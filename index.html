@@ -63,50 +63,61 @@
   .header-note{font-size:13px; color:var(--accent-tint); display:none;}
   @media(min-width:720px){ .header-note{display:block;} }
 
-  /* ---------- Intro / hero strip ---------- */
-  .intro{
-    max-width:1080px; margin:0 auto; padding:36px 24px 8px;
-    text-align:left;
+  /* ---------- Page shell: main column + ad rail ---------- */
+  .page-shell{
+    max-width:1240px; margin:0 auto; padding:0 24px;
+    display:flex; align-items:flex-start; gap:26px;
   }
-  .intro h1{font-size:clamp(24px,3.4vw,32px);}
-  .intro p{max-width:640px; color:#3a4a44; font-size:15.5px;}
+  .main-col{flex:1; min-width:0;}
+  .ad-col{width:300px; flex-shrink:0; position:sticky; top:calc(var(--header-h) + 18px); display:flex; flex-direction:column; gap:20px;}
+  @media(max-width:980px){
+    .page-shell{flex-direction:column;}
+    .ad-col{width:100%; position:static; flex-direction:row; flex-wrap:wrap;}
+    .ad-col .ad-slot{flex:1; min-width:260px;}
+  }
 
-  /* ---------- Navigation grid ---------- */
-  .toolgrid-wrap{max-width:1080px; margin:0 auto; padding:8px 24px 12px;}
-  .category-label{
-    font-size:13px; color:var(--forest-mid); font-weight:600;
-    margin:22px 0 10px;
-  }
-  .grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-    gap:14px;
+  /* ---------- Reserved space for ad units, dropped in later ---------- */
+  .ad-slot{ /* intentionally unstyled/blank until an ad unit is placed here */ }
+  .ad-leaderboard{min-height:90px; margin:18px 0;}
+  .ad-skyscraper{min-height:250px;}
+  .ad-col .ad-skyscraper{min-height:600px;}
+
+  /* ---------- Intro / hero strip ---------- */
+  .intro{padding:32px 0 6px; text-align:left;}
+  .intro h1{font-size:clamp(22px,3vw,28px);}
+  .intro p{max-width:640px; color:#3a4a44; font-size:15px;}
+
+  /* ---------- Navigation: single horizontal row of medium buttons ---------- */
+  .toolbar-row{
+    display:flex; flex-wrap:wrap; gap:10px;
+    padding:6px 0 6px;
   }
   .action-block{
     background:var(--white);
     border:1px solid #e1e8e4;
-    border-left:4px solid var(--forest-light);
+    border-bottom:3px solid var(--forest-light);
     border-radius:var(--radius);
-    padding:18px 18px 16px;
-    text-align:left;
-    transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease;
-    display:flex; flex-direction:column; gap:6px;
+    padding:12px 14px;
+    text-align:center;
+    flex:0 1 128px;
+    min-width:104px;
+    transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease, background .18s ease;
+    display:flex; flex-direction:column; align-items:center; gap:5px;
   }
   .action-block:hover{
-    box-shadow:0 8px 20px rgba(27,67,50,.12);
+    box-shadow:0 6px 14px rgba(27,67,50,.12);
     transform:translateY(-2px);
-    border-left-color:var(--forest-dark);
+    border-bottom-color:var(--forest-dark);
   }
   .action-block.is-active{
-    border-left-color:var(--forest-dark);
+    border-bottom-color:var(--forest-dark);
     background:var(--accent-tint);
   }
-  .action-block .icon{font-size:22px;}
-  .action-block h3{font-size:16px; margin:2px 0 2px;}
-  .action-block p{font-size:13.5px; color:#4c5c55; margin:0;}
+  .action-block .icon{font-size:21px;}
+  .action-block h3{font-size:12.5px; margin:0; line-height:1.25; font-weight:600; color:var(--forest-dark);}
 
   /* ---------- Workspace panels ---------- */
-  .workspace-wrap{max-width:1080px; margin:0 auto; padding:6px 24px 80px;}
+  .workspace-wrap{padding:2px 0 60px;}
   .panel{
     display:none;
     background:var(--white);
@@ -240,59 +251,41 @@
   <div class="header-note">Nothing you open here ever leaves your device.</div>
 </header>
 
+<div class="page-shell">
+<div class="main-col">
+
 <section class="intro">
   <h1>Six tools. Zero uploads. Zero cost.</h1>
   <p>Every calculation, edit, and file conversion below runs inside this browser tab. Nothing is ever sent to a server — pick a tool to get started.</p>
 </section>
 
-<div class="toolgrid-wrap">
+<div class="ad-slot ad-leaderboard"></div>
 
-  <div class="category-label">Advanced PDF Suite</div>
-  <div class="grid">
-    <button class="action-block" data-target="panel-resume">
-      <span class="icon">📄</span>
-      <h3>Resume &amp; Document Editor</h3>
-      <p>Edit a ready-made resume right on the page and export it as a Letter-size PDF.</p>
-    </button>
-    <button class="action-block" data-target="panel-split">
-      <span class="icon">✂️</span>
-      <h3>PDF Splitter</h3>
-      <p>Pull specific pages out of any PDF and download them as a new file.</p>
-    </button>
-  </div>
-
-  <div class="category-label">Office &amp; Payroll Suite</div>
-  <div class="grid">
-    <button class="action-block" data-target="panel-ctc">
-      <span class="icon">💰</span>
-      <h3>CTC &amp; In-Hand Salary Estimator</h3>
-      <p>Turn an annual CTC figure into an estimated monthly take-home amount.</p>
-    </button>
-    <button class="action-block" data-target="panel-invoice">
-      <span class="icon">🧾</span>
-      <h3>Freelance Invoice Builder</h3>
-      <p>Itemize your work, apply tax, and export a clean client-ready invoice.</p>
-    </button>
-  </div>
-
-  <div class="category-label">Media Optimizer</div>
-  <div class="grid">
-    <button class="action-block" data-target="panel-image">
-      <span class="icon">🖼️</span>
-      <h3>Image Compressor &amp; Resizer</h3>
-      <p>Shrink a photo under a target file size — handy for government portal uploads.</p>
-    </button>
-  </div>
-
-  <div class="category-label">LinkedIn Growth Engine</div>
-  <div class="grid">
-    <button class="action-block" data-target="panel-carousel">
-      <span class="icon">📊</span>
-      <h3>PDF Carousel Builder</h3>
-      <p>Write out a slide-by-slide carousel and download it as one LinkedIn-ready PDF.</p>
-    </button>
-  </div>
-
+<div class="toolbar-row">
+  <button class="action-block" data-target="panel-resume" title="Edit a ready-made resume right on the page and export it as a Letter-size PDF.">
+    <span class="icon">📄</span>
+    <h3>Resume Editor</h3>
+  </button>
+  <button class="action-block" data-target="panel-split" title="Pull specific pages out of any PDF and download them as a new file.">
+    <span class="icon">✂️</span>
+    <h3>PDF Splitter</h3>
+  </button>
+  <button class="action-block" data-target="panel-ctc" title="Turn an annual CTC figure into an estimated monthly take-home amount.">
+    <span class="icon">💰</span>
+    <h3>CTC Estimator</h3>
+  </button>
+  <button class="action-block" data-target="panel-invoice" title="Itemize your work, apply tax, and export a clean client-ready invoice.">
+    <span class="icon">🧾</span>
+    <h3>Invoice Builder</h3>
+  </button>
+  <button class="action-block" data-target="panel-image" title="Shrink a photo under a target file size — handy for government portal uploads.">
+    <span class="icon">🖼️</span>
+    <h3>Image Compressor</h3>
+  </button>
+  <button class="action-block" data-target="panel-carousel" title="Write out a slide-by-slide carousel and download it as one LinkedIn-ready PDF.">
+    <span class="icon">📊</span>
+    <h3>Carousel Builder</h3>
+  </button>
 </div>
 
 <div class="workspace-wrap">
@@ -502,6 +495,16 @@
   </div>
 
 </div>
+
+<div class="ad-slot ad-leaderboard"></div>
+
+</div><!-- /main-col -->
+
+<aside class="ad-col">
+  <div class="ad-slot ad-skyscraper"></div>
+</aside>
+
+</div><!-- /page-shell -->
 
 <footer>AllToolForest — every tool above runs entirely in your browser. No files or numbers you enter are ever transmitted or stored.</footer>
 
