@@ -1,0 +1,10 @@
+{
+  "name": "AllToolForest",
+  "short_name": "AllToolForest",
+  "description": "Simple browser tools for work, documents, images and calculations.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f9f7",
+  "theme_color": "#12372a"
+}
