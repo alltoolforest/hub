@@ -547,6 +547,21 @@
   });
 })();
 
+/* Open a legacy tool directly when linked with #panel-* */
+(function(){
+  const target = window.location.hash.replace('#','');
+  if(!target || !target.startsWith('panel-')) return;
+  const panel = document.getElementById(target);
+  const button = document.querySelector('.action-block[data-target="' + target + '"]');
+  if(panel){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.action-block').forEach(b=>b.classList.remove('is-active'));
+    panel.classList.add('active');
+    if(button) button.classList.add('is-active');
+    setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),50);
+  }
+})();
+
 /* =====================================================
    TOOL 1: Resume & Document Editor -> html2pdf export
 ===================================================== */
