@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AllToolForest — Free Client-Side Tools</title>
+<meta name="description" content="Resume editor, PDF splitter, CTC calculator, invoice maker, image compressor and LinkedIn carousel builder — all free, all in your browser, nothing ever uploaded.">
+
+<!-- CDN libraries: html2pdf (HTML -> PDF) and pdf-lib (PDF page manipulation & generation) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+<style>
+  :root{
+    --forest-dark:#1b4332;
+    --forest-mid:#2d6a4f;
+    --forest-light:#52b788;
+    --accent-tint:#b7e4c7;
+    --bg-surface:#f4f7f6;
+    --text-main:#212529;
+    --white:#ffffff;
+    --danger:#a4342a;
+    --radius:10px;
+    --header-h:72px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", Arial, Helvetica, sans-serif;
+    background:var(--bg-surface);
+    color:var(--text-main);
+    line-height:1.5;
+    padding-top:var(--header-h);
+  }
+  h1,h2,h3,h4{font-family:inherit; margin:0 0 .4em 0; color:var(--forest-dark);}
+  p{margin:0 0 .8em 0;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select,textarea{font-family:inherit; font-size:15px;}
+  a{color:var(--forest-mid);}
+
+  /* ---------- Header ---------- */
+  header.site-header{
+    position:fixed; top:0; left:0; right:0; height:var(--header-h);
+    background:var(--forest-dark);
+    color:var(--white);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 28px;
+    z-index:1000;
+    box-shadow:0 2px 10px rgba(0,0,0,.15);
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-mark{
+    width:34px; height:34px; border-radius:8px;
+    background:linear-gradient(155deg, var(--forest-light), var(--forest-mid));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:17px; color:var(--forest-dark);
+  }
+  .brand-text{display:flex; flex-direction:column; line-height:1.1;}
+  .brand-text strong{font-size:18px; letter-spacing:.2px;}
+  .brand-text span{font-size:11.5px; color:var(--accent-tint);}
+  .header-note{font-size:13px; color:var(--accent-tint); display:none;}
+  @media(min-width:720px){ .header-note{display:block;} }
+
+  /* ---------- Intro / hero strip ---------- */
+  .intro{
+    max-width:1080px; margin:0 auto; padding:36px 24px 8px;
+    text-align:left;
+  }
+  .intro h1{font-size:clamp(24px,3.4vw,32px);}
+  .intro p{max-width:640px; color:#3a4a44; font-size:15.5px;}
+
+  /* ---------- Navigation grid ---------- */
+  .toolgrid-wrap{max-width:1080px; margin:0 auto; padding:8px 24px 12px;}
+  .category-label{
+    font-size:13px; color:var(--forest-mid); font-weight:600;
+    margin:22px 0 10px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:14px;
+  }
+  .action-block{
+    background:var(--white);
+    border:1px solid #e1e8e4;
+    border-left:4px solid var(--forest-light);
+    border-radius:var(--radius);
+    padding:18px 18px 16px;
+    text-align:left;
+    transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .action-block:hover{
+    box-shadow:0 8px 20px rgba(27,67,50,.12);
+    transform:translateY(-2px);
+    border-left-color:var(--forest-dark);
+  }
+  .action-block.is-active{
+    border-left-color:var(--forest-dark);
+    background:var(--accent-tint);
+  }
+  .action-block .icon{font-size:22px;}
+  .action-block h3{font-size:16px; margin:2px 0 2px;}
+  .action-block p{font-size:13.5px; color:#4c5c55; margin:0;}
+
+  /* ---------- Workspace panels ---------- */
+  .workspace-wrap{max-width:1080px; margin:0 auto; padding:6px 24px 80px;}
+  .panel{
+    display:none;
+    background:var(--white);
+    border:1px solid #e1e8e4;
+    border-radius:var(--radius);
+    padding:26px;
+    margin-top:22px;
+  }
+  .panel.active{display:block; animation:fadeIn .35s ease;}
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; border-bottom:1px solid #e6ece8; padding-bottom:12px; margin-bottom:18px;}
+  .panel-head h2{font-size:20px;}
+  .panel-head .tag{font-size:12px; background:var(--accent-tint); color:var(--forest-dark); padding:3px 9px; border-radius:20px; font-weight:600;}
+  .close-panel{background:none; border:none; color:#7a8a83; font-size:22px; line-height:1; padding:4px 8px;}
+  .close-panel:hover{color:var(--forest-dark);}
+
+  .btn{
+    background:var(--forest-mid); color:var(--white); border:none;
+    padding:10px 18px; border-radius:7px; font-size:14.5px; font-weight:600;
+    transition:background .15s ease;
+  }
+  .btn:hover{background:var(--forest-dark);}
+  .btn.secondary{background:var(--white); color:var(--forest-mid); border:1.5px solid var(--forest-mid);}
+  .btn.secondary:hover{background:var(--accent-tint);}
+  .btn.danger{background:var(--white); color:var(--danger); border:1.5px solid var(--danger);}
+  .btn.danger:hover{background:#f7e3e1;}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:13px; font-weight:600; color:var(--forest-dark); margin-bottom:5px;}
+  .field input[type=text],
+  .field input[type=number],
+  .field select,
+  .field textarea{
+    width:100%; padding:9px 11px; border:1.5px solid #d7e0db; border-radius:7px;
+    background:var(--white); color:var(--text-main);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--forest-light); border-color:var(--forest-light);}
+  .row{display:flex; gap:14px; flex-wrap:wrap;}
+  .row > .field{flex:1; min-width:180px;}
+
+  /* Tool 1: Resume editor */
+  .doc-toolbar{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; background:var(--bg-surface); padding:10px 14px; border-radius:8px; margin-bottom:18px;}
+  .doc-toolbar .hint{font-size:12.5px; color:#607068;}
+  #resumeCanvas{
+    max-width:8.5in; margin:0 auto; padding:.6in .5in; background:var(--white);
+    border:1px solid #dfe6e2; box-shadow:0 1px 6px rgba(0,0,0,.06);
+  }
+  #resumeCanvas [contenteditable="true"]{
+    border-bottom:2px solid transparent; padding:3px 2px; border-radius:3px; transition:background .15s;
+  }
+  #resumeCanvas [contenteditable="true"]:hover{ outline:1px dashed var(--forest-light); outline-offset:2px; background:#f7fcf9; }
+  #resumeCanvas [contenteditable="true"]:focus{ outline:1.5px solid var(--forest-mid); background:#f2faf5; }
+  #resumeCanvas h2.doc-name{font-size:26px; border-bottom:3px solid var(--forest-mid); padding-bottom:6px; margin-bottom:2px;}
+  #resumeCanvas .doc-contact{font-size:13px; color:#495a52; margin-bottom:16px;}
+  #resumeCanvas h4.doc-section{ text-transform:uppercase; letter-spacing:.6px; font-size:13px; color:var(--forest-mid); border-bottom:1.5px solid var(--accent-tint); padding-bottom:4px; margin-top:20px;}
+  #resumeCanvas .doc-entry-title{font-weight:700; font-size:14.5px;}
+  #resumeCanvas .doc-entry-sub{font-size:13px; color:#5c6b64; font-style:italic;}
+  #resumeCanvas ul{margin:6px 0 0 18px; padding:0; font-size:13.5px;}
+  #resumeCanvas li{margin-bottom:4px;}
+
+  /* Tool 2: PDF splitter */
+  .dropzone{
+    border:2.5px dashed #b9d3c6; border-radius:12px; padding:34px 18px; text-align:center;
+    background:var(--bg-surface); transition:border-color .15s, background .15s; cursor:pointer;
+  }
+  .dropzone.drag-over{ border-color:var(--forest-light); background:var(--accent-tint); }
+  .dropzone .dz-icon{font-size:34px; margin-bottom:6px;}
+  .file-summary{margin-top:16px; padding:12px 16px; background:var(--bg-surface); border-radius:8px; font-size:14px; display:none;}
+  .file-summary.show{display:block;}
+
+  /* Tool 3: CTC calculator */
+  .result-box{
+    background:var(--forest-dark); color:var(--white); border-radius:10px; padding:22px;
+    margin-top:8px;
+  }
+  .result-box .headline{font-size:13px; color:var(--accent-tint); margin-bottom:2px;}
+  .result-box .big{font-size:30px; font-weight:700; margin-bottom:16px;}
+  .result-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;}
+  .result-grid .item .lbl{font-size:12px; color:var(--accent-tint);}
+  .result-grid .item .val{font-size:17px; font-weight:600;}
+  .note{font-size:12.5px; color:#5c6b64; margin-top:12px;}
+
+  /* Tool 4: Invoice */
+  table.invoice-table{width:100%; border-collapse:collapse; margin-top:6px;}
+  table.invoice-table th{text-align:left; font-size:12px; color:var(--forest-mid); text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid var(--accent-tint); padding:8px 6px;}
+  table.invoice-table td{padding:6px; border-bottom:1px solid #eef2ef; vertical-align:top;}
+  table.invoice-table input{padding:7px 8px;}
+  .amount-cell{font-weight:600; white-space:nowrap;}
+  .totals-block{margin-top:14px; margin-left:auto; max-width:280px;}
+  .totals-block .line{display:flex; justify-content:space-between; padding:5px 0; font-size:14px;}
+  .totals-block .line.grand{border-top:2px solid var(--forest-dark); font-weight:700; font-size:16px; margin-top:4px; padding-top:8px;}
+  #invoicePreview{background:var(--white);}
+
+  /* Tool 5: Image compressor */
+  .compress-layout{display:grid; grid-template-columns:1fr 1fr; gap:24px;}
+  @media(max-width:680px){.compress-layout{grid-template-columns:1fr;}}
+  .preview-card{background:var(--bg-surface); border-radius:10px; padding:14px; text-align:center;}
+  .preview-card img{max-width:100%; max-height:220px; border-radius:6px; margin-bottom:8px;}
+  .preview-card .size-tag{font-size:13px; font-weight:600; color:var(--forest-dark);}
+  .radio-group{display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;}
+  .radio-group label{display:flex; align-items:center; gap:6px; font-size:14px; font-weight:500; color:var(--text-main);}
+
+  /* Tool 6: Carousel */
+  .swatches{display:flex; gap:8px; margin-top:4px;}
+  .swatch{width:28px; height:28px; border-radius:50%; border:2px solid transparent; cursor:pointer;}
+  .swatch.selected{border-color:var(--forest-dark); box-shadow:0 0 0 2px var(--accent-tint);}
+  .slide-list{display:flex; flex-direction:column; gap:12px; margin-top:16px;}
+  .slide-card{display:flex; gap:14px; align-items:flex-start; background:var(--bg-surface); border-radius:10px; padding:12px;}
+  .slide-thumb{
+    width:96px; height:120px; border-radius:6px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    color:#fff; font-size:10.5px; padding:8px; overflow:hidden; font-weight:600;
+  }
+  .slide-card textarea{min-height:70px; resize:vertical;}
+  .slide-card .slide-actions{display:flex; flex-direction:column; gap:6px;}
+
+  footer{text-align:center; font-size:12.5px; color:#7a8a83; padding:28px 20px 40px;}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <div class="brand-mark">AF</div>
+    <div class="brand-text">
+      <strong>AllToolForest</strong>
+      <span>free browser-only tools</span>
+    </div>
+  </div>
+  <div class="header-note">Nothing you open here ever leaves your device.</div>
+</header>
+
+<section class="intro">
+  <h1>Six tools. Zero uploads. Zero cost.</h1>
+  <p>Every calculation, edit, and file conversion below runs inside this browser tab. Nothing is ever sent to a server — pick a tool to get started.</p>
+</section>
+
+<div class="toolgrid-wrap">
+
+  <div class="category-label">Advanced PDF Suite</div>
+  <div class="grid">
+    <button class="action-block" data-target="panel-resume">
+      <span class="icon">📄</span>
+      <h3>Resume &amp; Document Editor</h3>
+      <p>Edit a ready-made resume right on the page and export it as a Letter-size PDF.</p>
+    </button>
+    <button class="action-block" data-target="panel-split">
+      <span class="icon">✂️</span>
+      <h3>PDF Splitter</h3>
+      <p>Pull specific pages out of any PDF and download them as a new file.</p>
+    </button>
+  </div>
+
+  <div class="category-label">Office &amp; Payroll Suite</div>
+  <div class="grid">
+    <button class="action-block" data-target="panel-ctc">
+      <span class="icon">💰</span>
+      <h3>CTC &amp; In-Hand Salary Estimator</h3>
+      <p>Turn an annual CTC figure into an estimated monthly take-home amount.</p>
+    </button>
+    <button class="action-block" data-target="panel-invoice">
+      <span class="icon">🧾</span>
+      <h3>Freelance Invoice Builder</h3>
+      <p>Itemize your work, apply tax, and export a clean client-ready invoice.</p>
+    </button>
+  </div>
+
+  <div class="category-label">Media Optimizer</div>
+  <div class="grid">
+    <button class="action-block" data-target="panel-image">
+      <span class="icon">🖼️</span>
+      <h3>Image Compressor &amp; Resizer</h3>
+      <p>Shrink a photo under a target file size — handy for government portal uploads.</p>
+    </button>
+  </div>
+
+  <div class="category-label">LinkedIn Growth Engine</div>
+  <div class="grid">
+    <button class="action-block" data-target="panel-carousel">
+      <span class="icon">📊</span>
+      <h3>PDF Carousel Builder</h3>
+      <p>Write out a slide-by-slide carousel and download it as one LinkedIn-ready PDF.</p>
+    </button>
+  </div>
+
+</div>
+
+<div class="workspace-wrap">
+
+  <!-- ================= PANEL 1: RESUME EDITOR ================= -->
+  <div class="panel" id="panel-resume">
+    <div class="panel-head">
+      <h2>Resume &amp; Document Editor <span class="tag">PDF export</span></h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="doc-toolbar">
+      <span class="hint">Click any line below to edit it. Nothing is saved until you download.</span>
+      <button class="btn" id="downloadResumeBtn">Download Document PDF</button>
+    </div>
+    <div id="resumeCanvas">
+      <h2 class="doc-name" contenteditable="true">Aditi Rao</h2>
+      <div class="doc-contact" contenteditable="true">aditi.rao@email.com · +91 98765 43210 · Bengaluru, India · linkedin.com/in/aditirao</div>
+
+      <h4 class="doc-section">Summary</h4>
+      <p contenteditable="true">Product-minded frontend engineer with 5 years building fast, accessible web applications. Comfortable owning a feature from design review through production release.</p>
+
+      <h4 class="doc-section">Experience</h4>
+      <div class="doc-entry-title" contenteditable="true">Senior Frontend Engineer — Nimbus Labs</div>
+      <div class="doc-entry-sub" contenteditable="true">Bengaluru, India · Jun 2022 – Present</div>
+      <ul>
+        <li contenteditable="true">Led the rebuild of the checkout flow, cutting page load time by 38%.</li>
+        <li contenteditable="true">Mentored two junior engineers and ran the team's weekly code review sessions.</li>
+      </ul>
+      <div class="doc-entry-title" contenteditable="true" style="margin-top:10px;">Frontend Engineer — Kestrel Software</div>
+      <div class="doc-entry-sub" contenteditable="true">Pune, India · Jul 2019 – May 2022</div>
+      <ul>
+        <li contenteditable="true">Built the internal design system now used across six product teams.</li>
+      </ul>
+
+      <h4 class="doc-section">Education</h4>
+      <div class="doc-entry-title" contenteditable="true">B.Tech, Computer Science — VIT Vellore</div>
+      <div class="doc-entry-sub" contenteditable="true">2015 – 2019</div>
+
+      <h4 class="doc-section">Skills</h4>
+      <p contenteditable="true">JavaScript, TypeScript, React, CSS architecture, accessibility, performance profiling</p>
+    </div>
+  </div>
+
+  <!-- ================= PANEL 2: PDF SPLITTER ================= -->
+  <div class="panel" id="panel-split">
+    <div class="panel-head">
+      <h2>PDF Splitter <span class="tag">runs in your browser</span></h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="dropzone" id="splitDropzone">
+      <div class="dz-icon">📥</div>
+      <p><strong>Drop a PDF here</strong> or click to browse. It is read directly into memory — never uploaded anywhere.</p>
+      <input type="file" id="splitFileInput" accept="application/pdf" style="display:none;">
+    </div>
+    <div class="file-summary" id="splitSummary"></div>
+    <div id="splitControls" style="display:none; margin-top:18px;">
+      <div class="row">
+        <div class="field">
+          <label for="pageRangeInput">Pages to extract (e.g. 1-3,5,8-9)</label>
+          <input type="text" id="pageRangeInput" placeholder="1-3,5">
+        </div>
+      </div>
+      <button class="btn" id="extractPagesBtn">Extract &amp; Download</button>
+      <button class="btn secondary" id="resetSplitBtn" style="margin-left:8px;">Load a different file</button>
+      <p class="note" id="splitError" style="color:#a4342a;"></p>
+    </div>
+  </div>
+
+  <!-- ================= PANEL 3: CTC CALCULATOR ================= -->
+  <div class="panel" id="panel-ctc">
+    <div class="panel-head">
+      <h2>CTC &amp; In-Hand Salary Estimator</h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="ctcInput">Annual Gross CTC (₹)</label>
+        <input type="number" id="ctcInput" value="1200000" min="0" step="1000">
+      </div>
+      <div class="field">
+        <label for="variableInput">Variable Pay (%)</label>
+        <input type="number" id="variableInput" value="10" min="0" max="100" step="0.5">
+      </div>
+      <div class="field">
+        <label for="regimeSelect">Tax Slab Regime</label>
+        <select id="regimeSelect">
+          <option value="new2026">New Indian Tax Regime (2026-27)</option>
+          <option value="old">Old Indian Tax Regime</option>
+          <option value="global">Global Fixed-Deduction Assessment</option>
+        </select>
+      </div>
+    </div>
+    <div class="result-box">
+      <div class="headline">Estimated monthly take-home</div>
+      <div class="big" id="ctcMonthly">₹0</div>
+      <div class="result-grid">
+        <div class="item"><div class="lbl">Fixed Salary (annual)</div><div class="val" id="ctcFixed">₹0</div></div>
+        <div class="item"><div class="lbl">Employer/EPF share (annual)</div><div class="val" id="ctcEpf">₹0</div></div>
+        <div class="item"><div class="lbl">Taxable base payout (annual)</div><div class="val" id="ctcTaxable">₹0</div></div>
+        <div class="item"><div class="lbl">Variable pay (annual)</div><div class="val" id="ctcVariable">₹0</div></div>
+      </div>
+    </div>
+    <p class="note">Regime shown above (<span id="regimeEcho"></span>) is for reference only — this estimator computes take-home from EPF deduction alone and does not run a full slab-wise income tax computation. For exact tax liability, check with a tax professional.</p>
+  </div>
+
+  <!-- ================= PANEL 4: INVOICE BUILDER ================= -->
+  <div class="panel" id="panel-invoice">
+    <div class="panel-head">
+      <h2>Freelance Invoice Builder <span class="tag">PDF export</span></h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="row">
+      <div class="field"><label>Your name / business</label><input type="text" id="invFrom" value="Your Name / Studio"></div>
+      <div class="field"><label>Bill to</label><input type="text" id="invTo" value="Client Company Pvt. Ltd."></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Invoice #</label><input type="text" id="invNumber" value="INV-0001"></div>
+      <div class="field"><label>Date</label><input type="text" id="invDate" value=""></div>
+      <div class="field">
+        <label>Currency</label>
+        <select id="invCurrency">
+          <option value="₹">₹ INR</option>
+          <option value="$">$ USD</option>
+          <option value="€">€ EUR</option>
+          <option value="£">£ GBP</option>
+        </select>
+      </div>
+      <div class="field"><label>Tax (%)</label><input type="number" id="invTax" value="18" min="0" step="0.5"></div>
+    </div>
+
+    <div id="invoicePreview">
+      <table class="invoice-table" id="invoiceTable">
+        <thead>
+          <tr><th style="width:45%;">Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr>
+        </thead>
+        <tbody id="invoiceRows"></tbody>
+      </table>
+    </div>
+    <button class="btn secondary" id="addRowBtn" style="margin-top:10px;">+ Add line item</button>
+
+    <div class="totals-block">
+      <div class="line"><span>Subtotal</span><span id="invSubtotal">0.00</span></div>
+      <div class="line"><span>Tax</span><span id="invTaxAmount">0.00</span></div>
+      <div class="line grand"><span>Total</span><span id="invTotal">0.00</span></div>
+    </div>
+
+    <button class="btn" id="downloadInvoiceBtn" style="margin-top:18px;">Download Invoice PDF</button>
+  </div>
+
+  <!-- ================= PANEL 5: IMAGE COMPRESSOR ================= -->
+  <div class="panel" id="panel-image">
+    <div class="panel-head">
+      <h2>Image Compressor &amp; Passport Portal Resizer</h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="field">
+      <label for="imageFileInput">Choose an image</label>
+      <input type="file" id="imageFileInput" accept="image/*">
+    </div>
+    <div class="field">
+      <label>Target size</label>
+      <div class="radio-group">
+        <label><input type="radio" name="targetSize" value="20" checked> Under 20 KB (photo/signature)</label>
+        <label><input type="radio" name="targetSize" value="50"> Under 50 KB (documents)</label>
+        <label><input type="radio" name="targetSize" value="custom"> Custom:
+          <input type="number" id="customKb" value="100" min="5" style="width:80px;">KB
+        </label>
+      </div>
+    </div>
+    <button class="btn" id="compressBtn" disabled>Compress Image</button>
+    <div class="compress-layout" style="margin-top:20px;">
+      <div class="preview-card">
+        <div><strong>Original</strong></div>
+        <img id="originalPreview" style="display:none;">
+        <div class="size-tag" id="originalSize">No image chosen</div>
+      </div>
+      <div class="preview-card">
+        <div><strong>Compressed</strong></div>
+        <img id="compressedPreview" style="display:none;">
+        <div class="size-tag" id="compressedSize">—</div>
+        <a class="btn" id="downloadCompressedBtn" style="display:none; margin-top:10px;" download="compressed.jpg">Download</a>
+      </div>
+    </div>
+    <canvas id="compressCanvas" style="display:none;"></canvas>
+  </div>
+
+  <!-- ================= PANEL 6: CAROUSEL BUILDER ================= -->
+  <div class="panel" id="panel-carousel">
+    <div class="panel-head">
+      <h2>PDF Carousel Slide Matrix Manager <span class="tag">PDF export</span></h2>
+      <button class="close-panel" data-close>&times;</button>
+    </div>
+    <div class="field">
+      <label>Theme color</label>
+      <div class="swatches" id="themeSwatches">
+        <div class="swatch selected" style="background:#1b4332;" data-color="#1b4332"></div>
+        <div class="swatch" style="background:#2d6a4f;" data-color="#2d6a4f"></div>
+        <div class="swatch" style="background:#52b788;" data-color="#52b788"></div>
+        <div class="swatch" style="background:#212529;" data-color="#212529"></div>
+        <div class="swatch" style="background:#a4342a;" data-color="#a4342a"></div>
+      </div>
+    </div>
+    <div id="slideList" class="slide-list"></div>
+    <button class="btn secondary" id="addSlideBtn" style="margin-top:6px;">+ Add slide</button>
+    <button class="btn" id="downloadCarouselBtn" style="margin-left:8px;">Download Carousel PDF</button>
+    <p class="note">Slides export at LinkedIn's recommended 4:5 portrait ratio, one page per slide.</p>
+  </div>
+
+</div>
+
+<footer>AllToolForest — every tool above runs entirely in your browser. No files or numbers you enter are ever transmitted or stored.</footer>
+
+<script>
+/* =====================================================
+   NAVIGATION: only one workspace panel visible at a time
+===================================================== */
+(function(){
+  const blocks = document.querySelectorAll('.action-block');
+  const panels = document.querySelectorAll('.panel');
+
+  function openPanel(id){
+    panels.forEach(p => p.classList.toggle('active', p.id === id));
+    blocks.forEach(b => b.classList.toggle('is-active', b.dataset.target === id));
+    const target = document.getElementById(id);
+    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  blocks.forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const id = b.dataset.target;
+      const alreadyOpen = document.getElementById(id).classList.contains('active');
+      if(alreadyOpen){
+        document.getElementById(id).classList.remove('active');
+        b.classList.remove('is-active');
+      } else {
+        openPanel(id);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-close]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const panel = btn.closest('.panel');
+      panel.classList.remove('active');
+      document.querySelectorAll('.action-block').forEach(b=>{
+        if(b.dataset.target === panel.id) b.classList.remove('is-active');
+      });
+    });
+  });
+})();
+
+/* =====================================================
+   TOOL 1: Resume & Document Editor -> html2pdf export
+===================================================== */
+document.getElementById('downloadResumeBtn').addEventListener('click', ()=>{
+  const el = document.getElementById('resumeCanvas');
+  const opt = {
+    margin: 0.25,
+    filename: 'resume.pdf',
+    image: { type:'jpeg', quality:0.98 },
+    html2canvas: { scale:2, useCORS:true },
+    jsPDF: { unit:'in', format:'letter', orientation:'portrait' }
+  };
+  html2pdf().set(opt).from(el).save();
+});
+
+/* =====================================================
+   TOOL 2: PDF Splitter -> pdf-lib
+===================================================== */
+(function(){
+  const { PDFDocument } = PDFLib;
+  const dropzone = document.getElementById('splitDropzone');
+  const fileInput = document.getElementById('splitFileInput');
+  const summary = document.getElementById('splitSummary');
+  const controls = document.getElementById('splitControls');
+  const rangeInput = document.getElementById('pageRangeInput');
+  const errorEl = document.getElementById('splitError');
+  let loadedBytes = null;
+  let pageCount = 0;
+
+  dropzone.addEventListener('click', ()=> fileInput.click());
+  ['dragover','dragenter'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag-over'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag-over'); });
+  });
+  dropzone.addEventListener('drop', e=>{
+    if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  async function handleFile(file){
+    if(file.type !== 'application/pdf'){
+      alert('Please choose a PDF file.');
+      return;
+    }
+    errorEl.textContent = '';
+    const buf = await file.arrayBuffer();
+    loadedBytes = buf;
+    try{
+      const doc = await PDFDocument.load(buf);
+      pageCount = doc.getPageCount();
+      summary.textContent = `Loaded "${file.name}" — ${pageCount} page${pageCount===1?'':'s'}.`;
+      summary.classList.add('show');
+      controls.style.display = 'block';
+      rangeInput.value = pageCount > 1 ? `1-${pageCount}` : '1';
+    }catch(err){
+      alert('Could not read this PDF: ' + err.message);
+    }
+  }
+
+  document.getElementById('resetSplitBtn').addEventListener('click', ()=>{
+    loadedBytes = null; pageCount = 0;
+    summary.classList.remove('show');
+    controls.style.display = 'none';
+    fileInput.value = '';
+  });
+
+  function parseRanges(str, max){
+    const pages = new Set();
+    const parts = str.split(',').map(s=>s.trim()).filter(Boolean);
+    for(const part of parts){
+      if(part.includes('-')){
+        const [a,b] = part.split('-').map(n=>parseInt(n.trim(),10));
+        if(isNaN(a) || isNaN(b) || a<1 || b>max || a>b) throw new Error(`Invalid range "${part}"`);
+        for(let i=a;i<=b;i++) pages.add(i-1);
+      } else {
+        const n = parseInt(part,10);
+        if(isNaN(n) || n<1 || n>max) throw new Error(`Invalid page "${part}"`);
+        pages.add(n-1);
+      }
+    }
+    if(pages.size === 0) throw new Error('No pages selected');
+    return Array.from(pages).sort((a,b)=>a-b);
+  }
+
+  document.getElementById('extractPagesBtn').addEventListener('click', async ()=>{
+    errorEl.textContent = '';
+    if(!loadedBytes){ errorEl.textContent = 'Load a PDF first.'; return; }
+    try{
+      const indices = parseRanges(rangeInput.value, pageCount);
+      const srcDoc = await PDFDocument.load(loadedBytes);
+      const outDoc = await PDFDocument.create();
+      const copied = await outDoc.copyPages(srcDoc, indices);
+      copied.forEach(p => outDoc.addPage(p));
+      const outBytes = await outDoc.save();
+      downloadBlob(outBytes, 'extracted-pages.pdf', 'application/pdf');
+    }catch(err){
+      errorEl.textContent = err.message;
+    }
+  });
+
+  function downloadBlob(bytes, filename, mime){
+    const blob = new Blob([bytes], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+  window.__downloadBlob = downloadBlob;
+})();
+
+/* =====================================================
+   TOOL 3: CTC & In-Hand Salary Estimator
+===================================================== */
+(function(){
+  const ctcInput = document.getElementById('ctcInput');
+  const variableInput = document.getElementById('variableInput');
+  const regimeSelect = document.getElementById('regimeSelect');
+  const regimeLabels = {
+    new2026: 'New Indian Tax Regime, 2026-27',
+    old: 'Old Indian Tax Regime',
+    global: 'Global Fixed-Deduction Assessment'
+  };
+
+  function inr(n){
+    return '₹' + Math.round(n).toLocaleString('en-IN');
+  }
+
+  function recalc(){
+    const ctc = parseFloat(ctcInput.value) || 0;
+    const variablePct = Math.min(Math.max(parseFloat(variableInput.value) || 0, 0), 100) / 100;
+
+    const variablePay = ctc * variablePct;
+    const fixed = ctc * (1 - variablePct);
+    const epf = Math.min(fixed * 0.12, 21600);
+    const taxableBase = fixed - epf;
+    const monthly = taxableBase / 12;
+
+    document.getElementById('ctcMonthly').textContent = inr(monthly) + ' / month';
+    document.getElementById('ctcFixed').textContent = inr(fixed);
+    document.getElementById('ctcEpf').textContent = inr(epf);
+    document.getElementById('ctcTaxable').textContent = inr(taxableBase);
+    document.getElementById('ctcVariable').textContent = inr(variablePay);
+    document.getElementById('regimeEcho').textContent = regimeLabels[regimeSelect.value];
+  }
+
+  [ctcInput, variableInput, regimeSelect].forEach(el=>{
+    el.addEventListener('input', recalc);
+    el.addEventListener('change', recalc);
+  });
+  recalc();
+})();
+
+/* =====================================================
+   TOOL 4: Freelance Invoice Builder
+===================================================== */
+(function(){
+  const rowsBody = document.getElementById('invoiceRows');
+  const currencySelect = document.getElementById('invCurrency');
+  const taxInput = document.getElementById('invTax');
+  let rowId = 0;
+
+  function addRow(desc='', qty=1, rate=0){
+    rowId++;
+    const tr = document.createElement('tr');
+    tr.dataset.id = rowId;
+    tr.innerHTML = `
+      <td><input type="text" class="rowDesc" value="${desc}" placeholder="Service description"></td>
+      <td><input type="number" class="rowQty" value="${qty}" min="0" step="1" style="width:70px;"></td>
+      <td><input type="number" class="rowRate" value="${rate}" min="0" step="0.01" style="width:100px;"></td>
+      <td class="amount-cell rowAmount">0.00</td>
+      <td><button class="btn danger removeRow" style="padding:6px 10px;">✕</button></td>
+    `;
+    rowsBody.appendChild(tr);
+    tr.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', recalcInvoice));
+    tr.querySelector('.removeRow').addEventListener('click', ()=>{ tr.remove(); recalcInvoice(); });
+    recalcInvoice();
+  }
+
+  function currentCurrency(){ return currencySelect.value; }
+
+  function recalcInvoice(){
+    let subtotal = 0;
+    rowsBody.querySelectorAll('tr').forEach(tr=>{
+      const qty = parseFloat(tr.querySelector('.rowQty').value) || 0;
+      const rate = parseFloat(tr.querySelector('.rowRate').value) || 0;
+      const amount = qty * rate;
+      tr.querySelector('.rowAmount').textContent = currentCurrency() + amount.toFixed(2);
+      subtotal += amount;
+    });
+    const taxPct = parseFloat(taxInput.value) || 0;
+    const taxAmount = subtotal * (taxPct/100);
+    const total = subtotal + taxAmount;
+    document.getElementById('invSubtotal').textContent = currentCurrency() + subtotal.toFixed(2);
+    document.getElementById('invTaxAmount').textContent = currentCurrency() + taxAmount.toFixed(2);
+    document.getElementById('invTotal').textContent = currentCurrency() + total.toFixed(2);
+  }
+
+  currencySelect.addEventListener('change', recalcInvoice);
+  taxInput.addEventListener('input', recalcInvoice);
+  document.getElementById('addRowBtn').addEventListener('click', ()=> addRow());
+
+  document.getElementById('invDate').value = new Date().toLocaleDateString('en-IN', {year:'numeric', month:'short', day:'numeric'});
+
+  addRow('Website design & build', 1, 25000);
+  addRow('Monthly maintenance retainer', 1, 5000);
+
+  document.getElementById('downloadInvoiceBtn').addEventListener('click', ()=>{
+    // Build a lightweight printable header wrapper around the live preview for the export.
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '10px';
+    wrapper.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+    wrapper.innerHTML = `
+      <div style="display:flex; justify-content:space-between; margin-bottom:18px;">
+        <div>
+          <div style="font-size:20px; font-weight:700; color:#1b4332;">${escapeHtml(document.getElementById('invFrom').value)}</div>
+          <div style="font-size:13px; color:#555;">Invoice ${escapeHtml(document.getElementById('invNumber').value)} · ${escapeHtml(document.getElementById('invDate').value)}</div>
+        </div>
+        <div style="text-align:right; font-size:13px;">
+          <div style="font-weight:700; color:#1b4332;">Billed to</div>
+          <div>${escapeHtml(document.getElementById('invTo').value)}</div>
+        </div>
+      </div>
+    `;
+    const tableClone = document.getElementById('invoiceTable').cloneNode(true);
+    tableClone.querySelectorAll('input').forEach(inp=>{
+      const span = document.createElement('span');
+      span.textContent = inp.classList.contains('rowDesc') ? inp.value : inp.value;
+      inp.replaceWith(span);
+    });
+    tableClone.querySelectorAll('td:last-child').forEach(td=> td.remove());
+    tableClone.querySelectorAll('th:last-child').forEach(th=> th.remove());
+    wrapper.appendChild(tableClone);
+
+    const totalsClone = document.querySelector('.totals-block').cloneNode(true);
+    totalsClone.style.marginTop = '14px';
+    wrapper.appendChild(totalsClone);
+
+    const opt = {
+      margin: 0.4,
+      filename: (document.getElementById('invNumber').value || 'invoice') + '.pdf',
+      image:{ type:'jpeg', quality:0.98 },
+      html2canvas:{ scale:2 },
+      jsPDF:{ unit:'in', format:'letter', orientation:'portrait' }
+    };
+    html2pdf().set(opt).from(wrapper).save();
+  });
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+})();
+
+/* =====================================================
+   TOOL 5: Image Compressor & Resizer
+===================================================== */
+(function(){
+  const fileInput = document.getElementById('imageFileInput');
+  const compressBtn = document.getElementById('compressBtn');
+  const originalPreview = document.getElementById('originalPreview');
+  const originalSize = document.getElementById('originalSize');
+  const compressedPreview = document.getElementById('compressedPreview');
+  const compressedSize = document.getElementById('compressedSize');
+  const downloadBtn = document.getElementById('downloadCompressedBtn');
+  const canvas = document.getElementById('compressCanvas');
+  const ctx = canvas.getContext('2d');
+  let currentImg = null;
+
+  function fmtKb(bytes){ return (bytes/1024).toFixed(1) + ' KB'; }
+
+  fileInput.addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = evt=>{
+      const img = new Image();
+      img.onload = ()=>{
+        currentImg = img;
+        originalPreview.src = evt.target.result;
+        originalPreview.style.display = 'block';
+        originalSize.textContent = `${img.width}×${img.height} · ${fmtKb(file.size)}`;
+        compressBtn.disabled = false;
+        compressedPreview.style.display = 'none';
+        compressedSize.textContent = '—';
+        downloadBtn.style.display = 'none';
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function getTargetKb(){
+    const sel = document.querySelector('input[name="targetSize"]:checked').value;
+    if(sel === 'custom') return parseFloat(document.getElementById('customKb').value) || 100;
+    return parseFloat(sel);
+  }
+
+  function canvasToBlob(quality){
+    return new Promise(resolve=> canvas.toBlob(blob=> resolve(blob), 'image/jpeg', quality));
+  }
+
+  compressBtn.addEventListener('click', async ()=>{
+    if(!currentImg) return;
+    compressBtn.disabled = true;
+    compressBtn.textContent = 'Compressing…';
+
+    const targetBytes = getTargetKb() * 1024;
+    let width = currentImg.width;
+    let height = currentImg.height;
+    let quality = 0.92;
+    let blob = null;
+
+    for(let attempt=0; attempt<18; attempt++){
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0,0,width,height);
+      ctx.drawImage(currentImg, 0, 0, width, height);
+      blob = await canvasToBlob(quality);
+      if(blob.size <= targetBytes) break;
+
+      if(quality > 0.35){
+        quality -= 0.1;
+      } else {
+        width = Math.round(width * 0.85);
+        height = Math.round(height * 0.85);
+        quality = 0.6;
+      }
+      if(width < 60 || height < 60) break;
+    }
+
+    const url = URL.createObjectURL(blob);
+    compressedPreview.src = url;
+    compressedPreview.style.display = 'block';
+    compressedSize.textContent = `${width}×${height} · ${fmtKb(blob.size)}` + (blob.size <= targetBytes ? ' ✓ under target' : ' (closest achievable)');
+    downloadBtn.href = url;
+    downloadBtn.style.display = 'inline-block';
+
+    compressBtn.disabled = false;
+    compressBtn.textContent = 'Compress Image';
+  });
+})();
+
+/* =====================================================
+   TOOL 6: LinkedIn PDF Carousel Builder -> pdf-lib
+===================================================== */
+(function(){
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const slideList = document.getElementById('slideList');
+  const swatches = document.querySelectorAll('#themeSwatches .swatch');
+  let themeColor = '#1b4332';
+  let slides = [];
+  let sId = 0;
+
+  function hexToRgb01(hex){
+    const h = hex.replace('#','');
+    return {
+      r: parseInt(h.substring(0,2),16)/255,
+      g: parseInt(h.substring(2,4),16)/255,
+      b: parseInt(h.substring(4,6),16)/255
+    };
+  }
+
+  swatches.forEach(sw=>{
+    sw.addEventListener('click', ()=>{
+      swatches.forEach(s=>s.classList.remove('selected'));
+      sw.classList.add('selected');
+      themeColor = sw.dataset.color;
+      renderThumbs();
+    });
+  });
+
+  function addSlide(text){
+    sId++;
+    slides.push({ id:sId, text: text !== undefined ? text : `Slide ${slides.length+1}\n\nWrite your point here.` });
+    render();
+  }
+
+  function removeSlide(id){
+    slides = slides.filter(s=>s.id !== id);
+    render();
+  }
+
+  function render(){
+    slideList.innerHTML = '';
+    slides.forEach((s, idx)=>{
+      const card = document.createElement('div');
+      card.className = 'slide-card';
+      card.innerHTML = `
+        <div class="slide-thumb" style="background:${themeColor};" data-thumb="${s.id}">${escapeHtml(s.text).replace(/\n/g,'<br>')}</div>
+        <textarea data-id="${s.id}">${s.text}</textarea>
+        <div class="slide-actions">
+          <span class="note" style="margin:0;">Slide ${idx+1}</span>
+          <button class="btn danger removeSlideBtn" data-id="${s.id}" style="padding:6px 10px;">Remove</button>
+        </div>
+      `;
+      slideList.appendChild(card);
+    });
+    slideList.querySelectorAll('textarea').forEach(ta=>{
+      ta.addEventListener('input', ()=>{
+        const id = parseInt(ta.dataset.id,10);
+        const slide = slides.find(s=>s.id===id);
+        slide.text = ta.value;
+        const thumb = slideList.querySelector(`.slide-thumb[data-thumb="${id}"]`);
+        thumb.innerHTML = escapeHtml(ta.value).replace(/\n/g,'<br>');
+      });
+    });
+    slideList.querySelectorAll('.removeSlideBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> removeSlide(parseInt(btn.dataset.id,10)));
+    });
+  }
+
+  function renderThumbs(){
+    slideList.querySelectorAll('.slide-thumb').forEach(t=> t.style.background = themeColor);
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  document.getElementById('addSlideBtn').addEventListener('click', ()=> addSlide());
+
+  // seed with three starter slides
+  addSlide('5 lessons from\nmy first year\nfreelancing 👇');
+  addSlide('1. Charge for\nvalue, not hours.\n\nYour experience is\nwhat you\'re selling.');
+  addSlide('Follow for more\nposts like this.');
+
+  function wrapText(font, text, size, maxWidth){
+    const lines = [];
+    text.split('\n').forEach(rawLine=>{
+      const words = rawLine.split(' ');
+      let current = '';
+      words.forEach(word=>{
+        const trial = current ? current + ' ' + word : word;
+        if(font.widthOfTextAtSize(trial, size) > maxWidth && current){
+          lines.push(current);
+          current = word;
+        } else {
+          current = trial;
+        }
+      });
+      lines.push(current);
+    });
+    return lines;
+  }
+
+  document.getElementById('downloadCarouselBtn').addEventListener('click', async ()=>{
+    if(slides.length === 0){ alert('Add at least one slide first.'); return; }
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pageW = 540, pageH = 675; // 4:5 portrait, LinkedIn carousel optimal ratio
+    const color = hexToRgb01(themeColor);
+    const fontSize = 26;
+    const margin = 50;
+
+    slides.forEach((s, idx)=>{
+      const page = pdfDoc.addPage([pageW, pageH]);
+      page.drawRectangle({ x:0, y:0, width:pageW, height:pageH, color: rgb(color.r,color.g,color.b) });
+
+      const lines = wrapText(font, s.text, fontSize, pageW - margin*2);
+      const lineHeight = fontSize * 13 / 10;
+      const blockHeight = lines.length * (fontSize + 6);
+      let y = pageH/2 + blockHeight/2 - fontSize;
+
+      lines.forEach(line=>{
+        const textWidth = font.widthOfTextAtSize(line, fontSize);
+        page.drawText(line, {
+          x: (pageW - textWidth)/2,
+          y,
+          size: fontSize,
+          font,
+          color: rgb(1,1,1)
+        });
+        y -= (fontSize + 6);
+      });
+
+      page.drawText(`${idx+1}/${slides.length}`, {
+        x: pageW - 46, y: 22, size: 11, font, color: rgb(1,1,1)
+      });
+    });
+
+    const bytes = await pdfDoc.save();
+    window.__downloadBlob(bytes, 'linkedin-carousel.pdf', 'application/pdf');
+  });
+})();
+</script>
+</body>
+</html>
