@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://alltoolforest.github.io/hub/sitemap.xml
