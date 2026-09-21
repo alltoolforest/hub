@@ -3,7 +3,7 @@
 A focused collection of browser-based tools for Work, Documents, Images and Calculators.
 
 ## v2 status
-Feature development is frozen. The `restructure-v2` branch is in release-hardening / QA.
+Feature development is frozen. The `restructure-v2` branch is a deployment-ready release candidate for post-deployment user testing.
 
 ## Release gates
 - [x] Four category hubs
@@ -12,10 +12,9 @@ Feature development is frozen. The `restructure-v2` branch is in release-hardeni
 - [x] robots.txt and XML sitemap
 - [x] Baseline mobile/accessibility CSS
 - [x] Initial third-party dependency inventory
-- [ ] Full browser smoke test on desktop and mobile
-- [ ] Validate every tool with empty, invalid and representative inputs
-- [ ] Validate PDF/image/OCR workflows with real sample files
-- [ ] Check very large-file memory behavior and graceful errors
+- [ ] Post-deployment browser/device smoke test by owner and testers
+- [ ] Post-deployment end-to-end tool validation with representative files
+- [ ] Post-deployment large-file/memory observations and graceful-error review
 - [ ] Self-host or formally approve critical third-party runtime dependencies
 - [ ] Add production contact method and update privacy notice
 - [ ] Choose commercial hosting and production domain
@@ -28,4 +27,4 @@ Feature development is frozen. The `restructure-v2` branch is in release-hardeni
 GitHub remains source control and a development/staging surface. Commercial production hosting should be selected before monetized launch.
 
 ## Release rule
-Do not merge `restructure-v2` into `main` until the release gates are reviewed and explicitly approved.
+The branch is prepared as the v2 release candidate. Merge/deploy only with explicit owner approval; use post-deployment testing to capture device-specific issues for fixes or v3.
