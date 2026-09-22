@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'hybrid/**'
+      - 'hybrid/hybrid-review-source.zip'
       - '.github/workflows/deploy-hybrid.yml'
   workflow_dispatch:
 
@@ -30,19 +30,23 @@ jobs:
           set -euo pipefail
           rm -rf hybrid-build
           mkdir -p hybrid-build
-          cat hybrid/source.b64.part*.txt | base64 --decode > /tmp/hybrid-source.zip
-          unzip -q /tmp/hybrid-source.zip -d hybrid-build
+          unzip -q hybrid/hybrid-review-source.zip -d hybrid-build
+
+      - name: Verify review archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(stat -c%s hybrid/hybrid-review-source.zip)" = "69675"
+          echo "f6fe59d49ebaebe845c9791504c4d337940c348e18b5a154c65775e6c66d82be  hybrid/hybrid-review-source.zip" | sha256sum -c -
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: hybrid-build/package-lock.json
 
-      - name: Install exact dependencies
+      - name: Install pinned direct dependencies
         working-directory: hybrid-build
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Vendor browser engines
         working-directory: hybrid-build
@@ -60,8 +64,8 @@ jobs:
         working-directory: hybrid-build
         run: npm run check
 
-      - name: Include reproducible source package
-        run: cp /tmp/hybrid-source.zip hybrid-build/dist/alltoolforest-source.zip
+      - name: Include review source package
+        run: cp hybrid/hybrid-review-source.zip hybrid-build/dist/alltoolforest-source.zip
 
       - name: Publish generated site into main root
         shell: bash
