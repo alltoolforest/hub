@@ -1,10 +1,15 @@
 name: Build and publish AllToolForest v2.1 Hybrid
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'hybrid/**'
+      - '.github/workflows/deploy-hybrid.yml'
   push:
     branches: [main]
     paths:
-      - 'hybrid/hybrid-review-source.zip'
+      - 'hybrid/**'
       - '.github/workflows/deploy-hybrid.yml'
   workflow_dispatch:
 
@@ -24,20 +29,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Reconstruct hybrid source
+      - name: Reconstruct and verify hybrid source
         shell: bash
         run: |
           set -euo pipefail
+          cat hybrid/chunk-*.b64 | base64 -d > hybrid/hybrid-review-source.zip
+          test "$(stat -c%s hybrid/hybrid-review-source.zip)" = "69675"
+          echo "f6fe59d49ebaebe845c9791504c4d337940c348e18b5a154c65775e6c66d82be  hybrid/hybrid-review-source.zip" | sha256sum -c -
           rm -rf hybrid-build
           mkdir -p hybrid-build
           unzip -q hybrid/hybrid-review-source.zip -d hybrid-build
 
-      - name: Verify review archive
+      - name: Verify staging configuration
         shell: bash
         run: |
           set -euo pipefail
-          test "$(stat -c%s hybrid/hybrid-review-source.zip)" = "69675"
-          echo "f6fe59d49ebaebe845c9791504c4d337940c348e18b5a154c65775e6c66d82be  hybrid/hybrid-review-source.zip" | sha256sum -c -
+          node -e "const c=require('./hybrid-build/site-config.json'); if(c.basePath!=='/hub/' || c.domain!=='') process.exit(1); console.log('Staging basePath/indexing configuration verified.')"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -68,6 +75,7 @@ jobs:
         run: cp hybrid/hybrid-review-source.zip hybrid-build/dist/alltoolforest-source.zip
 
       - name: Publish generated site into main root
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
