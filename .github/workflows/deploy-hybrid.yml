@@ -1,0 +1,82 @@
+name: Build and publish AllToolForest v2.1 Hybrid
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hybrid/**'
+      - '.github/workflows/deploy-hybrid.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alltoolforest-hybrid-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct hybrid source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf hybrid-build
+          mkdir -p hybrid-build
+          cat hybrid/source.b64.part*.txt | base64 --decode > /tmp/hybrid-source.zip
+          unzip -q /tmp/hybrid-source.zip -d hybrid-build
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: hybrid-build/package-lock.json
+
+      - name: Install exact dependencies
+        working-directory: hybrid-build
+        run: npm ci
+
+      - name: Vendor browser engines
+        working-directory: hybrid-build
+        run: npm run vendor
+
+      - name: Build site
+        working-directory: hybrid-build
+        run: npm run build
+
+      - name: Run regression tests
+        working-directory: hybrid-build
+        run: npm test
+
+      - name: Run static checks
+        working-directory: hybrid-build
+        run: npm run check
+
+      - name: Include reproducible source package
+        run: cp /tmp/hybrid-source.zip hybrid-build/dist/alltoolforest-source.zip
+
+      - name: Publish generated site into main root
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf work documents images calculators assets about privacy request legacy
+          rm -f index.html 404.html robots.txt sitemap.xml site.webmanifest favicon.svg site-config.json _headers alltoolforest-source.zip .nojekyll
+          cp -a hybrid-build/dist/. ./
+          touch .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Generated site is already current."
+            exit 0
+          fi
+          git commit -m "Deploy AllToolForest v2.1 hybrid review [skip ci]"
+          git push origin HEAD:main
