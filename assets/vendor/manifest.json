@@ -1,0 +1,40 @@
+{
+  "pdf": {
+    "script": "assets/vendor/pdf-lib.js",
+    "global": "PDFLib"
+  },
+  "pdfjs": {
+    "module": "assets/vendor/pdf.mjs"
+  },
+  "mammoth": {
+    "script": "assets/vendor/mammoth.js",
+    "global": "mammoth"
+  },
+  "purify": {
+    "script": "assets/vendor/purify.js",
+    "global": "DOMPurify"
+  },
+  "docx": {
+    "script": "assets/vendor/docx.js",
+    "global": "docx"
+  },
+  "excel": {
+    "script": "assets/vendor/excel.js",
+    "global": "ExcelJS"
+  },
+  "csv": {
+    "script": "assets/vendor/csv.js",
+    "global": "Papa"
+  },
+  "heic": {
+    "script": "assets/vendor/heic.js",
+    "global": "heic2any"
+  },
+  "ocr": {
+    "script": "assets/vendor/ocr.js",
+    "global": "Tesseract"
+  },
+  "background": {
+    "module": "assets/vendor/background.mjs"
+  }
+}

@@ -1,0 +1,15 @@
+@imgly/background-removal 1.7.0 — SEE LICENSE IN LICENSE.md
+docx 9.7.1 — MIT
+dompurify 3.4.15 — (MPL-2.0 OR Apache-2.0)
+esbuild 0.28.2 — MIT
+exceljs 4.4.0 — MIT
+heic2any 0.0.4 — MIT
+jsdom 27.4.0 — MIT
+mammoth 1.12.3 — BSD-2-Clause
+papaparse 5.5.3 — MIT
+pdf-lib 1.17.1 — MIT
+pdfjs-dist 6.3.289 — Apache-2.0
+tesseract.js 7.0.0 — Apache-2.0
+vite 8.3.0 — MIT
+
+See package-lock.json for exact transitive versions. IMG.LY model assets are downloaded on demand from its configured public path.
