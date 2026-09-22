@@ -72,8 +72,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ln -s . dist/hub
-          trap 'rm -f dist/hub' EXIT
+          mkdir -p dist/hub
+          printf '%s\n' '<!doctype html><html lang="en"><head><title>Pages subpath check</title></head><body></body></html>' > dist/hub/index.html
+          trap 'rm -rf dist/hub' EXIT
           npm run check
 
       - name: Include review source package
