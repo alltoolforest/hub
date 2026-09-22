@@ -69,7 +69,12 @@ jobs:
 
       - name: Run static checks
         working-directory: hybrid-build
-        run: npm run check
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s . dist/hub
+          trap 'rm -f dist/hub' EXIT
+          npm run check
 
       - name: Include review source package
         run: cp hybrid/hybrid-review-source.zip hybrid-build/dist/alltoolforest-source.zip
