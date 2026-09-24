@@ -78,6 +78,7 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
   const mapped=blocks.map((block)=>{
     const matches=[];
     const sourceLines=[];
+    const pendingClaims=new Set();
     let minConfidence=1;
     let mappingReason=null;
     let fontReason=null;
@@ -85,7 +86,10 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
     let allFontsDirect=true;
 
     for(const line of block.lines){
-      const candidates=candidateSequences(sourceRuns,line).filter(seq=>seq.every(r=>!claimed.has(`${r.streamIndex}:${r.operatorIndex}`)));
+      const candidates=candidateSequences(sourceRuns,line).filter(seq=>seq.every(r=>{
+        const key=`${r.streamIndex}:${r.operatorIndex}`;
+        return !claimed.has(key)&&!pendingClaims.has(key);
+      }));
       if(candidates.length===0){mappingReason='SOURCE_NOT_MAPPED';minConfidence=0;continue;}
       const scored=candidates.map(seq=>({seq,score:scoreSequence(seq,line)})).sort((a,b)=>b.score-a.score);
       if(scored.length>1&&Math.abs(scored[0].score-scored[1].score)<0.05){mappingReason='AMBIGUOUS_SOURCE_MAPPING';minConfidence=Math.min(minConfidence,0.4);continue;}
@@ -95,7 +99,7 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
       sourceLines.push(best.seq.slice());
       directSafe&&=isDirectSafeSequence(best.seq);
       for(const r of best.seq){
-        claimed.add(`${r.streamIndex}:${r.operatorIndex}`);
+        pendingClaims.add(`${r.streamIndex}:${r.operatorIndex}`);
         const support=classifyFontSupport(r.fontContext);
         if(support.tier!=='DIRECT_EDIT'){
           allFontsDirect=false;
@@ -117,6 +121,7 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
       reason=fontReason||(directSafe?'FONT_SUBSTITUTION_REQUIRED':'RECONSTRUCT_SOURCE_SEQUENCE');
     }
 
+    if(allLinesMapped)for(const key of pendingClaims)claimed.add(key);
     return {...block,sourceRuns:matches,sourceLines,confidence,tier,reason};
   });
   return {blocks:mapped,sourceRuns,fontResolver};
