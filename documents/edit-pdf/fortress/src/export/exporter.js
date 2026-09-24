@@ -98,7 +98,7 @@ function planDirectReplacement(block,replacementUnicode){
   return {success:true,replacements,layout};
 }
 
-export async function exportEditedPdf(originalBytes,transactions){
+export async function exportEditedPdf(originalBytes,transactions,{validate=true}={}){
   const doc=await PDFDocument.load(originalBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
   const byStream=new Map();
   const checks=[];
@@ -148,7 +148,7 @@ export async function exportEditedPdf(originalBytes,transactions){
   for(const item of reconstructions)await drawReconstructedText(doc,item,fontCache,warnings);
 
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
-  const validation=await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks});
-  if(!validation.ok)throw Object.assign(new Error('Export validation failed'),{validation});
+  const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks}):null;
+  if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{validation});
   return {bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,validation,warnings};
 }
