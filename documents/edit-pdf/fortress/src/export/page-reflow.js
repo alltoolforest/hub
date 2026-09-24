@@ -16,12 +16,28 @@ function drawSlice(page,embedded,{x=0,y=0,width,height}){
   page.drawPage(embedded,{x,y,width,height});
 }
 
+async function buildFrameSlices(doc,donorPage,{width,height,flowLeft,flowRight,frameTop,frameBottom}){
+  const left=flowLeft>0?await embedSlice(doc,donorPage,{left:0,bottom:0,right:flowLeft,top:height}):null;
+  const right=flowRight<width?await embedSlice(doc,donorPage,{left:flowRight,bottom:0,right:width,top:height}):null;
+  const top=frameTop>0?await embedSlice(doc,donorPage,{left:flowLeft,bottom:height-frameTop,right:flowRight,top:height}):null;
+  const bottom=frameBottom>0?await embedSlice(doc,donorPage,{left:flowLeft,bottom:0,right:flowRight,top:frameBottom}):null;
+  return {left,right,top,bottom};
+}
+
+function drawFrame(page,frame,{width,height,flowLeft,flowRight,frameTop,frameBottom}){
+  if(frame.left)drawSlice(page,frame.left,{x:0,y:0,width:flowLeft,height});
+  if(frame.right)drawSlice(page,frame.right,{x:flowRight,y:0,width:width-flowRight,height});
+  if(frame.top)drawSlice(page,frame.top,{x:flowLeft,y:height-frameTop,width:flowRight-flowLeft,height:frameTop});
+  if(frame.bottom)drawSlice(page,frame.bottom,{x:flowLeft,y:0,width:flowRight-flowLeft,height:frameBottom});
+}
+
 /**
  * Rebuild one page as preserved PDF slices with a vertical gap inserted.
- * The original slice content remains vector/text PDF content inside Form
- * XObjects; it is not rasterized. Complex content below the cut (tables,
- * borders, images, text) therefore moves together instead of being rewritten
- * object-by-object.
+ *
+ * Only the interior document band moves. Page-edge framing stays fixed. The
+ * moving band remains vector/text PDF content inside Form XObjects, so tables,
+ * borders inside the body, images and text move together instead of being
+ * reconstructed object-by-object.
  */
 export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,sequenceIndex=0}={}){
   const plan=tx?.reflowPlan;
@@ -38,9 +54,8 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     return {applied:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED',overflowPageCount:0};
   }
 
-  // Rebuilding a page would orphan/misplace page-level annotations because
-  // their rectangles would need independent geometry updates. Keep the normal
-  // Add Text behavior instead of risking annotation corruption.
+  // Rebuilding a page would require separate annotation rectangle geometry.
+  // Fall back rather than risk corrupting links, widgets or comments.
   if(pageHasAnnotations(livePage)){
     return {applied:false,reason:'ANNOTATED_PAGE_REFLOW_UNSAFE',overflowPageCount:0};
   }
@@ -55,8 +70,17 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const textBottomY=Number(layout?.bottomY);
   if(!Number.isFinite(textBottomY))return {applied:false,reason:'REFLOW_TEXT_GEOMETRY_MISSING',overflowPageCount:0};
 
-  // Existing whitespace is consumed first. Only the overlap amount is added as
-  // new vertical space, which avoids the "everything jumps down" behavior.
+  const requestedLeft=Number(plan.flowBand?.left);
+  const requestedRight=Number(plan.flowBand?.right);
+  const flowLeft=clamp(Number.isFinite(requestedLeft)?requestedLeft:0,0,width-8);
+  const flowRight=clamp(Number.isFinite(requestedRight)?requestedRight:width,flowLeft+8,width);
+  if(flowRight-flowLeft<40)return {applied:false,reason:'REFLOW_BAND_TOO_NARROW',overflowPageCount:0};
+
+  const frameBottom=clamp(Number(plan.frame?.bottom)||0,0,Math.max(0,cutY-4));
+  const frameTop=clamp(Number(plan.frame?.top)||0,0,Math.max(0,height-cutY-4));
+
+  // Existing whitespace is consumed first. Only actual overlap creates new
+  // vertical space, which avoids unnecessary page movement for short inserts.
   const delta=Math.max(0,flowTopY+safetyGap-textBottomY);
   if(delta<.5){
     return {
@@ -71,35 +95,44 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
   }
 
-  const overflowNeeded=contentBottomY-delta<bottomMargin;
-  const overflowBoundary=overflowNeeded?clamp(delta+bottomMargin,0,cutY):0;
-  const usableOverflowHeight=Math.max(40,height-topMargin-bottomMargin);
+  // Keep moved content above the preserved bottom frame. If it would cross
+  // that protected area, move only the overflowing lower body onto continuation
+  // pages while leaving the frame itself fixed.
+  const protectedBottom=Math.max(frameBottom+safetyGap,bottomMargin);
+  const overflowNeeded=contentBottomY-delta<protectedBottom;
+  const overflowBoundary=overflowNeeded?clamp(delta+protectedBottom,frameBottom,cutY):frameBottom;
+  const effectiveTopMargin=Math.max(topMargin,frameTop+safetyGap);
+  const usableOverflowHeight=Math.max(40,height-effectiveTopMargin-protectedBottom);
 
-  // Snapshot before rebuilding so the donor page represents the exact current
-  // state, including previous edits/reflows on this page.
+  // Snapshot before rebuilding so donor content includes all earlier edits and
+  // earlier reflows already applied to this source page.
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false});
   const donorPage=donorDoc.getPage(pageIndex);
 
-  const topSlice=await embedSlice(doc,donorPage,{left:0,bottom:cutY,right:width,top:height});
-  const visibleBottomSlice=await embedSlice(doc,donorPage,{left:0,bottom:overflowBoundary,right:width,top:cutY});
+  const frame=await buildFrameSlices(doc,donorPage,{width,height,flowLeft,flowRight,frameTop,frameBottom});
+  const topBody=await embedSlice(doc,donorPage,{left:flowLeft,bottom:cutY,right:flowRight,top:height-frameTop});
+  const visibleBottom=await embedSlice(doc,donorPage,{left:flowLeft,bottom:overflowBoundary,right:flowRight,top:cutY});
 
-  // Insert replacement before the old page, then delete the old page. Net page
-  // index of the source page remains unchanged.
+  // Insert replacement before the old page, then delete the old page. The
+  // source page index remains stable throughout the editing session.
   const replacement=doc.insertPage(pageIndex,[width,height]);
-  if(topSlice)drawSlice(replacement,topSlice,{x:0,y:cutY,width,height:height-cutY});
-  if(visibleBottomSlice){
-    const sliceHeight=cutY-overflowBoundary;
-    drawSlice(replacement,visibleBottomSlice,{x:0,y:overflowBoundary-delta,width,height:sliceHeight});
+  drawFrame(replacement,frame,{width,height,flowLeft,flowRight,frameTop,frameBottom});
+  if(topBody){
+    drawSlice(replacement,topBody,{x:flowLeft,y:cutY,width:flowRight-flowLeft,height:height-frameTop-cutY});
+  }
+  if(visibleBottom){
+    const h=cutY-overflowBoundary;
+    drawSlice(replacement,visibleBottom,{x:flowLeft,y:overflowBoundary-delta,width:flowRight-flowLeft,height:h});
   }
   doc.removePage(pageIndex+1);
 
   let overflowPageCount=0;
-  if(overflowNeeded&&overflowBoundary>.5){
+  if(overflowNeeded&&overflowBoundary>frameBottom+.5){
     const slices=[];
     let sliceTop=overflowBoundary;
-    while(sliceTop>.5){
-      const sliceBottom=Math.max(0,sliceTop-usableOverflowHeight);
+    while(sliceTop>frameBottom+.5){
+      const sliceBottom=Math.max(frameBottom,sliceTop-usableOverflowHeight);
       slices.push({bottom:sliceBottom,top:sliceTop});
       sliceTop=sliceBottom;
       if(slices.length>16)throw Object.assign(new Error('Reflow would create too many continuation pages.'),{code:'REFLOW_PAGE_LIMIT'});
@@ -107,13 +140,16 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
 
     for(let i=0;i<slices.length;i++){
       const slice=slices[i];
-      const embedded=await embedSlice(doc,donorPage,{left:0,bottom:slice.bottom,right:width,top:slice.top});
+      const embedded=await embedSlice(doc,donorPage,{left:flowLeft,bottom:slice.bottom,right:flowRight,top:slice.top});
       const continuation=preview?doc.addPage([width,height]):doc.insertPage(pageIndex+1+i,[width,height]);
+      drawFrame(continuation,frame,{width,height,flowLeft,flowRight,frameTop,frameBottom});
       const h=slice.top-slice.bottom;
-      drawSlice(continuation,embedded,{x:0,y:height-topMargin-h,width,height:h});
+      drawSlice(continuation,embedded,{x:flowLeft,y:height-effectiveTopMargin-h,width:flowRight-flowLeft,height:h});
       overflowPageCount++;
     }
   }
+
+  try{donorDoc.close?.();}catch{}
 
   return {
     applied:true,
@@ -128,6 +164,10 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       contentBottomY,
       overflowBoundary,
       overflowPageCount,
+      flowLeft,
+      flowRight,
+      frameTop,
+      frameBottom,
     },
   };
 }
