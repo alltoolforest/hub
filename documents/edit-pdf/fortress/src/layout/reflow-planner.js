@@ -17,10 +17,10 @@ function shiftedRect(rect,dy){return {...rect,bottom:rect.bottom+dy,top:rect.top
 /**
  * Build a conservative vertical-flow plan for Add Text.
  *
- * The planner does not mutate the PDF. It finds the nearest content band below
- * the insertion lane, then chooses a horizontal cut that does not pass through
- * any detected text block. The exporter later measures the actual paragraph
- * and shifts the preserved PDF region only when the new text needs more room.
+ * The planner finds the next content band below the insertion, avoids cutting
+ * through detected text, and calculates an interior flow band. Page-edge
+ * framing is intentionally kept outside that band so common resume borders do
+ * not get split when body content moves.
  */
 export function planInsertionReflow({
   blocks=[],
@@ -50,8 +50,6 @@ export function planInsertionReflow({
   for(const block of blocks||[]){
     let rect=rectOf(block);
     if(!rect)continue;
-    // Metrics describe already-applied reflows on this visual page. Apply them
-    // sequentially so a second insertion plans against what the user sees.
     for(const metric of existingMetrics||[]){
       if(metric?.pageIndex!==block?.pageIndex)continue;
       if(rect.top<=Number(metric.cutY)+.75)rect=shiftedRect(rect,-Math.max(0,Number(metric.delta)||0));
@@ -95,6 +93,21 @@ export function planInsertionReflow({
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
   const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
 
+  const allLeft=Math.min(...rects.map(({rect})=>rect.left));
+  const allRight=Math.max(...rects.map(({rect})=>rect.right));
+  const allBottom=Math.min(...rects.map(({rect})=>rect.bottom));
+  const allTop=Math.max(...rects.map(({rect})=>rect.top));
+  const bandPadding=Math.max(18,size*1.5);
+  const flowLeft=clamp(Math.min(allLeft,laneLeft)-bandPadding,0,pageWidth-8);
+  const flowRight=clamp(Math.max(allRight,laneRight)+bandPadding,flowLeft+40,pageWidth);
+
+  // Preserve a narrow top/bottom frame where there is a genuine text-free
+  // margin. This catches common A4 resume borders without freezing body text.
+  const lowerTextMargin=Math.max(0,allBottom);
+  const upperTextMargin=Math.max(0,pageHeight-allTop);
+  const frameBottom=clamp(lowerTextMargin*.72,4,36);
+  const frameTop=clamp(upperTextMargin*.9,4,36);
+
   return {
     enabled:true,
     mode:'VERTICAL_REGION_REFLOW',
@@ -108,6 +121,8 @@ export function planInsertionReflow({
     pageHeight,
     pageRotation:rotation,
     lane:{left:laneLeft,right:laneRight},
+    flowBand:{left:flowLeft,right:flowRight},
+    frame:{top:frameTop,bottom:frameBottom},
     confidence:'TEXT_BAND_SAFE_CUT',
   };
 }
