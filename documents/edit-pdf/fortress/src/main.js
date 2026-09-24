@@ -119,10 +119,46 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
   function setStatus(msg,kind=''){status.textContent=msg||'';status.dataset.kind=kind;onStatus(msg);}
   function updateHistory(){undo.disabled=!history.state.canUndo;redo.disabled=!history.state.canRedo;}
-  function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
+
+  function overflowCountsBySourcePage(){
+    const counts=new Map();
+    for(const metric of previewReflowMetrics||[]){
+      const source=Number(metric?.pageIndex);
+      const count=Math.max(0,Number(metric?.overflowPageCount)||0);
+      if(Number.isInteger(source)&&source>=0&&count>0)counts.set(source,(counts.get(source)||0)+count);
+    }
+    return counts;
+  }
+
+  function previewPageDescriptors(){
+    const originalCount=pdfDoc?.getPageCount?.()||0;
+    const counts=overflowCountsBySourcePage();
+    const pages=[];
+    for(let sourcePageIndex=0;sourcePageIndex<originalCount;sourcePageIndex++){
+      pages.push({kind:'source',sourcePageIndex});
+      const overflowCount=counts.get(sourcePageIndex)||0;
+      for(let continuationIndex=0;continuationIndex<overflowCount;continuationIndex++){
+        pages.push({kind:'continuation',sourcePageIndex,continuationIndex});
+      }
+    }
+    const actualPreviewCount=Number(previewRenderer?.doc?.numPages)||pages.length;
+    while(pages.length<actualPreviewCount)pages.push({kind:'continuation',sourcePageIndex:null,continuationIndex:pages.length});
+    return pages.slice(0,actualPreviewCount);
+  }
+
+  function activePageDescriptors(){
+    if(previewRenderer)return previewPageDescriptors();
+    const count=pdfDoc?.getPageCount?.()||0;
+    return Array.from({length:count},(_,sourcePageIndex)=>({kind:'source',sourcePageIndex}));
+  }
+
+  function activePageCount(){return activePageDescriptors().length;}
+  function currentPageDescriptor(){return activePageDescriptors()[pageIndex]||null;}
+  function currentSourcePageIndex(){const d=currentPageDescriptor();return d?.kind==='source'?d.sourcePageIndex:null;}
+  function updatePageLabel(){const count=activePageCount();pageLabel.textContent=count?`${pageIndex+1} / ${count}`:'—';}
   function currentText(block){const tx=txByBlock.get(block.id);return tx?.displayUnicode??tx?.replacementUnicode??block.text;}
   function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true'};}
-  function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&Number(m.delta)>0).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);}
+  function metricsForPage(index=currentSourcePageIndex()){return Number.isInteger(index)?previewReflowMetrics.filter(m=>m.pageIndex===index&&Number(m.delta)>0).sort((a,b)=>a.sequenceIndex-b.sequenceIndex):[];}
 
   function visualBlock(block){
     let out=block;
@@ -192,7 +228,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }else if(!activeTextInput){
       hideFormatToolsIfIdle();
     }
-    if(announce)setStatus(addTextMode?'Add Text is on — choose formatting, then click anywhere on the PDF.':'Click existing text to edit and format it, or choose Add text for a new paragraph.');
+    if(announce){
+      if(currentPageDescriptor()?.kind==='continuation'&&addTextMode)setStatus('This is an automatically generated continuation page. Edit the source content on the preceding page.','warning');
+      else setStatus(addTextMode?'Add Text is on — choose formatting, then click anywhere on the PDF.':'Click existing text to edit and format it, or choose Add text for a new paragraph.');
+    }
   }
 
   async function open(file){
@@ -220,8 +259,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }catch(e){setStatus(e.message,'error');onError(e);throw e;}
   }
 
-  async function analyzePage(index=pageIndex,{announce=true}={}){
+  async function analyzePage(index,{announce=true}={}){
     if(!pdfDoc)throw new Error('No PDF open');
+    if(!Number.isInteger(index)||index<0||index>=pdfDoc.getPageCount())throw new Error('Source PDF page is unavailable');
     if(announce)setStatus('Finding editable text…');
     const visual=await extractVisualText(renderer,index);
     const blocks=buildLogicalBlocks(visual.items,{pageIndex:index,pageRotation:model.page(index).rotation});
@@ -239,8 +279,12 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     insertEditorCleanup?.();insertEditorCleanup=null;
     activeTextInput=null;activeInputScale=1;
     if(!addTextMode){formatContext='none';formatTools.hidden=true;}
+    const count=activePageCount();
+    if(count&&pageIndex>=count)pageIndex=count-1;
+    if(pageIndex<0)pageIndex=0;
     docArea.innerHTML='';
     updatePageLabel();
+    const descriptor=currentPageDescriptor();
     const wrap=document.createElement('div');wrap.className='pdf-page-wrap';
     const canvas=document.createElement('canvas');canvas.className='pdf-page-canvas';
     const layer=document.createElement('div');layer.className='pdf-hit-layer';
@@ -252,8 +296,19 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const scale=fit*zoom;
     const r=await displayRenderer.render(pageIndex,canvas,{scale});
     wrap.style.width=`${r.cssWidth}px`;wrap.style.height=`${r.cssHeight}px`;layer.style.width=`${r.cssWidth}px`;layer.style.height=`${r.cssHeight}px`;
-    analysis=await analyzePage(pageIndex,{announce});
     layer.__matrix=r.matrix;
+
+    if(descriptor?.kind==='continuation'){
+      analysis={pageIndex:null,blocks:[],sourceRuns:[],streams:[]};
+      if(announce)setStatus(`Continuation page from page ${(descriptor.sourcePageIndex??0)+1} — overflow content continues here automatically.`);
+      layer.addEventListener('click',(evt)=>{
+        if(addTextMode&&evt.target===layer)setStatus('This continuation page is generated automatically. Edit or add content on the source page instead.','warning');
+      });
+      return;
+    }
+
+    const sourcePageIndex=descriptor?.sourcePageIndex;
+    analysis=await analyzePage(sourcePageIndex,{announce});
 
     layer.addEventListener('click',(evt)=>{
       if(!addTextMode||evt.target!==layer)return;
@@ -284,7 +339,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }
 
     for(const tx of txByBlock.values()){
-      if(tx.kind!=='INSERT_TEXT'||tx.pageIndex!==pageIndex)continue;
+      if(tx.kind!=='INSERT_TEXT'||tx.pageIndex!==sourcePageIndex)continue;
       const shownTx=visualInsertedTransaction(tx);
       const rect=pdfRectToScreen(r.matrix,insertedHitBounds(shownTx));
       const hit=document.createElement('button');
@@ -371,6 +426,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
   async function beginInsertEditor(layer,matrix,evt,existingTx=null){
     evt?.preventDefault?.();
+    const descriptor=currentPageDescriptor();
+    if(!existingTx&&descriptor?.kind!=='source')throw Object.assign(new Error('Add text is not available directly on an automatically generated continuation page.'),{code:'CONTINUATION_PAGE_READONLY'});
+    const sourcePageIndex=existingTx?.pageIndex??descriptor?.sourcePageIndex;
+    if(!Number.isInteger(sourcePageIndex))throw Object.assign(new Error('Source page is unavailable for editing.'),{code:'SOURCE_PAGE_UNAVAILABLE'});
     inline?.cancel();
     insertEditorCleanup?.();insertEditorCleanup=null;
     const layerRect=layer.getBoundingClientRect();
@@ -427,7 +486,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
           const p=screenPointToPdf(matrix,left,baselineScreenY);
           const p2=screenPointToPdf(matrix,left+desiredWidth,baselineScreenY);
           const pdfWidth=Math.max(40,Math.hypot(p2.x-p.x,p2.y-p.y));
-          const geometry=currentPageGeometry||{width:Math.max(p.x+pdfWidth,1),height:Math.max(p.y+activeStyle.fontSize*4,1),rotation:model?.page(pageIndex)?.rotation||0};
+          const geometry=currentPageGeometry||{width:Math.max(p.x+pdfWidth,1),height:Math.max(p.y+activeStyle.fontSize*4,1),rotation:model?.page(sourcePageIndex)?.rotation||0};
           const reflowPlan=planInsertionReflow({
             blocks:analysis?.blocks||[],
             x:p.x,
@@ -437,15 +496,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
             pageWidth:geometry.width,
             pageHeight:geometry.height,
             pageRotation:geometry.rotation,
-            existingMetrics:metricsForPage(pageIndex),
+            existingMetrics:metricsForPage(sourcePageIndex),
           });
-          tx=createInsertTransaction({pageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth,reflowPlan});
+          tx=createInsertTransaction({pageIndex:sourcePageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth,reflowPlan});
         }
         const preview=await queueInsertion(tx,existingTx);
         cleanup();setAddTextMode(false,{announce:false});
         const metric=preview?.reflowMetrics?.find(m=>m.transactionId===tx.id&&Number(m.delta)>0);
-        if(existingTx)setStatus(metric?.overflowPageCount?'Added text updated — lower content reflowed and overflow will continue on a new page when saved.':(metric?'Added text updated — lower content moved down automatically.':'Added text updated — continue editing or Save a copy.'));
-        else setStatus(metric?.overflowPageCount?'New text added — lower content reflowed and overflow will continue on a new page when saved.':(metric?'New text added — lower content moved down automatically.':'New text added — existing spacing was sufficient.'));
+        if(existingTx)setStatus(metric?.overflowPageCount?'Added text updated — lower content reflowed onto a continuation page.':(metric?'Added text updated — lower content moved down automatically.':'Added text updated — continue editing or Save a copy.'));
+        else setStatus(metric?.overflowPageCount?'New text added — lower content continued onto the next page.':(metric?'New text added — lower content moved down automatically.':'New text added — existing spacing was sufficient.'));
       }catch(error){done.disabled=false;cancel.disabled=false;input.disabled=false;input.focus();setStatus(error.code||error.message,'error');onError(error);}
     });
   }
@@ -575,7 +634,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     updateHistory();onChange([...txByBlock.values()]);previewToken++;
     previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview.reflowMetrics||[];
     await renderPage({announce:false});
-    if(metric?.overflowPageCount)setStatus('Paragraph expanded safely — lower content moved and overflow will continue on a new page when saved.');
+    if(metric?.overflowPageCount)setStatus('Paragraph expanded safely — overflow moved onto the next continuation page and later original pages shifted forward.');
     else if(Number(metric?.delta)>0)setStatus('Paragraph expanded safely — content below moved down automatically.');
     else setStatus('Paragraph expanded safely within the available spacing.');
   }
@@ -672,10 +731,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   redo.addEventListener('click',()=>redoAction().catch(()=>{}));
   save.addEventListener('click',()=>saveCopy().catch(()=>{}));
   prev.addEventListener('click',async()=>{if(pageIndex>0){pageIndex--;await renderPage();}});
-  next.addEventListener('click',async()=>{if(pdfDoc&&pageIndex<pdfDoc.getPageCount()-1){pageIndex++;await renderPage();}});
+  next.addEventListener('click',async()=>{if(pageIndex<activePageCount()-1){pageIndex++;await renderPage();}});
   zoomOut.addEventListener('click',async()=>{zoom=Math.max(.6,zoom-.15);await renderPage();});
   zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,pageCount:activePageCount(),pageDescriptor:currentPageDescriptor(),analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }
