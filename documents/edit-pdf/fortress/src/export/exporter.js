@@ -131,6 +131,8 @@ async function drawInsertedText(doc,tx,fontCache,warnings){
     }
     page.drawText(text,{x,y:y-i*lineHeight,size,font,color:rgb(0,0,0)});
   }
+  tx._renderedLineCount=lines.length;
+  tx._renderedWidth=availableWidth;
   warnings.push({code:'TEXT_INSERTED',pageIndex:tx.pageIndex,transactionId:tx.id,lineCount:lines.length});
 }
 
