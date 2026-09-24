@@ -30,7 +30,7 @@ export function createEditTransaction({pageIndex,block,replacementUnicode,style=
   };
 }
 
-export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=false,italic=false,fontFamily='serif',lineHeight=null,maxWidth=300}){
+export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=false,italic=false,fontFamily='serif',lineHeight=null,maxWidth=300,reflowPlan=null}){
   const size=Math.max(6,Math.min(72,Number(fontSize)||12));
   return {
     id:uniqueId('insert'),
@@ -47,6 +47,7 @@ export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=fal
     bold:!!bold,
     italic:!!italic,
     fontFamily:normalizeFamily(fontFamily),
+    reflowPlan:reflowPlan&&typeof reflowPlan==='object'?{...reflowPlan}:null,
     status:'COMMITTED',
   };
 }
