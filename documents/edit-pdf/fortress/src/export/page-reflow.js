@@ -97,10 +97,14 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
 
   // Keep moved content above the preserved bottom frame. If it would cross
   // that protected area, move only the overflowing lower body onto continuation
-  // pages while leaving the frame itself fixed.
+  // pages while leaving the frame itself fixed. When no overflow is required,
+  // trim only the proven text-free margin that would otherwise slide beneath
+  // the fixed frame.
   const protectedBottom=Math.max(frameBottom+safetyGap,bottomMargin);
   const overflowNeeded=contentBottomY-delta<protectedBottom;
-  const overflowBoundary=overflowNeeded?clamp(delta+protectedBottom,frameBottom,cutY):frameBottom;
+  const overflowBoundary=overflowNeeded
+    ?clamp(delta+protectedBottom,frameBottom,cutY)
+    :clamp(frameBottom+delta,frameBottom,cutY);
   const effectiveTopMargin=Math.max(topMargin,frameTop+safetyGap);
   const usableOverflowHeight=Math.max(40,height-effectiveTopMargin-protectedBottom);
 
