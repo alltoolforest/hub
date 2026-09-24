@@ -182,6 +182,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const input=inline.begin(editBlock,matrix,tap);
     viewportCtl.watch(input);
     const done=document.createElement('button');done.className='pdf-done';done.textContent='Done';done.type='button';
+    const inputLeft=input.offsetLeft,inputTop=input.offsetTop,inputWidth=input.offsetWidth,inputHeight=input.offsetHeight;
+    const buttonWidth=72,gap=6;
+    let doneLeft=inputLeft+inputWidth+gap;
+    let doneTop=Math.max(4,inputTop);
+    if(doneLeft+buttonWidth>layer.clientWidth-4){
+      doneLeft=Math.min(Math.max(4,inputLeft),Math.max(4,layer.clientWidth-buttonWidth-4));
+      doneTop=inputTop+inputHeight+gap;
+    }
+    Object.assign(done.style,{left:`${doneLeft}px`,top:`${doneTop}px`,right:'auto'});
     done.addEventListener('click',async()=>{
       done.disabled=true;
       const result=await inline.commit();
