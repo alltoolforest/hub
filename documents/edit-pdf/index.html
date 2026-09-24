@@ -13,6 +13,7 @@
   <link rel="manifest" href="../../site.webmanifest">
   <link rel="stylesheet" href="../../assets/css/main.css">
   <link rel="stylesheet" href="./fortress/src/styles.css">
+  <link rel="stylesheet" href="./fortress/src/font-size-precision.css">
   <style>
     .fortress-shell{padding:0;overflow:hidden;min-height:620px}
     .fortress-picker{min-height:620px;display:grid;place-content:center;gap:14px;text-align:center;padding:28px;background:var(--surface,#fff)}
@@ -43,12 +44,13 @@
       </div>
       <div id="fortress-app" hidden></div>
     </section>
-    <aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing for this editor happens in your browser. Your document is not uploaded to an AllToolForest server.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>How to edit</h2><p><strong>Existing text:</strong> click or tap the text, type the replacement, then press Done.</p><p><strong>New paragraph:</strong> choose Add text, select the font size/style, click where the paragraph should start, type, then press Done.</p><p>When finished, use Save a copy to validate and download the edited PDF.</p><div id="fortress-downloads" class="fortress-downloads"></div><p id="fortress-integration-status" class="fortress-integration-status" role="status" aria-live="polite"></p></aside>
+    <aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing for this editor happens in your browser. Your document is not uploaded to an AllToolForest server.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>How to edit</h2><p><strong>Existing text:</strong> click or tap the text, type the replacement, then press Done.</p><p><strong>Font size:</strong> the exact detected size is preserved, including decimal sizes such as 12.5 pt. Type a size directly or use − / + for 0.5 pt adjustments.</p><p><strong>New paragraph:</strong> choose Add text, select the font size/style, click where the paragraph should start, type, then press Done.</p><p>When finished, use Save a copy to validate and download the edited PDF.</p><div id="fortress-downloads" class="fortress-downloads"></div><p id="fortress-integration-status" class="fortress-integration-status" role="status" aria-live="polite"></p></aside>
   </div>
 </main>
 <footer class="site-footer"><span>© 2026 AllToolForest · Made for everyday work.</span><div class="footer-links"><a href="../../about/">About</a><a href="../../privacy/">Privacy</a><a href="../../request/">Request a tool</a></div></footer>
 <script type="module">
 import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/main.js';
+import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
@@ -63,6 +65,7 @@ function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downlo
 function showPicker(){clearDownload();app.hidden=true;picker.hidden=false;input.value='';setIntegrationStatus('');editor=null;}
 
 await configurePdfWorker(new URL('./fortress/vendor/pdf.worker.mjs',location.href).href);
+const precisionFontSize=attachPrecisionFontSize({app,getEditor:()=>editor});
 
 const closeObserver=new MutationObserver(()=>{
   if(!app.hidden && app.childElementCount===0) showPicker();
@@ -102,7 +105,7 @@ input.addEventListener('change',async()=>{
     setIntegrationStatus(error?.message||'Could not open this PDF safely.');
   }
 });
-window.addEventListener('pagehide',()=>{clearDownload();try{editor?.destroy();}catch{}},{once:true});
+window.addEventListener('pagehide',()=>{clearDownload();precisionFontSize.destroy();try{editor?.destroy();}catch{}},{once:true});
 </script>
 </body>
 </html>
