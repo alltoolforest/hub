@@ -41,14 +41,42 @@ function inferContentBand(moved,{laneLeft,laneRight,pageWidth,size}){
   };
 }
 
+function inferFooterGuard(moved,{pageHeight,size,bottomMargin}){
+  if(!moved.length)return {enabled:false,top:bottomMargin,height:bottomMargin,reason:'NO_MOVABLE_CONTENT'};
+  const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
+  const clearance=Math.max(6,size*.60);
+  const maxGuardHeight=Math.max(36,Math.min(72,pageHeight*.085));
+  const candidate=Math.min(maxGuardHeight,contentBottomY-clearance);
+  if(!Number.isFinite(candidate)||candidate<=bottomMargin+2){
+    return {
+      enabled:false,
+      top:bottomMargin,
+      height:bottomMargin,
+      clearance,
+      contentBottomY,
+      reason:'FOOTER_GUARD_SPACE_INSUFFICIENT',
+    };
+  }
+  const top=clamp(candidate,bottomMargin,Math.min(pageHeight*.18,contentBottomY-clearance));
+  return {
+    enabled:top>bottomMargin+2,
+    top,
+    height:top,
+    clearance,
+    contentBottomY,
+    confidence:'TEXT_FREE_FOOTER_GUARD',
+  };
+}
+
 /**
  * Build a conservative vertical-flow plan for inserted/expanded text.
  *
  * The planner does not mutate the PDF. It finds the nearest content band below
  * the insertion lane, chooses a horizontal cut that does not pass through any
- * detected text block, and derives a movable horizontal content band. Static
- * outer margins are intentionally excluded from movement so page frames and
- * decorative edge rules do not get broken by paragraph reflow.
+ * detected text block, derives a movable horizontal content band, and reserves
+ * a text-free footer guard. Static outer margins and the footer guard are
+ * intentionally excluded from movement so page frames and decorative edge
+ * rules do not get broken by paragraph reflow.
  */
 export function planInsertionReflow({
   blocks=[],
@@ -127,6 +155,7 @@ export function planInsertionReflow({
 
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
   const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
+  const footerGuard=inferFooterGuard(moved,{pageHeight,size,bottomMargin});
 
   return {
     enabled:true,
@@ -142,6 +171,7 @@ export function planInsertionReflow({
     pageRotation:rotation,
     lane:{left:laneLeft,right:laneRight},
     contentBand,
-    confidence:'TEXT_BAND_AND_MARGIN_SAFE_CUT',
+    footerGuard,
+    confidence:footerGuard.enabled?'TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'TEXT_BAND_AND_MARGIN_SAFE_CUT',
   };
 }
