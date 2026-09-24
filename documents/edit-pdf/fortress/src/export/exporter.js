@@ -33,6 +33,11 @@ function standardFontForBlock(block){
   return StandardFonts.Helvetica;
 }
 
+function standardFontForInsert(tx){
+  if(tx.fontFamily==='sans')return tx.bold?StandardFonts.HelveticaBold:StandardFonts.Helvetica;
+  return tx.bold?StandardFonts.TimesRomanBold:StandardFonts.TimesRoman;
+}
+
 async function getEmbeddedStandardFont(doc,cache,name){
   if(!cache.has(name))cache.set(name,await doc.embedFont(name));
   return cache.get(name);
@@ -70,6 +75,65 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
   warnings.push({code:'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:'Replacement was reconstructed with a safe standard PDF font.'});
 }
 
+function splitLongWord(word,font,size,maxWidth){
+  const out=[];
+  let current='';
+  for(const ch of Array.from(word)){
+    const next=current+ch;
+    if(current&&font.widthOfTextAtSize(next,size)>maxWidth){out.push(current);current=ch;}
+    else current=next;
+  }
+  if(current)out.push(current);
+  return out;
+}
+
+function wrapParagraph(text,font,size,maxWidth){
+  const wrapped=[];
+  const sourceLines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+  for(const source of sourceLines){
+    if(!source.trim()){wrapped.push('');continue;}
+    const words=source.trim().split(/\s+/);
+    let line='';
+    for(const originalWord of words){
+      const pieces=font.widthOfTextAtSize(originalWord,size)>maxWidth?splitLongWord(originalWord,font,size,maxWidth):[originalWord];
+      for(const word of pieces){
+        const candidate=line?`${line} ${word}`:word;
+        if(line&&font.widthOfTextAtSize(candidate,size)>maxWidth){wrapped.push(line);line=word;}
+        else line=candidate;
+      }
+    }
+    if(line)wrapped.push(line);
+  }
+  return wrapped.length?wrapped:[''];
+}
+
+async function drawInsertedText(doc,tx,fontCache,warnings){
+  const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'INSERT_PAGE_MISSING'});
+  const pageSize=page.getSize();
+  const x=Number(tx.x),y=Number(tx.y);
+  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>pageSize.width||y<0||y>pageSize.height){
+    throw Object.assign(new Error('New text position is outside the page.'),{code:'INSERT_POSITION_INVALID'});
+  }
+  const fontName=standardFontForInsert(tx);
+  const font=await getEmbeddedStandardFont(doc,fontCache,fontName);
+  const size=Math.max(6,Math.min(72,Number(tx.fontSize)||12));
+  const lineHeight=Math.max(size,Number(tx.lineHeight)||size*1.2);
+  const availableWidth=Math.max(40,Math.min(Number(tx.maxWidth)||300,pageSize.width-x-8));
+  const lines=wrapParagraph(tx.replacementUnicode,font,size,availableWidth);
+  const lowestY=y-(Math.max(0,lines.length-1)*lineHeight);
+  if(lowestY<-size)throw Object.assign(new Error('The new paragraph extends below the page.'),{code:'INSERT_TEXT_OVERFLOW'});
+  for(let i=0;i<lines.length;i++){
+    const text=lines[i];
+    if(!text)continue;
+    try{font.encodeText(text);}catch(error){
+      throw Object.assign(new Error('New text contains characters unavailable in the selected PDF font.'),{code:'INSERT_FONT_UNSUPPORTED',cause:error});
+    }
+    page.drawText(text,{x,y:y-i*lineHeight,size,font,color:rgb(0,0,0)});
+  }
+  warnings.push({code:'TEXT_INSERTED',pageIndex:tx.pageIndex,transactionId:tx.id,lineCount:lines.length});
+}
+
 function neutralizeSourceLines(byStream,tx,sourceLines){
   for(const seq of sourceLines){
     for(const run of seq||[]){
@@ -104,11 +168,19 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
   const checks=[];
   const warnings=[];
   const reconstructions=[];
+  const insertions=[];
   const fontCache=new Map();
 
   for(const tx of transactions){
+    if(tx.kind==='INSERT_TEXT'){
+      if(!String(tx.replacementUnicode||'').trim())continue;
+      insertions.push(tx);
+      checks.push({kind:'insert',pageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:''});
+      continue;
+    }
+
     const block=tx.block;
-    if(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION')throw new Error(`Block ${block.id} is not safely editable: ${block.reason||block.tier}`);
+    if(!block||(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION'))throw new Error(`Block ${block?.id||tx.blockId||'unknown'} is not safely editable: ${block?.reason||block?.tier||'UNKNOWN'}`);
     const sourceLines=block.sourceLines||[];
     const outputLines=String(tx.replacementUnicode).split('\n');
     if(!sourceLines.length)throw Object.assign(new Error('Mapped source text disappeared.'),{code:'SOURCE_NOT_MAPPED'});
@@ -133,7 +205,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
       reconstructions.push({tx,block});
     }
 
-    checks.push({pageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
+    checks.push({kind:'replace',pageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
   }
 
   for(const {pageIndex,streamIndex,edits} of byStream.values()){
@@ -146,9 +218,10 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
   }
 
   for(const item of reconstructions)await drawReconstructedText(doc,item,fontCache,warnings);
+  for(const tx of insertions)await drawInsertedText(doc,tx,fontCache,warnings);
 
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
   const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks}):null;
-  if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{validation});
+  if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{code:'EXPORT_VALIDATION_FAILED',validation});
   return {bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,validation,warnings};
 }
