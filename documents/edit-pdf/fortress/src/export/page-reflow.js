@@ -60,12 +60,6 @@ function normalizedFooterGuard(plan,pageHeight,bottomMargin,cutY){
   };
 }
 
-/**
- * Reflow may safely preserve ordinary Link annotations because their clickable
- * rectangle can move with the preserved page region. More complex annotations
- * (widgets, signatures, comments, appearances, quad-point links, etc.) keep the
- * conservative fallback behavior.
- */
 function inspectAnnotations(doc,page){
   const raw=page?.node?.get?.(ANN0TS);
   if(!raw)return {ok:true,raw:null,links:[]};
@@ -171,13 +165,6 @@ function drawStaticMargins(page,slices,{bandLeft,bandRight,width,bottom=0,top}){
   if(slices.right)drawSlice(page,slices.right,{x:bandRight,y:bottom,width:width-bandRight,height:h});
 }
 
-/**
- * Rebuild one page with a vertical gap inserted inside a movable horizontal
- * content band. Text/table content in that band moves together as preserved PDF
- * vector content, while outer page margins and a text-free footer guard remain
- * fixed. The footer guard is a full-width, non-overlapping slice so bottom frame
- * corners cannot be split between static margins and the movable body.
- */
 export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,sequenceIndex=0}={}){
   const plan=tx?.reflowPlan;
   if(!plan?.enabled)return {applied:false,reason:plan?.reason||'REFLOW_DISABLED',overflowPageCount:0};
@@ -214,8 +201,6 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const textBottomY=Number(layout?.bottomY);
   if(!Number.isFinite(textBottomY))return {applied:false,reason:'REFLOW_TEXT_GEOMETRY_MISSING',overflowPageCount:0};
 
-  // Existing whitespace is consumed first. Only the overlap amount is added as
-  // new vertical space, which avoids the "everything jumps down" behavior.
   const delta=Math.max(0,flowTopY+safetyGap-textBottomY);
   if(delta<.5){
     return {
@@ -230,8 +215,6 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
   }
 
-  // Overflow is based on actual movable content. Reflowed content may consume
-  // whitespace, but it must not enter the full-width static footer guard.
   const overflowNeeded=contentBottomY-delta<movableFloor;
   const overflowBoundary=overflowNeeded?clamp(delta+movableFloor,footerGuardTop,cutY):footerGuardTop;
   const usableOverflowHeight=Math.max(40,height-topMargin-bottomMargin);
@@ -240,10 +223,6 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
   }
 
-  // Snapshot before rebuilding so the donor page represents the exact current
-  // state, including previous edits/reflows on this page. Link annotations are
-  // preserved separately because embedPage intentionally embeds page content,
-  // not interactive annotation dictionaries.
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false});
   const donorPage=donorDoc.getPage(pageIndex);
@@ -253,8 +232,6 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const visibleMovableSlice=await embedSlice(doc,donorPage,{left:bandLeft,bottom:overflowBoundary,right:bandRight,top:cutY});
   const staticBelow=await buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,bottom:footerGuardTop,top:cutY});
 
-  // The page is rebuilt from four non-overlapping regions: top, full-width
-  // footer, side margins above the footer, and the movable center band.
   const replacement=doc.insertPage(pageIndex,[width,height]);
   if(topSlice)drawSlice(replacement,topSlice,{x:0,y:cutY,width,height:height-cutY});
   if(footerSlice)drawSlice(replacement,footerSlice,{x:0,y:0,width,height:footerGuardTop});
@@ -277,12 +254,13 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       if(slices.length>16)throw Object.assign(new Error('Reflow would create too many continuation pages.'),{code:'REFLOW_PAGE_LIMIT'});
     }
 
-    // Continuation pages receive only overflow content from the movable body.
-    // Static margins and the original footer/frame are never duplicated.
+    // Preview and final export must use identical page order: continuation
+    // pages are inserted immediately after the overflowing source page, which
+    // shifts later original pages forward instead of hiding overflow at the end.
     for(let i=0;i<slices.length;i++){
       const slice=slices[i];
       const embedded=await embedSlice(doc,donorPage,{left:bandLeft,bottom:slice.bottom,right:bandRight,top:slice.top});
-      const continuation=preview?doc.addPage([width,height]):doc.insertPage(pageIndex+1+i,[width,height]);
+      const continuation=doc.insertPage(pageIndex+1+i,[width,height]);
       const h=slice.top-slice.bottom;
       drawSlice(continuation,embedded,{x:bandLeft,y:height-topMargin-h,width:bandWidth,height:h});
       overflowPageCount++;
