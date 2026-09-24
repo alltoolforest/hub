@@ -36,6 +36,17 @@ function rectBounds(rect){
   return {left,right,bottom,top};
 }
 
+function normalizedContentBand(plan,pageWidth){
+  const raw=plan?.contentBand;
+  if(!raw)return {left:0,right:pageWidth,width:pageWidth,legacyFullWidth:true};
+  let left=clamp(Number(raw.left)||0,0,pageWidth);
+  let right=clamp(Number(raw.right)||pageWidth,0,pageWidth);
+  if(right-left<40)return null;
+  if(left<1)left=0;
+  if(pageWidth-right<1)right=pageWidth;
+  return {left,right,width:right-left,legacyFullWidth:false};
+}
+
 /**
  * Reflow may safely preserve ordinary Link annotations because their clickable
  * rectangle can move with the preserved page region. More complex annotations
@@ -78,17 +89,22 @@ function inspectAnnotations(doc,page){
   return {ok:true,raw,links};
 }
 
-function classifyLink(link,cutY){
-  const {bottom,top}=link.bounds;
+function classifyLink(link,{cutY,bandLeft,bandRight}){
+  const {left,right,bottom,top}=link.bounds;
+  const outsideBand=right<=bandLeft+.5||left>=bandRight-.5;
+  if(outsideBand)return 'STATIC';
+  const crossesBand=(left<bandLeft-.5&&right>bandLeft+.5)||(left<bandRight-.5&&right>bandRight+.5);
+  if(crossesBand)return 'CROSSES_BAND';
   if(bottom<cutY-.5&&top>cutY+.5)return 'CROSSES_CUT';
   if(top<=cutY+.5)return 'MOVED';
   return 'STATIC';
 }
 
-function validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,bottomMargin}){
+function validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,bottomMargin,bandLeft,bandRight}){
   const classified=[];
   for(const link of annotationInfo.links){
-    const zone=classifyLink(link,cutY);
+    const zone=classifyLink(link,{cutY,bandLeft,bandRight});
+    if(zone==='CROSSES_BAND')return {ok:false,reason:'LINK_CROSSES_CONTENT_BAND'};
     if(zone==='CROSSES_CUT')return {ok:false,reason:'LINK_CROSSES_REFLOW_BOUNDARY'};
     if(zone==='MOVED'){
       if(overflowNeeded&&link.bounds.bottom<overflowBoundary+.5){
@@ -125,12 +141,23 @@ function drawSlice(page,embedded,{x=0,y=0,width,height}){
   page.drawPage(embedded,{x,y,width,height});
 }
 
+async function buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,height,bottom=0,top=height}){
+  const left=bandLeft>1?await embedSlice(doc,donorPage,{left:0,bottom,right:bandLeft,top}):null;
+  const right=bandRight<width-1?await embedSlice(doc,donorPage,{left:bandRight,bottom,right:width,top}):null;
+  return {left,right};
+}
+
+function drawStaticMargins(page,slices,{bandLeft,bandRight,width,bottom=0,top}){
+  const h=top-bottom;
+  if(slices.left)drawSlice(page,slices.left,{x:0,y:bottom,width:bandLeft,height:h});
+  if(slices.right)drawSlice(page,slices.right,{x:bandRight,y:bottom,width:width-bandRight,height:h});
+}
+
 /**
- * Rebuild one page as preserved PDF slices with a vertical gap inserted.
- * The original slice content remains vector/text PDF content inside Form
- * XObjects; it is not rasterized. Complex content below the cut (tables,
- * borders, images, text) therefore moves together instead of being rewritten
- * object-by-object.
+ * Rebuild one page with a vertical gap inserted inside a movable horizontal
+ * content band. Text/table content in that band moves together as preserved PDF
+ * vector content, while outer page margins remain fixed. This prevents page
+ * frames and decorative edge rules from being split when a paragraph expands.
  */
 export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,sequenceIndex=0}={}){
   const plan=tx?.reflowPlan;
@@ -153,6 +180,9 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   }
 
   const {width,height}=livePage.getSize();
+  const band=normalizedContentBand(plan,width);
+  if(!band)return {applied:false,reason:'CONTENT_BAND_INVALID',overflowPageCount:0};
+  const bandLeft=band.left,bandRight=band.right,bandWidth=band.width;
   const cutY=clamp(Number(plan.cutY)||0,2,height-2);
   const flowTopY=clamp(Number(plan.flowTopY)||cutY,0,height);
   const contentBottomY=clamp(Number(plan.contentBottomY)||0,0,height);
@@ -170,7 +200,7 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       applied:false,
       reason:'EXISTING_WHITESPACE_SUFFICIENT',
       overflowPageCount:0,
-      metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0},
+      metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,bandLeft,bandRight},
     };
   }
 
@@ -178,10 +208,12 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
   }
 
+  // Overflow is based on detected movable document content, not on page-frame
+  // graphics living in static margins.
   const overflowNeeded=contentBottomY-delta<bottomMargin;
   const overflowBoundary=overflowNeeded?clamp(delta+bottomMargin,0,cutY):0;
   const usableOverflowHeight=Math.max(40,height-topMargin-bottomMargin);
-  const linkSafety=validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,bottomMargin});
+  const linkSafety=validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,bottomMargin,bandLeft,bandRight});
   if(!linkSafety.ok){
     return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
   }
@@ -195,15 +227,17 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const donorPage=donorDoc.getPage(pageIndex);
 
   const topSlice=await embedSlice(doc,donorPage,{left:0,bottom:cutY,right:width,top:height});
-  const visibleBottomSlice=await embedSlice(doc,donorPage,{left:0,bottom:overflowBoundary,right:width,top:cutY});
+  const visibleMovableSlice=await embedSlice(doc,donorPage,{left:bandLeft,bottom:overflowBoundary,right:bandRight,top:cutY});
+  const staticBelow=await buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,height,bottom:0,top:cutY});
 
   // Insert replacement before the old page, then delete the old page. Net page
   // index of the source page remains unchanged.
   const replacement=doc.insertPage(pageIndex,[width,height]);
   if(topSlice)drawSlice(replacement,topSlice,{x:0,y:cutY,width,height:height-cutY});
-  if(visibleBottomSlice){
+  drawStaticMargins(replacement,staticBelow,{bandLeft,bandRight,width,bottom:0,top:cutY});
+  if(visibleMovableSlice){
     const sliceHeight=cutY-overflowBoundary;
-    drawSlice(replacement,visibleBottomSlice,{x:0,y:overflowBoundary-delta,width,height:sliceHeight});
+    drawSlice(replacement,visibleMovableSlice,{x:bandLeft,y:overflowBoundary-delta,width:bandWidth,height:sliceHeight});
   }
   preserveAndMoveLinks(doc,replacement,annotationInfo,linkSafety.links,delta);
   doc.removePage(pageIndex+1);
@@ -219,12 +253,16 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       if(slices.length>16)throw Object.assign(new Error('Reflow would create too many continuation pages.'),{code:'REFLOW_PAGE_LIMIT'});
     }
 
+    // Static margin strips are copied to continuation pages as a page-frame
+    // background, while only the movable content band is paginated.
+    const continuationMargins=await buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,height,bottom:0,top:height});
     for(let i=0;i<slices.length;i++){
       const slice=slices[i];
-      const embedded=await embedSlice(doc,donorPage,{left:0,bottom:slice.bottom,right:width,top:slice.top});
+      const embedded=await embedSlice(doc,donorPage,{left:bandLeft,bottom:slice.bottom,right:bandRight,top:slice.top});
       const continuation=preview?doc.addPage([width,height]):doc.insertPage(pageIndex+1+i,[width,height]);
+      drawStaticMargins(continuation,continuationMargins,{bandLeft,bandRight,width,bottom:0,top:height});
       const h=slice.top-slice.bottom;
-      drawSlice(continuation,embedded,{x:0,y:height-topMargin-h,width,height:h});
+      drawSlice(continuation,embedded,{x:bandLeft,y:height-topMargin-h,width:bandWidth,height:h});
       overflowPageCount++;
     }
   }
@@ -243,6 +281,10 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       overflowBoundary,
       overflowPageCount,
       preservedLinkCount:annotationInfo.links.length,
+      bandLeft,
+      bandRight,
+      bandWidth,
+      mode:plan.mode||'VERTICAL_CONTENT_BAND_REFLOW',
     },
   };
 }
