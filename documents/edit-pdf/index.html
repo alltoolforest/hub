@@ -1,1 +1,109 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Edit PDF | AllToolForest</title><meta name="description" content="Edit supported existing PDF text directly in your browser and save a validated copy."><meta name="theme-color" content="#145940"><meta property="og:title" content="Edit PDF | AllToolForest"><meta property="og:description" content="Edit supported existing PDF text directly in your browser and save a validated copy."><meta property="og:type" content="website"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23145940%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2243%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2231%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%3EAF%3C%2Ftext%3E%3C%2Fsvg%3E"><link rel="manifest" href="../../site.webmanifest"><link rel="stylesheet" href="../../assets/css/main.css"><link rel="stylesheet" href="./fortress/src/styles.css"><style>#fortress-launch{display:grid;gap:12px;margin-bottom:14px}.fortress-picker{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.fortress-picker input{font-size:16px;max-width:100%}#fortress-host{height:min(76vh,780px);min-height:520px;border:1px solid var(--line);border-radius:12px;overflow:hidden}.fortress-message{font-size:.92rem;color:var(--muted)}@media(max-width:700px){.tool-layout{display:block}aside.side-note{margin-top:18px}#fortress-host{height:72vh;min-height:500px}.page-intro{margin-bottom:16px}}</style></head><body><a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a href="../../work/">Work</a><a class="active" href="../../documents/">Documents</a><a href="../../images/">Images</a><a href="../../calculators/">Calculators</a></nav><span class="header-note">No account needed</span></div></header><main class="container" id="main"><div class="breadcrumb"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>Edit PDF</div><section class="page-intro"><h1>Edit PDF</h1><p>Edit supported existing PDF text directly. Your file stays in this browser.</p></section><div class="tool-layout"><section class="workspace" aria-label="Edit PDF workspace"><div id="fortress-launch"><div class="fortress-picker"><label for="fortress-file"><strong>Open a PDF</strong></label><input id="fortress-file" type="file" accept="application/pdf,.pdf"><span id="fortress-file-status" class="fortress-message" role="status" aria-live="polite">Choose a PDF from your device.</span></div><div class="notice">Direct Edit rewrites supported PDF text operators and validates the saved copy. Unsupported or ambiguous text is refused instead of being visually covered.</div></div><div id="fortress-host" aria-label="PDF editor"></div><div id="fortress-downloads" class="downloads"></div></section><aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing happens locally in your browser. No document upload is required for this editor.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>Testing note</h2><p>This new Edit PDF engine is being tested against real documents. If a text region cannot be mapped safely, the tool may mark it unsupported instead of changing it.</p></aside></div></main><footer class="site-footer"><span>© 2026 AllToolForest · Made for everyday work.</span><div class="footer-links"><a href="../../about/">About</a><a href="../../privacy/">Privacy</a><a href="../../request/">Request a tool</a></div></footer><script type="module">import{createAdvancedPdfTextEngine,configurePdfWorker}from'./fortress/src/main.js';const input=document.querySelector('#fortress-file'),host=document.querySelector('#fortress-host'),msg=document.querySelector('#fortress-file-status'),downloads=document.querySelector('#fortress-downloads');await configurePdfWorker('./fortress/vendor/pdf.worker.mjs');let editor=null,urls=[];function clearDownloads(){for(const u of urls)URL.revokeObjectURL(u);urls=[];downloads.replaceChildren()}function showOutput({blob,filename}){clearDownloads();const url=URL.createObjectURL(blob);urls.push(url);const row=document.createElement('div');row.className='download-row';const label=document.createElement('span');label.textContent=filename;const a=document.createElement('a');a.className='button primary';a.href=url;a.download=filename;a.textContent='Download';row.append(label,a);if(navigator.canShare){try{const file=new File([blob],filename,{type:'application/pdf'});if(navigator.canShare({files:[file]})){const b=document.createElement('button');b.type='button';b.textContent='Share / Save';b.addEventListener('click',async()=>{try{await navigator.share({files:[file],title:filename})}catch(e){if(e.name!=='AbortError')console.error(e)}});row.append(b)}}catch{}}const open=document.createElement('a');open.className='button';open.href=url;open.target='_blank';open.rel='noopener';open.textContent='Open';row.append(open);downloads.append(row)}function resetHost(){editor?.destroy?.();editor=null;host.replaceChildren();clearDownloads()}input.addEventListener('change',async()=>{const file=input.files?.[0];if(!file)return;resetHost();msg.textContent='Opening '+file.name+'…';try{editor=createAdvancedPdfTextEngine({container:host,workerUrl:'./fortress/vendor/pdf.worker.mjs',onStatus:s=>{if(s)msg.textContent=s},onWarning:w=>{msg.textContent=w?.message||w?.code||'This text cannot be safely edited.'},onError:e=>{msg.textContent=e?.message||'Could not edit this PDF.'},onExport:showOutput});await editor.open(file);msg.textContent='PDF ready. Tap or click a highlighted editable text region.'}catch(e){console.error(e);msg.textContent=e?.message||'Could not open this PDF.'}finally{input.value=''}});window.addEventListener('pagehide',()=>{editor?.destroy?.();for(const u of urls)URL.revokeObjectURL(u)},{once:true});</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Edit PDF | AllToolForest</title>
+  <meta name="description" content="Edit supported existing PDF text directly in your browser with source-aware PDF text replacement.">
+  <meta name="theme-color" content="#145940">
+  <meta property="og:title" content="Edit PDF | AllToolForest">
+  <meta property="og:description" content="Edit supported existing PDF text directly in your browser.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23145940%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2243%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2231%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%3EAF%3C%2Ftext%3E%3C%2Fsvg%3E">
+  <link rel="manifest" href="../../site.webmanifest">
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <link rel="stylesheet" href="./fortress/src/styles.css">
+  <style>
+    .fortress-shell{padding:0;overflow:hidden;min-height:620px}
+    .fortress-picker{min-height:620px;display:grid;place-content:center;gap:14px;text-align:center;padding:28px;background:var(--surface,#fff)}
+    .fortress-picker[hidden],#fortress-app[hidden]{display:none}
+    .fortress-picker h2{margin:0;font-size:1.35rem}
+    .fortress-picker p{margin:0;color:var(--muted,#667085);max-width:620px}
+    .fortress-picker input{font-size:16px;max-width:100%}
+    #fortress-app{height:calc(100svh - 150px);min-height:620px}
+    .fortress-integration-status{margin:.8rem 0 0;color:var(--muted,#667085);font-size:.9rem}
+    .fortress-downloads{margin-top:12px}
+    .fortress-downloads a{display:inline-flex}
+    @media(max-width:700px){.fortress-shell,.fortress-picker,#fortress-app{min-height:560px}.fortress-picker{padding:18px}#fortress-app{height:calc(100svh - 84px)}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a href="../../work/">Work</a><a class="active" href="../../documents/">Documents</a><a href="../../images/">Images</a><a href="../../calculators/">Calculators</a></nav><span class="header-note"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6"/></svg>No account needed</span></div></header>
+<main class="container" id="main">
+  <div class="breadcrumb"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>Edit PDF</div>
+  <section class="page-intro"><h1>Edit PDF</h1><p>Edit supported existing PDF text directly in your browser. Unsupported text is refused rather than hidden with a visual cover.</p></section>
+  <div class="tool-layout">
+    <section class="workspace fortress-shell" aria-label="Edit PDF workspace">
+      <div id="fortress-picker" class="fortress-picker">
+        <h2>Open a PDF to edit</h2>
+        <p>Select a PDF from your device. Processing stays in this browser. Supported text is rewritten in the PDF content stream.</p>
+        <input id="fortress-file" type="file" accept="application/pdf,.pdf" aria-label="Open a PDF to edit">
+        <small>For unsupported fonts or document structures, the editor will refuse unsafe direct editing.</small>
+      </div>
+      <div id="fortress-app" hidden></div>
+    </section>
+    <aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing for this editor happens in your browser. Your document is not uploaded to an AllToolForest server.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>Edit behavior</h2><p>Direct Edit rewrites supported PDF text. It is not secure redaction, and some PDFs may be limited or unsupported.</p><div id="fortress-downloads" class="fortress-downloads"></div><p id="fortress-integration-status" class="fortress-integration-status" role="status" aria-live="polite"></p></aside>
+  </div>
+</main>
+<footer class="site-footer"><span>© 2026 AllToolForest · Made for everyday work.</span><div class="footer-links"><a href="../../about/">About</a><a href="../../privacy/">Privacy</a><a href="../../request/">Request a tool</a></div></footer>
+<script src="../../assets/vendor/pdf-lib.js"></script>
+<script type="module">
+import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/main.js';
+
+const picker=document.querySelector('#fortress-picker');
+const input=document.querySelector('#fortress-file');
+const app=document.querySelector('#fortress-app');
+const integrationStatus=document.querySelector('#fortress-integration-status');
+const downloads=document.querySelector('#fortress-downloads');
+let editor=null;
+let downloadUrl=null;
+
+function setIntegrationStatus(message=''){integrationStatus.textContent=message;}
+function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downloadUrl=null;}downloads.replaceChildren();}
+function showPicker(){clearDownload();app.hidden=true;picker.hidden=false;input.value='';setIntegrationStatus('');editor=null;}
+
+await configurePdfWorker(new URL('../../assets/vendor/pdf.worker.mjs',location.href).href);
+
+const closeObserver=new MutationObserver(()=>{
+  if(!app.hidden && app.childElementCount===0) showPicker();
+});
+closeObserver.observe(app,{childList:true});
+
+input.addEventListener('change',async()=>{
+  const file=input.files?.[0];
+  if(!file)return;
+  clearDownload();
+  picker.hidden=true;
+  app.hidden=false;
+  setIntegrationStatus('Opening PDF…');
+  try{
+    editor=createAdvancedPdfTextEngine({
+      container:app,
+      onStatus:message=>setIntegrationStatus(message||''),
+      onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This text cannot be safely edited directly.'),
+      onError:error=>setIntegrationStatus(error?.message||'The PDF could not be edited safely.'),
+      onExport:({blob,filename})=>{
+        clearDownload();
+        downloadUrl=URL.createObjectURL(blob);
+        const link=document.createElement('a');
+        link.href=downloadUrl;
+        link.download=filename||'edited-copy.pdf';
+        link.className='button primary';
+        link.textContent='Download edited PDF';
+        downloads.append(link);
+        link.click();
+      }
+    });
+    await editor.open(file);
+  }catch(error){
+    console.error(error);
+    try{editor?.destroy();}catch{}
+    showPicker();
+    setIntegrationStatus(error?.message||'Could not open this PDF safely.');
+  }
+});
+window.addEventListener('pagehide',()=>{clearDownload();try{editor?.destroy();}catch{}},{once:true});
+</script>
+</body>
+</html>
