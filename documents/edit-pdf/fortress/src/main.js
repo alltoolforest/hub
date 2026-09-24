@@ -28,7 +28,8 @@ function lineHitBounds(line,block){
 export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onChange=()=>{},onExport=()=>{}}={}){
   if(!container)throw new Error('container is required');
   if(workerUrl)configurePdfWorker(workerUrl);
-  let originalBytes=null,pdfDoc=null,model=null,renderer=null,fileName='document.pdf',pageIndex=0,zoom=1,analysis=null;
+  let originalBytes=null,pdfDoc=null,model=null,renderer=null,previewRenderer=null,fileName='document.pdf',pageIndex=0,zoom=1,analysis=null;
+  let previewToken=0;
   const txByBlock=new Map();
   const history=new History(40);
 
@@ -64,6 +65,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function setStatus(msg,kind=''){status.textContent=msg||'';status.dataset.kind=kind;onStatus(msg);}
   function updateHistory(){undo.disabled=!history.state.canUndo;redo.disabled=!history.state.canRedo;}
   function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
+  function currentText(block){return txByBlock.get(block.id)?.replacementUnicode??block.text;}
 
   async function open(file){
     try{
@@ -73,6 +75,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       else if(file instanceof ArrayBuffer)bytes=new Uint8Array(file);
       else{bytes=new Uint8Array(await file.arrayBuffer());fileName=file.name||fileName;}
       name.textContent=fileName;
+      previewToken++;
+      previewRenderer?.destroy();previewRenderer=null;
+      renderer?.destroy();
       const loaded=await loadPdfForEditing(bytes);
       originalBytes=loaded.originalBytes;
       pdfDoc=loaded.pdfDoc;
@@ -85,9 +90,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }catch(e){setStatus(e.message,'error');onError(e);throw e;}
   }
 
-  async function analyzePage(index=pageIndex){
+  async function analyzePage(index=pageIndex,{announce=true}={}){
     if(!pdfDoc)throw new Error('No PDF open');
-    setStatus('Finding editable text…');
+    if(announce)setStatus('Finding editable text…');
     const visual=await extractVisualText(renderer,index);
     const blocks=buildLogicalBlocks(visual.items,{pageIndex:index,pageRotation:model.page(index).rotation});
     const streams=getPageContentStreams(pdfDoc,index);
@@ -95,23 +100,25 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const safe=applyDocumentSafety(mapped.blocks,model.flags);
     analysis={pageIndex:index,blocks:safe,sourceRuns:mapped.sourceRuns,streams};
     const editable=safe.filter(isEditable).length;
-    setStatus(editable?`${editable} editable text region${editable===1?'':'s'} — click text to edit`:'No safely editable text detected on this page');
+    if(announce)setStatus(editable?`${editable} editable text region${editable===1?'':'s'} — click text to edit`:'No safely editable text detected on this page');
     return analysis;
   }
 
-  async function renderPage(){
+  async function renderPage({announce=true}={}){
+    inline?.cancel();
     docArea.innerHTML='';
     updatePageLabel();
     const wrap=document.createElement('div');wrap.className='pdf-page-wrap';
     const canvas=document.createElement('canvas');canvas.className='pdf-page-canvas';
     const layer=document.createElement('div');layer.className='pdf-hit-layer';
     wrap.append(canvas,layer);docArea.append(wrap);
-    const info=await renderer.pageInfo(pageIndex);
+    const displayRenderer=previewRenderer||renderer;
+    const info=await displayRenderer.pageInfo(pageIndex);
     const fit=Math.min(Math.max((docArea.clientWidth-24)/Math.max(info.width,1),.25),2.5);
     const scale=fit*zoom;
-    const r=await renderer.render(pageIndex,canvas,{scale});
+    const r=await displayRenderer.render(pageIndex,canvas,{scale});
     wrap.style.width=`${r.cssWidth}px`;wrap.style.height=`${r.cssHeight}px`;layer.style.width=`${r.cssWidth}px`;layer.style.height=`${r.cssHeight}px`;
-    analysis=await analyzePage(pageIndex);
+    analysis=await analyzePage(pageIndex,{announce});
     layer.__matrix=r.matrix;
 
     for(const block of analysis.blocks){
@@ -124,36 +131,89 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
         Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
         hit.title='Click to edit text';
-        hit.setAttribute('aria-label',`Edit text: ${(line.text||block.text).slice(0,100)}`);
+        hit.setAttribute('aria-label',`Edit text: ${currentText(block).slice(0,100)}`);
         hit.addEventListener('click',(evt)=>beginEdit(block,layer,r.matrix,evt));
         layer.append(hit);
       }
     }
   }
 
+  async function buildPreviewForTransactions(transactions){
+    if(!transactions.length)return null;
+    return exportEditedPdf(originalBytes,transactions,{validate:false});
+  }
+
+  async function replacePreviewRenderer(bytes){
+    const next=new PdfRenderer(bytes);
+    await next.load();
+    previewRenderer?.destroy();
+    previewRenderer=next;
+  }
+
+  async function refreshPreviewFromCommittedState(message='Edit applied — continue editing or Save a copy.'){
+    const token=++previewToken;
+    try{
+      if(!txByBlock.size){
+        previewRenderer?.destroy();previewRenderer=null;
+        await renderPage({announce:false});
+        if(token===previewToken)setStatus(message);
+        return;
+      }
+      setStatus('Applying edits…');
+      const result=await buildPreviewForTransactions([...txByBlock.values()]);
+      if(token!==previewToken)return;
+      await replacePreviewRenderer(result.bytes);
+      if(token!==previewToken)return;
+      await renderPage({announce:false});
+      if(token===previewToken)setStatus(message);
+    }catch(e){
+      if(token===previewToken){setStatus(e.code||e.message,'error');onError(e);}
+      throw e;
+    }
+  }
+
   function beginEdit(block,layer,matrix,evt){
     inline?.cancel();
-    inline=new InlineEditor(layer,{onCommit:(b,text)=>queueEdit(b,text),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
+    const existing=txByBlock.get(block.id);
+    const editBlock={...block,text:existing?.replacementUnicode??block.text};
+    inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(block,text),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
     const rect=layer.getBoundingClientRect();
-    const input=inline.begin(block,matrix,{x:evt.clientX-rect.left,y:evt.clientY-rect.top});
+    const tap=existing?null:{x:evt.clientX-rect.left,y:evt.clientY-rect.top};
+    const input=inline.begin(editBlock,matrix,tap);
     viewportCtl.watch(input);
     const done=document.createElement('button');done.className='pdf-done';done.textContent='Done';done.type='button';
-    done.addEventListener('click',()=>{const result=inline.commit();if(result?.blocked)return;viewportCtl.stop();done.remove();});
+    done.addEventListener('click',async()=>{
+      done.disabled=true;
+      const result=await inline.commit();
+      if(result?.blocked){done.disabled=false;if(result.error)setStatus(result.error.code||result.error.message,'error');return;}
+      viewportCtl.stop();done.remove();
+    });
     layer.append(done);
   }
 
-  function queueEdit(block,newText){
+  async function queueEdit(block,newText){
     const old=txByBlock.get(block.id);
-    const tx=createEditTransaction({pageIndex,block,replacementUnicode:newText});
+    const tx=createEditTransaction({pageIndex:block.pageIndex,block,replacementUnicode:newText});
+    tx.originalUnicode=old?.originalUnicode??block.text;
     tx.status='COMMITTED';
+    const nextMap=new Map(txByBlock);
+    nextMap.set(block.id,tx);
+    setStatus('Applying edit…');
+    const preview=await buildPreviewForTransactions([...nextMap.values()]);
+    const nextRenderer=new PdfRenderer(preview.bytes);
+    await nextRenderer.load();
+
     txByBlock.set(block.id,tx);
-    const oldText=block.text;
-    block.text=newText;
     history.push({
-      undo:()=>{if(old)txByBlock.set(block.id,old);else txByBlock.delete(block.id);block.text=old?.replacementUnicode??oldText;onChange([...txByBlock.values()]);},
-      redo:()=>{txByBlock.set(block.id,tx);block.text=newText;onChange([...txByBlock.values()]);}
+      undo:()=>{if(old)txByBlock.set(block.id,old);else txByBlock.delete(block.id);onChange([...txByBlock.values()]);},
+      redo:()=>{txByBlock.set(block.id,tx);onChange([...txByBlock.values()]);}
     });
-    updateHistory();onChange([...txByBlock.values()]);setStatus('Edit ready. Save a copy when finished.');
+    updateHistory();onChange([...txByBlock.values()]);
+    previewToken++;
+    previewRenderer?.destroy();
+    previewRenderer=nextRenderer;
+    await renderPage({announce:false});
+    setStatus('Edit applied — continue editing or Save a copy.');
   }
 
   async function saveCopy(){
@@ -168,13 +228,13 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
 
   function setMode(){/* reserved for isolated integration */}
-  function undoAction(){if(history.undo()){updateHistory();setStatus('Undone');}}
-  function redoAction(){if(history.redo()){updateHistory();setStatus('Redone');}}
-  function destroy(){inline?.cancel();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;}
+  async function undoAction(){if(history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
+  async function redoAction(){if(history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
+  function destroy(){previewToken++;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;}
 
   back.addEventListener('click',destroy);
-  undo.addEventListener('click',undoAction);
-  redo.addEventListener('click',redoAction);
+  undo.addEventListener('click',()=>undoAction().catch(()=>{}));
+  redo.addEventListener('click',()=>redoAction().catch(()=>{}));
   save.addEventListener('click',()=>saveCopy().catch(()=>{}));
   prev.addEventListener('click',async()=>{if(pageIndex>0){pageIndex--;await renderPage();}});
   next.addEventListener('click',async()=>{if(pdfDoc&&pageIndex<pdfDoc.getPageCount()-1){pageIndex++;await renderPage();}});
@@ -182,5 +242,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer})};
 }
