@@ -58,13 +58,44 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
     const targetWidth=Math.max(1,maxX-minX);
     let size=originalSize;
     let width=font.widthOfTextAtSize(text,size);
-    if(width>targetWidth*1.04){size=Math.max(6,size*(targetWidth/Math.max(width,1)));width=font.widthOfTextAtSize(text,size);}
+    if(width>targetWidth*1.04){
+      size=Math.max(6,size*(targetWidth/Math.max(width,1)));
+      width=font.widthOfTextAtSize(text,size);
+    }
     if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
     const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
     const angle=line.runs?.[0]?.angle||0;
     page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
   }
   warnings.push({code:'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:'Replacement was reconstructed with a safe standard PDF font.'});
+}
+
+function neutralizeSourceLines(byStream,tx,sourceLines){
+  for(const seq of sourceLines){
+    for(const run of seq||[]){
+      const n=buildNeutralizerForSourceRun(run);
+      if(!n.success)throw Object.assign(new Error(`Cannot neutralize source text safely: ${n.reason}`),{code:n.reason});
+      streamBucket(byStream,tx.pageIndex,run.streamIndex).edits.push({start:n.start,end:n.end,replacement:n.replacement});
+    }
+  }
+}
+
+function planDirectReplacement(block,replacementUnicode){
+  const outputLines=String(replacementUnicode).split('\n');
+  const sourceLines=block.sourceLines||[];
+  if(outputLines.length>sourceLines.length)return {success:false,reason:'TEXT_OVERFLOW'};
+  const layout=validateReplacementLayout(block,replacementUnicode);
+  if(!layout.ok)return {success:false,reason:layout.reason,layout};
+  const replacements=[];
+  for(let lineIndex=0;lineIndex<sourceLines.length;lineIndex++){
+    const seq=sourceLines[lineIndex];
+    if(!seq?.length)continue;
+    if(lineIndex>=outputLines.length)return {success:false,reason:'RECONSTRUCT_EMPTY_TRAILING_LINE'};
+    const r=buildReplacementForSourceLine(seq,outputLines[lineIndex]);
+    if(!r.success)return {success:false,reason:r.reason,unsupportedCharacters:r.unsupportedCharacters};
+    replacements.push(r);
+  }
+  return {success:true,replacements,layout};
 }
 
 export async function exportEditedPdf(originalBytes,transactions){
@@ -78,39 +109,27 @@ export async function exportEditedPdf(originalBytes,transactions){
   for(const tx of transactions){
     const block=tx.block;
     if(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION')throw new Error(`Block ${block.id} is not safely editable: ${block.reason||block.tier}`);
-    const layout=validateReplacementLayout(block,tx.replacementUnicode);
-    tx.layoutValidation=layout;
-    if(!layout.ok)throw Object.assign(new Error(layout.message),{code:layout.reason});
-    const outputLines=String(tx.replacementUnicode).split('\n');
     const sourceLines=block.sourceLines||[];
+    const outputLines=String(tx.replacementUnicode).split('\n');
+    if(!sourceLines.length)throw Object.assign(new Error('Mapped source text disappeared.'),{code:'SOURCE_NOT_MAPPED'});
     if(outputLines.length>sourceLines.length)throw Object.assign(new Error('Replacement requires additional source lines.'),{code:'TEXT_OVERFLOW'});
 
+    let usedDirect=false;
     if(block.tier==='DIRECT_EDIT'){
-      for(let lineIndex=0;lineIndex<sourceLines.length;lineIndex++){
-        const seq=sourceLines[lineIndex];
-        if(!seq?.length)continue;
-        const streamIndex=seq[0].streamIndex;
-        const bucket=streamBucket(byStream,tx.pageIndex,streamIndex);
-        if(lineIndex<outputLines.length){
-          const r=buildReplacementForSourceLine(seq,outputLines[lineIndex]);
-          if(!r.success)throw Object.assign(new Error(`Cannot encode replacement: ${r.reason}`),{code:r.reason,unsupportedCharacters:r.unsupportedCharacters});
-          bucket.edits.push({start:r.start,end:r.end,replacement:r.replacement});
-        }else{
-          for(const run of seq){
-            const n=buildNeutralizerForSourceRun(run);
-            if(!n.success)throw Object.assign(new Error(`Cannot remove source text safely: ${n.reason}`),{code:n.reason});
-            streamBucket(byStream,tx.pageIndex,run.streamIndex).edits.push({start:n.start,end:n.end,replacement:n.replacement});
-          }
+      const direct=planDirectReplacement(block,tx.replacementUnicode);
+      tx.layoutValidation=direct.layout||null;
+      if(direct.success){
+        for(const r of direct.replacements){
+          streamBucket(byStream,tx.pageIndex,r.streamIndex).edits.push({start:r.start,end:r.end,replacement:r.replacement});
         }
+        usedDirect=true;
+      }else{
+        warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
       }
-    }else{
-      for(const seq of sourceLines){
-        for(const run of seq||[]){
-          const n=buildNeutralizerForSourceRun(run);
-          if(!n.success)throw Object.assign(new Error(`Cannot neutralize source text safely: ${n.reason}`),{code:n.reason});
-          streamBucket(byStream,tx.pageIndex,run.streamIndex).edits.push({start:n.start,end:n.end,replacement:n.replacement});
-        }
-      }
+    }
+
+    if(!usedDirect){
+      neutralizeSourceLines(byStream,tx,sourceLines);
       reconstructions.push({tx,block});
     }
 
