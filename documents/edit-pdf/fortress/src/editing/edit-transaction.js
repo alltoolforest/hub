@@ -20,7 +20,8 @@ export function createEditTransaction({pageIndex,block,replacementUnicode}){
   };
 }
 
-export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=false,fontFamily='serif',lineHeight=null}){
+export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=false,fontFamily='serif',lineHeight=null,maxWidth=300}){
+  const size=Math.max(6,Math.min(72,Number(fontSize)||12));
   return {
     id:uniqueId('insert'),
     kind:'INSERT_TEXT',
@@ -30,8 +31,9 @@ export function createInsertTransaction({pageIndex,text,x,y,fontSize=12,bold=fal
     replacementUnicode:String(text||''),
     x:Number(x)||0,
     y:Number(y)||0,
-    fontSize:Math.max(6,Math.min(72,Number(fontSize)||12)),
-    lineHeight:Math.max(7,Math.min(96,Number(lineHeight)||((Number(fontSize)||12)*1.2))),
+    fontSize:size,
+    lineHeight:Math.max(7,Math.min(96,Number(lineHeight)||(size*1.2))),
+    maxWidth:Math.max(40,Math.min(1000,Number(maxWidth)||300)),
     bold:!!bold,
     fontFamily:fontFamily==='sans'?'sans':'serif',
     status:'COMMITTED',
