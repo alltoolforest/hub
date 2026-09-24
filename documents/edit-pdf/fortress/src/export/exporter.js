@@ -53,15 +53,16 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
     const line=block.lines?.[i]||block.lines?.at(-1);
     if(!line)throw Object.assign(new Error('Missing visual line geometry for reconstructed text.'),{code:'RECONSTRUCT_GEOMETRY_MISSING'});
     const originalSize=Math.max(1,line.fontSize||block.fontSize||12);
-    const targetWidth=Math.max(1,(line.maxX??(block.bounds?.x+block.bounds?.width??1))-(line.minX??block.bounds?.x??0));
+    const minX=Number.isFinite(line.minX)?line.minX:(block.bounds?.x??0);
+    const maxX=Number.isFinite(line.maxX)?line.maxX:(minX+(block.bounds?.width??1));
+    const targetWidth=Math.max(1,maxX-minX);
     let size=originalSize;
     let width=font.widthOfTextAtSize(text,size);
     if(width>targetWidth*1.04){size=Math.max(6,size*(targetWidth/Math.max(width,1)));width=font.widthOfTextAtSize(text,size);}
     if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
-    const x=line.minX??block.bounds?.x??0;
-    const y=line.y??block.bounds?.y??0;
+    const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
     const angle=line.runs?.[0]?.angle||0;
-    page.drawText(text,{x,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
+    page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
   }
   warnings.push({code:'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:'Replacement was reconstructed with a safe standard PDF font.'});
 }
