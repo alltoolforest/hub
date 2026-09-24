@@ -120,7 +120,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function setStatus(msg,kind=''){status.textContent=msg||'';status.dataset.kind=kind;onStatus(msg);}
   function updateHistory(){undo.disabled=!history.state.canUndo;redo.disabled=!history.state.canRedo;}
   function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
-  function currentText(block){return txByBlock.get(block.id)?.replacementUnicode??block.text;}
+  function currentText(block){const tx=txByBlock.get(block.id);return tx?.displayUnicode??tx?.replacementUnicode??block.text;}
   function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true'};}
   function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&Number(m.delta)>0).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);}
 
@@ -262,6 +262,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
     for(const block of analysis.blocks){
       if(!isEditable(block))continue;
+      const existingTx=txByBlock.get(block.id);
+      if(existingTx?.expandedInsertId)continue;
       const shown=visualBlock(block);
       const lines=shown.lines?.length?shown.lines:[{text:shown.text,...shown.bounds,minX:shown.bounds?.x,maxX:(shown.bounds?.x||0)+(shown.bounds?.width||1),y:(shown.bounds?.y||0)+(shown.fontSize||12)*.3,fontSize:shown.fontSize||12}];
       for(const line of lines){
@@ -340,7 +342,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const originalStyle=inferBlockStyle(sourceBlock);
     const existingStyle=existing?.fontSize?{fontFamily:existing.fontFamily||originalStyle.fontFamily,fontSize:existing.fontSize,bold:existing.bold??originalStyle.bold,italic:existing.italic??originalStyle.italic}:originalStyle;
     setFormatControls(existingStyle,{context:'existing',show:true});
-    const editBlock={...shownBlock,text:existing?.replacementUnicode??sourceBlock.text,fontSize:existingStyle.fontSize};
+    const editBlock={...shownBlock,text:existing?.displayUnicode??existing?.replacementUnicode??sourceBlock.text,fontSize:existingStyle.fontSize};
     inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(sourceBlock,text,currentFormatStyle()),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
     const rect=layer.getBoundingClientRect();
     const tap=existing?null:{x:evt.clientX-rect.left,y:evt.clientY-rect.top};
@@ -360,7 +362,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     done.addEventListener('click',async()=>{
       done.disabled=true;
       const result=await inline.commit();
-      if(result?.blocked){done.disabled=false;if(result.error)setStatus(result.error.code||result.error.message,'error');return;}
+      if(result?.blocked){done.disabled=false;if(result.error)setStatus(result.error.message||result.error.code,'error');return;}
       viewportCtl.stop();activeTextInput=null;done.remove();hideFormatToolsIfIdle();
     });
     layer.append(done);
@@ -448,6 +450,136 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     });
   }
 
+  function growthNeedsParagraphFallback(error,block,newText,selectedStyle,originalStyle){
+    if(!error||!['LAYOUT_COLLISION','TEXT_OVERFLOW'].includes(error.code))return false;
+    if(error.code==='TEXT_OVERFLOW')return true;
+    const oldLength=Math.max(1,Array.from(String(block.text||'').replace(/\s+/g,'')).length);
+    const newLength=Array.from(String(newText||'').replace(/\s+/g,'')).length;
+    const sizeRatio=(Number(selectedStyle?.fontSize)||originalStyle.fontSize)/Math.max(originalStyle.fontSize,1);
+    return String(newText||'').includes('\n')||(newLength>oldLength*1.12&&sizeRatio<=1.20);
+  }
+
+  function expansionGeometryForBlock(block,selectedStyle){
+    const geometry=currentPageGeometry;
+    if(!geometry||Number(geometry.rotation||0)!==0||!analysis?.blocks?.length)return null;
+    const shown=visualBlock(block);
+    const line=shown.lines?.[0];
+    const originalStyle=inferBlockStyle(block);
+    const size=Math.max(6,Math.min(72,Number(selectedStyle?.fontSize)||originalStyle.fontSize));
+    const x=Number.isFinite(line?.minX)?line.minX:Number(shown.bounds?.x);
+    const baseline=Number.isFinite(line?.y)?line.y:(Number(shown.bounds?.y)||0)+size*.30;
+    const ownRight=Number.isFinite(line?.maxX)?line.maxX:x+Number(shown.bounds?.width||0);
+    if(![x,baseline,ownRight].every(Number.isFinite)||ownRight<=x)return null;
+
+    const nearbyRights=[];
+    for(const candidate of analysis.blocks){
+      if(candidate.id===block.id||!isEditable(candidate))continue;
+      const cStyle=inferBlockStyle(candidate);
+      if(cStyle.fontFamily!==originalStyle.fontFamily||cStyle.bold!==originalStyle.bold||cStyle.italic!==originalStyle.italic)continue;
+      if(Math.abs(cStyle.fontSize-originalStyle.fontSize)>Math.max(1.25,originalStyle.fontSize*.12))continue;
+      const visual=visualBlock(candidate);
+      const cLine=visual.lines?.[0];
+      const cBaseline=Number.isFinite(cLine?.y)?cLine.y:(Number(visual.bounds?.y)||0)+cStyle.fontSize*.30;
+      if(Math.abs(cBaseline-baseline)>size*4.2)continue;
+      const cX=Number.isFinite(cLine?.minX)?cLine.minX:Number(visual.bounds?.x);
+      if(!Number.isFinite(cX)||Math.abs(cX-x)>Math.max(12,size*1.4))continue;
+      const cRight=Number.isFinite(cLine?.maxX)?cLine.maxX:cX+Number(visual.bounds?.width||0);
+      if(Number.isFinite(cRight)&&cRight>cX)nearbyRights.push(cRight);
+    }
+
+    const rightMargin=Math.max(18,geometry.width*.055);
+    const pageRight=Math.max(x+40,geometry.width-rightMargin);
+    const inferredRight=Math.min(pageRight,Math.max(ownRight,...nearbyRights));
+    const maxWidth=Math.max(ownRight-x,inferredRight-x);
+    if(maxWidth<Math.max(140,geometry.width*.38)||x>geometry.width*.30)return null;
+
+    const reflowPlan=planInsertionReflow({
+      blocks:analysis.blocks.filter(candidate=>candidate.id!==block.id),
+      x,
+      y:Number.isFinite(Number(shown.bounds?.y))?Number(shown.bounds.y):baseline-size*.30,
+      maxWidth,
+      fontSize:size,
+      pageWidth:geometry.width,
+      pageHeight:geometry.height,
+      pageRotation:geometry.rotation,
+      existingMetrics:metricsForPage(block.pageIndex),
+    });
+    if(!reflowPlan.enabled&&reflowPlan.reason!=='NO_CONTENT_BELOW_INSERTION')return null;
+    return {x,y:baseline,maxWidth,size,reflowPlan};
+  }
+
+  function paragraphExpansionError(cause=null){
+    return Object.assign(new Error('This replacement needs more space than the PDF can safely provide here. Shorten the text or use Add text.'),{code:'LAYOUT_COLLISION',cause});
+  }
+
+  async function queueExpandedEdit(block,newText,selectedStyle,originalStyle,old,cause){
+    const geometry=expansionGeometryForBlock(block,selectedStyle);
+    if(!geometry)throw paragraphExpansionError(cause);
+
+    const clearTx=createEditTransaction({pageIndex:block.pageIndex,block,replacementUnicode:'',style:{...originalStyle,styleChanged:false}});
+    clearTx.originalUnicode=old?.originalUnicode??block.text;
+    clearTx.status='COMMITTED';
+
+    const insertTx=createInsertTransaction({
+      pageIndex:block.pageIndex,
+      text:newText,
+      x:geometry.x,
+      y:geometry.y,
+      fontSize:geometry.size,
+      bold:!!selectedStyle.bold,
+      italic:!!selectedStyle.italic,
+      fontFamily:selectedStyle.fontFamily,
+      lineHeight:geometry.size*1.2,
+      maxWidth:geometry.maxWidth,
+      reflowPlan:geometry.reflowPlan,
+    });
+    clearTx.expandedInsertId=insertTx.id;
+    clearTx.displayUnicode=newText;
+    insertTx.expandedFromBlockId=block.id;
+
+    const oldInsertId=old?.expandedInsertId||null;
+    const oldInsert=oldInsertId?txByBlock.get(oldInsertId):null;
+    const nextMap=new Map(txByBlock);
+    if(oldInsertId)nextMap.delete(oldInsertId);
+    nextMap.set(block.id,clearTx);
+    nextMap.set(insertTx.id,insertTx);
+    setStatus('Replacement needs more space — checking safe paragraph reflow…');
+
+    let preview;
+    try{preview=await buildPreviewForTransactions([...nextMap.values()]);}
+    catch(error){throw paragraphExpansionError(error);}
+
+    const metric=preview?.reflowMetrics?.find(item=>item.transactionId===insertTx.id);
+    if(geometry.reflowPlan.enabled&&!metric)throw paragraphExpansionError(cause);
+
+    const nextRenderer=new PdfRenderer(preview.bytes);
+    await nextRenderer.load();
+
+    if(oldInsertId)txByBlock.delete(oldInsertId);
+    txByBlock.set(block.id,clearTx);
+    txByBlock.set(insertTx.id,insertTx);
+    history.push({
+      undo:()=>{
+        txByBlock.delete(insertTx.id);
+        if(old)txByBlock.set(block.id,old);else txByBlock.delete(block.id);
+        if(oldInsert)txByBlock.set(oldInsert.id,oldInsert);
+        onChange([...txByBlock.values()]);
+      },
+      redo:()=>{
+        if(oldInsert)txByBlock.delete(oldInsert.id);
+        txByBlock.set(block.id,clearTx);
+        txByBlock.set(insertTx.id,insertTx);
+        onChange([...txByBlock.values()]);
+      }
+    });
+    updateHistory();onChange([...txByBlock.values()]);previewToken++;
+    previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview.reflowMetrics||[];
+    await renderPage({announce:false});
+    if(metric?.overflowPageCount)setStatus('Paragraph expanded safely — lower content moved and overflow will continue on a new page when saved.');
+    else if(Number(metric?.delta)>0)setStatus('Paragraph expanded safely — content below moved down automatically.');
+    else setStatus('Paragraph expanded safely within the available spacing.');
+  }
+
   async function queueEdit(block,newText,selectedStyle){
     const old=txByBlock.get(block.id);
     const originalStyle=inferBlockStyle(block);
@@ -458,9 +590,19 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const nextMap=new Map(txByBlock);
     nextMap.set(block.id,tx);
     setStatus(style.styleChanged?'Applying text and formatting…':'Applying edit…');
-    const preview=await buildPreviewForTransactions([...nextMap.values()]);
-    const nextRenderer=new PdfRenderer(preview.bytes);
-    await nextRenderer.load();
+
+    let preview;
+    let nextRenderer;
+    try{
+      preview=await buildPreviewForTransactions([...nextMap.values()]);
+      nextRenderer=new PdfRenderer(preview.bytes);
+      await nextRenderer.load();
+    }catch(error){
+      if(growthNeedsParagraphFallback(error,block,newText,selectedStyle,originalStyle)){
+        return queueExpandedEdit(block,newText,selectedStyle,originalStyle,old,error);
+      }
+      throw error;
+    }
 
     txByBlock.set(block.id,tx);
     history.push({
@@ -507,7 +649,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         else if(e.validation?.render&&!e.validation.render.ok)message='Save failed: the edited page could not be rendered safely.';
         else if(e.validation?.extraction&&!e.validation.extraction.ok)message='Save failed: the new text could not be verified in the exported PDF.';
       }else if(e.code==='LAYOUT_COLLISION'){
-        message='The selected font size is too large for this position. Reduce the size and try again.';
+        message='The replacement needs more room than this PDF region can safely provide. Shorten the text, reduce the font size, or use Add text.';
       }else if(e.code==='INSERT_TEXT_OVERFLOW'){
         message='This paragraph starts too close to the bottom edge to fit safely. Place it slightly higher and try again.';
       }
