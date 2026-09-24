@@ -51,6 +51,7 @@
 <script type="module">
 import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/main.js';
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
+import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion.js';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
@@ -66,6 +67,7 @@ function showPicker(){clearDownload();app.hidden=true;picker.hidden=false;input.
 
 await configurePdfWorker(new URL('./fortress/vendor/pdf.worker.mjs',location.href).href);
 const precisionFontSize=attachPrecisionFontSize({app,getEditor:()=>editor});
+const smartLineInsertion=attachSmartLineInsertion({app,getEditor:()=>editor});
 
 const closeObserver=new MutationObserver(()=>{
   if(!app.hidden && app.childElementCount===0) showPicker();
@@ -105,7 +107,7 @@ input.addEventListener('change',async()=>{
     setIntegrationStatus(error?.message||'Could not open this PDF safely.');
   }
 });
-window.addEventListener('pagehide',()=>{clearDownload();precisionFontSize.destroy();try{editor?.destroy();}catch{}},{once:true});
+window.addEventListener('pagehide',()=>{clearDownload();smartLineInsertion.destroy();precisionFontSize.destroy();try{editor?.destroy();}catch{}},{once:true});
 </script>
 </body>
 </html>
