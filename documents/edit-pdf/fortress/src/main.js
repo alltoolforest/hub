@@ -11,6 +11,7 @@ import { createEditTransaction, createInsertTransaction } from './editing/edit-t
 import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
 import { exportEditedPdf } from './export/exporter.js';
+import { planInsertionReflow } from './layout/reflow-planner.js';
 
 export { configurePdfWorker };
 
@@ -48,6 +49,20 @@ function stylesDiffer(a,b){
   return a.fontFamily!==b.fontFamily||Math.abs(Number(a.fontSize)-Number(b.fontSize))>.15||!!a.bold!==!!b.bold||!!a.italic!==!!b.italic;
 }
 
+function shiftBlock(block,dy){
+  if(!dy)return block;
+  return {
+    ...block,
+    bounds:block.bounds?{...block.bounds,y:block.bounds.y+dy}:block.bounds,
+    lines:(block.lines||[]).map(line=>({
+      ...line,
+      y:Number.isFinite(line.y)?line.y+dy:line.y,
+      bounds:line.bounds?{...line.bounds,y:line.bounds.y+dy}:line.bounds,
+      runs:(line.runs||[]).map(run=>({...run,y:Number.isFinite(run.y)?run.y+dy:run.y})),
+    })),
+  };
+}
+
 export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onChange=()=>{},onExport=()=>{}}={}){
   if(!container)throw new Error('container is required');
   if(workerUrl)configurePdfWorker(workerUrl);
@@ -57,6 +72,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   let activeTextInput=null;
   let activeInputScale=1;
   let formatContext='none';
+  let currentPageGeometry=null;
+  let previewReflowMetrics=[];
   const txByBlock=new Map();
   const history=new History(40);
 
@@ -105,6 +122,29 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
   function currentText(block){return txByBlock.get(block.id)?.replacementUnicode??block.text;}
   function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true'};}
+  function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&Number(m.delta)>0).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);}
+
+  function visualBlock(block){
+    let out=block;
+    for(const metric of metricsForPage(block.pageIndex)){
+      const top=(out.bounds?.y||0)+(out.bounds?.height||0);
+      if(top<=Number(metric.cutY)+.75)out=shiftBlock(out,-Number(metric.delta||0));
+    }
+    return out;
+  }
+
+  function visualInsertedTransaction(tx){
+    const all=[...txByBlock.values()];
+    const txIndex=all.findIndex(item=>item.id===tx.id);
+    let y=Number(tx.y)||0;
+    const size=Math.max(6,Number(tx.fontSize)||12);
+    for(const metric of metricsForPage(tx.pageIndex)){
+      if(Number(metric.sequenceIndex)<=txIndex)continue;
+      const top=y+size*.9;
+      if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta||0);
+    }
+    return {...tx,y};
+  }
 
   function setToggle(buttonEl,active){
     buttonEl.setAttribute('aria-pressed',String(!!active));
@@ -174,7 +214,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       renderer=new PdfRenderer(originalBytes);
       await renderer.load();
       pageIndex=0;zoom=1;txByBlock.clear();history.undoStack=[];history.redoStack=[];updateHistory();
-      activeTextInput=null;formatContext='none';formatTools.hidden=true;setAddTextMode(false,{announce:false});
+      activeTextInput=null;formatContext='none';formatTools.hidden=true;previewReflowMetrics=[];currentPageGeometry=null;setAddTextMode(false,{announce:false});
       await renderPage();
       return {pageCount:loaded.pageCount,flags:model.flags};
     }catch(e){setStatus(e.message,'error');onError(e);throw e;}
@@ -207,6 +247,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     wrap.append(canvas,layer);docArea.append(wrap);
     const displayRenderer=previewRenderer||renderer;
     const info=await displayRenderer.pageInfo(pageIndex);
+    currentPageGeometry={width:info.width,height:info.height,rotation:info.rotation};
     const fit=Math.min(Math.max((docArea.clientWidth-24)/Math.max(info.width,1),.25),2.5);
     const scale=fit*zoom;
     const r=await displayRenderer.render(pageIndex,canvas,{scale});
@@ -221,9 +262,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
     for(const block of analysis.blocks){
       if(!isEditable(block))continue;
-      const lines=block.lines?.length?block.lines:[{text:block.text,...block.bounds,minX:block.bounds?.x,maxX:(block.bounds?.x||0)+(block.bounds?.width||1),y:(block.bounds?.y||0)+(block.fontSize||12)*.3,fontSize:block.fontSize||12}];
+      const shown=visualBlock(block);
+      const lines=shown.lines?.length?shown.lines:[{text:shown.text,...shown.bounds,minX:shown.bounds?.x,maxX:(shown.bounds?.x||0)+(shown.bounds?.width||1),y:(shown.bounds?.y||0)+(shown.fontSize||12)*.3,fontSize:shown.fontSize||12}];
       for(const line of lines){
-        const rect=pdfRectToScreen(r.matrix,lineHitBounds(line,block));
+        const rect=pdfRectToScreen(r.matrix,lineHitBounds(line,shown));
         const hit=document.createElement('button');
         hit.type='button';
         hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
@@ -233,7 +275,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         hit.addEventListener('click',(evt)=>{
           evt.stopPropagation();
           if(addTextMode)beginInsertEditor(layer,r.matrix,evt).catch(error=>{setStatus(error.code||error.message,'error');onError(error);});
-          else beginEdit(block,layer,r.matrix,evt);
+          else beginEdit(block,shown,layer,r.matrix,evt);
         });
         layer.append(hit);
       }
@@ -241,7 +283,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
     for(const tx of txByBlock.values()){
       if(tx.kind!=='INSERT_TEXT'||tx.pageIndex!==pageIndex)continue;
-      const rect=pdfRectToScreen(r.matrix,insertedHitBounds(tx));
+      const shownTx=visualInsertedTransaction(tx);
+      const rect=pdfRectToScreen(r.matrix,insertedHitBounds(shownTx));
       const hit=document.createElement('button');
       hit.type='button';hit.className='pdf-hit pdf-hit-inserted';hit.title=addTextMode?'Place new text here':'Click to edit and format added text';
       Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,12)}px`,height:`${Math.max(rect.height,12)}px`});
@@ -257,21 +300,22 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
   async function buildPreviewForTransactions(transactions){
     if(!transactions.length)return null;
-    return exportEditedPdf(originalBytes,transactions,{validate:false});
+    return exportEditedPdf(originalBytes,transactions,{validate:false,preview:true});
   }
 
-  async function replacePreviewRenderer(bytes){
-    const next=new PdfRenderer(bytes);
+  async function replacePreviewRenderer(result){
+    const next=new PdfRenderer(result.bytes);
     await next.load();
     previewRenderer?.destroy();
     previewRenderer=next;
+    previewReflowMetrics=result.reflowMetrics||[];
   }
 
   async function refreshPreviewFromCommittedState(message='Edit applied — continue editing or Save a copy.'){
     const token=++previewToken;
     try{
       if(!txByBlock.size){
-        previewRenderer?.destroy();previewRenderer=null;
+        previewRenderer?.destroy();previewRenderer=null;previewReflowMetrics=[];
         await renderPage({announce:false});
         if(token===previewToken)setStatus(message);
         return;
@@ -279,7 +323,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       setStatus('Applying edits…');
       const result=await buildPreviewForTransactions([...txByBlock.values()]);
       if(token!==previewToken)return;
-      await replacePreviewRenderer(result.bytes);
+      await replacePreviewRenderer(result);
       if(token!==previewToken)return;
       await renderPage({announce:false});
       if(token===previewToken)setStatus(message);
@@ -289,15 +333,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }
   }
 
-  function beginEdit(block,layer,matrix,evt){
+  function beginEdit(sourceBlock,shownBlock,layer,matrix,evt){
     insertEditorCleanup?.();insertEditorCleanup=null;
     inline?.cancel();
-    const existing=txByBlock.get(block.id);
-    const originalStyle=inferBlockStyle(block);
+    const existing=txByBlock.get(sourceBlock.id);
+    const originalStyle=inferBlockStyle(sourceBlock);
     const existingStyle=existing?.fontSize?{fontFamily:existing.fontFamily||originalStyle.fontFamily,fontSize:existing.fontSize,bold:existing.bold??originalStyle.bold,italic:existing.italic??originalStyle.italic}:originalStyle;
     setFormatControls(existingStyle,{context:'existing',show:true});
-    const editBlock={...block,text:existing?.replacementUnicode??block.text,fontSize:existingStyle.fontSize};
-    inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(block,text,currentFormatStyle()),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
+    const editBlock={...shownBlock,text:existing?.replacementUnicode??sourceBlock.text,fontSize:existingStyle.fontSize};
+    inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(sourceBlock,text,currentFormatStyle()),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
     const rect=layer.getBoundingClientRect();
     const tap=existing?null:{x:evt.clientX-rect.left,y:evt.clientY-rect.top};
     const input=inline.begin(editBlock,matrix,tap);
@@ -373,7 +417,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         const activeStyle=currentFormatStyle();
         let tx;
         if(existingTx){
-          tx=createInsertTransaction({pageIndex:existingTx.pageIndex,text,x:existingTx.x,y:existingTx.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:existingTx.maxWidth||existingTx._renderedWidth||300});
+          tx=createInsertTransaction({pageIndex:existingTx.pageIndex,text,x:existingTx.x,y:existingTx.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:existingTx.maxWidth||existingTx._renderedWidth||300,reflowPlan:existingTx.reflowPlan});
           tx.id=existingTx.id;
         }else{
           const scaleY=Math.max(Math.abs(matrix[3]||1),.1);
@@ -381,10 +425,25 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
           const p=screenPointToPdf(matrix,left,baselineScreenY);
           const p2=screenPointToPdf(matrix,left+desiredWidth,baselineScreenY);
           const pdfWidth=Math.max(40,Math.hypot(p2.x-p.x,p2.y-p.y));
-          tx=createInsertTransaction({pageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth});
+          const geometry=currentPageGeometry||{width:Math.max(p.x+pdfWidth,1),height:Math.max(p.y+activeStyle.fontSize*4,1),rotation:model?.page(pageIndex)?.rotation||0};
+          const reflowPlan=planInsertionReflow({
+            blocks:analysis?.blocks||[],
+            x:p.x,
+            y:p.y,
+            maxWidth:pdfWidth,
+            fontSize:activeStyle.fontSize,
+            pageWidth:geometry.width,
+            pageHeight:geometry.height,
+            pageRotation:geometry.rotation,
+            existingMetrics:metricsForPage(pageIndex),
+          });
+          tx=createInsertTransaction({pageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth,reflowPlan});
         }
-        await queueInsertion(tx,existingTx);
-        cleanup();setAddTextMode(false,{announce:false});setStatus(existingTx?'Added text updated — continue editing or Save a copy.':'New text added — continue editing or Save a copy.');
+        const preview=await queueInsertion(tx,existingTx);
+        cleanup();setAddTextMode(false,{announce:false});
+        const metric=preview?.reflowMetrics?.find(m=>m.transactionId===tx.id&&Number(m.delta)>0);
+        if(existingTx)setStatus(metric?.overflowPageCount?'Added text updated — lower content reflowed and overflow will continue on a new page when saved.':(metric?'Added text updated — lower content moved down automatically.':'Added text updated — continue editing or Save a copy.'));
+        else setStatus(metric?.overflowPageCount?'New text added — lower content reflowed and overflow will continue on a new page when saved.':(metric?'New text added — lower content moved down automatically.':'New text added — existing spacing was sufficient.'));
       }catch(error){done.disabled=false;cancel.disabled=false;input.disabled=false;input.focus();setStatus(error.code||error.message,'error');onError(error);}
     });
   }
@@ -412,13 +471,14 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     previewToken++;
     previewRenderer?.destroy();
     previewRenderer=nextRenderer;
+    previewReflowMetrics=preview.reflowMetrics||[];
     await renderPage({announce:false});
     setStatus(style.styleChanged?'Text and formatting applied — continue editing or Save a copy.':'Edit applied — continue editing or Save a copy.');
   }
 
   async function queueInsertion(tx,old=null){
     const nextMap=new Map(txByBlock);nextMap.set(tx.id,tx);
-    setStatus(old?'Updating added text…':'Adding text…');
+    setStatus(old?'Updating added text…':'Adding text and checking page flow…');
     const preview=await buildPreviewForTransactions([...nextMap.values()]);
     const nextRenderer=new PdfRenderer(preview.bytes);await nextRenderer.load();
     txByBlock.set(tx.id,tx);
@@ -427,8 +487,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       redo:()=>{txByBlock.set(tx.id,tx);onChange([...txByBlock.values()]);}
     });
     updateHistory();onChange([...txByBlock.values()]);previewToken++;
-    previewRenderer?.destroy();previewRenderer=nextRenderer;
+    previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview.reflowMetrics||[];
     await renderPage({announce:false});
+    return preview;
   }
 
   async function saveCopy(){
@@ -436,7 +497,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     try{
       setStatus('Validating edited PDF…');
       const result=await exportEditedPdf(originalBytes,[...txByBlock.values()]);
-      setStatus('Edited PDF validated — download ready.');
+      setStatus(result.overflowPageCount?`Edited PDF validated — ${result.overflowPageCount} continuation page${result.overflowPageCount===1?'':'s'} added.`:'Edited PDF validated — download ready.');
       onExport({...result,filename:fileName.replace(/\.pdf$/i,'')+'-edited.pdf'});
       return result;
     }catch(e){
@@ -447,6 +508,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         else if(e.validation?.extraction&&!e.validation.extraction.ok)message='Save failed: the new text could not be verified in the exported PDF.';
       }else if(e.code==='LAYOUT_COLLISION'){
         message='The selected font size is too large for this position. Reduce the size and try again.';
+      }else if(e.code==='INSERT_TEXT_OVERFLOW'){
+        message='This paragraph starts too close to the bottom edge to fit safely. Place it slightly higher and try again.';
       }
       setStatus(message,'error');onError(e);throw e;
     }
@@ -455,7 +518,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function setMode(mode){setAddTextMode(mode==='add-text');}
   async function undoAction(){if(history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
   async function redoAction(){if(history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
-  function destroy(){previewToken++;insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;}
+  function destroy(){previewToken++;insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;previewReflowMetrics=[];currentPageGeometry=null;}
 
   addText.addEventListener('click',()=>setAddTextMode(!addTextMode));
   familySelect.addEventListener('change',updateActiveInputFormatting);
@@ -472,5 +535,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }
