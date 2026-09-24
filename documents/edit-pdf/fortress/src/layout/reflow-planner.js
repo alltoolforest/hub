@@ -14,13 +14,41 @@ function horizontalOverlap(aLeft,aRight,bLeft,bRight){
 
 function shiftedRect(rect,dy){return {...rect,bottom:rect.bottom+dy,top:rect.top+dy};}
 
+function inferContentBand(moved,{laneLeft,laneRight,pageWidth,size}){
+  if(!moved.length)return null;
+  const padding=Math.max(12,size);
+  const minStaticMargin=Math.max(10,size*.65);
+  const minLeft=Math.min(laneLeft,...moved.map(({rect})=>rect.left));
+  const maxRight=Math.max(laneRight,...moved.map(({rect})=>rect.right));
+  let left=clamp(minLeft-padding,0,pageWidth);
+  let right=clamp(maxRight+padding,0,pageWidth);
+
+  // Avoid creating tiny static slivers. If the detected content nearly touches
+  // an edge, that edge is treated as part of the movable region instead.
+  if(left<minStaticMargin)left=0;
+  if(pageWidth-right<minStaticMargin)right=pageWidth;
+
+  const width=right-left;
+  if(width<Math.max(120,pageWidth*.30))return null;
+
+  return {
+    left,
+    right,
+    width,
+    leftStaticWidth:left,
+    rightStaticWidth:pageWidth-right,
+    padding,
+  };
+}
+
 /**
- * Build a conservative vertical-flow plan for Add Text.
+ * Build a conservative vertical-flow plan for inserted/expanded text.
  *
  * The planner does not mutate the PDF. It finds the nearest content band below
- * the insertion lane, then chooses a horizontal cut that does not pass through
- * any detected text block. The exporter later measures the actual paragraph
- * and shifts the preserved PDF region only when the new text needs more room.
+ * the insertion lane, chooses a horizontal cut that does not pass through any
+ * detected text block, and derives a movable horizontal content band. Static
+ * outer margins are intentionally excluded from movement so page frames and
+ * decorative edge rules do not get broken by paragraph reflow.
  */
 export function planInsertionReflow({
   blocks=[],
@@ -92,12 +120,17 @@ export function planInsertionReflow({
     return {enabled:false,reason:'NO_MOVABLE_CONTENT',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation};
   }
 
+  const contentBand=inferContentBand(moved,{laneLeft,laneRight,pageWidth,size});
+  if(!contentBand){
+    return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation};
+  }
+
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
   const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
 
   return {
     enabled:true,
-    mode:'VERTICAL_REGION_REFLOW',
+    mode:'VERTICAL_CONTENT_BAND_REFLOW',
     cutY,
     flowTopY,
     contentBottomY,
@@ -108,6 +141,7 @@ export function planInsertionReflow({
     pageHeight,
     pageRotation:rotation,
     lane:{left:laneLeft,right:laneRight},
-    confidence:'TEXT_BAND_SAFE_CUT',
+    contentBand,
+    confidence:'TEXT_BAND_AND_MARGIN_SAFE_CUT',
   };
 }
