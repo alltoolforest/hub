@@ -17,6 +17,14 @@ export { configurePdfWorker };
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);
 const isEditable=(block)=>EDITABLE_TIERS.has(block?.tier);
 
+function lineHitBounds(line,block){
+  const size=Math.max(1,line?.fontSize||block?.fontSize||12);
+  const x=Number.isFinite(line?.minX)?line.minX:(block?.bounds?.x||0);
+  const maxX=Number.isFinite(line?.maxX)?line.maxX:(x+(block?.bounds?.width||1));
+  const baseline=Number.isFinite(line?.y)?line.y:(block?.bounds?.y||0);
+  return {x,y:baseline-size*.30,width:Math.max(2,maxX-x),height:Math.max(4,size*1.18)};
+}
+
 export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onChange=()=>{},onExport=()=>{}}={}){
   if(!container)throw new Error('container is required');
   if(workerUrl)configurePdfWorker(workerUrl);
@@ -108,15 +116,18 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
     for(const block of analysis.blocks){
       if(!isEditable(block))continue;
-      const rect=pdfRectToScreen(r.matrix,block.bounds);
-      const hit=document.createElement('button');
-      hit.type='button';
-      hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
-      Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
-      hit.title='Click to edit text';
-      hit.setAttribute('aria-label',`Edit text: ${block.text.slice(0,100)}`);
-      hit.addEventListener('click',(evt)=>beginEdit(block,layer,r.matrix,evt));
-      layer.append(hit);
+      const lines=block.lines?.length?block.lines:[{text:block.text,...block.bounds,minX:block.bounds?.x,maxX:(block.bounds?.x||0)+(block.bounds?.width||1),y:(block.bounds?.y||0)+(block.fontSize||12)*.3,fontSize:block.fontSize||12}];
+      for(const line of lines){
+        const rect=pdfRectToScreen(r.matrix,lineHitBounds(line,block));
+        const hit=document.createElement('button');
+        hit.type='button';
+        hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
+        Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
+        hit.title='Click to edit text';
+        hit.setAttribute('aria-label',`Edit text: ${(line.text||block.text).slice(0,100)}`);
+        hit.addEventListener('click',(evt)=>beginEdit(block,layer,r.matrix,evt));
+        layer.append(hit);
+      }
     }
   }
 
