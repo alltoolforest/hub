@@ -11,31 +11,39 @@ function streamBucket(map,pageIndex,streamIndex){
   return map.get(key);
 }
 
-function standardFontForBlock(block){
-  const raw=[block.fontName,block.lines?.[0]?.fontName,block.sourceRuns?.[0]?.fontContext?.baseFont].filter(Boolean).join(' ').toLowerCase();
-  const bold=/bold|black|semibold|demi/.test(raw);
-  const italic=/italic|oblique/.test(raw);
-  if(/courier|mono/.test(raw)){
+function standardFontForChoice(family,bold=false,italic=false){
+  if(family==='mono'){
     if(bold&&italic)return StandardFonts.CourierBoldOblique;
     if(bold)return StandardFonts.CourierBold;
     if(italic)return StandardFonts.CourierOblique;
     return StandardFonts.Courier;
   }
-  if(/times|serif|roman/.test(raw)){
-    if(bold&&italic)return StandardFonts.TimesRomanBoldItalic;
-    if(bold)return StandardFonts.TimesRomanBold;
-    if(italic)return StandardFonts.TimesRomanItalic;
-    return StandardFonts.TimesRoman;
+  if(family==='sans'){
+    if(bold&&italic)return StandardFonts.HelveticaBoldOblique;
+    if(bold)return StandardFonts.HelveticaBold;
+    if(italic)return StandardFonts.HelveticaOblique;
+    return StandardFonts.Helvetica;
   }
-  if(bold&&italic)return StandardFonts.HelveticaBoldOblique;
-  if(bold)return StandardFonts.HelveticaBold;
-  if(italic)return StandardFonts.HelveticaOblique;
-  return StandardFonts.Helvetica;
+  if(bold&&italic)return StandardFonts.TimesRomanBoldItalic;
+  if(bold)return StandardFonts.TimesRomanBold;
+  if(italic)return StandardFonts.TimesRomanItalic;
+  return StandardFonts.TimesRoman;
+}
+
+function standardFontForBlock(block,tx=null){
+  if(tx?.styleChanged){
+    return standardFontForChoice(tx.fontFamily||'serif',!!tx.bold,!!tx.italic);
+  }
+  const raw=[block.fontName,block.lines?.[0]?.fontName,block.sourceRuns?.[0]?.fontContext?.baseFont].filter(Boolean).join(' ').toLowerCase();
+  const bold=/bold|black|semibold|demi/.test(raw);
+  const italic=/italic|oblique/.test(raw);
+  if(/courier|mono/.test(raw))return standardFontForChoice('mono',bold,italic);
+  if(/times|serif|roman/.test(raw))return standardFontForChoice('serif',bold,italic);
+  return standardFontForChoice('sans',bold,italic);
 }
 
 function standardFontForInsert(tx){
-  if(tx.fontFamily==='sans')return tx.bold?StandardFonts.HelveticaBold:StandardFonts.Helvetica;
-  return tx.bold?StandardFonts.TimesRomanBold:StandardFonts.TimesRoman;
+  return standardFontForChoice(tx.fontFamily||'serif',!!tx.bold,!!tx.italic);
 }
 
 async function getEmbeddedStandardFont(doc,cache,name){
@@ -46,14 +54,15 @@ async function getEmbeddedStandardFont(doc,cache,name){
 async function drawReconstructedText(doc,item,fontCache,warnings){
   const {tx,block}=item;
   const page=doc.getPage(tx.pageIndex);
-  const fontName=standardFontForBlock(block);
+  const pageSize=page.getSize();
+  const fontName=standardFontForBlock(block,tx);
   const font=await getEmbeddedStandardFont(doc,fontCache,fontName);
   const outputLines=String(tx.replacementUnicode).split('\n');
   for(let i=0;i<outputLines.length;i++){
     const text=outputLines[i];
     if(!text)continue;
     try{font.encodeText(text);}catch(error){
-      throw Object.assign(new Error('Replacement contains characters unavailable in the safe fallback font.'),{code:'RECONSTRUCT_FONT_UNSUPPORTED',cause:error});
+      throw Object.assign(new Error('Replacement contains characters unavailable in the selected PDF font.'),{code:'RECONSTRUCT_FONT_UNSUPPORTED',cause:error});
     }
     const line=block.lines?.[i]||block.lines?.at(-1);
     if(!line)throw Object.assign(new Error('Missing visual line geometry for reconstructed text.'),{code:'RECONSTRUCT_GEOMETRY_MISSING'});
@@ -61,18 +70,30 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
     const minX=Number.isFinite(line.minX)?line.minX:(block.bounds?.x??0);
     const maxX=Number.isFinite(line.maxX)?line.maxX:(minX+(block.bounds?.width??1));
     const targetWidth=Math.max(1,maxX-minX);
-    let size=originalSize;
+    let size=tx.styleChanged&&Number.isFinite(Number(tx.fontSize))?Math.max(6,Math.min(72,Number(tx.fontSize))):originalSize;
     let width=font.widthOfTextAtSize(text,size);
-    if(width>targetWidth*1.04){
-      size=Math.max(6,size*(targetWidth/Math.max(width,1)));
-      width=font.widthOfTextAtSize(text,size);
+
+    if(tx.styleChanged){
+      const pageAvailable=Math.max(1,pageSize.width-minX-4);
+      if(width>pageAvailable){
+        throw Object.assign(new Error('The selected font size makes this text extend beyond the page.'),{code:'LAYOUT_COLLISION'});
+      }
+      if(width>targetWidth*1.04){
+        warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is wider than the original text region.'});
+      }
+    }else{
+      if(width>targetWidth*1.04){
+        size=Math.max(6,size*(targetWidth/Math.max(width,1)));
+        width=font.widthOfTextAtSize(text,size);
+      }
+      if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
     }
-    if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
+
     const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
     const angle=line.runs?.[0]?.angle||0;
     page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
   }
-  warnings.push({code:'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:'Replacement was reconstructed with a safe standard PDF font.'});
+  warnings.push({code:tx.styleChanged?'STYLE_APPLIED':'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:tx.styleChanged?'Selected font formatting was written into the PDF.':'Replacement was reconstructed with a safe standard PDF font.'});
 }
 
 function splitLongWord(word,font,size,maxWidth){
@@ -189,7 +210,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
     if(outputLines.length>sourceLines.length)throw Object.assign(new Error('Replacement requires additional source lines.'),{code:'TEXT_OVERFLOW'});
 
     let usedDirect=false;
-    if(block.tier==='DIRECT_EDIT'){
+    if(block.tier==='DIRECT_EDIT'&&!tx.styleChanged){
       const direct=planDirectReplacement(block,tx.replacementUnicode);
       tx.layoutValidation=direct.layout||null;
       if(direct.success){
@@ -200,6 +221,8 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
       }else{
         warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
       }
+    }else if(tx.styleChanged){
+      warnings.push({code:'FORMATTING_REQUIRES_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id});
     }
 
     if(!usedDirect){
