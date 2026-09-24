@@ -35,12 +35,28 @@ function insertedHitBounds(tx){
   return {x:tx.x,y:tx.y-(lineCount-1)*lineHeight-size*.28,width:approxWidth,height};
 }
 
+function inferBlockStyle(block){
+  const raw=[block?.fontName,block?.lines?.[0]?.fontName,block?.sourceRuns?.[0]?.fontContext?.baseFont].filter(Boolean).join(' ').toLowerCase();
+  const fontFamily=/courier|mono/.test(raw)?'mono':(/times|serif|roman/.test(raw)?'serif':'sans');
+  const bold=/bold|black|semibold|demi/.test(raw);
+  const italic=/italic|oblique/.test(raw);
+  const fontSize=Math.max(6,Math.min(72,Number(block?.lines?.[0]?.fontSize||block?.fontSize)||12));
+  return {fontFamily,fontSize,bold,italic};
+}
+
+function stylesDiffer(a,b){
+  return a.fontFamily!==b.fontFamily||Math.abs(Number(a.fontSize)-Number(b.fontSize))>.15||!!a.bold!==!!b.bold||!!a.italic!==!!b.italic;
+}
+
 export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onChange=()=>{},onExport=()=>{}}={}){
   if(!container)throw new Error('container is required');
   if(workerUrl)configurePdfWorker(workerUrl);
   let originalBytes=null,pdfDoc=null,model=null,renderer=null,previewRenderer=null,fileName='document.pdf',pageIndex=0,zoom=1,analysis=null;
   let previewToken=0;
   let addTextMode=false;
+  let activeTextInput=null;
+  let activeInputScale=1;
+  let formatContext='none';
   const txByBlock=new Map();
   const history=new History(40);
 
@@ -52,17 +68,18 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   const name=document.createElement('div');name.className='pdf-fortress-name';name.textContent=fileName;
   const addText=button('Add text','Add new text or paragraph');
   addText.classList.add('pdf-add-text-button');
-  const insertTools=document.createElement('div');insertTools.className='pdf-insert-tools';insertTools.hidden=true;
-  const familySelect=document.createElement('select');familySelect.className='pdf-format-select';familySelect.setAttribute('aria-label','New text font family');
-  familySelect.append(new Option('Serif','serif'),new Option('Sans','sans'));
-  const sizeSelect=document.createElement('select');sizeSelect.className='pdf-format-select pdf-size-select';sizeSelect.setAttribute('aria-label','New text font size');
-  for(const size of [8,10,11,12,14,16,18,20,24,28,32])sizeSelect.append(new Option(`${size} pt`,String(size),false,size===12));
-  const bold=button('B','Bold new text');bold.classList.add('pdf-format-toggle');bold.setAttribute('aria-pressed','false');
-  insertTools.append(familySelect,sizeSelect,bold);
+  const formatTools=document.createElement('div');formatTools.className='pdf-insert-tools pdf-format-tools';formatTools.hidden=true;
+  const familySelect=document.createElement('select');familySelect.className='pdf-format-select';familySelect.setAttribute('aria-label','Text font family');
+  familySelect.append(new Option('Serif','serif'),new Option('Sans','sans'),new Option('Mono','mono'));
+  const sizeSelect=document.createElement('select');sizeSelect.className='pdf-format-select pdf-size-select';sizeSelect.setAttribute('aria-label','Text font size');
+  for(const size of [6,8,9,10,11,12,14,16,18,20,24,28,32,36,48,60,72])sizeSelect.append(new Option(`${size} pt`,String(size),false,size===12));
+  const bold=button('B','Bold text');bold.classList.add('pdf-format-toggle');bold.setAttribute('aria-pressed','false');
+  const italic=button('I','Italic text');italic.classList.add('pdf-format-toggle','pdf-format-italic');italic.setAttribute('aria-pressed','false');
+  formatTools.append(familySelect,sizeSelect,bold,italic);
   const undo=button('Undo','Undo');
   const redo=button('Redo','Redo');
   const save=button('Save a copy','Save a copy','primary');
-  top.append(back,name,addText,insertTools,undo,redo,save);
+  top.append(back,name,addText,formatTools,undo,redo,save);
   const docArea=document.createElement('div');docArea.className='pdf-fortress-doc';
   const footer=document.createElement('div');footer.className='pdf-fortress-footer';
   const prev=button('‹','Previous page');
@@ -87,15 +104,55 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function updateHistory(){undo.disabled=!history.state.canUndo;redo.disabled=!history.state.canRedo;}
   function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
   function currentText(block){return txByBlock.get(block.id)?.replacementUnicode??block.text;}
-  function newTextStyle(){return {fontFamily:familySelect.value==='sans'?'sans':'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true'};}
+  function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true'};}
+
+  function setToggle(buttonEl,active){
+    buttonEl.setAttribute('aria-pressed',String(!!active));
+    buttonEl.classList.toggle('is-active',!!active);
+  }
+
+  function setFormatControls(style,{context='none',show=true}={}){
+    familySelect.value=['serif','sans','mono'].includes(style?.fontFamily)?style.fontFamily:'serif';
+    const requested=Math.max(6,Math.min(72,Number(style?.fontSize)||12));
+    const available=[...sizeSelect.options].map(o=>Number(o.value));
+    const nearest=available.reduce((best,n)=>Math.abs(n-requested)<Math.abs(best-requested)?n:best,available[0]);
+    sizeSelect.value=String(nearest);
+    setToggle(bold,!!style?.bold);
+    setToggle(italic,!!style?.italic);
+    formatContext=context;
+    formatTools.hidden=!show;
+    updateActiveInputFormatting();
+  }
+
+  function hideFormatToolsIfIdle(){
+    if(addTextMode)return;
+    formatContext='none';
+    formatTools.hidden=true;
+    activeTextInput=null;
+    activeInputScale=1;
+  }
+
+  function updateActiveInputFormatting(){
+    if(!activeTextInput)return;
+    const style=currentFormatStyle();
+    activeTextInput.style.fontFamily=style.fontFamily==='sans'?'Arial, sans-serif':(style.fontFamily==='mono'?'Courier New, monospace':'Times New Roman, serif');
+    activeTextInput.style.fontWeight=style.bold?'700':'400';
+    activeTextInput.style.fontStyle=style.italic?'italic':'normal';
+    activeTextInput.style.fontSize=`${Math.max(16,style.fontSize*Math.max(activeInputScale,.1))}px`;
+  }
 
   function setAddTextMode(enabled,{announce=true}={}){
     addTextMode=!!enabled;
     addText.classList.toggle('is-active',addTextMode);
     addText.setAttribute('aria-pressed',String(addTextMode));
-    insertTools.hidden=!addTextMode;
     docArea.classList.toggle('pdf-add-text-mode',addTextMode);
-    if(announce)setStatus(addTextMode?'Add Text is on — click anywhere on the PDF to place a text box.':'Click existing text to edit, or choose Add text for a new paragraph.');
+    if(addTextMode){
+      if(formatContext==='none')setFormatControls({fontFamily:'serif',fontSize:12,bold:false,italic:false},{context:'insert-new',show:true});
+      else formatTools.hidden=false;
+    }else if(!activeTextInput){
+      hideFormatToolsIfIdle();
+    }
+    if(announce)setStatus(addTextMode?'Add Text is on — choose formatting, then click anywhere on the PDF.':'Click existing text to edit and format it, or choose Add text for a new paragraph.');
   }
 
   async function open(file){
@@ -116,7 +173,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       model=new DocumentModel(pdfDoc);
       renderer=new PdfRenderer(originalBytes);
       await renderer.load();
-      pageIndex=0;zoom=1;txByBlock.clear();history.undoStack=[];history.redoStack=[];updateHistory();setAddTextMode(false,{announce:false});
+      pageIndex=0;zoom=1;txByBlock.clear();history.undoStack=[];history.redoStack=[];updateHistory();
+      activeTextInput=null;formatContext='none';formatTools.hidden=true;setAddTextMode(false,{announce:false});
       await renderPage();
       return {pageCount:loaded.pageCount,flags:model.flags};
     }catch(e){setStatus(e.message,'error');onError(e);throw e;}
@@ -132,13 +190,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const safe=applyDocumentSafety(mapped.blocks,model.flags);
     analysis={pageIndex:index,blocks:safe,sourceRuns:mapped.sourceRuns,streams};
     const editable=safe.filter(isEditable).length;
-    if(announce)setStatus(editable?`${editable} editable text region${editable===1?'':'s'} — click text to edit, or use Add text`:'No safely editable existing text detected — Add text is still available');
+    if(announce)setStatus(editable?`${editable} editable text region${editable===1?'':'s'} — click text to edit and format`:'No safely editable existing text detected — Add text is still available');
     return analysis;
   }
 
   async function renderPage({announce=true}={}){
     inline?.cancel();
     insertEditorCleanup?.();insertEditorCleanup=null;
+    activeTextInput=null;activeInputScale=1;
+    if(!addTextMode){formatContext='none';formatTools.hidden=true;}
     docArea.innerHTML='';
     updatePageLabel();
     const wrap=document.createElement('div');wrap.className='pdf-page-wrap';
@@ -168,7 +228,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         hit.type='button';
         hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
         Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
-        hit.title=addTextMode?'Place new text here':'Click to edit text';
+        hit.title=addTextMode?'Place new text here':'Click to edit and format text';
         hit.setAttribute('aria-label',`Edit text: ${currentText(block).slice(0,100)}`);
         hit.addEventListener('click',(evt)=>{
           evt.stopPropagation();
@@ -183,7 +243,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       if(tx.kind!=='INSERT_TEXT'||tx.pageIndex!==pageIndex)continue;
       const rect=pdfRectToScreen(r.matrix,insertedHitBounds(tx));
       const hit=document.createElement('button');
-      hit.type='button';hit.className='pdf-hit pdf-hit-inserted';hit.title=addTextMode?'Place new text here':'Click to edit added text';
+      hit.type='button';hit.className='pdf-hit pdf-hit-inserted';hit.title=addTextMode?'Place new text here':'Click to edit and format added text';
       Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,12)}px`,height:`${Math.max(rect.height,12)}px`});
       hit.setAttribute('aria-label',`Edit added text: ${tx.replacementUnicode.slice(0,100)}`);
       hit.addEventListener('click',(evt)=>{
@@ -233,11 +293,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     insertEditorCleanup?.();insertEditorCleanup=null;
     inline?.cancel();
     const existing=txByBlock.get(block.id);
-    const editBlock={...block,text:existing?.replacementUnicode??block.text};
-    inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(block,text),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
+    const originalStyle=inferBlockStyle(block);
+    const existingStyle=existing?.fontSize?{fontFamily:existing.fontFamily||originalStyle.fontFamily,fontSize:existing.fontSize,bold:existing.bold??originalStyle.bold,italic:existing.italic??originalStyle.italic}:originalStyle;
+    setFormatControls(existingStyle,{context:'existing',show:true});
+    const editBlock={...block,text:existing?.replacementUnicode??block.text,fontSize:existingStyle.fontSize};
+    inline=new InlineEditor(layer,{onCommit:(_b,text)=>queueEdit(block,text,currentFormatStyle()),onCompositionBlocked:()=>setStatus('Finish text composition before Done.','warning')});
     const rect=layer.getBoundingClientRect();
     const tap=existing?null:{x:evt.clientX-rect.left,y:evt.clientY-rect.top};
     const input=inline.begin(editBlock,matrix,tap);
+    activeTextInput=input;activeInputScale=Math.max(Math.abs(matrix[3]||1),.1);updateActiveInputFormatting();
     viewportCtl.watch(input);
     const done=document.createElement('button');done.className='pdf-done';done.textContent='Done';done.type='button';
     const inputLeft=input.offsetLeft,inputTop=input.offsetTop,inputWidth=input.offsetWidth,inputHeight=input.offsetHeight;
@@ -253,9 +317,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       done.disabled=true;
       const result=await inline.commit();
       if(result?.blocked){done.disabled=false;if(result.error)setStatus(result.error.code||result.error.message,'error');return;}
-      viewportCtl.stop();done.remove();
+      viewportCtl.stop();activeTextInput=null;done.remove();hideFormatToolsIfIdle();
     });
     layer.append(done);
+    setStatus('Edit the text and use the formatting controls above, then press Done.');
   }
 
   async function beginInsertEditor(layer,matrix,evt,existingTx=null){
@@ -263,13 +328,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     inline?.cancel();
     insertEditorCleanup?.();insertEditorCleanup=null;
     const layerRect=layer.getBoundingClientRect();
-    const style=existingTx?{fontFamily:existingTx.fontFamily,fontSize:existingTx.fontSize,bold:existingTx.bold}:newTextStyle();
-    if(existingTx){
-      familySelect.value=style.fontFamily||'serif';
-      sizeSelect.value=String(style.fontSize||12);
-      bold.setAttribute('aria-pressed',String(!!style.bold));
-      bold.classList.toggle('is-active',!!style.bold);
-    }
+    const style=existingTx?{fontFamily:existingTx.fontFamily||'serif',fontSize:existingTx.fontSize||12,bold:!!existingTx.bold,italic:!!existingTx.italic}:currentFormatStyle();
+    setFormatControls(style,{context:existingTx?'insert-existing':'insert-new',show:true});
     const clickX=Math.max(4,Math.min(layer.clientWidth-4,(evt?.clientX??layerRect.left+12)-layerRect.left));
     const clickY=Math.max(4,Math.min(layer.clientHeight-4,(evt?.clientY??layerRect.top+12)-layerRect.top));
     const desiredWidth=existingTx?Math.max(180,Math.min(440,(existingTx._renderedWidth||existingTx.maxWidth||300)*Math.max(Math.abs(matrix[0]||1),.1))):Math.min(420,Math.max(180,layer.clientWidth-clickX-12));
@@ -277,12 +337,12 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const topPos=Math.min(clickY,Math.max(4,layer.clientHeight-96));
     const input=document.createElement('textarea');
     input.dataset.role='pdf-new-text-editor';input.setAttribute('aria-label',existingTx?'Edit added PDF text':'Type new PDF text');input.spellcheck=true;input.value=existingTx?.replacementUnicode||'';
-    const screenFont=Math.max(16,(Number(style.fontSize)||12)*Math.max(Math.abs(matrix[3]||1),.8));
-    Object.assign(input.style,{position:'absolute',left:`${left}px`,top:`${topPos}px`,width:`${desiredWidth}px`,height:'112px',minHeight:'80px',fontSize:`${screenFont}px`,fontFamily:style.fontFamily==='sans'?'Arial, sans-serif':'Times New Roman, serif',fontWeight:style.bold?'700':'400',lineHeight:'1.2',padding:'7px 8px',border:'2px solid var(--pdf-editor-focus,#2563eb)',borderRadius:'6px',background:'rgba(255,255,255,.985)',color:'var(--pdf-editor-text,#111)',zIndex:'90',resize:'vertical',boxSizing:'border-box',touchAction:'manipulation'});
+    Object.assign(input.style,{position:'absolute',left:`${left}px`,top:`${topPos}px`,width:`${desiredWidth}px`,height:'112px',minHeight:'80px',lineHeight:'1.2',padding:'7px 8px',border:'2px solid var(--pdf-editor-focus,#2563eb)',borderRadius:'6px',background:'rgba(255,255,255,.985)',color:'var(--pdf-editor-text,#111)',zIndex:'90',resize:'vertical',boxSizing:'border-box',touchAction:'manipulation'});
     const actions=document.createElement('div');actions.className='pdf-insert-actions';
     const cancel=document.createElement('button');cancel.type='button';cancel.className='pdf-insert-cancel';cancel.textContent='Cancel';
     const done=document.createElement('button');done.type='button';done.className='pdf-insert-done';done.textContent='Done';
     actions.append(cancel,done);layer.append(input,actions);
+    activeTextInput=input;activeInputScale=Math.max(Math.abs(matrix[3]||1),.1);updateActiveInputFormatting();
     const actionTop=Math.min(layer.clientHeight-48,topPos+input.offsetHeight+6);
     const actionLeft=Math.min(Math.max(4,left),Math.max(4,layer.clientWidth-150));
     Object.assign(actions.style,{left:`${actionLeft}px`,top:`${actionTop}px`});
@@ -293,7 +353,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const cleanup=()=>{
       if(closed)return;closed=true;
       input.removeEventListener('keydown',onKeyDown);input.remove();actions.remove();viewportCtl.stop();
+      activeTextInput=null;activeInputScale=1;
       if(insertEditorCleanup===cleanup)insertEditorCleanup=null;
+      hideFormatToolsIfIdle();
     };
     insertEditorCleanup=cleanup;
     const onKeyDown=(event)=>{
@@ -308,10 +370,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       if(!text.trim()){setStatus('Type some text before pressing Done.','warning');input.focus();return;}
       done.disabled=true;cancel.disabled=true;input.disabled=true;
       try{
-        const activeStyle=newTextStyle();
+        const activeStyle=currentFormatStyle();
         let tx;
         if(existingTx){
-          tx=createInsertTransaction({pageIndex:existingTx.pageIndex,text,x:existingTx.x,y:existingTx.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:existingTx.maxWidth||existingTx._renderedWidth||300});
+          tx=createInsertTransaction({pageIndex:existingTx.pageIndex,text,x:existingTx.x,y:existingTx.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:existingTx.maxWidth||existingTx._renderedWidth||300});
           tx.id=existingTx.id;
         }else{
           const scaleY=Math.max(Math.abs(matrix[3]||1),.1);
@@ -319,7 +381,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
           const p=screenPointToPdf(matrix,left,baselineScreenY);
           const p2=screenPointToPdf(matrix,left+desiredWidth,baselineScreenY);
           const pdfWidth=Math.max(40,Math.hypot(p2.x-p.x,p2.y-p.y));
-          tx=createInsertTransaction({pageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth});
+          tx=createInsertTransaction({pageIndex,text,x:p.x,y:p.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,lineHeight:activeStyle.fontSize*1.2,maxWidth:pdfWidth});
         }
         await queueInsertion(tx,existingTx);
         cleanup();setAddTextMode(false,{announce:false});setStatus(existingTx?'Added text updated — continue editing or Save a copy.':'New text added — continue editing or Save a copy.');
@@ -327,14 +389,16 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     });
   }
 
-  async function queueEdit(block,newText){
+  async function queueEdit(block,newText,selectedStyle){
     const old=txByBlock.get(block.id);
-    const tx=createEditTransaction({pageIndex:block.pageIndex,block,replacementUnicode:newText});
+    const originalStyle=inferBlockStyle(block);
+    const style={...selectedStyle,styleChanged:stylesDiffer(selectedStyle,originalStyle)};
+    const tx=createEditTransaction({pageIndex:block.pageIndex,block,replacementUnicode:newText,style});
     tx.originalUnicode=old?.originalUnicode??block.text;
     tx.status='COMMITTED';
     const nextMap=new Map(txByBlock);
     nextMap.set(block.id,tx);
-    setStatus('Applying edit…');
+    setStatus(style.styleChanged?'Applying text and formatting…':'Applying edit…');
     const preview=await buildPreviewForTransactions([...nextMap.values()]);
     const nextRenderer=new PdfRenderer(preview.bytes);
     await nextRenderer.load();
@@ -349,7 +413,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     previewRenderer?.destroy();
     previewRenderer=nextRenderer;
     await renderPage({announce:false});
-    setStatus('Edit applied — continue editing or Save a copy.');
+    setStatus(style.styleChanged?'Text and formatting applied — continue editing or Save a copy.':'Edit applied — continue editing or Save a copy.');
   }
 
   async function queueInsertion(tx,old=null){
@@ -381,6 +445,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         if(e.validation?.structural&&!e.validation.structural.ok)message='Save failed: the generated PDF structure did not reopen correctly.';
         else if(e.validation?.render&&!e.validation.render.ok)message='Save failed: the edited page could not be rendered safely.';
         else if(e.validation?.extraction&&!e.validation.extraction.ok)message='Save failed: the new text could not be verified in the exported PDF.';
+      }else if(e.code==='LAYOUT_COLLISION'){
+        message='The selected font size is too large for this position. Reduce the size and try again.';
       }
       setStatus(message,'error');onError(e);throw e;
     }
@@ -389,10 +455,13 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function setMode(mode){setAddTextMode(mode==='add-text');}
   async function undoAction(){if(history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
   async function redoAction(){if(history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
-  function destroy(){previewToken++;insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;}
+  function destroy(){previewToken++;insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;}
 
   addText.addEventListener('click',()=>setAddTextMode(!addTextMode));
-  bold.addEventListener('click',()=>{const active=bold.getAttribute('aria-pressed')!=='true';bold.setAttribute('aria-pressed',String(active));bold.classList.toggle('is-active',active);});
+  familySelect.addEventListener('change',updateActiveInputFormatting);
+  sizeSelect.addEventListener('change',updateActiveInputFormatting);
+  bold.addEventListener('click',()=>{setToggle(bold,bold.getAttribute('aria-pressed')!=='true');updateActiveInputFormatting();});
+  italic.addEventListener('click',()=>{setToggle(italic,italic.getAttribute('aria-pressed')!=='true');updateActiveInputFormatting();});
   back.addEventListener('click',destroy);
   undo.addEventListener('click',()=>undoAction().catch(()=>{}));
   redo.addEventListener('click',()=>redoAction().catch(()=>{}));
@@ -403,5 +472,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext})};
 }
