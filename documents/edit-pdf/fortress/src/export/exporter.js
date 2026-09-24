@@ -4,6 +4,7 @@ import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
+import { applyVerticalRegionReflow } from './page-reflow.js';
 
 function streamBucket(map,pageIndex,streamIndex){
   const key=`${pageIndex}:${streamIndex}`;
@@ -128,7 +129,7 @@ function wrapParagraph(text,font,size,maxWidth){
   return wrapped.length?wrapped:[''];
 }
 
-async function drawInsertedText(doc,tx,fontCache,warnings){
+async function prepareInsertedText(doc,tx,fontCache){
   const page=doc.getPage(tx.pageIndex);
   if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'INSERT_PAGE_MISSING'});
   const pageSize=page.getSize();
@@ -142,19 +143,30 @@ async function drawInsertedText(doc,tx,fontCache,warnings){
   const lineHeight=Math.max(size,Number(tx.lineHeight)||size*1.2);
   const availableWidth=Math.max(40,Math.min(Number(tx.maxWidth)||300,pageSize.width-x-8));
   const lines=wrapParagraph(tx.replacementUnicode,font,size,availableWidth);
-  const lowestY=y-(Math.max(0,lines.length-1)*lineHeight);
-  if(lowestY<-size)throw Object.assign(new Error('The new paragraph extends below the page.'),{code:'INSERT_TEXT_OVERFLOW'});
-  for(let i=0;i<lines.length;i++){
-    const text=lines[i];
+  for(const text of lines){
     if(!text)continue;
     try{font.encodeText(text);}catch(error){
       throw Object.assign(new Error('New text contains characters unavailable in the selected PDF font.'),{code:'INSERT_FONT_UNSUPPORTED',cause:error});
     }
-    page.drawText(text,{x,y:y-i*lineHeight,size,font,color:rgb(0,0,0)});
   }
-  tx._renderedLineCount=lines.length;
-  tx._renderedWidth=availableWidth;
-  warnings.push({code:'TEXT_INSERTED',pageIndex:tx.pageIndex,transactionId:tx.id,lineCount:lines.length});
+  const bottomY=y-(Math.max(0,lines.length-1)*lineHeight)-size*.28;
+  return {pageSize,font,fontName,size,lineHeight,availableWidth,lines,bottomY};
+}
+
+function drawInsertedLayout(doc,tx,layout,warnings){
+  const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'INSERT_PAGE_MISSING'});
+  if(layout.bottomY<-layout.size){
+    throw Object.assign(new Error('The new paragraph extends below the page.'),{code:'INSERT_TEXT_OVERFLOW'});
+  }
+  for(let i=0;i<layout.lines.length;i++){
+    const text=layout.lines[i];
+    if(!text)continue;
+    page.drawText(text,{x:Number(tx.x),y:Number(tx.y)-i*layout.lineHeight,size:layout.size,font:layout.font,color:rgb(0,0,0)});
+  }
+  tx._renderedLineCount=layout.lines.length;
+  tx._renderedWidth=layout.availableWidth;
+  warnings.push({code:'TEXT_INSERTED',pageIndex:tx.pageIndex,transactionId:tx.id,lineCount:layout.lines.length});
 }
 
 function neutralizeSourceLines(byStream,tx,sourceLines){
@@ -185,20 +197,32 @@ function planDirectReplacement(block,replacementUnicode){
   return {success:true,replacements,layout};
 }
 
-export async function exportEditedPdf(originalBytes,transactions,{validate=true}={}){
+function finalSourcePageIndex(sourcePageIndex,overflowCounts){
+  let shift=0;
+  for(const [page,count] of overflowCounts){
+    if(page<sourcePageIndex)shift+=count;
+  }
+  return sourcePageIndex+shift;
+}
+
+export async function exportEditedPdf(originalBytes,transactions,{validate=true,preview=false}={}){
   const doc=await PDFDocument.load(originalBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
   const byStream=new Map();
   const checks=[];
   const warnings=[];
   const reconstructions=[];
-  const insertions=[];
+  const insertionsByPage=new Map();
   const fontCache=new Map();
+  const reflowMetrics=[];
+  const overflowCounts=new Map();
 
-  for(const tx of transactions){
+  for(let sequenceIndex=0;sequenceIndex<transactions.length;sequenceIndex++){
+    const tx=transactions[sequenceIndex];
     if(tx.kind==='INSERT_TEXT'){
       if(!String(tx.replacementUnicode||'').trim())continue;
-      insertions.push(tx);
-      checks.push({kind:'insert',pageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:''});
+      if(!insertionsByPage.has(tx.pageIndex))insertionsByPage.set(tx.pageIndex,[]);
+      insertionsByPage.get(tx.pageIndex).push({tx,sequenceIndex});
+      checks.push({kind:'insert',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:''});
       continue;
     }
 
@@ -230,7 +254,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
       reconstructions.push({tx,block});
     }
 
-    checks.push({kind:'replace',pageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
+    checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
   }
 
   for(const {pageIndex,streamIndex,edits} of byStream.values()){
@@ -243,11 +267,53 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
   }
 
   for(const item of reconstructions)await drawReconstructedText(doc,item,fontCache,warnings);
-  for(const tx of insertions)await drawInsertedText(doc,tx,fontCache,warnings);
+
+  // Process pages from last to first. In final export, continuation pages are
+  // inserted immediately after their source page. Descending order prevents
+  // those insertions from invalidating indexes of pages still to be processed.
+  const insertionPages=[...insertionsByPage.keys()].sort((a,b)=>b-a);
+  for(const sourcePageIndex of insertionPages){
+    const items=insertionsByPage.get(sourcePageIndex)||[];
+    for(const {tx,sequenceIndex} of items){
+      const layout=await prepareInsertedText(doc,tx,fontCache);
+      let reflow=null;
+      if(tx.reflowPlan?.enabled){
+        reflow=await applyVerticalRegionReflow(doc,tx,layout,{preview,sequenceIndex});
+        if(reflow.metric)reflowMetrics.push(reflow.metric);
+        if(reflow.applied){
+          overflowCounts.set(sourcePageIndex,(overflowCounts.get(sourcePageIndex)||0)+(reflow.overflowPageCount||0));
+          warnings.push({
+            code:'LAYOUT_REFLOWED',
+            pageIndex:sourcePageIndex,
+            transactionId:tx.id,
+            delta:reflow.metric?.delta||0,
+            overflowPageCount:reflow.overflowPageCount||0,
+            message:reflow.overflowPageCount?'Content below the new text was moved and overflow continued on a new page.':'Content below the new text was moved down to preserve spacing.',
+          });
+        }else if(!['EXISTING_WHITESPACE_SUFFICIENT','NO_CONTENT_BELOW_INSERTION','REFLOW_DISABLED'].includes(reflow.reason)){
+          warnings.push({code:'REFLOW_FALLBACK',pageIndex:sourcePageIndex,transactionId:tx.id,reason:reflow.reason,message:'This page could not be safely reflowed, so the text was added without moving page content.'});
+        }
+      }
+      drawInsertedLayout(doc,tx,layout,warnings);
+    }
+  }
+
+  const finalChecks=checks.map(check=>({
+    ...check,
+    pageIndex:finalSourcePageIndex(check.sourcePageIndex,overflowCounts),
+  }));
 
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
-  const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks}):null;
+  const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:finalChecks}):null;
   if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{code:'EXPORT_VALIDATION_FAILED',validation});
   if(validation&&!validation.textVerified)warnings.push({code:'TEXT_EXTRACTION_VERIFICATION_DIFFERED',message:'The PDF structure and rendering passed, but extracted text segmentation differed from the editor check.'});
-  return {bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,validation,warnings};
+  const overflowPageCount=[...overflowCounts.values()].reduce((sum,n)=>sum+n,0);
+  return {
+    bytes,
+    blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,
+    validation,
+    warnings,
+    reflowMetrics,
+    overflowPageCount,
+  };
 }
