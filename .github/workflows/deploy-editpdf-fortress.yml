@@ -1,0 +1,66 @@
+name: Deploy Edit PDF Fortress only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.editpdf-fortress-deploy.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: editpdf-fortress-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-editpdf-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current site
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode and verify isolated Edit PDF package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .editpdf-fortress-deploy.b64 ]; then
+            echo 'No Edit PDF deployment payload present; nothing to do.'
+            exit 0
+          fi
+          base64 -d .editpdf-fortress-deploy.b64 > /tmp/editpdf-fortress.zip
+          echo '597df748a402ad51037be09867db0514b4f9976866dd02582fd095403c0a8dd1  /tmp/editpdf-fortress.zip' | sha256sum -c -
+          rm -rf /tmp/editpdf-fortress
+          mkdir -p /tmp/editpdf-fortress
+          unzip -q /tmp/editpdf-fortress.zip -d /tmp/editpdf-fortress
+          test -f /tmp/editpdf-fortress/documents/edit-pdf/index.html
+          test -f /tmp/editpdf-fortress/documents/edit-pdf/fortress/src/main.js
+
+      - name: Replace only Documents Edit PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf documents/edit-pdf
+          mkdir -p documents
+          cp -a /tmp/editpdf-fortress/documents/edit-pdf documents/edit-pdf
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add documents/edit-pdf
+
+          changed="$(git diff --cached --name-only)"
+          printf '%s\n' "$changed"
+          if [ -z "$changed" ]; then
+            echo 'Edit PDF is already current.'
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -Ev '^documents/edit-pdf/' >/dev/null; then
+            echo 'Refusing deployment: a file outside documents/edit-pdf would change.'
+            exit 1
+          fi
+
+          git commit -m 'Replace Edit PDF with Fortress Super Hybrid'
+          git push origin HEAD:main
