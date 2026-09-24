@@ -28,15 +28,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f .editpdf-fortress-deploy.b64 ]; then
-            echo 'No Edit PDF deployment marker present; nothing to do.'
+            echo 'No Edit PDF deployment payload present; nothing to do.'
             exit 0
           fi
-          cat .editpdf-fortress-chunk-*.b64 > /tmp/editpdf-fortress.b64
-          base64 -d /tmp/editpdf-fortress.b64 > /tmp/editpdf-fortress.zip
-          echo '597df748a402ad51037be09867db0514b4f9976866dd02582fd095403c0a8dd1  /tmp/editpdf-fortress.zip' | sha256sum -c -
+          base64 -d .editpdf-fortress-deploy.b64 > /tmp/editpdf-fortress.tar.xz
+          echo 'f07fb71a7cc2613f1d4fb5a3919ab2455c0fb69067bb4cfa8d249483b0b9fd48  /tmp/editpdf-fortress.tar.xz' | sha256sum -c -
           rm -rf /tmp/editpdf-fortress
           mkdir -p /tmp/editpdf-fortress
-          unzip -q /tmp/editpdf-fortress.zip -d /tmp/editpdf-fortress
+          tar -xJf /tmp/editpdf-fortress.tar.xz -C /tmp/editpdf-fortress
           test -f /tmp/editpdf-fortress/documents/edit-pdf/index.html
           test -f /tmp/editpdf-fortress/documents/edit-pdf/fortress/src/main.js
 
