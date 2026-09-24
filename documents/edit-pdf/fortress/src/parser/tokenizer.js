@@ -55,6 +55,8 @@ function readHex(bytes, start, limits) {
 }
 
 function skipInlineImage(bytes, start) {
+  // Inline images are opaque for this text editor. This scanner is intentionally conservative:
+  // it looks for whitespace-delimited EI and returns the entire BI..EI region as one token.
   let i = start;
   while (i + 2 < bytes.length) {
     if (isWs(bytes[i]) && bytes[i + 1] === 0x45 && bytes[i + 2] === 0x49 && (i + 3 >= bytes.length || isWs(bytes[i + 3]) || isDelim(bytes[i + 3]))) {
@@ -66,14 +68,24 @@ function skipInlineImage(bytes, start) {
 }
 
 export function tokenizeContentStream(bytes, options = {}) {
-  const limits = {maxTokens: options.maxTokens ?? 200000,maxStringBytes: options.maxStringBytes ?? 8 * 1024 * 1024,maxNesting: options.maxNesting ?? 64};
-  const tokens = []; let i = 0;
-  const push = (t) => { tokens.push(t); if (tokens.length > limits.maxTokens) throw new PdfContentSyntaxError('Operator/token limit exceeded'); };
+  const limits = {
+    maxTokens: options.maxTokens ?? 200000,
+    maxStringBytes: options.maxStringBytes ?? 8 * 1024 * 1024,
+    maxNesting: options.maxNesting ?? 64,
+  };
+  const tokens = [];
+  let i = 0;
+  const push = (t) => {
+    tokens.push(t);
+    if (tokens.length > limits.maxTokens) throw new PdfContentSyntaxError('Operator/token limit exceeded');
+  };
   while (i < bytes.length) {
     const b = bytes[i];
     if (isWs(b)) { i++; continue; }
     if (b === 0x25) { while (i < bytes.length && bytes[i] !== 0x0a && bytes[i] !== 0x0d) i++; continue; }
-    if (b === 0x28) { const r = readLiteral(bytes, i, limits); push({ type:'string', value:r.value, syntax:r.syntax, start:i, end:r.end }); i = r.end; continue; }
+    if (b === 0x28) {
+      const r = readLiteral(bytes, i, limits); push({ type:'string', value:r.value, syntax:r.syntax, start:i, end:r.end }); i = r.end; continue;
+    }
     if (b === 0x3c) {
       if (bytes[i + 1] === 0x3c) { push({ type:'dictStart', start:i, end:i+2 }); i += 2; continue; }
       const r = readHex(bytes, i, limits); push({ type:'string', value:r.value, syntax:r.syntax, start:i, end:r.end }); i = r.end; continue;
@@ -84,35 +96,50 @@ export function tokenizeContentStream(bytes, options = {}) {
     if (b === 0x2f) {
       const start = i; let j = i + 1; let name = '';
       while (j < bytes.length && isRegular(bytes[j])) {
-        if (bytes[j] === 0x23 && j + 2 < bytes.length) { const h = String.fromCharCode(bytes[j+1], bytes[j+2]); if (/^[0-9a-fA-F]{2}$/.test(h)) { name += String.fromCharCode(Number.parseInt(h,16)); j += 3; continue; } }
+        if (bytes[j] === 0x23 && j + 2 < bytes.length) {
+          const h = String.fromCharCode(bytes[j+1], bytes[j+2]);
+          if (/^[0-9a-fA-F]{2}$/.test(h)) { name += String.fromCharCode(Number.parseInt(h,16)); j += 3; continue; }
+        }
         name += String.fromCharCode(bytes[j]); j++;
       }
       push({ type:'name', value:name, start, end:j }); i = j; continue;
     }
-    const start = i; let j = i; while (j < bytes.length && isRegular(bytes[j])) j++;
+    const start = i;
+    let j = i;
+    while (j < bytes.length && isRegular(bytes[j])) j++;
     if (j === start) { i++; continue; }
     const raw = new TextDecoder('latin1').decode(bytes.slice(start,j));
     if (/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(raw)) push({ type:'num', value:Number(raw), start, end:j });
     else if (raw === 'true' || raw === 'false') push({ type:'bool', value:raw === 'true', start, end:j });
     else if (raw === 'null') push({ type:'null', value:null, start, end:j });
-    else if (raw === 'BI') { const end = skipInlineImage(bytes, j); push({ type:'opaque', value:'INLINE_IMAGE', start, end }); i = end; continue; }
-    else push({ type:'op', value:raw, start, end:j });
+    else if (raw === 'BI') {
+      const end = skipInlineImage(bytes, j);
+      push({ type:'opaque', value:'INLINE_IMAGE', start, end }); i = end; continue;
+    } else push({ type:'op', value:raw, start, end:j });
     i = j;
   }
   return tokens;
 }
 
 export function groupOperators(tokens) {
-  const out = []; let pending = []; let start = null;
+  const out = [];
+  let pending = [];
+  let start = null;
   for (const token of tokens) {
-    if (token.type === 'op' || token.type === 'opaque') { out.push({ op: token.type === 'opaque' ? token.value : token.value, args: pending, start: start ?? token.start, opStart: token.start, end: token.end }); pending = []; start = null; }
-    else { if (start === null) start = token.start; pending.push(token); }
+    if (token.type === 'op' || token.type === 'opaque') {
+      out.push({ op: token.type === 'opaque' ? token.value : token.value, args: pending, start: start ?? token.start, opStart: token.start, end: token.end });
+      pending = []; start = null;
+    } else {
+      if (start === null) start = token.start;
+      pending.push(token);
+    }
   }
   return out;
 }
 
 export function operandsToValues(args) {
-  const result = []; let i = 0;
+  const result = [];
+  let i = 0;
   while (i < args.length) {
     const t = args[i];
     if (t.type === 'arrayStart') {
@@ -121,12 +148,15 @@ export function operandsToValues(args) {
         const el = args[i];
         if (el.type === 'arrayStart') { depth++; arr.push({nestedArrayStart:true}); i++; continue; }
         if (el.type === 'arrayEnd') { depth--; i++; if (depth === 0) break; continue; }
-        if (el.type === 'string') arr.push({ str: el.value, syntax: el.syntax, token: el }); else arr.push(el.value);
+        if (el.type === 'string') arr.push({ str: el.value, syntax: el.syntax, token: el });
+        else arr.push(el.value);
         i++;
       }
       result.push(arr); continue;
     }
-    if (t.type === 'string') result.push({ str:t.value, syntax:t.syntax, token:t }); else result.push(t.value); i++;
+    if (t.type === 'string') result.push({ str:t.value, syntax:t.syntax, token:t });
+    else result.push(t.value);
+    i++;
   }
   return result;
 }
