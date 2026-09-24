@@ -253,14 +253,13 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
       if(slices.length>16)throw Object.assign(new Error('Reflow would create too many continuation pages.'),{code:'REFLOW_PAGE_LIMIT'});
     }
 
-    // Static margin strips are copied to continuation pages as a page-frame
-    // background, while only the movable content band is paginated.
-    const continuationMargins=await buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,height,bottom:0,top:height});
+    // Continuation pages receive only overflow content from the movable band.
+    // We intentionally do not clone static margins because they may contain
+    // headers, page numbers, or marginal links that must not be duplicated.
     for(let i=0;i<slices.length;i++){
       const slice=slices[i];
       const embedded=await embedSlice(doc,donorPage,{left:bandLeft,bottom:slice.bottom,right:bandRight,top:slice.top});
       const continuation=preview?doc.addPage([width,height]):doc.insertPage(pageIndex+1+i,[width,height]);
-      drawStaticMargins(continuation,continuationMargins,{bandLeft,bandRight,width,bottom:0,top:height});
       const h=slice.top-slice.bottom;
       drawSlice(continuation,embedded,{x:bandLeft,y:height-topMargin-h,width:bandWidth,height:h});
       overflowPageCount++;
