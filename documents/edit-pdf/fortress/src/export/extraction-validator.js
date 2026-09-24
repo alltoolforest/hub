@@ -1,0 +1,3 @@
+import { loadPdfjs } from '../rendering/pdfjs.js';
+export async function extractPageText(bytes,pageIndex){const p=await loadPdfjs();const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});const doc=await task.promise;const page=await doc.getPage(pageIndex+1);const tc=await page.getTextContent();return tc.items.map(x=>x.str).join(' ');}
+export async function validateExtraction(bytes,checks){const results=[];for(const c of checks){const text=await extractPageText(bytes,c.pageIndex);results.push({pageIndex:c.pageIndex,replacementPresent:text.includes(c.newText),oldTextAbsent:!c.oldText||!text.includes(c.oldText),text});}return{ok:results.every(r=>r.replacementPresent&&r.oldTextAbsent),results};}

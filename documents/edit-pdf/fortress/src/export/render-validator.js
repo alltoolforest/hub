@@ -1,0 +1,2 @@
+import { loadPdfjs } from '../rendering/pdfjs.js';
+export async function validateRenderable(bytes,pageIndexes){try{const p=await loadPdfjs();const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});const doc=await task.promise;for(const i of new Set(pageIndexes)){const page=await doc.getPage(i+1);await page.getOperatorList();}return{ok:true};}catch(err){return{ok:false,error:String(err)};}}
