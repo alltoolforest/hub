@@ -225,5 +225,6 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true}
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
   const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks}):null;
   if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{code:'EXPORT_VALIDATION_FAILED',validation});
+  if(validation&&!validation.textVerified)warnings.push({code:'TEXT_EXTRACTION_VERIFICATION_DIFFERED',message:'The PDF structure and rendering passed, but extracted text segmentation differed from the editor check.'});
   return {bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,validation,warnings};
 }
