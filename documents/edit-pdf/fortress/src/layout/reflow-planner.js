@@ -14,18 +14,36 @@ function rectOf(block){
   return {left:x,right:x+width,bottom:y,top:y+height,width,height};
 }
 
+function lineRectOf(block,line){
+  const b=line?.bounds;
+  if(b){
+    const x=Number(b.x),y=Number(b.y),width=Number(b.width),height=Number(b.height);
+    if([x,y,width,height].every(Number.isFinite)&&width>0&&height>0)return {left:x,right:x+width,bottom:y,top:y+height,width,height};
+  }
+  const size=Math.max(1,Number(line?.fontSize||block?.fontSize)||12);
+  const left=Number.isFinite(Number(line?.minX))?Number(line.minX):Number(block?.bounds?.x||0);
+  const right=Number.isFinite(Number(line?.maxX))?Number(line.maxX):left+Number(block?.bounds?.width||1);
+  const baseline=Number.isFinite(Number(line?.y))?Number(line.y):Number(block?.bounds?.y||0)+size*.30;
+  if(![left,right,baseline,size].every(Number.isFinite)||right<=left)return rectOf(block);
+  const descent=Math.max(size*.24,1.5);
+  const ascent=Math.max(size*.86,2);
+  return {left,right,bottom:baseline-descent,top:baseline+ascent,width:right-left,height:ascent+descent};
+}
+
 function horizontalOverlap(aLeft,aRight,bLeft,bRight){
   return Math.max(0,Math.min(aRight,bRight)-Math.max(aLeft,bLeft));
 }
 
 function shiftedRect(rect,dy){return {...rect,bottom:rect.bottom+dy,top:rect.top+dy};}
 
-function overflowedIdsFromMetrics(metrics=[]){
-  const out=new Set();
+function overflowedTargetsFromMetrics(metrics=[]){
+  const blockIds=new Set();
+  const lineIds=new Set();
   for(const metric of metrics||[]){
-    for(const id of metric?.overflowedBlockIds||[])if(id)out.add(id);
+    for(const id of metric?.overflowedBlockIds||[])if(id)blockIds.add(id);
+    for(const id of metric?.overflowedLineIds||[])if(id)lineIds.add(id);
   }
-  return out;
+  return {blockIds,lineIds};
 }
 
 function inferContentBand(moved,{laneLeft,laneRight,pageWidth,size}){
@@ -56,8 +74,28 @@ function inferFooterGuard(moved,{pageHeight,size,bottomMargin}){
   return {enabled:top>bottomMargin+2,top,height:top,clearance,contentBottomY,confidence:'TEXT_FREE_FOOTER_GUARD'};
 }
 
-function inferredSourcePageIndex(rects){
-  const value=rects.find(item=>Number.isInteger(item?.block?.pageIndex))?.block?.pageIndex;
+function preparedPageGeometry(pageIndex){
+  if(!Number.isInteger(pageIndex))return null;
+  return cascadePageGeometry.find(page=>Number(page?.pageIndex)===pageIndex)||null;
+}
+
+function resolveFooterGuard(prepared,moved,{pageHeight,size,bottomMargin}){
+  const preparedTop=Number(prepared?.footerGuardTop);
+  if(Number.isFinite(preparedTop)){
+    const top=clamp(preparedTop,bottomMargin,Math.min(pageHeight*.18,pageHeight-2));
+    return {
+      enabled:top>bottomMargin+1,
+      top,
+      height:top,
+      contentBottomY:Number(prepared?.textBottomY),
+      confidence:'PREPARED_PAGE_FOOTER_GUARD',
+    };
+  }
+  return inferFooterGuard(moved,{pageHeight,size,bottomMargin});
+}
+
+function inferredSourcePageIndex(blocks){
+  const value=(blocks||[]).find(block=>Number.isInteger(block?.pageIndex))?.pageIndex;
   return Number.isInteger(value)?value:null;
 }
 
@@ -66,11 +104,15 @@ function followingCascadePages(sourcePageIndex){
   return cascadePageGeometry.filter(page=>page.pageIndex>sourcePageIndex).sort((a,b)=>a.pageIndex-b.pageIndex).map(page=>({...page}));
 }
 
-function flowBlockGeometry(moved,contentBand){
+function flowLineGeometry(moved,contentBand){
   return moved
     .filter(({rect})=>horizontalOverlap(rect.left,rect.right,contentBand.left,contentBand.right)>Math.min(8,rect.width*.2))
-    .map(({block,rect})=>({
+    .map(({block,lineIndex,lineId,rect})=>({
       id:block?.id||null,
+      blockId:block?.id||null,
+      lineId,
+      lineIndex,
+      blockLineCount:Math.max(1,block?.lines?.length||1),
       left:rect.left,right:rect.right,bottom:rect.bottom,top:rect.top,width:rect.width,height:rect.height,
     }))
     .filter(item=>Number.isFinite(item.bottom)&&Number.isFinite(item.top)&&item.top>item.bottom)
@@ -84,28 +126,34 @@ export function planInsertionReflow({
   if(rotation!==0)return {enabled:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED',pageRotation:rotation};
 
   const size=clamp(Number(fontSize)||12,6,72);
+  const sourcePageIndex=inferredSourcePageIndex(blocks);
+  const prepared=preparedPageGeometry(sourcePageIndex);
   const safetyGap=Math.max(4,size*.35);
-  const bottomMargin=Math.max(12,size*.8);
-  const topMargin=Math.max(24,size*1.6);
+  const bottomMargin=Math.max(12,Number(prepared?.bottomMargin)||size*.8);
+  const topMargin=Math.max(24,Number(prepared?.topMargin)||size*1.6);
   const laneLeft=clamp(Number(x)||0,0,pageWidth);
   const laneRight=clamp(laneLeft+Math.max(40,Number(maxWidth)||300),0,pageWidth);
   const insertionTop=clamp((Number(y)||0)+size*.9,0,pageHeight);
-  const alreadyFlowed=overflowedIdsFromMetrics(existingMetrics);
+  const alreadyFlowed=overflowedTargetsFromMetrics(existingMetrics);
 
-  const rects=[];
+  const lines=[];
   for(const block of blocks||[]){
-    if(block?.id&&alreadyFlowed.has(block.id))continue;
-    let rect=rectOf(block);
-    if(!rect)continue;
-    for(const metric of existingMetrics||[]){
-      if(metric?.pageIndex!==block?.pageIndex)continue;
-      if(rect.top<=Number(metric.cutY)+.75)rect=shiftedRect(rect,-Math.max(0,Number(metric.delta)||0));
+    if(block?.id&&alreadyFlowed.blockIds.has(block.id))continue;
+    const blockLines=block?.lines?.length?block.lines:[null];
+    for(let lineIndex=0;lineIndex<blockLines.length;lineIndex++){
+      const lineId=`${block?.id||'block'}:line:${lineIndex}`;
+      if(alreadyFlowed.lineIds.has(lineId))continue;
+      let rect=lineRectOf(block,blockLines[lineIndex]);
+      if(!rect)continue;
+      for(const metric of existingMetrics||[]){
+        if(metric?.pageIndex!==block?.pageIndex)continue;
+        if(rect.top<=Number(metric.cutY)+.75)rect=shiftedRect(rect,-Math.max(0,Number(metric.delta)||0));
+      }
+      lines.push({block,line:blockLines[lineIndex],lineIndex,lineId,rect});
     }
-    rects.push({block,rect});
   }
-  const sourcePageIndex=inferredSourcePageIndex(rects);
 
-  const laneCandidates=rects
+  const laneCandidates=lines
     .filter(({rect})=>horizontalOverlap(rect.left,rect.right,laneLeft,laneRight)>Math.min(8,rect.width*.2))
     .filter(({rect})=>rect.bottom<=insertionTop+.5)
     .sort((a,b)=>b.rect.top-a.rect.top);
@@ -116,8 +164,8 @@ export function planInsertionReflow({
   }
 
   let cutY=clamp(nearest.rect.top+safetyGap,2,pageHeight-2);
-  for(let i=0;i<12;i++){
-    const crossing=rects.filter(({rect})=>rect.bottom<cutY-.5&&rect.top>cutY+.5);
+  for(let i=0;i<16;i++){
+    const crossing=lines.filter(({rect})=>rect.bottom<cutY-.5&&rect.top>cutY+.5);
     if(!crossing.length)break;
     const lifted=Math.max(...crossing.map(({rect})=>rect.top))+safetyGap;
     const next=clamp(lifted,2,pageHeight-2);
@@ -125,7 +173,7 @@ export function planInsertionReflow({
     cutY=next;
   }
 
-  const moved=rects.filter(({rect})=>rect.top<=cutY+.75);
+  const moved=lines.filter(({rect})=>rect.top<=cutY+.75);
   if(!moved.length){
     return {enabled:false,reason:'NO_MOVABLE_CONTENT',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
@@ -135,14 +183,17 @@ export function planInsertionReflow({
     return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
-  const flowBlocks=flowBlockGeometry(moved,contentBand);
+  const flowLines=flowLineGeometry(moved,contentBand);
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
   const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
-  const footerGuard=inferFooterGuard(moved,{pageHeight,size,bottomMargin});
+  const footerGuard=resolveFooterGuard(prepared,moved,{pageHeight,size,bottomMargin});
 
   return {
     enabled:true,mode:'VERTICAL_CONTENT_BAND_REFLOW',cutY,flowTopY,contentBottomY,safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,
-    sourcePageIndex,lane:{left:laneLeft,right:laneRight},contentBand,footerGuard,flowBlocks,cascadePages:followingCascadePages(sourcePageIndex),
-    confidence:footerGuard.enabled?'TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'TEXT_BAND_AND_MARGIN_SAFE_CUT',
+    sourcePageIndex,lane:{left:laneLeft,right:laneRight},contentBand,footerGuard,
+    flowLines,
+    flowBlocks:flowLines,
+    cascadePages:followingCascadePages(sourcePageIndex),
+    confidence:footerGuard.confidence==='PREPARED_PAGE_FOOTER_GUARD'?'LINE_AWARE_STABLE_FOOTER_REFLOW':(footerGuard.enabled?'LINE_AWARE_TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'LINE_AWARE_TEXT_BAND_AND_MARGIN_SAFE_CUT'),
   };
 }
