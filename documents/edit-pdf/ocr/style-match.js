@@ -19,19 +19,19 @@ export function inferScannedTextStyle(ctx,bbox,text='',background={r:255,g:255,b
     if(n)rowCenters.push({y,x:sx/n});
   }
   const coverage=ink/Math.max(1,total);
-  let italic=false;
-  if(rowCenters.length>=4){
-    const q=Math.max(1,Math.floor(rowCenters.length/4));
-    const top=median(rowCenters.slice(0,q).map(r=>r.x));
-    const bottom=median(rowCenters.slice(-q).map(r=>r.x));
-    italic=Math.abs(top-bottom)>width*.065;
-  }
+  // Camera perspective frequently mimics italics. Automatic italic inference is
+  // intentionally disabled until line-level slant evidence is reliable.
+  const italic=false;
   const value=String(text),charAspect=width/Math.max(1,value.length)/height;
+  const digits=(value.match(/[0-9]/g)||[]).length;
+  const numericRatio=digits/Math.max(1,value.length);
   let family='sans-serif';
   if(hint.fontFamily)family=hint.fontFamily;
-  else if(value.length>=3&&/[0-9]/.test(value)&&/[.,:/%+()\-]/.test(value)&&charAspect>.38&&charAspect<.82)family='monospace';
-  else if(value.length>=8&&/[a-z]/.test(value)&&charAspect<.46&&coverage<.34)family='serif';
-  const weight=hint.bold?700:coverage>.40?600:coverage>.25?500:400;
+  else if(value.length>=3&&charAspect>.30&&charAspect<1.10&&numericRatio>=.55)family='monospace';
+  else if(coverage<.145&&value.length>=5)family='serif';
+  // Be conservative: camera blur/antialiasing inflates ink coverage and previously
+  // caused normal text to be rendered too bold.
+  const weight=hint.bold?700:coverage>.58?700:coverage>.48?600:coverage>.38?500:400;
   return {family,weight,italic:hint.italic??italic,coverage,charAspect};
 }
 
