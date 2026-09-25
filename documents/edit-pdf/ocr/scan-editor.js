@@ -1,7 +1,7 @@
 import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
 import { loadPdfjs } from '../fortress/src/rendering/pdfjs.js';
 import { TesseractOcrProvider } from './tesseract-provider.js';
-import { assessFlatBackground,estimateTextColor,repaintPreservedLines } from './background-safety.js';
+import { assessFlatBackground,estimateTextColor,reconstructBackground } from './background-safety.js';
 import { computeOcrRenderPlan } from './render-budget.js';
 import { groupOcrWords,targetsForGranularity } from './layout-model.js';
 import { inferScannedTextStyle,cssFont } from './style-match.js';
@@ -141,7 +141,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     const eraseWidth=Math.min(state.canvas.width-x,Math.ceil(bb.x1-bb.x0+pad*2)),eraseHeight=Math.min(state.canvas.height-y,Math.ceil(bb.y1-bb.y0+pad*2));
     const eraseRect={x,y,width:eraseWidth,height:eraseHeight},bg=safety.fillColor,color=estimateTextColor(baseCtx,bb,bg),style=inferScannedTextStyle(baseCtx,bb,target.text,bg,target.style||{});
     let fitted=null;if(replacement){fitted=fitReplacement(workCtx,target,replacement,style);if(!fitted){onWarning({code:'OCR_TEXT_TOO_WIDE',message:'The replacement cannot fit this scanned-text region safely.'});return;}}
-    workCtx.save();workCtx.fillStyle=`rgb(${bg.r} ${bg.g} ${bg.b})`;workCtx.fillRect(x,y,eraseWidth,eraseHeight);repaintPreservedLines(workCtx,safety,eraseRect);
+    workCtx.save();reconstructBackground(workCtx,baseCtx,safety,eraseRect);
     if(replacement){workCtx.fillStyle=`rgb(${color.r} ${color.g} ${color.b})`;workCtx.font=cssFont(style,fitted.fontPx);workCtx.textBaseline='alphabetic';const baselineStart=bb.y0+fitted.fontPx;for(let i=0;i<fitted.lines.length;i++)workCtx.fillText(fitted.lines[i],bb.x0,baselineStart+i*fitted.lineHeight);}
     workCtx.restore();
     state.edited=true;state.editedBlob=null;state.edits.push({type:target.type,oldText:target.text,newText:replacement,bbox:{...bb},confidence:target.confidence,style,tone:safety.tone});
