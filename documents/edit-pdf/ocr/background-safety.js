@@ -60,6 +60,14 @@ export function assessFlatBackground(ctx,bbox,{padding=7,minDominantRatio=.42,ma
   let residual=0;for(const p of ring)if(isContrast(p,bg))residual++;
   const residualFraction=residual/ring.length;
   const lines=detectCrossingLines(data,width,height,inner,bg);
+  const decorations=[];
+  const ix0=Math.max(0,Math.floor(inner.x0)),ix1=Math.min(width,Math.ceil(inner.x1)),iy0=Math.max(0,Math.floor(inner.y0)),iy1=Math.min(height,Math.ceil(inner.y1));
+  const innerWidth=Math.max(1,ix1-ix0),innerHeight=Math.max(1,iy1-iy0);
+  for(let y=Math.floor(iy0+innerHeight*.52);y<iy1;y++){
+    let run=0,best=0,start=ix0,bestStart=ix0;
+    for(let x=ix0;x<ix1;x++){if(isContrast(pixelAt(data,width,x,y),bg)){if(run===0)start=x;run++;if(run>best){best=run;bestStart=start;}}else run=0;}
+    if(best>=innerWidth*.72)decorations.push({axis:'h',x0:x0+bestStart,x1:x0+bestStart+best,y:y0+y,thickness:1});
+  }
   const linePixels=(lines.horizontal.reduce((n,l)=>n+l.thickness*width,0)+lines.vertical.reduce((n,l)=>n+l.thickness*height,0));
   const lineFraction=Math.min(1,linePixels/Math.max(1,width*height));
   const backgroundLuminance=luminance(bg.r,bg.g,bg.b);
@@ -75,6 +83,7 @@ export function assessFlatBackground(ctx,bbox,{padding=7,minDominantRatio=.42,ma
     residualFraction,
     lineAwareResidual,
     preservedLines:lines,
+    decorations,
     rect:{x0,y0,x1,y1},
   };
 }
@@ -101,6 +110,7 @@ export function repaintPreservedLines(ctx,safety,eraseRect){
   ctx.save();ctx.strokeStyle=lineColor;
   for(const line of lines.horizontal||[]){const y=(safety.rect?.y0||0)+line.pos;ctx.lineWidth=Math.max(1,line.thickness);ctx.beginPath();ctx.moveTo(eraseRect.x,y);ctx.lineTo(eraseRect.x+eraseRect.width,y);ctx.stroke();}
   for(const line of lines.vertical||[]){const x=(safety.rect?.x0||0)+line.pos;ctx.lineWidth=Math.max(1,line.thickness);ctx.beginPath();ctx.moveTo(x,eraseRect.y);ctx.lineTo(x,eraseRect.y+eraseRect.height);ctx.stroke();}
+  for(const deco of safety.decorations||[]){ctx.lineWidth=Math.max(1,deco.thickness||1);ctx.beginPath();ctx.moveTo(deco.x0,deco.y);ctx.lineTo(deco.x1,deco.y);ctx.stroke();}
   ctx.restore();
 }
 
