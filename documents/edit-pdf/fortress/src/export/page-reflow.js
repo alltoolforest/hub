@@ -14,6 +14,7 @@ function lookup(doc,value){if(!value)return null;try{return doc.context.lookup(v
 function arrayItem(doc,array,index){try{if(typeof array?.lookup==='function')return array.lookup(index);}catch{}try{return lookup(doc,array?.get?.(index));}catch{return null;}}
 function numberValue(doc,value){const resolved=lookup(doc,value)||value;if(typeof resolved?.asNumber==='function')return resolved.asNumber();const n=Number(String(resolved));return Number.isFinite(n)?n:null;}
 function rectBounds(rect){return {left:Math.min(rect[0],rect[2]),right:Math.max(rect[0],rect[2]),bottom:Math.min(rect[1],rect[3]),top:Math.max(rect[1],rect[3])};}
+function overlap(a1,a2,b1,b2){return Math.max(0,Math.min(a2,b2)-Math.max(a1,b1));}
 
 function normalizedContentBand(plan,pageWidth){
   const raw=plan?.contentBand;
@@ -30,6 +31,43 @@ function normalizedFooterGuard(plan,pageHeight,bottomMargin,cutY){
   const maxTop=Math.max(bottomMargin,Math.min(cutY-2,pageHeight*.18));
   const top=clamp(requested,bottomMargin,maxTop);
   return {enabled:top>bottomMargin+1,top,height:top,confidence:plan?.footerGuard?.confidence||null};
+}
+
+function normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY}){
+  const out=[];
+  for(const raw of Array.isArray(plan?.flowBlocks)?plan.flowBlocks:[]){
+    const left=Number(raw?.left),right=Number(raw?.right),bottom=Number(raw?.bottom),top=Number(raw?.top);
+    if(![left,right,bottom,top].every(Number.isFinite)||right<=left||top<=bottom)continue;
+    if(top<=footerGuardTop+.25||bottom>=cutY-.25)continue;
+    if(overlap(left,right,bandLeft,bandRight)<Math.min(8,Math.max(1,right-left)*.2))continue;
+    out.push({id:raw?.id||null,left,right,bottom,top});
+  }
+  return out.sort((a,b)=>b.top-a.top);
+}
+
+function snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}){
+  const rawBoundary=clamp(delta+movableFloor,footerGuardTop,cutY);
+  const blocks=normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY});
+  if(!blocks.length)return {boundary:rawBoundary,overflowedBlockIds:[]};
+
+  const affected=blocks.filter(block=>block.bottom-delta<movableFloor+.5);
+  if(!affected.length)return {boundary:rawBoundary,overflowedBlockIds:[]};
+
+  const pad=Math.max(.65,Math.min(2,Number(safetyGap||4)*.18));
+  let boundary=clamp(Math.max(...affected.map(block=>block.top))+pad,footerGuardTop,cutY);
+
+  // Never let the slice boundary pass through another text block. Lift the
+  // boundary repeatedly until it falls entirely inside whitespace.
+  for(let i=0;i<16;i++){
+    const crossing=blocks.filter(block=>block.bottom<boundary-.2&&block.top>boundary+.2);
+    if(!crossing.length)break;
+    const next=clamp(Math.max(...crossing.map(block=>block.top))+pad,footerGuardTop,cutY);
+    if(next<=boundary+.05)break;
+    boundary=next;
+  }
+
+  const overflowedBlockIds=blocks.filter(block=>block.top<=boundary+.75).map(block=>block.id).filter(Boolean);
+  return {boundary,overflowedBlockIds};
 }
 
 function inspectAnnotations(doc,page){
@@ -135,12 +173,14 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
 
   const delta=Math.max(0,flowTopY+safetyGap-textBottomY);
   if(delta<.5){
-    return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,bandLeft,bandRight,footerGuardTop}};
+    return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],bandLeft,bandRight,footerGuardTop}};
   }
   if(delta>height*.72)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
 
   const overflowNeeded=contentBottomY-delta<movableFloor;
-  const overflowBoundary=overflowNeeded?clamp(delta+movableFloor,footerGuardTop,cutY):footerGuardTop;
+  const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[]};
+  const overflowBoundary=snapped.boundary;
+  const overflowedBlockIds=snapped.overflowedBlockIds;
   const linkSafety=validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,movableFloor,bandLeft,bandRight,footerGuardTop});
   if(!linkSafety.ok)return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
 
@@ -180,13 +220,10 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const cascadedPageCount=Number(cascadeInfo.cascadedPageCount)||0;
   return {
     applied:true,
-    // Existing pages keep their indexes in cascade mode. Appended pages are
-    // reported separately in the metric so exporter source-page mapping does
-    // not incorrectly shift original Page 2/3 references.
     overflowPageCount:0,
     metric:{
       transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta,flowTopY,contentBottomY,overflowBoundary,
-      overflowPageCount:0,appendedPageCount,cascadedPageCount,preservedLinkCount:annotationInfo.links.length,
+      overflowPageCount:0,appendedPageCount,cascadedPageCount,overflowedBlockIds,preservedLinkCount:annotationInfo.links.length,
       bandLeft,bandRight,bandWidth,footerGuardTop,footerGuardEnabled:footerGuard.enabled,
       mode:overflowNeeded?'CASCADE_EXISTING_PAGES':(plan.mode||'VERTICAL_CONTENT_BAND_REFLOW'),
     },
