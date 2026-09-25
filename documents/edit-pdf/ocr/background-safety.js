@@ -103,3 +103,28 @@ export function repaintPreservedLines(ctx,safety,eraseRect){
   for(const line of lines.vertical||[]){const x=(safety.rect?.x0||0)+line.pos;ctx.lineWidth=Math.max(1,line.thickness);ctx.beginPath();ctx.moveTo(x,eraseRect.y);ctx.lineTo(x,eraseRect.y+eraseRect.height);ctx.stroke();}
   ctx.restore();
 }
+
+function averageStrip(ctx,x,y,width,height){
+  const sx=Math.max(0,Math.floor(x)),sy=Math.max(0,Math.floor(y));
+  const sw=Math.max(1,Math.min(ctx.canvas.width-sx,Math.floor(width))),sh=Math.max(1,Math.min(ctx.canvas.height-sy,Math.floor(height)));
+  if(sw<=0||sh<=0)return null;const d=ctx.getImageData(sx,sy,sw,sh).data;let r=0,g=0,b=0,n=0;
+  for(let i=0;i<d.length;i+=4){if(d[i+3]<180)continue;r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
+  return n?{r:r/n,g:g/n,b:b/n}:null;
+}
+
+export function reconstructBackground(workCtx,baseCtx,safety,eraseRect){
+  const bg=safety?.fillColor||{r:255,g:255,b:255};
+  const useEdgeBlend=safety?.tone==='dark'||(safety?.dominantRatio??1)<.62;
+  if(!useEdgeBlend){workCtx.fillStyle=`rgb(${bg.r} ${bg.g} ${bg.b})`;workCtx.fillRect(eraseRect.x,eraseRect.y,eraseRect.width,eraseRect.height);repaintPreservedLines(workCtx,safety,eraseRect);return;}
+  const image=workCtx.createImageData(eraseRect.width,eraseRect.height),d=image.data;
+  for(let y=0;y<eraseRect.height;y++){
+    const py=eraseRect.y+y;
+    const left=averageStrip(baseCtx,eraseRect.x-4,py,3,1)||bg;
+    const right=averageStrip(baseCtx,eraseRect.x+eraseRect.width+1,py,3,1)||bg;
+    for(let x=0;x<eraseRect.width;x++){
+      const t=eraseRect.width<=1?0:x/(eraseRect.width-1),i=(y*eraseRect.width+x)*4;
+      d[i]=Math.round(left.r*(1-t)+right.r*t);d[i+1]=Math.round(left.g*(1-t)+right.g*t);d[i+2]=Math.round(left.b*(1-t)+right.b*t);d[i+3]=255;
+    }
+  }
+  workCtx.putImageData(image,eraseRect.x,eraseRect.y);repaintPreservedLines(workCtx,safety,eraseRect);
+}
