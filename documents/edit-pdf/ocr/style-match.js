@@ -24,14 +24,14 @@ export function inferScannedTextStyle(ctx,bbox,text='',background={r:255,g:255,b
     const q=Math.max(1,Math.floor(rowCenters.length/4));
     const top=median(rowCenters.slice(0,q).map(r=>r.x));
     const bottom=median(rowCenters.slice(-q).map(r=>r.x));
-    italic=Math.abs(top-bottom)>width*.07;
+    italic=Math.abs(top-bottom)>width*.065;
   }
-  const charAspect=width/Math.max(1,String(text).length)/height;
+  const value=String(text),charAspect=width/Math.max(1,value.length)/height;
   let family='sans-serif';
   if(hint.fontFamily)family=hint.fontFamily;
-  else if(String(text).length>=3&&charAspect>.42&&charAspect<.78&&/^[A-Z0-9.,:/%+()\-]+$/.test(String(text)))family='monospace';
-  else if(coverage<.145&&String(text).length>=5)family='serif';
-  const weight=hint.bold?700:coverage>.225?700:coverage>.175?600:400;
+  else if(value.length>=3&&/[0-9]/.test(value)&&/[.,:/%+()\-]/.test(value)&&charAspect>.38&&charAspect<.82)family='monospace';
+  else if(value.length>=8&&/[a-z]/.test(value)&&charAspect<.46&&coverage<.34)family='serif';
+  const weight=hint.bold?700:coverage>.40?600:coverage>.25?500:400;
   return {family,weight,italic:hint.italic??italic,coverage,charAspect};
 }
 
