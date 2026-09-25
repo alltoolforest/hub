@@ -98,10 +98,34 @@ function overflowedIds(state){
 function filteredState(state){
   if(!state?.analysis)return state;
   const ids=overflowedIds(state);
-  if(ids.size){
-    state.analysis.blocks=(state.analysis.blocks||[]).filter(block=>!ids.has(block?.id));
-  }
-  return state;
+  if(!ids.size)return state;
+
+  const rawAnalysis=state.analysis;
+  const rawBlocks=rawAnalysis.blocks||[];
+  const visibleBlocks=rawBlocks.filter(block=>!ids.has(block?.id));
+  let planningOverride=false;
+  const analysis=new Proxy(rawAnalysis,{
+    get(target,prop,receiver){
+      if(prop==='blocks'&&!planningOverride)return visibleBlocks;
+      return Reflect.get(target,prop,receiver);
+    },
+    set(target,prop,value,receiver){
+      if(prop!=='blocks')return Reflect.set(target,prop,value,receiver);
+      if(!planningOverride){
+        target.blocks=value;
+        planningOverride=true;
+        return true;
+      }
+      if(value===visibleBlocks){
+        target.blocks=rawBlocks;
+        planningOverride=false;
+        return true;
+      }
+      target.blocks=value;
+      return true;
+    },
+  });
+  return {...state,analysis};
 }
 
 function editorForSmartInsertion(getEditor){
