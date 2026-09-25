@@ -59,10 +59,11 @@ function parseCidWidths(desc){
   return {defaultWidth,widthsLookup};
 }
 
-export function inspectFontResource(pdfDoc,pageIndex,fontName){
-  const page=pdfDoc.getPage(pageIndex); const ctx=pdfDoc.context;
-  const resources=page.node.Resources(); if(!resources) return null;
-  const fonts=resources.lookup(PDFName.of('Font')); if(!(fonts instanceof PDFDict)) return null;
+export function inspectFontResourceFromResources(pdfDoc,resources,fontName){
+  const ctx=pdfDoc.context;
+  const resolvedResources=resources instanceof PDFDict?resources:ctx.lookup(resources);
+  if(!(resolvedResources instanceof PDFDict)) return null;
+  const fonts=resolvedResources.lookup(PDFName.of('Font')); if(!(fonts instanceof PDFDict)) return null;
   const rawRef=fonts.get(PDFName.of(fontName)); if(!rawRef) return null;
   const dict=rawRef instanceof PDFDict?rawRef:ctx.lookup(rawRef); if(!(dict instanceof PDFDict)) return null;
   const subtype=nameOf(dict.lookup(PDFName.of('Subtype')));
@@ -111,6 +112,11 @@ export function inspectFontResource(pdfDoc,pageIndex,fontName){
   };
   Object.assign(meta,classifyFontSupport(meta));
   return meta;
+}
+
+export function inspectFontResource(pdfDoc,pageIndex,fontName){
+  const page=pdfDoc.getPage(pageIndex);
+  return inspectFontResourceFromResources(pdfDoc,page.node.Resources(),fontName);
 }
 
 export function listPageFonts(pdfDoc,pageIndex){

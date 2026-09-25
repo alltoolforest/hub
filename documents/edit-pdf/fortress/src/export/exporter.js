@@ -1,14 +1,25 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from '../core/pdf-lib.js';
-import { getPageContentStreams, replacePageContentStream } from '../core/document-model.js';
+import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream } from '../core/document-model.js';
 import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
 import { applyVerticalRegionReflow } from './page-reflow.js';
 
-function streamBucket(map,pageIndex,streamIndex){
-  const key=`${pageIndex}:${streamIndex}`;
-  if(!map.has(key))map.set(key,{pageIndex,streamIndex,edits:[]});
+function sourceBucket(map,pageIndex,run){
+  const sourceKind=run?.sourceKind==='form'?'form':'page';
+  if(sourceKind==='form'){
+    const formRefKey=run?.formRefKey||run?.streamRef;
+    const formResourceName=run?.formResourceName;
+    if(!formRefKey||!formResourceName)throw Object.assign(new Error('Form XObject source metadata is incomplete.'),{code:'FORM_SOURCE_METADATA_MISSING'});
+    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}`;
+    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,edits:[]});
+    return map.get(key);
+  }
+  const streamIndex=Number(run?.streamIndex);
+  if(!Number.isInteger(streamIndex))throw Object.assign(new Error('Page source stream metadata is incomplete.'),{code:'SOURCE_STREAM_METADATA_MISSING'});
+  const key=`page:${pageIndex}:${streamIndex}`;
+  if(!map.has(key))map.set(key,{sourceKind:'page',pageIndex,streamIndex,edits:[]});
   return map.get(key);
 }
 
@@ -186,7 +197,7 @@ function neutralizeSourceLines(byStream,tx,sourceLines){
     for(const run of seq||[]){
       const n=buildNeutralizerForSourceRun(run);
       if(!n.success)throw Object.assign(new Error(`Cannot neutralize source text safely: ${n.reason}`),{code:n.reason});
-      streamBucket(byStream,tx.pageIndex,run.streamIndex).edits.push({start:n.start,end:n.end,replacement:n.replacement});
+      sourceBucket(byStream,tx.pageIndex,run).edits.push({start:n.start,end:n.end,replacement:n.replacement});
     }
   }
 }
@@ -204,7 +215,7 @@ function planDirectReplacement(block,replacementUnicode){
     if(lineIndex>=outputLines.length)return {success:false,reason:'RECONSTRUCT_EMPTY_TRAILING_LINE'};
     const r=buildReplacementForSourceLine(seq,outputLines[lineIndex]);
     if(!r.success)return {success:false,reason:r.reason,unsupportedCharacters:r.unsupportedCharacters};
-    replacements.push(r);
+    replacements.push({...r,sourceRun:seq[0]});
   }
   return {success:true,replacements,layout};
 }
@@ -241,6 +252,10 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     const block=tx.block;
     if(!block||(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION'))throw new Error(`Block ${block?.id||tx.blockId||'unknown'} is not safely editable: ${block?.reason||block?.tier||'UNKNOWN'}`);
     const sourceLines=block.sourceLines||[];
+    const usesFormXObject=sourceLines.some(seq=>(seq||[]).some(run=>run?.sourceKind==='form'));
+    if(usesFormXObject&&tx.styleChanged){
+      throw Object.assign(new Error('Formatting existing text inside a Form XObject is not enabled yet. Text replacement is supported when the original operators can be rewritten directly.'),{code:'FORM_XOBJECT_FORMATTING_UNSUPPORTED'});
+    }
     const outputLines=String(tx.replacementUnicode).split('\n');
     if(!sourceLines.length)throw Object.assign(new Error('Mapped source text disappeared.'),{code:'SOURCE_NOT_MAPPED'});
     if(outputLines.length>sourceLines.length)throw Object.assign(new Error('Replacement requires additional source lines.'),{code:'TEXT_OVERFLOW'});
@@ -251,7 +266,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       tx.layoutValidation=direct.layout||null;
       if(direct.success){
         for(const r of direct.replacements){
-          streamBucket(byStream,tx.pageIndex,r.streamIndex).edits.push({start:r.start,end:r.end,replacement:r.replacement});
+          sourceBucket(byStream,tx.pageIndex,r.sourceRun).edits.push({start:r.start,end:r.end,replacement:r.replacement});
         }
         usedDirect=true;
       }else{
@@ -272,7 +287,16 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
   }
 
-  for(const {pageIndex,streamIndex,edits} of byStream.values()){
+  for(const bucket of byStream.values()){
+    const {pageIndex,edits}=bucket;
+    if(bucket.sourceKind==='form'){
+      const stream=getPageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey});
+      const rewritten=rewriteByteRanges(stream.bytes,edits);
+      replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
+      warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      continue;
+    }
+    const {streamIndex}=bucket;
     const streams=getPageContentStreams(doc,pageIndex);
     const stream=streams.find(s=>s.streamIndex===streamIndex);
     if(!stream)throw new Error('SOURCE_STREAM_DISAPPEARED');

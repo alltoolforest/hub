@@ -15,8 +15,8 @@ function moveText(state,tx,ty){
 function nextLine(state){moveText(state,0,-(state.leading||0));}
 function advanceText(state,amount){ state.textMatrix=multiply(translate(amount,0),state.textMatrix||IDENTITY); }
 
-export function interpretTextRuns(instructions,{fontResolver,streamRef=null,streamIndex=0}={}){
-  const state={font:null,fontSize:0,charSpacing:0,wordSpacing:0,horizontalScale:100,leading:0,rise:0,renderingMode:0,textMatrix:null,textLineMatrix:null,ctm:IDENTITY.slice()};
+export function interpretTextRuns(instructions,{fontResolver,streamRef=null,streamIndex=0,initialCtm=IDENTITY}={}){
+  const state={font:null,fontSize:0,charSpacing:0,wordSpacing:0,horizontalScale:100,leading:0,rise:0,renderingMode:0,textMatrix:null,textLineMatrix:null,ctm:(initialCtm||IDENTITY).slice()};
   const gs=[]; const runs=[]; let textObjectIndex=-1; let lastPos=null;
   for(let operatorIndex=0;operatorIndex<instructions.length;operatorIndex++){
     const instr=instructions[operatorIndex]; const a=operandsToValues(instr.args);

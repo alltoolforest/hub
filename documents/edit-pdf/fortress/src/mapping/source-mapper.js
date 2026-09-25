@@ -1,34 +1,161 @@
 import { parseContentStream } from '../parser/content-stream-parser.js';
 import { interpretTextRuns } from '../text/text-state.js';
 import { mappingConfidence, DIRECT_EDIT_THRESHOLD } from './confidence.js';
-import { inspectFontResource } from '../fonts/font-inspector.js';
+import { inspectFontResource, inspectFontResourceFromResources } from '../fonts/font-inspector.js';
 import { classifyFontSupport } from '../fonts/font-support.js';
+import { PDFName, PDFDict, PDFArray, PDFRawStream, PDFRef, decodePDFRawStream } from '../core/pdf-lib.js';
+import { IDENTITY, multiply } from '../utils/matrices.js';
 
 const norm=(s)=>String(s||'').replace(/\s+/g,' ').trim();
 const compact=(s)=>norm(s).replace(/\s+/g,'');
 const RECONSTRUCT_THRESHOLD=0.70;
 const MAX_SEQUENCE_RUNS=128;
+const MAX_FORM_DEPTH=1; // First safe milestone: page -> Form XObject only.
+
+function nameOf(obj){
+  if(!obj)return null;
+  try{return (typeof obj.asString==='function'?obj.asString():obj.toString()).replace(/^\//,'');}catch{return null;}
+}
+function numberOf(obj){
+  try{const n=typeof obj?.asNumber==='function'?obj.asNumber():Number(obj?.toString?.());return Number.isFinite(n)?n:null;}catch{return null;}
+}
+function refKey(ref){return ref?.toString?.()??String(ref);}
+function lookup(ctx,obj){
+  if(!obj)return null;
+  if(obj instanceof PDFDict||obj instanceof PDFRawStream||obj instanceof PDFArray)return obj;
+  try{return ctx.lookup(obj);}catch{return null;}
+}
+function matrixFromArray(value){
+  if(!(value instanceof PDFArray)||value.size()<6)return IDENTITY.slice();
+  const out=[];
+  for(let i=0;i<6;i++){const n=numberOf(value.get(i));if(!Number.isFinite(n))return IDENTITY.slice();out.push(n);}
+  return out;
+}
+function decodedRawStream(ctx,value){
+  const raw=value instanceof PDFRawStream?value:lookup(ctx,value);
+  if(!(raw instanceof PDFRawStream))return null;
+  try{return {raw,bytes:new Uint8Array(decodePDFRawStream(raw).getBytes())};}catch{return null;}
+}
+function runClaimKey(run){return `${run?.sourceContainerKey||`page:${run?.streamRef||run?.streamIndex}`}:${run?.operatorIndex}`;}
+
+function directFormInvocations(pdfDoc,pageIndex,streams){
+  const page=pdfDoc.getPage(pageIndex);
+  const ctx=pdfDoc.context;
+  const pageResources=page.node.Resources();
+  if(!(pageResources instanceof PDFDict))return [];
+  const xobjects=pageResources.lookup(PDFName.of('XObject'));
+  if(!(xobjects instanceof PDFDict))return [];
+  const invocations=[];
+
+  for(const stream of streams){
+    let instructions;
+    try{({instructions}=parseContentStream(stream.bytes));}catch{continue;}
+    let ctm=IDENTITY.slice();
+    const stack=[];
+    for(let operatorIndex=0;operatorIndex<instructions.length;operatorIndex++){
+      const instr=instructions[operatorIndex];
+      const a=instr.values||[];
+      if(instr.op==='q'){stack.push(ctm.slice());continue;}
+      if(instr.op==='Q'){const saved=stack.pop();if(saved)ctm=saved;continue;}
+      if(instr.op==='cm'&&a.length>=6){ctm=multiply([a[0],a[1],a[2],a[3],a[4],a[5]],ctm);continue;}
+      if(instr.op!=='Do'||!a[0])continue;
+      const resourceName=String(a[0]);
+      const rawRef=xobjects.get(PDFName.of(resourceName));
+      if(!rawRef)continue;
+      const resolved=lookup(ctx,rawRef);
+      if(!(resolved instanceof PDFRawStream))continue;
+      const subtype=nameOf(resolved.dict.lookup(PDFName.of('Subtype')));
+      if(subtype!=='Form')continue;
+      const matrix=matrixFromArray(resolved.dict.lookup(PDFName.of('Matrix')));
+      const resources=resolved.dict.lookup(PDFName.of('Resources'))||pageResources;
+      const ref=rawRef instanceof PDFRef?rawRef:null;
+      invocations.push({
+        depth:1,
+        resourceName,
+        formRefKey:refKey(rawRef),
+        formObjectNumber:Number.isInteger(ref?.objectNumber)?ref.objectNumber:null,
+        formGenerationNumber:Number.isInteger(ref?.generationNumber)?ref.generationNumber:0,
+        rawRef,
+        rawStream:resolved,
+        resources,
+        pageStreamIndex:stream.streamIndex,
+        invocationOperatorIndex:operatorIndex,
+        initialCtm:multiply(matrix,ctm),
+      });
+    }
+  }
+
+  // Editing a Form stream changes every invocation that references it. Until
+  // path cloning is implemented for repeated/nested forms, only expose a Form
+  // that is invoked exactly once on the page.
+  const counts=new Map();
+  for(const item of invocations)counts.set(item.formRefKey,(counts.get(item.formRefKey)||0)+1);
+  return invocations.filter(item=>(counts.get(item.formRefKey)||0)===1&&item.depth<=MAX_FORM_DEPTH);
+}
 
 export function extractSourceRunsFromStreams(pdfDoc,pageIndex,streams){
-  const fontCache=new Map();
-  const fontResolver=(name)=>{
+  const pageFontCache=new Map();
+  const pageFontResolver=(name)=>{
     if(!name)return null;
-    if(!fontCache.has(name))fontCache.set(name,inspectFontResource(pdfDoc,pageIndex,name));
-    return fontCache.get(name);
+    if(!pageFontCache.has(name))pageFontCache.set(name,inspectFontResource(pdfDoc,pageIndex,name));
+    return pageFontCache.get(name);
   };
   const sourceRuns=[];
+
   for(const stream of streams){
     const {instructions}=parseContentStream(stream.bytes);
-    const runs=interpretTextRuns(instructions,{fontResolver,streamRef:stream.refKey,streamIndex:stream.streamIndex});
+    const containerKey=`page:${stream.refKey}`;
+    const runs=interpretTextRuns(instructions,{fontResolver:pageFontResolver,streamRef:stream.refKey,streamIndex:stream.streamIndex});
     sourceRuns.push(...runs.map((r)=>({
       ...r,
+      sourceKind:'page',
+      sourceContainerKey:containerKey,
       operator:instructions[r.operatorIndex]?.op||r.kind,
       x:r.trm[4],
       y:r.trm[5],
     })));
   }
+
+  const forms=directFormInvocations(pdfDoc,pageIndex,streams);
+  let virtualStreamIndex=streams.length;
+  for(const form of forms){
+    const decoded=decodedRawStream(pdfDoc.context,form.rawStream);
+    if(!decoded)continue;
+    let instructions;
+    try{({instructions}=parseContentStream(decoded.bytes));}catch{continue;}
+    const formFontCache=new Map();
+    const formFontResolver=(name)=>{
+      if(!name)return null;
+      if(!formFontCache.has(name))formFontCache.set(name,inspectFontResourceFromResources(pdfDoc,form.resources,name));
+      return formFontCache.get(name);
+    };
+    const streamIndex=virtualStreamIndex++;
+    const containerKey=`form:${form.formRefKey}`;
+    const runs=interpretTextRuns(instructions,{
+      fontResolver:formFontResolver,
+      streamRef:form.formRefKey,
+      streamIndex,
+      initialCtm:form.initialCtm,
+    });
+    sourceRuns.push(...runs.map((r)=>({
+      ...r,
+      sourceKind:'form',
+      sourceContainerKey:containerKey,
+      formRefKey:form.formRefKey,
+      formObjectNumber:form.formObjectNumber,
+      formGenerationNumber:form.formGenerationNumber,
+      formResourceName:form.resourceName,
+      formPageStreamIndex:form.pageStreamIndex,
+      formInvocationOperatorIndex:form.invocationOperatorIndex,
+      formDepth:form.depth,
+      operator:instructions[r.operatorIndex]?.op||r.kind,
+      x:r.trm[4],
+      y:r.trm[5],
+    })));
+  }
+
   sourceRuns.sort((a,b)=>Math.abs(b.y-a.y)>1?(b.y-a.y):(a.x-b.x));
-  return {sourceRuns,fontResolver};
+  return {sourceRuns,fontResolver:pageFontResolver};
 }
 
 function sameText(a,b){
@@ -69,7 +196,7 @@ function candidateSequences(runs,targetLine){
         if(seq.length)break;
         continue;
       }
-      if(seq.length&&r.streamIndex!==seq[0].streamIndex)break;
+      if(seq.length&&r.sourceContainerKey!==seq[0].sourceContainerKey)break;
       if(seq.length&&r.x<seq.at(-1).x-xBackTol)break;
 
       seq.push(r);
@@ -86,7 +213,7 @@ function candidateSequences(runs,targetLine){
 
   const seen=new Set();
   return out.filter(seq=>{
-    const key=seq.map(r=>`${r.streamIndex}:${r.operatorIndex}`).join('|');
+    const key=seq.map(runClaimKey).join('|');
     if(seen.has(key))return false;
     seen.add(key);
     return true;
@@ -114,7 +241,7 @@ function isDirectSafeSequence(seq){
   if(!seq?.length)return false;
   const first=seq[0];
   return seq.every((r,idx)=>idx===0||(
-    r.streamIndex===first.streamIndex&&
+    r.sourceContainerKey===first.sourceContainerKey&&
     r.textObjectIndex===first.textObjectIndex&&
     r.fontName===first.fontName&&
     r.operatorIndex===seq[idx-1].operatorIndex+1
@@ -136,7 +263,7 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
 
     for(const line of block.lines){
       const candidates=candidateSequences(sourceRuns,line).filter(seq=>seq.every(r=>{
-        const key=`${r.streamIndex}:${r.operatorIndex}`;
+        const key=runClaimKey(r);
         return !claimed.has(key)&&!pendingClaims.has(key);
       }));
       if(candidates.length===0){mappingReason='SOURCE_NOT_MAPPED';minConfidence=0;continue;}
@@ -152,7 +279,7 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
       sourceLines.push(best.seq.slice());
       directSafe&&=isDirectSafeSequence(best.seq);
       for(const r of best.seq){
-        pendingClaims.add(`${r.streamIndex}:${r.operatorIndex}`);
+        pendingClaims.add(runClaimKey(r));
         const support=classifyFontSupport(r.fontContext);
         if(support.tier!=='DIRECT_EDIT'){
           allFontsDirect=false;
@@ -166,12 +293,16 @@ export function mapBlocksToSources(pdfDoc,pageIndex,streams,blocks){
     let tier='LIMITED_EDIT';
     let reason=mappingReason||'LOW_MAPPING_CONFIDENCE';
 
+    const usesFormXObject=matches.some(r=>r.sourceKind==='form');
     if(allLinesMapped&&confidence>=DIRECT_EDIT_THRESHOLD&&directSafe&&allFontsDirect){
       tier='DIRECT_EDIT';
       reason=null;
-    }else if(allLinesMapped&&confidence>=RECONSTRUCT_THRESHOLD){
+    }else if(allLinesMapped&&confidence>=RECONSTRUCT_THRESHOLD&&!usesFormXObject){
       tier='FONT_SUBSTITUTION';
       reason=fontReason||(directSafe?'FONT_SUBSTITUTION_REQUIRED':'RECONSTRUCT_SOURCE_SEQUENCE');
+    }else if(allLinesMapped&&usesFormXObject){
+      tier='LIMITED_EDIT';
+      reason='FORM_XOBJECT_RECONSTRUCTION_UNSAFE';
     }
 
     if(allLinesMapped)for(const key of pendingClaims)claimed.add(key);
