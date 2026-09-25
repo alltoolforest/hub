@@ -1,55 +1,105 @@
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 function luminance(r,g,b){return .2126*r+.7152*g+.0722*b;}
+function colorDistance(a,b){return Math.hypot(a.r-b.r,a.g-b.g,a.b-b.b);}
+function quant(v){return Math.max(0,Math.min(255,Math.round(v/16)*16));}
+function dominantColor(samples){
+  const bins=new Map();
+  for(const p of samples){const k=`${quant(p.r)},${quant(p.g)},${quant(p.b)}`;bins.set(k,(bins.get(k)||0)+1);}
+  let best=null,count=0;for(const [k,n] of bins)if(n>count){best=k;count=n;}
+  if(!best)return null;
+  const [qr,qg,qb]=best.split(',').map(Number);let r=0,g=0,b=0,n=0;
+  for(const p of samples){if(Math.abs(p.r-qr)<=24&&Math.abs(p.g-qg)<=24&&Math.abs(p.b-qb)<=24){r+=p.r;g+=p.g;b+=p.b;n++;}}
+  return {r:Math.round(r/Math.max(1,n)),g:Math.round(g/Math.max(1,n)),b:Math.round(b/Math.max(1,n)),ratio:count/Math.max(1,samples.length)};
+}
+function pixelAt(data,width,x,y){const i=(y*width+x)*4;return {r:data[i],g:data[i+1],b:data[i+2],a:data[i+3]};}
+function isContrast(p,bg,threshold=42){return Math.abs(luminance(p.r,p.g,p.b)-luminance(bg.r,bg.g,bg.b))>threshold||colorDistance(p,bg)>72;}
+function mergeIndexes(indexes,maxGap=1){
+  if(!indexes.length)return [];
+  const sorted=[...new Set(indexes)].sort((a,b)=>a-b),runs=[];let start=sorted[0],prev=sorted[0];
+  for(let i=1;i<sorted.length;i++){const v=sorted[i];if(v-prev>maxGap+1){runs.push([start,prev]);start=v;}prev=v;}runs.push([start,prev]);return runs;
+}
+function detectCrossingLines(data,width,height,inner,bg){
+  const horizontals=[],verticals=[];
+  const leftWidth=Math.max(1,Math.floor(inner.x0)),rightStart=Math.min(width-1,Math.ceil(inner.x1));
+  const topHeight=Math.max(1,Math.floor(inner.y0)),bottomStart=Math.min(height-1,Math.ceil(inner.y1));
+  for(let y=0;y<height;y++){
+    let left=0,ln=0,right=0,rn=0;
+    for(let x=0;x<leftWidth;x++){ln++;if(isContrast(pixelAt(data,width,x,y),bg))left++;}
+    for(let x=rightStart;x<width;x++){rn++;if(isContrast(pixelAt(data,width,x,y),bg))right++;}
+    if(ln&&rn&&left/ln>=.45&&right/rn>=.45)horizontals.push(y);
+  }
+  for(let x=0;x<width;x++){
+    let top=0,tn=0,bottom=0,bn=0;
+    for(let y=0;y<topHeight;y++){tn++;if(isContrast(pixelAt(data,width,x,y),bg))top++;}
+    for(let y=bottomStart;y<height;y++){bn++;if(isContrast(pixelAt(data,width,x,y),bg))bottom++;}
+    if(tn&&bn&&top/tn>=.45&&bottom/bn>=.45)verticals.push(x);
+  }
+  return {
+    horizontal:mergeIndexes(horizontals,1).map(([a,b])=>({axis:'h',pos:(a+b)/2,thickness:b-a+1})),
+    vertical:mergeIndexes(verticals,1).map(([a,b])=>({axis:'v',pos:(a+b)/2,thickness:b-a+1})),
+  };
+}
 
-export function assessFlatBackground(ctx,bbox,{padding=3,maxStdDev=14,maxRange=42,maxDarkFraction=.18}={}){
+export function assessFlatBackground(ctx,bbox,{padding=7,minDominantRatio=.42,maxResidualFraction=.30}={}){
   const canvas=ctx.canvas;
-  const x0=clamp(Math.floor(bbox.x0-padding),0,canvas.width-1);
-  const y0=clamp(Math.floor(bbox.y0-padding),0,canvas.height-1);
+  const x0=clamp(Math.floor(bbox.x0-padding),0,Math.max(0,canvas.width-1));
+  const y0=clamp(Math.floor(bbox.y0-padding),0,Math.max(0,canvas.height-1));
   const x1=clamp(Math.ceil(bbox.x1+padding),x0+1,canvas.width);
   const y1=clamp(Math.ceil(bbox.y1+padding),y0+1,canvas.height);
-  const data=ctx.getImageData(x0,y0,x1-x0,y1-y0).data;
+  const width=x1-x0,height=y1-y0;
+  const data=ctx.getImageData(x0,y0,width,height).data;
   const inner={x0:bbox.x0-x0,y0:bbox.y0-y0,x1:bbox.x1-x0,y1:bbox.y1-y0};
-  const samples=[];
-
-  for(let y=0;y<y1-y0;y++){
-    for(let x=0;x<x1-x0;x++){
-      const inside=x>=inner.x0&&x<=inner.x1&&y>=inner.y0&&y<=inner.y1;
-      if(inside)continue;
-      const i=(y*(x1-x0)+x)*4;
-      if(data[i+3]<230)continue;
-      samples.push([data[i],data[i+1],data[i+2]]);
-    }
+  const ring=[];
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const inside=x>=inner.x0&&x<=inner.x1&&y>=inner.y0&&y<=inner.y1;if(inside)continue;
+    const p=pixelAt(data,width,x,y);if(p.a<230)continue;ring.push(p);
   }
-
-  if(samples.length<12)return {safe:false,reason:'OCR_BACKGROUND_SAMPLE_TOO_SMALL'};
-  let sr=0,sg=0,sb=0,sl=0,minL=255,maxL=0;
-  const ls=[];
-  for(const [r,g,b] of samples){
-    const l=luminance(r,g,b);
-    sr+=r;sg+=g;sb+=b;sl+=l;ls.push(l);minL=Math.min(minL,l);maxL=Math.max(maxL,l);
-  }
-  const meanL=sl/samples.length;
-  let variance=0,dark=0;
-  for(const l of ls){variance+=(l-meanL)**2;if(l<meanL-35)dark++;}
-  const stdDev=Math.sqrt(variance/samples.length);
-  const darkFraction=dark/samples.length;
-  const fillColor={r:Math.round(sr/samples.length),g:Math.round(sg/samples.length),b:Math.round(sb/samples.length)};
-  const safe=stdDev<=maxStdDev&&(maxL-minL)<=maxRange&&darkFraction<=maxDarkFraction;
-
-  return {safe,reason:safe?null:'OCR_COMPLEX_BACKGROUND',fillColor,stdDev,range:maxL-minL,darkFraction,rect:{x0,y0,x1,y1}};
+  if(ring.length<16)return {safe:false,reason:'OCR_BACKGROUND_SAMPLE_TOO_SMALL'};
+  const dom=dominantColor(ring);if(!dom)return {safe:false,reason:'OCR_BACKGROUND_SAMPLE_TOO_SMALL'};
+  const bg={r:dom.r,g:dom.g,b:dom.b};
+  let residual=0;for(const p of ring)if(isContrast(p,bg))residual++;
+  const residualFraction=residual/ring.length;
+  const lines=detectCrossingLines(data,width,height,inner,bg);
+  const linePixels=(lines.horizontal.reduce((n,l)=>n+l.thickness*width,0)+lines.vertical.reduce((n,l)=>n+l.thickness*height,0));
+  const lineFraction=Math.min(1,linePixels/Math.max(1,width*height));
+  const backgroundLuminance=luminance(bg.r,bg.g,bg.b);
+  const lineAwareResidual=Math.max(0,residualFraction-lineFraction*.85);
+  const safe=dom.ratio>=minDominantRatio&&lineAwareResidual<=maxResidualFraction;
+  return {
+    safe,
+    reason:safe?null:'OCR_COMPLEX_BACKGROUND',
+    fillColor:bg,
+    backgroundLuminance,
+    tone:backgroundLuminance<118?'dark':'light',
+    dominantRatio:dom.ratio,
+    residualFraction,
+    lineAwareResidual,
+    preservedLines:lines,
+    rect:{x0,y0,x1,y1},
+  };
 }
 
 export function estimateTextColor(ctx,bbox,background){
   const x0=Math.max(0,Math.floor(bbox.x0)),y0=Math.max(0,Math.floor(bbox.y0));
   const x1=Math.min(ctx.canvas.width,Math.ceil(bbox.x1)),y1=Math.min(ctx.canvas.height,Math.ceil(bbox.y1));
-  if(x1<=x0||y1<=y0)return {r:0,g:0,b:0};
+  if(x1<=x0||y1<=y0)return luminance(background.r,background.g,background.b)<128?{r:245,g:245,b:245}:{r:0,g:0,b:0};
   const data=ctx.getImageData(x0,y0,x1-x0,y1-y0).data;
+  const candidates=[];
+  for(let i=0;i<data.length;i+=4){if(data[i+3]<180)continue;const p={r:data[i],g:data[i+1],b:data[i+2]};if(isContrast(p,background,28))candidates.push(p);}
+  if(!candidates.length)return luminance(background.r,background.g,background.b)<128?{r:245,g:245,b:245}:{r:0,g:0,b:0};
   const bgL=luminance(background.r,background.g,background.b);
-  let r=0,g=0,b=0,n=0;
-  for(let i=0;i<data.length;i+=4){
-    if(data[i+3]<180)continue;
-    const l=luminance(data[i],data[i+1],data[i+2]);
-    if(l<bgL-30){r+=data[i];g+=data[i+1];b+=data[i+2];n++;}
-  }
-  return n?{r:Math.round(r/n),g:Math.round(g/n),b:Math.round(b/n)}:{r:0,g:0,b:0};
+  const preferred=candidates.filter(p=>bgL<128?luminance(p.r,p.g,p.b)>bgL+35:luminance(p.r,p.g,p.b)<bgL-35);
+  const pool=preferred.length>=Math.max(3,candidates.length*.18)?preferred:candidates;
+  let r=0,g=0,b=0;for(const p of pool){r+=p.r;g+=p.g;b+=p.b;}
+  return {r:Math.round(r/pool.length),g:Math.round(g/pool.length),b:Math.round(b/pool.length)};
+}
+
+export function repaintPreservedLines(ctx,safety,eraseRect){
+  const lines=safety?.preservedLines;if(!lines)return;
+  const bg=safety.fillColor||{r:255,g:255,b:255};
+  const lineColor=luminance(bg.r,bg.g,bg.b)<128?'rgba(245,245,245,.72)':'rgba(20,20,20,.72)';
+  ctx.save();ctx.strokeStyle=lineColor;
+  for(const line of lines.horizontal||[]){const y=(safety.rect?.y0||0)+line.pos;ctx.lineWidth=Math.max(1,line.thickness);ctx.beginPath();ctx.moveTo(eraseRect.x,y);ctx.lineTo(eraseRect.x+eraseRect.width,y);ctx.stroke();}
+  for(const line of lines.vertical||[]){const x=(safety.rect?.x0||0)+line.pos;ctx.lineWidth=Math.max(1,line.thickness);ctx.beginPath();ctx.moveTo(x,eraseRect.y);ctx.lineTo(x,eraseRect.y+eraseRect.height);ctx.stroke();}
+  ctx.restore();
 }
