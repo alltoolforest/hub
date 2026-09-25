@@ -52,7 +52,7 @@
 import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/main.js';
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 import {attachInsertAnchorBridge} from './fortress/src/insert-anchor-bridge.js';
-import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v4.js';
+import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v5.js';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
@@ -84,6 +84,7 @@ input.addEventListener('change',async()=>{
   app.hidden=false;
   setIntegrationStatus('Opening PDF…');
   try{
+    await smartLineInsertion.prepareDocument(file);
     editor=createAdvancedPdfTextEngine({
       container:app,
       onStatus:message=>setIntegrationStatus(message||''),
