@@ -98,11 +98,10 @@ function overflowedIds(state){
 function filteredState(state){
   if(!state?.analysis)return state;
   const ids=overflowedIds(state);
-  if(!ids.size)return state;
-  return {
-    ...state,
-    analysis:{...state.analysis,blocks:(state.analysis.blocks||[]).filter(block=>!ids.has(block?.id))},
-  };
+  if(ids.size){
+    state.analysis.blocks=(state.analysis.blocks||[]).filter(block=>!ids.has(block?.id));
+  }
+  return state;
 }
 
 function editorForSmartInsertion(getEditor){
