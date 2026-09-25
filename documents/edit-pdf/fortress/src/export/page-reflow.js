@@ -122,7 +122,11 @@ function classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop}){
   if(outsideBand)return 'STATIC';
   const crossesBand=(left<bandLeft-.5&&right>bandLeft+.5)||(left<bandRight-.5&&right>bandRight+.5);
   if(crossesBand)return 'CROSSES_BAND';
-  if(bottom<cutY-.5&&top>cutY+.5)return 'CROSSES_CUT';
+  // Link rectangles are often slightly taller than their visible glyphs. If a
+  // simple link straddles the visual cut, classify it by its vertical centre
+  // instead of rejecting safe reflow. The linked text line itself has already
+  // been snapped wholly to one side of cutY by the line-aware planner.
+  if(bottom<cutY-.5&&top>cutY+.5)return ((bottom+top)/2<=cutY?'MOVED':'STATIC');
   if(top<=cutY+.5)return 'MOVED';
   return 'STATIC';
 }
