@@ -32,13 +32,13 @@ function fitReplacement(ctx,target,text,style){
   const bb=target.bbox,width=Math.max(4,bb.x1-bb.x0),height=Math.max(5,bb.y1-bb.y0);
   const memberHeights=(target.words||[]).map(w=>w.bbox.y1-w.bbox.y0).filter(v=>v>0).sort((a,b)=>a-b);
   const medianH=memberHeights.length?memberHeights[Math.floor(memberHeights.length/2)]:height;
-  const initial=Math.max(7,medianH*.90),min=Math.max(6,initial*.54);
+  const initial=Math.max(7,medianH*1.15),min=Math.max(6,initial*.54);
   for(let fontPx=initial;fontPx>=min;fontPx-=.5){
     ctx.font=cssFont(style,fontPx);let lines;
     if(target.type==='paragraph')lines=wrapText(ctx,text,width*1.02);else lines=[text];
     const lineHeight=fontPx*1.16;
     const measured=Math.max(0,...lines.map(line=>ctx.measureText(line).width));
-    if(measured<=width*1.10&&lines.length*lineHeight<=height*1.18)return {fontPx,lines,lineHeight};
+    if(measured<=width*1.10&&lines.length*lineHeight<=height*1.32)return {fontPx,lines,lineHeight};
   }
   return null;
 }
