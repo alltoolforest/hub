@@ -50,7 +50,12 @@ function classifyLinks(info,{bandLeft,bandRight,bodyTopY,footerTop,shift,outgoin
     if(crossesBand)return {ok:false,reason:'CASCADE_LINK_CROSSES_BAND'};
     if(outsideBand||b.bottom>=bodyTopY-.5||b.top<=footerTop+.5){out.push({...link,zone:'STATIC'});continue;}
     if(b.bottom<footerTop-.5&&b.top>footerTop+.5)return {ok:false,reason:'CASCADE_LINK_CROSSES_FOOTER'};
-    if(b.bottom<bodyTopY-.5&&b.top>bodyTopY+.5)return {ok:false,reason:'CASCADE_LINK_CROSSES_BODY_TOP'};
+    if(b.bottom<bodyTopY-.5&&b.top>bodyTopY+.5){
+      // A simple link rectangle can extend a few points beyond its text glyphs.
+      // The page body slice is text-snapped, so use the rectangle centre to
+      // decide which side owns the annotation instead of failing the cascade.
+      if((b.bottom+b.top)/2>=bodyTopY){out.push({...link,zone:'STATIC'});continue;}
+    }
     if(outgoingBoundary>footerTop+.5&&b.bottom<outgoingBoundary+.5)return {ok:false,reason:'CASCADE_LINK_WOULD_OVERFLOW'};
     if(b.bottom-shift<footerTop-1)return {ok:false,reason:'CASCADE_LINK_SHIFT_INTO_FOOTER'};
     out.push({...link,zone:'MOVED'});
