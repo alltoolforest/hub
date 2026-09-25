@@ -30,12 +30,13 @@ export function parseTsvWords(tsv,{minConfidence=45}={}){
   for(let i=1;i<lines.length;i++){
     if(!lines[i])continue;
     const cols=lines[i].split('\t');
-    if(cols.length<12)continue;
-    if(Number(cols[0])!==5)continue;
+    if(cols.length<12||Number(cols[0])!==5)continue;
+    const pageNum=Number(cols[1]),blockNum=Number(cols[2]),paragraphNum=Number(cols[3]),lineNum=Number(cols[4]),wordNum=Number(cols[5]);
     const left=Number(cols[6]),top=Number(cols[7]),width=Number(cols[8]),height=Number(cols[9]),confidence=Number(cols[10]);
     const text=cols.slice(11).join('\t').trim();
     if(!text||![left,top,width,height,confidence].every(Number.isFinite)||width<=0||height<=0||confidence<minConfidence)continue;
-    out.push({text,confidence,bbox:{x0:left,y0:top,x1:left+width,y1:top+height}});
+    const id=`${pageNum||1}:${blockNum||0}:${paragraphNum||0}:${lineNum||0}:${wordNum||out.length+1}`;
+    out.push({id,text,confidence,pageNum,blockNum,paragraphNum,lineNum,wordNum,bbox:{x0:left,y0:top,x1:left+width,y1:top+height}});
   }
   return out;
 }
