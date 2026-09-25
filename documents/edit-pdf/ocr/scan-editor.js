@@ -74,7 +74,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
 
   async function freezeOtherPages(exceptIndex){
     for(const [idx,state] of pages){if(idx===exceptIndex||!state.canvas)continue;
-      if(state.edited){state.editedBlob=await canvasBlob(state.canvas,'image/jpeg',.91);state.pixelWidth=state.canvas.width;state.pixelHeight=state.canvas.height;}
+      if(state.edited){state.editedBlob=await canvasBlob(state.canvas,'image/jpeg',.88);state.pixelWidth=state.canvas.width;state.pixelHeight=state.canvas.height;}
       releaseCanvas(state.canvas);releaseCanvas(state.base);state.canvas=null;state.base=null;state.overlay=null;
       if(!state.edited&&!state.words)pages.delete(idx);
     }
@@ -85,14 +85,15 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);canvas.className='ocr-canvas';
     const ctx=canvas.getContext('2d',{willReadFrequently:true});await page.render({canvasContext:ctx,viewport}).promise;
     const base=document.createElement('canvas');base.width=canvas.width;base.height=canvas.height;base.getContext('2d').drawImage(canvas,0,0);
-    return {pageNumber:index+1,canvas,base,words:null,layout:null,edited:false,edits:[],editedBlob:null,renderPlan:plan,pixelWidth:canvas.width,pixelHeight:canvas.height};
+    const annotations=await page.getAnnotations({intent:'display'});
+    return {pageNumber:index+1,canvas,base,words:null,layout:null,edited:false,edits:[],editedBlob:null,annotationCount:annotations.length,renderPlan:plan,pixelWidth:canvas.width,pixelHeight:canvas.height};
   }
 
   async function hydrateState(index){
     let state=pages.get(index);
     if(!state){state=await createPageState(index);pages.set(index,state);return state;}
     if(state.canvas)return state;
-    const fresh=await createPageState(index);state.canvas=fresh.canvas;state.base=fresh.base;state.renderPlan=fresh.renderPlan;state.pixelWidth=fresh.pixelWidth;state.pixelHeight=fresh.pixelHeight;
+    const fresh=await createPageState(index);state.canvas=fresh.canvas;state.base=fresh.base;state.renderPlan=fresh.renderPlan;state.pixelWidth=fresh.pixelWidth;state.pixelHeight=fresh.pixelHeight;state.annotationCount=fresh.annotationCount;
     if(state.editedBlob)await drawBlobToCanvas(state.editedBlob,state.canvas);
     return state;
   }
@@ -152,9 +153,16 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     if(!sourceBytes)return;const edited=[...pages.entries()].filter(([,s])=>s.edited);if(!edited.length){onWarning({code:'OCR_NO_EDITS',message:'No scanned-text changes have been made yet.'});return;}
     save.disabled=true;
     try{
-      onStatus('Building size-controlled edited scanned PDF…');const doc=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
-      for(const [idx,state] of edited){let blob=state.editedBlob;if(!blob){if(!state.canvas)await hydrateState(idx);blob=await canvasBlob(state.canvas,'image/jpeg',.91);state.editedBlob=blob;}
-        const bytes=await blobBytes(blob),image=await doc.embedJpg(bytes),page=doc.getPage(idx),size=page.getSize();page.drawImage(image,{x:0,y:0,width:size.width,height:size.height});
+      onStatus('Building size-controlled edited scanned PDF…');const sourceDoc=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});const doc=await PDFDocument.create();
+      const editedMap=new Map(edited);
+      for(let idx=0;idx<pageCount;idx++){
+        const state=editedMap.get(idx);
+        if(!state){const [copied]=await doc.copyPages(sourceDoc,[idx]);doc.addPage(copied);continue;}
+        let blob=state.editedBlob;if(!blob){if(!state.canvas)await hydrateState(idx);blob=await canvasBlob(state.canvas,'image/jpeg',.88);state.editedBlob=blob;}
+        const image=await doc.embedJpg(await blobBytes(blob));
+        const sourcePage=sourceDoc.getPage(idx),size=sourcePage.getSize();
+        if((state.annotationCount||0)===0){const page=doc.addPage([size.width,size.height]);page.drawImage(image,{x:0,y:0,width:size.width,height:size.height});}
+        else{const [copied]=await doc.copyPages(sourceDoc,[idx]);doc.addPage(copied);copied.drawImage(image,{x:0,y:0,width:size.width,height:size.height});}
       }
       const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));const verify=await PDFDocument.load(bytes.slice(),{ignoreEncryption:true,updateMetadata:false});if(verify.getPageCount()!==pageCount)throw new Error('OCR export page-count validation failed.');
       const blob=new Blob([bytes],{type:'application/pdf'});onExport({blob,bytes,filename:safeName(sourceName),mode:'ocr-scan',edits:edited.reduce((n,[,s])=>n+s.edits.length,0)});onStatus(`Edited scanned PDF validated — ${(bytes.length/1048576).toFixed(2)} MB download ready.`);
