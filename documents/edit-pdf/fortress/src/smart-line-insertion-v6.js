@@ -1,6 +1,6 @@
 import { getDocument } from '../vendor/pdf.mjs';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
-import { attachSmartLineInsertion as attachV4 } from './smart-line-insertion-v4.js';
+import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js';
 
 const ORIGINAL_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);
@@ -99,10 +99,33 @@ function filteredState(state){
   if(!state?.analysis)return state;
   const ids=overflowedIds(state);
   if(!ids.size)return state;
-  return {
-    ...state,
-    analysis:{...state.analysis,blocks:(state.analysis.blocks||[]).filter(block=>!ids.has(block?.id))},
-  };
+
+  const rawAnalysis=state.analysis;
+  const rawBlocks=rawAnalysis.blocks||[];
+  const visibleBlocks=rawBlocks.filter(block=>!ids.has(block?.id));
+  let planningOverride=false;
+  const analysis=new Proxy(rawAnalysis,{
+    get(target,prop,receiver){
+      if(prop==='blocks'&&!planningOverride)return visibleBlocks;
+      return Reflect.get(target,prop,receiver);
+    },
+    set(target,prop,value,receiver){
+      if(prop!=='blocks')return Reflect.set(target,prop,value,receiver);
+      if(!planningOverride){
+        target.blocks=value;
+        planningOverride=true;
+        return true;
+      }
+      if(value===visibleBlocks){
+        target.blocks=rawBlocks;
+        planningOverride=false;
+        return true;
+      }
+      target.blocks=value;
+      return true;
+    },
+  });
+  return {...state,analysis};
 }
 
 function editorForSmartInsertion(getEditor){
@@ -120,7 +143,6 @@ function pruneFlowedHitRegions(app,getEditor){
   const ids=overflowedIds(state);
   const hits=[...app.querySelectorAll(ORIGINAL_SELECTOR)];
 
-  // Reset first so Undo can restore source hit regions without a full reload.
   for(const hit of hits){
     hit.hidden=false;
     hit.style.pointerEvents='';
@@ -148,7 +170,7 @@ export function attachSmartLineInsertion(options){
   const {app,getEditor}=options||{};
   if(!app)throw new Error('Edit PDF app element is required');
 
-  const v4=attachV4({...options,getEditor:()=>editorForSmartInsertion(getEditor)});
+  const unified=attachV7({...options,getEditor:()=>editorForSmartInsertion(getEditor)});
   let preparedPages=[];
   let raf=0;
   const schedulePrune=()=>{
@@ -178,7 +200,7 @@ export function attachSmartLineInsertion(options){
       configureCascadePageGeometry([]);
       if(raf)cancelAnimationFrame(raf);
       observer.disconnect();
-      v4?.destroy?.();
+      unified?.destroy?.();
     },
   };
 }
