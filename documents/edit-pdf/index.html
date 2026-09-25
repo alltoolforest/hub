@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="../../assets/css/main.css">
   <link rel="stylesheet" href="./fortress/src/styles.css">
   <link rel="stylesheet" href="./fortress/src/font-size-precision.css">
+  <link rel="stylesheet" href="./ocr/styles.css">
   <style>
     .fortress-shell{padding:0;overflow:hidden;min-height:620px}
     .fortress-picker{min-height:620px;display:grid;place-content:center;gap:14px;text-align:center;padding:28px;background:var(--surface,#fff)}
@@ -33,14 +34,14 @@
 <header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a href="../../work/">Work</a><a class="active" href="../../documents/">Documents</a><a href="../../images/">Images</a><a href="../../calculators/">Calculators</a></nav><span class="header-note"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6"/></svg>No account needed</span></div></header>
 <main class="container" id="main">
   <div class="breadcrumb"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>Edit PDF</div>
-  <section class="page-intro"><h1>Edit PDF</h1><p>Open a text-based PDF, edit existing text or add a new text box/paragraph anywhere on the page, then save a new PDF copy.</p></section>
+  <section class="page-intro"><h1>Edit PDF</h1><p>Open a PDF, edit native text or scanned text detected with OCR, add new text where supported, then save a new PDF copy.</p></section>
   <div class="tool-layout">
     <section class="workspace fortress-shell" aria-label="Edit PDF workspace">
       <div id="fortress-picker" class="fortress-picker">
         <h2>Open a PDF to edit</h2>
         <p>Select a PDF from your device. Processing stays in this browser. Click existing text to replace it, or use Add text to place a new paragraph.</p>
         <input id="fortress-file" type="file" accept="application/pdf,.pdf" aria-label="Open a PDF to edit">
-        <small>Best for text-based PDFs. Scanned/image-only PDFs require OCR and are not directly editable yet.</small>
+        <small>Text-based PDFs use the native editor. Scan-dominant PDFs are detected automatically and use the isolated OCR editor.</small>
       </div>
       <div id="fortress-app" hidden></div>
     </section>
@@ -53,6 +54,8 @@ import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/mai
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 import {attachInsertAnchorBridge} from './fortress/src/insert-anchor-bridge.js';
 import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v8.js';
+import {choosePdfEditorRoute} from './ocr/editor-router.js';
+import {createScannedPdfEditor} from './ocr/scan-editor.js';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
@@ -76,36 +79,57 @@ const closeObserver=new MutationObserver(()=>{
 });
 closeObserver.observe(app,{childList:true});
 
+function handleExport({blob,filename}){
+  clearDownload();
+  downloadUrl=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=downloadUrl;
+  link.download=filename||'edited-copy.pdf';
+  link.className='button primary';
+  link.textContent='Download edited PDF';
+  downloads.append(link);
+  link.click();
+}
+
 input.addEventListener('change',async()=>{
   const file=input.files?.[0];
   if(!file)return;
   clearDownload();
-  picker.hidden=true;
-  app.hidden=false;
-  setIntegrationStatus('Opening PDF…');
+  setIntegrationStatus('Checking PDF structure…');
   try{
+    const route=await choosePdfEditorRoute(file);
+    picker.hidden=true;
+    app.hidden=false;
+
+    if(route.mode==='ocr'){
+      setIntegrationStatus('Scanned PDF detected. Opening OCR editor…');
+      editor=createScannedPdfEditor({
+        container:app,
+        allowGroupedEditing:false,
+        onStatus:message=>setIntegrationStatus(message||''),
+        onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This scanned text cannot be edited safely.'),
+        onError:error=>setIntegrationStatus(error?.message||'The scanned PDF could not be edited safely.'),
+        onExport:handleExport,
+        onClose:showPicker,
+      });
+      await editor.open(file);
+      return;
+    }
+
+    if(route.classifierError)console.warn('PDF classification failed; preserving the native editor route.',route.classifierError);
+    setIntegrationStatus('Opening PDF…');
     await smartLineInsertion.prepareDocument(file);
     editor=createAdvancedPdfTextEngine({
       container:app,
       onStatus:message=>setIntegrationStatus(message||''),
       onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This text cannot be edited safely.'),
       onError:error=>setIntegrationStatus(error?.message||'The PDF could not be edited safely.'),
-      onExport:({blob,filename})=>{
-        clearDownload();
-        downloadUrl=URL.createObjectURL(blob);
-        const link=document.createElement('a');
-        link.href=downloadUrl;
-        link.download=filename||'edited-copy.pdf';
-        link.className='button primary';
-        link.textContent='Download edited PDF';
-        downloads.append(link);
-        link.click();
-      }
+      onExport:handleExport,
     });
     await editor.open(file);
   }catch(error){
     console.error(error);
-    try{editor?.destroy();}catch{}
+    try{await editor?.destroy?.();}catch{}
     showPicker();
     setIntegrationStatus(error?.message||'Could not open this PDF safely.');
   }
