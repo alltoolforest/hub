@@ -20,6 +20,14 @@ function horizontalOverlap(aLeft,aRight,bLeft,bRight){
 
 function shiftedRect(rect,dy){return {...rect,bottom:rect.bottom+dy,top:rect.top+dy};}
 
+function overflowedIdsFromMetrics(metrics=[]){
+  const out=new Set();
+  for(const metric of metrics||[]){
+    for(const id of metric?.overflowedBlockIds||[])if(id)out.add(id);
+  }
+  return out;
+}
+
 function inferContentBand(moved,{laneLeft,laneRight,pageWidth,size}){
   if(!moved.length)return null;
   const padding=Math.max(12,size);
@@ -58,6 +66,17 @@ function followingCascadePages(sourcePageIndex){
   return cascadePageGeometry.filter(page=>page.pageIndex>sourcePageIndex).sort((a,b)=>a.pageIndex-b.pageIndex).map(page=>({...page}));
 }
 
+function flowBlockGeometry(moved,contentBand){
+  return moved
+    .filter(({rect})=>horizontalOverlap(rect.left,rect.right,contentBand.left,contentBand.right)>Math.min(8,rect.width*.2))
+    .map(({block,rect})=>({
+      id:block?.id||null,
+      left:rect.left,right:rect.right,bottom:rect.bottom,top:rect.top,width:rect.width,height:rect.height,
+    }))
+    .filter(item=>Number.isFinite(item.bottom)&&Number.isFinite(item.top)&&item.top>item.bottom)
+    .sort((a,b)=>b.top-a.top);
+}
+
 export function planInsertionReflow({
   blocks=[],x=0,y=0,maxWidth=300,fontSize=12,pageWidth=595,pageHeight=842,pageRotation=0,existingMetrics=[],
 }={}){
@@ -71,9 +90,11 @@ export function planInsertionReflow({
   const laneLeft=clamp(Number(x)||0,0,pageWidth);
   const laneRight=clamp(laneLeft+Math.max(40,Number(maxWidth)||300),0,pageWidth);
   const insertionTop=clamp((Number(y)||0)+size*.9,0,pageHeight);
+  const alreadyFlowed=overflowedIdsFromMetrics(existingMetrics);
 
   const rects=[];
   for(const block of blocks||[]){
+    if(block?.id&&alreadyFlowed.has(block.id))continue;
     let rect=rectOf(block);
     if(!rect)continue;
     for(const metric of existingMetrics||[]){
@@ -114,13 +135,14 @@ export function planInsertionReflow({
     return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
+  const flowBlocks=flowBlockGeometry(moved,contentBand);
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
   const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
   const footerGuard=inferFooterGuard(moved,{pageHeight,size,bottomMargin});
 
   return {
     enabled:true,mode:'VERTICAL_CONTENT_BAND_REFLOW',cutY,flowTopY,contentBottomY,safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,
-    sourcePageIndex,lane:{left:laneLeft,right:laneRight},contentBand,footerGuard,cascadePages:followingCascadePages(sourcePageIndex),
+    sourcePageIndex,lane:{left:laneLeft,right:laneRight},contentBand,footerGuard,flowBlocks,cascadePages:followingCascadePages(sourcePageIndex),
     confidence:footerGuard.enabled?'TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'TEXT_BAND_AND_MARGIN_SAFE_CUT',
   };
 }
