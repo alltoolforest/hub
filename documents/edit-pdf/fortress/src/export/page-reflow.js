@@ -1,5 +1,6 @@
 import { PDFDocument, PDFName } from '../core/pdf-lib.js';
 import { cascadeOverflowIntoExistingPages } from './cascade-page-flow.js';
+import { loadPdfjs } from '../rendering/pdfjs.js';
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 
@@ -170,6 +171,56 @@ function drawStaticMargins(page,slices,{bandLeft,bandRight,width,bottom=0,top}){
   if(slices.right)drawSlice(page,slices.right,{x:bandRight,y:bottom,width:width-bandRight,height:h});
 }
 
+function crossesBoundary(bottom,top,boundary,tolerance=1){
+  return Number.isFinite(boundary)&&bottom<boundary-tolerance&&top>boundary+tolerance;
+}
+
+async function validateVectorReflow(bytes,pageIndex,{cutY,overflowBoundary,bandLeft,bandRight}){
+  try{
+    const p=await loadPdfjs();
+    const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
+    const pdf=await task.promise;
+    const page=await pdf.getPage(pageIndex+1);
+    const operators=await page.getOperatorList();
+    const dangerous=[];
+    for(let i=0;i<operators.fnArray.length;i++){
+      if(operators.fnArray[i]!==p.OPS.constructPath)continue;
+      const raw=operators.argsArray[i]?.[2];
+      if(!raw)continue;
+      const left=Number(raw[0]),bottom=Number(raw[1]),right=Number(raw[2]),top=Number(raw[3]);
+      if(![left,bottom,right,top].every(Number.isFinite))continue;
+      const x0=Math.min(left,right),x1=Math.max(left,right),y0=Math.min(bottom,top),y1=Math.max(bottom,top);
+      const width=x1-x0,height=y1-y0;
+      const horizontalOverlap=Math.max(0,Math.min(x1,bandRight)-Math.max(x0,bandLeft));
+      const bandWidth=Math.max(1,bandRight-bandLeft);
+      const isVerticalBoundary=width<=2.5&&height>=10;
+      const isHorizontalBoundary=height<=2.5&&width>=12;
+      const isStructuredCell=width>=8&&height>=6&&width<=bandWidth*.92&&height<=180&&horizontalOverlap>=Math.min(8,width*.20);
+      if(!isVerticalBoundary&&!isHorizontalBoundary&&!isStructuredCell)continue;
+      const centerX=(x0+x1)/2;
+      const verticalInBand=isVerticalBoundary&&centerX>=bandLeft-1&&centerX<=bandRight+1;
+      const horizontalInBand=isHorizontalBoundary&&horizontalOverlap>=8;
+      const cellInBand=isStructuredCell&&horizontalOverlap>=Math.min(8,width*.20);
+      if(!verticalInBand&&!horizontalInBand&&!cellInBand)continue;
+      const crossesCut=verticalInBand&&crossesBoundary(y0,y1,cutY);
+      const crossesOverflow=verticalInBand&&crossesBoundary(y0,y1,overflowBoundary);
+      const sitsOnCut=horizontalInBand&&Math.abs((y0+y1)/2-cutY)<=1.25;
+      const sitsOnOverflow=horizontalInBand&&Math.abs((y0+y1)/2-overflowBoundary)<=1.25;
+      const cellCrossesCut=cellInBand&&cutY>y0+.35&&cutY<y1-.35;
+      const cellCrossesOverflow=cellInBand&&Number.isFinite(overflowBoundary)&&overflowBoundary>y0+.35&&overflowBoundary<y1-.35;
+      if(crossesCut||crossesOverflow||sitsOnCut||sitsOnOverflow||cellCrossesCut||cellCrossesOverflow){
+        dangerous.push({left:x0,right:x1,bottom:y0,top:y1,kind:isVerticalBoundary?'VERTICAL':(isHorizontalBoundary?'HORIZONTAL':'CELL')});
+        if(dangerous.length>=8)break;
+      }
+    }
+    try{await pdf.destroy?.();}catch{}
+    if(dangerous.length)return {ok:false,reason:'STRUCTURED_VECTOR_REFLOW_UNSAFE',boundaries:dangerous};
+    return {ok:true,boundaries:[]};
+  }catch(error){
+    return {ok:false,reason:'VECTOR_REFLOW_PREFLIGHT_FAILED',error:String(error)};
+  }
+}
+
 export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,sequenceIndex=0}={}){
   const plan=tx?.reflowPlan;
   if(!plan?.enabled)return {applied:false,reason:plan?.reason||'REFLOW_DISABLED',overflowPageCount:0};
@@ -213,6 +264,8 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   if(!linkSafety.ok)return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
 
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
+  const vectorSafety=await validateVectorReflow(donorBytes,pageIndex,{cutY,overflowBoundary,bandLeft,bandRight});
+  if(!vectorSafety.ok)return {applied:false,reason:vectorSafety.reason,overflowPageCount:0,vectorSafety};
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false});
   const donorPage=donorDoc.getPage(pageIndex);
 

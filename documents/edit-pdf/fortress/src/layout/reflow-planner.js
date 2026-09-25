@@ -189,7 +189,14 @@ export function planInsertionReflow({
 
   const nearest=laneCandidates[0];
   if(!nearest){
-    return {enabled:false,reason:'NO_CONTENT_BELOW_INSERTION',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
+    const preparedFooterTop=Number(prepared?.footerGuardTop);
+    const footerGuard=Number.isFinite(preparedFooterTop)?{
+      enabled:preparedFooterTop>bottomMargin+1,
+      top:clamp(preparedFooterTop,bottomMargin,Math.min(pageHeight*.18,pageHeight-2)),
+      height:clamp(preparedFooterTop,bottomMargin,Math.min(pageHeight*.18,pageHeight-2)),
+      confidence:'PREPARED_PAGE_FOOTER_GUARD',
+    }:null;
+    return {enabled:false,reason:'NO_CONTENT_BELOW_INSERTION',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
   }
 
   let cutY=clamp(nearest.rect.top+safetyGap,2,pageHeight-2);
