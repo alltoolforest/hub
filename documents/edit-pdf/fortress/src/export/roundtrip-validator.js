@@ -9,11 +9,11 @@ export async function validateRoundTrip(bytes,{expectedPages,checks}){
   const pageIndexes=(checks||[]).map(c=>c.pageIndex);
   const render=await validateRenderable(bytes,pageIndexes);
   return {
-    ok:structural.ok&&render.ok,
+    ok:structural.ok&&render.ok&&extraction.ok,
     structural,
     extraction,
     render,
     textVerified:extraction.ok,
-    warning:extraction.ok?null:'TEXT_EXTRACTION_VERIFICATION_DIFFERED',
+    warning:extraction.ok?null:'TEXT_EXTRACTION_VERIFICATION_FAILED',
   };
 }
