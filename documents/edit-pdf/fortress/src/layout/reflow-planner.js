@@ -1,5 +1,11 @@
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 
+let cascadePageGeometry=[];
+
+export function configureCascadePageGeometry(pages=[]){
+  cascadePageGeometry=Array.isArray(pages)?pages.filter(page=>Number.isInteger(page?.pageIndex)&&page.pageIndex>=0).map(page=>({...page})):[];
+}
+
 function rectOf(block){
   const b=block?.bounds;
   if(!b)return null;
@@ -22,23 +28,11 @@ function inferContentBand(moved,{laneLeft,laneRight,pageWidth,size}){
   const maxRight=Math.max(laneRight,...moved.map(({rect})=>rect.right));
   let left=clamp(minLeft-padding,0,pageWidth);
   let right=clamp(maxRight+padding,0,pageWidth);
-
-  // Avoid creating tiny static slivers. If the detected content nearly touches
-  // an edge, that edge is treated as part of the movable region instead.
   if(left<minStaticMargin)left=0;
   if(pageWidth-right<minStaticMargin)right=pageWidth;
-
   const width=right-left;
   if(width<Math.max(120,pageWidth*.30))return null;
-
-  return {
-    left,
-    right,
-    width,
-    leftStaticWidth:left,
-    rightStaticWidth:pageWidth-right,
-    padding,
-  };
+  return {left,right,width,leftStaticWidth:left,rightStaticWidth:pageWidth-right,padding};
 }
 
 function inferFooterGuard(moved,{pageHeight,size,bottomMargin}){
@@ -48,51 +42,27 @@ function inferFooterGuard(moved,{pageHeight,size,bottomMargin}){
   const maxGuardHeight=Math.max(36,Math.min(72,pageHeight*.085));
   const candidate=Math.min(maxGuardHeight,contentBottomY-clearance);
   if(!Number.isFinite(candidate)||candidate<=bottomMargin+2){
-    return {
-      enabled:false,
-      top:bottomMargin,
-      height:bottomMargin,
-      clearance,
-      contentBottomY,
-      reason:'FOOTER_GUARD_SPACE_INSUFFICIENT',
-    };
+    return {enabled:false,top:bottomMargin,height:bottomMargin,clearance,contentBottomY,reason:'FOOTER_GUARD_SPACE_INSUFFICIENT'};
   }
   const top=clamp(candidate,bottomMargin,Math.min(pageHeight*.18,contentBottomY-clearance));
-  return {
-    enabled:top>bottomMargin+2,
-    top,
-    height:top,
-    clearance,
-    contentBottomY,
-    confidence:'TEXT_FREE_FOOTER_GUARD',
-  };
+  return {enabled:top>bottomMargin+2,top,height:top,clearance,contentBottomY,confidence:'TEXT_FREE_FOOTER_GUARD'};
 }
 
-/**
- * Build a conservative vertical-flow plan for inserted/expanded text.
- *
- * The planner does not mutate the PDF. It finds the nearest content band below
- * the insertion lane, chooses a horizontal cut that does not pass through any
- * detected text block, derives a movable horizontal content band, and reserves
- * a text-free footer guard. Static outer margins and the footer guard are
- * intentionally excluded from movement so page frames and decorative edge
- * rules do not get broken by paragraph reflow.
- */
+function inferredSourcePageIndex(rects){
+  const value=rects.find(item=>Number.isInteger(item?.block?.pageIndex))?.block?.pageIndex;
+  return Number.isInteger(value)?value:null;
+}
+
+function followingCascadePages(sourcePageIndex){
+  if(!Number.isInteger(sourcePageIndex))return [];
+  return cascadePageGeometry.filter(page=>page.pageIndex>sourcePageIndex).sort((a,b)=>a.pageIndex-b.pageIndex).map(page=>({...page}));
+}
+
 export function planInsertionReflow({
-  blocks=[],
-  x=0,
-  y=0,
-  maxWidth=300,
-  fontSize=12,
-  pageWidth=595,
-  pageHeight=842,
-  pageRotation=0,
-  existingMetrics=[],
+  blocks=[],x=0,y=0,maxWidth=300,fontSize=12,pageWidth=595,pageHeight=842,pageRotation=0,existingMetrics=[],
 }={}){
   const rotation=((Number(pageRotation)||0)%360+360)%360;
-  if(rotation!==0){
-    return {enabled:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED',pageRotation:rotation};
-  }
+  if(rotation!==0)return {enabled:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED',pageRotation:rotation};
 
   const size=clamp(Number(fontSize)||12,6,72);
   const safetyGap=Math.max(4,size*.35);
@@ -106,14 +76,13 @@ export function planInsertionReflow({
   for(const block of blocks||[]){
     let rect=rectOf(block);
     if(!rect)continue;
-    // Metrics describe already-applied reflows on this visual page. Apply them
-    // sequentially so a second insertion plans against what the user sees.
     for(const metric of existingMetrics||[]){
       if(metric?.pageIndex!==block?.pageIndex)continue;
       if(rect.top<=Number(metric.cutY)+.75)rect=shiftedRect(rect,-Math.max(0,Number(metric.delta)||0));
     }
     rects.push({block,rect});
   }
+  const sourcePageIndex=inferredSourcePageIndex(rects);
 
   const laneCandidates=rects
     .filter(({rect})=>horizontalOverlap(rect.left,rect.right,laneLeft,laneRight)>Math.min(8,rect.width*.2))
@@ -122,18 +91,10 @@ export function planInsertionReflow({
 
   const nearest=laneCandidates[0];
   if(!nearest){
-    return {
-      enabled:false,
-      reason:'NO_CONTENT_BELOW_INSERTION',
-      safetyGap,bottomMargin,topMargin,
-      pageWidth,pageHeight,pageRotation:rotation,
-    };
+    return {enabled:false,reason:'NO_CONTENT_BELOW_INSERTION',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
   let cutY=clamp(nearest.rect.top+safetyGap,2,pageHeight-2);
-
-  // Never slice through a detected text block. If the proposed cut intersects
-  // any text block (including another column), lift it just above that block.
   for(let i=0;i<12;i++){
     const crossing=rects.filter(({rect})=>rect.bottom<cutY-.5&&rect.top>cutY+.5);
     if(!crossing.length)break;
@@ -145,12 +106,12 @@ export function planInsertionReflow({
 
   const moved=rects.filter(({rect})=>rect.top<=cutY+.75);
   if(!moved.length){
-    return {enabled:false,reason:'NO_MOVABLE_CONTENT',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation};
+    return {enabled:false,reason:'NO_MOVABLE_CONTENT',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
   const contentBand=inferContentBand(moved,{laneLeft,laneRight,pageWidth,size});
   if(!contentBand){
-    return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation};
+    return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
   const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
@@ -158,20 +119,8 @@ export function planInsertionReflow({
   const footerGuard=inferFooterGuard(moved,{pageHeight,size,bottomMargin});
 
   return {
-    enabled:true,
-    mode:'VERTICAL_CONTENT_BAND_REFLOW',
-    cutY,
-    flowTopY,
-    contentBottomY,
-    safetyGap,
-    bottomMargin,
-    topMargin,
-    pageWidth,
-    pageHeight,
-    pageRotation:rotation,
-    lane:{left:laneLeft,right:laneRight},
-    contentBand,
-    footerGuard,
+    enabled:true,mode:'VERTICAL_CONTENT_BAND_REFLOW',cutY,flowTopY,contentBottomY,safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,
+    sourcePageIndex,lane:{left:laneLeft,right:laneRight},contentBand,footerGuard,cascadePages:followingCascadePages(sourcePageIndex),
     confidence:footerGuard.enabled?'TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'TEXT_BAND_AND_MARGIN_SAFE_CUT',
   };
 }
