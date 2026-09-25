@@ -87,26 +87,63 @@ function normalizedGeometry(raw,page){
   return {width,height,bandLeft:left,bandRight:right,bandWidth:right-left,topMargin,bottomMargin,safetyGap,footerTop,textTopY,textBottomY,bodyTopY};
 }
 
-async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
+function validateIncomingRegion(incoming,g){
+  if(!incoming||!(incoming.height>0))return {ok:false,reason:'CASCADE_INCOMING_EMPTY'};
+  if(incoming.left<0||incoming.right>g.width||incoming.right<=incoming.left)return {ok:false,reason:'CASCADE_INCOMING_BOUNDS_INVALID'};
+  const tolerance=Math.max(28,g.width*.06);
+  if(incoming.left<g.bandLeft-tolerance||incoming.right>g.bandRight+tolerance)return {ok:false,reason:'CASCADE_CONTENT_BAND_MISMATCH'};
+  return {ok:true};
+}
+
+function preflightFollowingPage(doc,pageIndex,geometry,incoming){
+  if(pageIndex<0||pageIndex>=doc.getPageCount())return {ok:false,reason:'CASCADE_TARGET_PAGE_MISSING'};
   const live=doc.getPage(pageIndex);
   const rotation=((live.getRotation().angle||0)%360+360)%360;
   if(rotation!==0)return {ok:false,reason:'CASCADE_ROTATED_PAGE_UNSUPPORTED'};
   const g=normalizedGeometry(geometry,live);
   if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
-  if(Math.abs(incoming.width-g.bandWidth)>Math.max(8,g.bandWidth*.08))return {ok:false,reason:'CASCADE_CONTENT_BAND_MISMATCH'};
-
-  const incomingHeight=incoming.top-incoming.bottom;
-  if(!(incomingHeight>0))return {ok:true,done:true};
-  const shift=incomingHeight+g.safetyGap;
+  const incomingSafety=validateIncomingRegion(incoming,g);
+  if(!incomingSafety.ok)return incomingSafety;
+  const shift=incoming.height+g.safetyGap;
   if(shift>g.bodyTopY-g.footerTop-20)return {ok:false,reason:'CASCADE_INCOMING_TOO_TALL'};
   const movableFloor=g.footerTop+g.safetyGap;
   const overflowNeeded=g.textBottomY-shift<movableFloor;
   const outgoingBoundary=overflowNeeded?clamp(shift+movableFloor,g.footerTop,g.bodyTopY):g.footerTop;
-
   const linkInfo=inspectLinks(doc,live);
   if(!linkInfo.ok)return {ok:false,reason:linkInfo.reason};
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
   if(!classified.ok)return {ok:false,reason:classified.reason};
+  return {
+    ok:true,g,shift,overflowNeeded,outgoingBoundary,
+    nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null,
+  };
+}
+
+function preflightCascade(doc,{sourcePageIndex,pages,incoming}){
+  const targets=[];
+  let simulation={...incoming};
+  for(const raw of pages){
+    const targetIndex=Number(raw.pageIndex);
+    if(!Number.isInteger(targetIndex)||targetIndex<=sourcePageIndex||targetIndex>=doc.getPageCount())continue;
+    const check=preflightFollowingPage(doc,targetIndex,raw,simulation);
+    if(!check.ok)return {ok:false,reason:check.reason};
+    targets.push({raw,targetIndex,check});
+    if(!check.overflowNeeded)return {ok:true,targets,absorbed:true};
+    simulation={...check.nextIncoming};
+  }
+  return {ok:true,targets,absorbed:false,remaining:simulation};
+}
+
+async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
+  const live=doc.getPage(pageIndex);
+  const g=normalizedGeometry(geometry,live);
+  if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
+  const incomingHeight=incoming.top-incoming.bottom;
+  const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incomingHeight,left:incoming.left,right:incoming.right});
+  if(!check.ok)return check;
+  const {shift,overflowNeeded,outgoingBoundary}=check;
+  const linkInfo=inspectLinks(doc,live);
+  const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
 
   const {donorDoc,donorPage}=await snapshotPage(doc,pageIndex);
   const topSlice=await embedSlice(doc,donorPage,{left:0,bottom:g.bodyTopY,right:g.width,top:g.height});
@@ -122,7 +159,8 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
   if(leftSlice)drawSlice(replacement,leftSlice,{x:0,y:g.footerTop,width:g.bandLeft,height:g.bodyTopY-g.footerTop});
   if(rightSlice)drawSlice(replacement,rightSlice,{x:g.bandRight,y:g.footerTop,width:g.width-g.bandRight,height:g.bodyTopY-g.footerTop});
   if(bodySlice)drawSlice(replacement,bodySlice,{x:g.bandLeft,y:outgoingBoundary-shift,width:g.bandWidth,height:g.bodyTopY-outgoingBoundary});
-  if(incomingEmbedded)drawSlice(replacement,incomingEmbedded,{x:g.bandLeft,y:g.bodyTopY-incomingHeight,width:g.bandWidth,height:incomingHeight});
+  // Preserve the incoming overflow at its original PDF width and x-position.
+  if(incomingEmbedded)drawSlice(replacement,incomingEmbedded,{x:incoming.left,y:g.bodyTopY-incomingHeight,width:incoming.right-incoming.left,height:incomingHeight});
   preserveLinks(doc,replacement,linkInfo,classified.links,shift);
   doc.removePage(pageIndex+1);
 
@@ -130,12 +168,11 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
     try{await donorDoc.destroy?.();}catch{}
     return {ok:true,done:true,shift,overflow:false};
   }
-
   const outgoing={donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc};
   return {ok:true,done:false,shift,overflow:true,outgoing};
 }
 
-async function appendCarryPages(doc,incoming,{width,height,bandLeft,bandRight,topMargin,bottomMargin}){
+async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargin}){
   const usable=Math.max(40,height-topMargin-bottomMargin);
   let bottom=incoming.bottom,top=incoming.top,count=0;
   while(top>bottom+.5){
@@ -143,7 +180,7 @@ async function appendCarryPages(doc,incoming,{width,height,bandLeft,bandRight,to
     const embedded=await embedSlice(doc,incoming.donorPage,{left:incoming.left,bottom:sliceBottom,right:incoming.right,top});
     const page=doc.addPage([width,height]);
     const h=top-sliceBottom;
-    drawSlice(page,embedded,{x:bandLeft,y:height-topMargin-h,width:bandRight-bandLeft,height:h});
+    drawSlice(page,embedded,{x:incoming.left,y:height-topMargin-h,width:incoming.right-incoming.left,height:h});
     count++;top=sliceBottom;
     if(count>16)throw Object.assign(new Error('Cascade would create too many pages.'),{code:'CASCADE_PAGE_LIMIT'});
   }
@@ -153,16 +190,20 @@ async function appendCarryPages(doc,incoming,{width,height,bandLeft,bandRight,to
 export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height}){
   if(!(overflowTop>overflowBottom))return {applied:false,reason:'NO_CASCADE_OVERFLOW',appendedPageCount:0,cascadedPageCount:0};
   const pages=Array.isArray(plan?.cascadePages)?plan.cascadePages:[];
+  const initial={height:overflowTop-overflowBottom,left:bandLeft,right:bandRight};
+  const preflight=preflightCascade(doc,{sourcePageIndex,pages,incoming:initial});
+  if(!preflight.ok)return {applied:false,reason:preflight.reason,appendedPageCount:0,cascadedPageCount:0};
+
   let incoming={donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
   let cascadedPageCount=0;
-
-  for(const raw of pages){
-    const targetIndex=Number(raw.pageIndex);
-    if(!Number.isInteger(targetIndex)||targetIndex<=sourcePageIndex||targetIndex>=doc.getPageCount())continue;
-    const result=await rebuildFollowingPage(doc,targetIndex,raw,incoming);
+  for(const target of preflight.targets){
+    const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming);
     if(!result.ok)return {applied:false,reason:result.reason,appendedPageCount:0,cascadedPageCount};
     cascadedPageCount++;
-    if(result.done)return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};
+    if(result.done){
+      if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
+      return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};
+    }
     if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
     incoming=result.outgoing;
   }
@@ -170,8 +211,6 @@ export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan
   const lastGeometry=pages.at(-1)||{};
   const appendedPageCount=await appendCarryPages(doc,incoming,{
     width,height,
-    bandLeft:Number(lastGeometry.contentBand?.left??bandLeft),
-    bandRight:Number(lastGeometry.contentBand?.right??bandRight),
     topMargin:Math.max(16,Number(lastGeometry.topMargin)||Number(plan?.topMargin)||28),
     bottomMargin:Math.max(8,Number(lastGeometry.bottomMargin)||Number(plan?.bottomMargin)||12),
   });
