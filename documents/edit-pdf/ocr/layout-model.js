@@ -7,7 +7,8 @@ function unionBBox(words){
 function avgConfidence(words){return words.reduce((n,w)=>n+(Number(w.confidence)||0),0)/Math.max(1,words.length);}
 function makeGroup(type,key,words){
   const ordered=[...words].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0);
-  return {type,key,text:ordered.map(w=>w.text).join(' ').replace(/\s+/g,' ').trim(),bbox:unionBBox(ordered),confidence:avgConfidence(ordered),words:ordered};
+  const lineKeys=new Set(ordered.map(w=>`${w.pageNum||1}:${w.blockNum||0}:${w.parNum||0}:${w.lineNum||0}`));
+  return {type,key,text:ordered.map(w=>w.text).join(' ').replace(/\s+/g,' ').trim(),bbox:unionBBox(ordered),confidence:avgConfidence(ordered),words:ordered,wordCount:ordered.length,lineCount:lineKeys.size};
 }
 function bucket(words,keyFn){
   const map=new Map();
@@ -51,7 +52,7 @@ export function groupOcrWords(words=[]){
 }
 
 export function targetsForGranularity(layout,granularity='word'){
-  if(granularity==='paragraph')return layout?.paragraphs||[];
-  if(granularity==='line')return layout?.lines||[];
+  if(granularity==='paragraph')return (layout?.paragraphs||[]).filter(g=>(g.wordCount||g.words?.length||0)<=60&&(g.lineCount||1)<=8);
+  if(granularity==='line')return (layout?.lines||[]).filter(g=>(g.wordCount||g.words?.length||0)<=30);
   return layout?.words||[];
 }
