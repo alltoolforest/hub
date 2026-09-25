@@ -74,13 +74,42 @@ function inferFooterGuard(moved,{pageHeight,size,bottomMargin}){
   return {enabled:top>bottomMargin+2,top,height:top,clearance,contentBottomY,confidence:'TEXT_FREE_FOOTER_GUARD'};
 }
 
+function inferSeparatedFooterGuard(moved,{pageHeight,size,bottomMargin}){
+  const rects=(moved||[]).map(item=>item?.rect).filter(rect=>rect&&Number.isFinite(rect.bottom)&&Number.isFinite(rect.top)&&rect.top>rect.bottom).sort((a,b)=>a.bottom-b.bottom||a.top-b.top);
+  if(rects.length<2)return null;
+
+  const clearance=Math.max(6,size*.60);
+  const minGap=Math.max(48,pageHeight*.055,size*4.5);
+  const maxFooterTop=Math.min(pageHeight*.18,pageHeight-2);
+  let clusterTop=rects[0].top;
+  let clusterCount=1;
+  let best=null;
+
+  for(let i=1;i<rects.length;i++){
+    const next=rects[i];
+    const gap=next.bottom-clusterTop;
+    if(gap>=minGap&&clusterTop<=maxFooterTop){
+      const enoughEvidence=clusterCount>=2||gap>=pageHeight*.10;
+      if(enoughEvidence&&(!best||gap>best.gap)){
+        const top=clamp(clusterTop+clearance,bottomMargin,maxFooterTop);
+        if(top>bottomMargin+2)best={enabled:true,top,height:top,gap,clusterTop,clusterCount,confidence:'SEPARATED_STATIC_FOOTER'};
+      }
+    }
+    clusterTop=Math.max(clusterTop,next.top);
+    clusterCount++;
+  }
+  return best;
+}
+
 function preparedPageGeometry(pageIndex){
   if(!Number.isInteger(pageIndex))return null;
   return cascadePageGeometry.find(page=>Number(page?.pageIndex)===pageIndex)||null;
 }
 
 function resolveFooterGuard(prepared,moved,{pageHeight,size,bottomMargin}){
+  const separated=inferSeparatedFooterGuard(moved,{pageHeight,size,bottomMargin});
   const preparedTop=Number(prepared?.footerGuardTop);
+  if(separated&&(!Number.isFinite(preparedTop)||separated.top>preparedTop+1))return separated;
   if(Number.isFinite(preparedTop)){
     const top=clamp(preparedTop,bottomMargin,Math.min(pageHeight*.18,pageHeight-2));
     return {
@@ -178,15 +207,23 @@ export function planInsertionReflow({
     return {enabled:false,reason:'NO_MOVABLE_CONTENT',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
   }
 
-  const contentBand=inferContentBand(moved,{laneLeft,laneRight,pageWidth,size});
-  if(!contentBand){
-    return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex)};
+  const footerGuard=resolveFooterGuard(prepared,moved,{pageHeight,size,bottomMargin});
+  const movable=moved.filter(({rect})=>rect.top>footerGuard.top+.25);
+  if(!movable.length){
+    return {enabled:false,reason:'NO_MOVABLE_CONTENT_ABOVE_FOOTER',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
   }
 
-  const flowLines=flowLineGeometry(moved,contentBand);
-  const flowTopY=Math.max(...moved.map(({rect})=>rect.top));
-  const contentBottomY=Math.min(...moved.map(({rect})=>rect.bottom));
-  const footerGuard=resolveFooterGuard(prepared,moved,{pageHeight,size,bottomMargin});
+  const contentBand=inferContentBand(movable,{laneLeft,laneRight,pageWidth,size});
+  if(!contentBand){
+    return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
+  }
+
+  const flowLines=flowLineGeometry(movable,contentBand);
+  if(!flowLines.length){
+    return {enabled:false,reason:'NO_FLOW_LINES_ABOVE_FOOTER',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
+  }
+  const flowTopY=Math.max(...flowLines.map(line=>line.top));
+  const contentBottomY=Math.min(...flowLines.map(line=>line.bottom));
 
   return {
     enabled:true,mode:'VERTICAL_CONTENT_BAND_REFLOW',cutY,flowTopY,contentBottomY,safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,
@@ -194,6 +231,6 @@ export function planInsertionReflow({
     flowLines,
     flowBlocks:flowLines,
     cascadePages:followingCascadePages(sourcePageIndex),
-    confidence:footerGuard.confidence==='PREPARED_PAGE_FOOTER_GUARD'?'LINE_AWARE_STABLE_FOOTER_REFLOW':(footerGuard.enabled?'LINE_AWARE_TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'LINE_AWARE_TEXT_BAND_AND_MARGIN_SAFE_CUT'),
+    confidence:footerGuard.confidence==='SEPARATED_STATIC_FOOTER'?'LINE_AWARE_STATIC_FOOTER_REFLOW':(footerGuard.confidence==='PREPARED_PAGE_FOOTER_GUARD'?'LINE_AWARE_STABLE_FOOTER_REFLOW':(footerGuard.enabled?'LINE_AWARE_TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'LINE_AWARE_TEXT_BAND_AND_MARGIN_SAFE_CUT')),
   };
 }
