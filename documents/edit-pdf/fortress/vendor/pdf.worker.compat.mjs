@@ -50,4 +50,5 @@ function ensurePdfjsRuntimeCompat(){
 }
 
 ensurePdfjsRuntimeCompat();
-await import('./pdf.worker.mjs');
+const {WorkerMessageHandler}=await import('./pdf.worker.mjs');
+export {WorkerMessageHandler};
