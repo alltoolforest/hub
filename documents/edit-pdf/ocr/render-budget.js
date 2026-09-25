@@ -1,6 +1,6 @@
 export const OCR_RENDER_LIMITS=Object.freeze({
-  maxLongSide:2200,
-  maxPixels:4_500_000,
+  maxLongSide:2000,
+  maxPixels:3_500_000,
   maxScale:2.15,
   minScale:.30,
 });
