@@ -79,8 +79,11 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
       if(width>pageAvailable){
         throw Object.assign(new Error('The selected font size makes this text extend beyond the page.'),{code:'LAYOUT_COLLISION'});
       }
+      if(width>targetWidth*1.18){
+        throw Object.assign(new Error('Formatted text would extend beyond the mapped text region.'),{code:'LAYOUT_COLLISION'});
+      }
       if(width>targetWidth*1.04){
-        warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is wider than the original text region.'});
+        warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is slightly wider than the original text region.'});
       }
     }else{
       if(width>targetWidth*1.04){
@@ -151,6 +154,15 @@ async function prepareInsertedText(doc,tx,fontCache){
   }
   const bottomY=y-(Math.max(0,lines.length-1)*lineHeight)-size*.28;
   return {pageSize,font,fontName,size,lineHeight,availableWidth,lines,bottomY};
+}
+
+function validateInsertedDesignRegion(tx,layout){
+  const guardTop=Number(tx?.reflowPlan?.footerGuard?.top);
+  if(!Number.isFinite(guardTop))return;
+  const guardGap=Math.max(2,Number(tx?.reflowPlan?.safetyGap)||4);
+  if(Number(layout?.bottomY)<guardTop+guardGap){
+    throw Object.assign(new Error('New text would enter a protected footer or design region.'),{code:'INSERT_DESIGN_REGION_UNSAFE'});
+  }
 }
 
 function drawInsertedLayout(doc,tx,layout,warnings){
@@ -243,6 +255,9 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
         }
         usedDirect=true;
       }else{
+        if(direct.reason==='LAYOUT_COLLISION'){
+          throw Object.assign(new Error(direct.layout?.message||'Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION',layout:direct.layout||null});
+        }
         warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
       }
     }else if(tx.styleChanged){
@@ -288,12 +303,13 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
             transactionId:tx.id,
             delta:reflow.metric?.delta||0,
             overflowPageCount:reflow.overflowPageCount||0,
-            message:reflow.overflowPageCount?'Content below the new text was moved and overflow continued on a new page.':'Content below the new text was moved down to preserve spacing.',
+            message:reflow.overflowPageCount?'Content below the new text was moved and overflow continued on a new page when saved.':'Content below the new text was moved down to preserve spacing.',
           });
         }else if(!['EXISTING_WHITESPACE_SUFFICIENT','NO_CONTENT_BELOW_INSERTION','REFLOW_DISABLED'].includes(reflow.reason)){
-          warnings.push({code:'REFLOW_FALLBACK',pageIndex:sourcePageIndex,transactionId:tx.id,reason:reflow.reason,message:'This page could not be safely reflowed, so the text was added without moving page content.'});
+          throw Object.assign(new Error('This text cannot be added here without risking overlap or layout damage.'),{code:reflow.reason||'INSERT_REFLOW_UNSAFE',reflow});
         }
       }
+      if(!reflow?.applied)validateInsertedDesignRegion(tx,layout);
       drawInsertedLayout(doc,tx,layout,warnings);
     }
   }
