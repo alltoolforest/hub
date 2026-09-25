@@ -6,12 +6,16 @@ const RECT=PDFName.of('Rect');
 const AP=PDFName.of('AP');
 const QUAD_POINTS=PDFName.of('QuadPoints');
 const PAGE=PDFName.of('P');
+const runtimeByDocument=new WeakMap();
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 function lookup(doc,value){if(!value)return null;try{return doc.context.lookup(value);}catch{return null;}}
 function arrayItem(doc,array,index){try{if(typeof array?.lookup==='function')return array.lookup(index);}catch{}try{return lookup(doc,array?.get?.(index));}catch{return null;}}
 function numberValue(doc,value){const resolved=lookup(doc,value)||value;if(typeof resolved?.asNumber==='function')return resolved.asNumber();const n=Number(String(resolved));return Number.isFinite(n)?n:null;}
 function rectBounds(rect){return {left:Math.min(rect[0],rect[2]),right:Math.max(rect[0],rect[2]),bottom:Math.min(rect[1],rect[3]),top:Math.max(rect[1],rect[3])};}
+function runtimeMap(doc){let map=runtimeByDocument.get(doc);if(!map){map=new Map();runtimeByDocument.set(doc,map);}return map;}
+function runtimeBottom(doc,pageIndex,fallback){const value=runtimeMap(doc).get(pageIndex)?.textBottomY;return Number.isFinite(value)?value:fallback;}
+function recordRuntimeBottom(doc,pageIndex,value){if(Number.isFinite(value))runtimeMap(doc).set(pageIndex,{textBottomY:value});}
 
 async function embedSlice(doc,page,{left=0,bottom=0,right,top}){if(!(top>bottom)||!(right>left))return null;return doc.embedPage(page,{left,bottom,right,top});}
 function drawSlice(page,embedded,{x=0,y=0,width,height}){if(embedded)page.drawPage(embedded,{x,y,width,height});}
@@ -102,6 +106,7 @@ function preflightFollowingPage(doc,pageIndex,geometry,incoming){
   if(rotation!==0)return {ok:false,reason:'CASCADE_ROTATED_PAGE_UNSUPPORTED'};
   const g=normalizedGeometry(geometry,live);
   if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
+  g.textBottomY=runtimeBottom(doc,pageIndex,g.textBottomY);
   const incomingSafety=validateIncomingRegion(incoming,g);
   if(!incomingSafety.ok)return incomingSafety;
   const shift=incoming.height+g.safetyGap;
@@ -113,10 +118,7 @@ function preflightFollowingPage(doc,pageIndex,geometry,incoming){
   if(!linkInfo.ok)return {ok:false,reason:linkInfo.reason};
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
   if(!classified.ok)return {ok:false,reason:classified.reason};
-  return {
-    ok:true,g,shift,overflowNeeded,outgoingBoundary,
-    nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null,
-  };
+  return {ok:true,g,shift,overflowNeeded,outgoingBoundary,nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null};
 }
 
 function preflightCascade(doc,{sourcePageIndex,pages,incoming}){
@@ -136,12 +138,9 @@ function preflightCascade(doc,{sourcePageIndex,pages,incoming}){
 
 async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
   const live=doc.getPage(pageIndex);
-  const g=normalizedGeometry(geometry,live);
-  if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
-  const incomingHeight=incoming.top-incoming.bottom;
-  const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incomingHeight,left:incoming.left,right:incoming.right});
+  const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right});
   if(!check.ok)return check;
-  const {shift,overflowNeeded,outgoingBoundary}=check;
+  const {g,shift,overflowNeeded,outgoingBoundary}=check;
   const linkInfo=inspectLinks(doc,live);
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
 
@@ -152,6 +151,7 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
   const leftSlice=g.bandLeft>1?await embedSlice(doc,donorPage,{left:0,bottom:g.footerTop,right:g.bandLeft,top:g.bodyTopY}):null;
   const rightSlice=g.bandRight<g.width-1?await embedSlice(doc,donorPage,{left:g.bandRight,bottom:g.footerTop,right:g.width,top:g.bodyTopY}):null;
   const incomingEmbedded=await embedSlice(doc,incoming.donorPage,{left:incoming.left,bottom:incoming.bottom,right:incoming.right,top:incoming.top});
+  const incomingHeight=incoming.top-incoming.bottom;
 
   const replacement=doc.insertPage(pageIndex,[g.width,g.height]);
   drawSlice(replacement,topSlice,{x:0,y:g.bodyTopY,width:g.width,height:g.height-g.bodyTopY});
@@ -159,11 +159,12 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
   if(leftSlice)drawSlice(replacement,leftSlice,{x:0,y:g.footerTop,width:g.bandLeft,height:g.bodyTopY-g.footerTop});
   if(rightSlice)drawSlice(replacement,rightSlice,{x:g.bandRight,y:g.footerTop,width:g.width-g.bandRight,height:g.bodyTopY-g.footerTop});
   if(bodySlice)drawSlice(replacement,bodySlice,{x:g.bandLeft,y:outgoingBoundary-shift,width:g.bandWidth,height:g.bodyTopY-outgoingBoundary});
-  // Preserve the incoming overflow at its original PDF width and x-position.
   if(incomingEmbedded)drawSlice(replacement,incomingEmbedded,{x:incoming.left,y:g.bodyTopY-incomingHeight,width:incoming.right-incoming.left,height:incomingHeight});
   preserveLinks(doc,replacement,linkInfo,classified.links,shift);
   doc.removePage(pageIndex+1);
 
+  const nextBottom=overflowNeeded?g.footerTop+g.safetyGap:Math.max(g.footerTop+g.safetyGap,g.textBottomY-shift);
+  recordRuntimeBottom(doc,pageIndex,nextBottom);
   if(!overflowNeeded){
     try{await donorDoc.destroy?.();}catch{}
     return {ok:true,done:true,shift,overflow:false};
@@ -190,8 +191,7 @@ async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargi
 export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height}){
   if(!(overflowTop>overflowBottom))return {applied:false,reason:'NO_CASCADE_OVERFLOW',appendedPageCount:0,cascadedPageCount:0};
   const pages=Array.isArray(plan?.cascadePages)?plan.cascadePages:[];
-  const initial={height:overflowTop-overflowBottom,left:bandLeft,right:bandRight};
-  const preflight=preflightCascade(doc,{sourcePageIndex,pages,incoming:initial});
+  const preflight=preflightCascade(doc,{sourcePageIndex,pages,incoming:{height:overflowTop-overflowBottom,left:bandLeft,right:bandRight}});
   if(!preflight.ok)return {applied:false,reason:preflight.reason,appendedPageCount:0,cascadedPageCount:0};
 
   let incoming={donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
@@ -200,20 +200,13 @@ export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan
     const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming);
     if(!result.ok)return {applied:false,reason:result.reason,appendedPageCount:0,cascadedPageCount};
     cascadedPageCount++;
-    if(result.done){
-      if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
-      return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};
-    }
+    if(result.done){if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};}
     if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
     incoming=result.outgoing;
   }
 
   const lastGeometry=pages.at(-1)||{};
-  const appendedPageCount=await appendCarryPages(doc,incoming,{
-    width,height,
-    topMargin:Math.max(16,Number(lastGeometry.topMargin)||Number(plan?.topMargin)||28),
-    bottomMargin:Math.max(8,Number(lastGeometry.bottomMargin)||Number(plan?.bottomMargin)||12),
-  });
+  const appendedPageCount=await appendCarryPages(doc,incoming,{width,height,topMargin:Math.max(16,Number(lastGeometry.topMargin)||Number(plan?.topMargin)||28),bottomMargin:Math.max(8,Number(lastGeometry.bottomMargin)||Number(plan?.bottomMargin)||12)});
   if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
   return {applied:true,reason:'CASCADE_APPENDED_AFTER_EXISTING_PAGES',appendedPageCount,cascadedPageCount};
 }
