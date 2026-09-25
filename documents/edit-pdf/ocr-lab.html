@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>OCR Edit PDF Lab | AllToolForest</title>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <link rel="stylesheet" href="./ocr/styles.css">
+  <style>.lab-shell{padding:0;overflow:hidden;min-height:620px}.lab-picker{min-height:620px;display:grid;place-content:center;gap:14px;text-align:center;padding:28px;background:#fff}.lab-picker[hidden],#ocr-lab-app[hidden]{display:none}#ocr-lab-app{height:calc(100svh - 150px);min-height:620px}.lab-status{margin:.8rem 0 0;color:#667085}.lab-downloads{margin-top:12px}</style>
+</head>
+<body>
+<main class="container" id="main">
+  <section class="page-intro"><h1>OCR Edit PDF Lab</h1><p>Internal isolated test surface for scanned-PDF editing. It does not use or modify the native Edit PDF engine.</p></section>
+  <section class="workspace lab-shell">
+    <div id="ocr-lab-picker" class="lab-picker">
+      <h2>Open a scanned PDF</h2>
+      <p>For clean image-only documents. OCR code and language assets are downloaded when needed; the PDF itself stays in the browser.</p>
+      <input id="ocr-lab-file" type="file" accept="application/pdf,.pdf">
+      <p id="ocr-lab-status" class="lab-status" role="status" aria-live="polite"></p>
+      <div id="ocr-lab-downloads" class="lab-downloads"></div>
+    </div>
+    <div id="ocr-lab-app" hidden></div>
+  </section>
+</main>
+<script type="module">
+import { configureWorkerSrc } from './fortress/src/rendering/pdfjs.js';
+import { classifyPdfForEditing } from './ocr/classifier.js';
+import { createScannedPdfEditor } from './ocr/scan-editor.js';
+
+const picker=document.querySelector('#ocr-lab-picker');
+const input=document.querySelector('#ocr-lab-file');
+const app=document.querySelector('#ocr-lab-app');
+const status=document.querySelector('#ocr-lab-status');
+const downloads=document.querySelector('#ocr-lab-downloads');
+let editor=null,downloadUrl=null;
+
+await configureWorkerSrc(new URL('./fortress/vendor/pdf.worker.compat.mjs',location.href).href);
+function setStatus(message=''){status.textContent=message;}
+function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downloadUrl=null;}downloads.replaceChildren();}
+function reset(){clearDownload();try{editor?.destroy();}catch{}editor=null;app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setStatus('');}
+
+input.addEventListener('change',async()=>{
+  const file=input.files?.[0];if(!file)return;
+  clearDownload();setStatus('Checking PDF structure…');
+  try{
+    const classification=await classifyPdfForEditing(file);
+    if(classification.kind!=='scanned')throw new Error(`OCR Lab only accepts scan-dominant PDFs. Detected: ${classification.kind}.`);
+    picker.hidden=true;app.hidden=false;
+    editor=createScannedPdfEditor({
+      container:app,
+      onStatus:setStatus,
+      onWarning:w=>setStatus(w?.message||w?.code||'OCR edit refused safely.'),
+      onError:e=>setStatus(e?.message||'OCR editing failed safely.'),
+      onClose:reset,
+      onExport:({blob,filename})=>{
+        clearDownload();downloadUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=downloadUrl;a.download=filename||'edited-scan.pdf';a.className='button primary';a.textContent='Download edited scanned PDF';downloads.append(a);a.click();
+      },
+    });
+    await editor.open(file);
+  }catch(error){console.error(error);reset();setStatus(error?.message||'Could not open this scan safely.');}
+});
+window.addEventListener('pagehide',()=>{clearDownload();try{editor?.destroy();}catch{}},{once:true});
+</script>
+</body>
+</html>
