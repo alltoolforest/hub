@@ -34,40 +34,63 @@ function normalizedFooterGuard(plan,pageHeight,bottomMargin,cutY){
 }
 
 function normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY}){
+  const rawLines=Array.isArray(plan?.flowLines)&&plan.flowLines.length?plan.flowLines:(Array.isArray(plan?.flowBlocks)?plan.flowBlocks:[]);
   const out=[];
-  for(const raw of Array.isArray(plan?.flowBlocks)?plan.flowBlocks:[]){
+  for(const raw of rawLines){
     const left=Number(raw?.left),right=Number(raw?.right),bottom=Number(raw?.bottom),top=Number(raw?.top);
     if(![left,right,bottom,top].every(Number.isFinite)||right<=left||top<=bottom)continue;
     if(top<=footerGuardTop+.25||bottom>=cutY-.25)continue;
     if(overlap(left,right,bandLeft,bandRight)<Math.min(8,Math.max(1,right-left)*.2))continue;
-    out.push({id:raw?.id||null,left,right,bottom,top});
+    out.push({
+      id:raw?.blockId||raw?.id||null,
+      blockId:raw?.blockId||raw?.id||null,
+      lineId:raw?.lineId||null,
+      lineIndex:Number.isInteger(raw?.lineIndex)?raw.lineIndex:null,
+      blockLineCount:Math.max(1,Number(raw?.blockLineCount)||1),
+      left,right,bottom,top,
+    });
   }
   return out.sort((a,b)=>b.top-a.top);
 }
 
 function snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}){
   const rawBoundary=clamp(delta+movableFloor,footerGuardTop,cutY);
-  const blocks=normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY});
-  if(!blocks.length)return {boundary:rawBoundary,overflowedBlockIds:[]};
+  const lines=normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY});
+  if(!lines.length)return {boundary:rawBoundary,overflowedBlockIds:[],overflowedLineIds:[]};
 
-  const affected=blocks.filter(block=>block.bottom-delta<movableFloor+.5);
-  if(!affected.length)return {boundary:rawBoundary,overflowedBlockIds:[]};
+  const affected=lines.filter(line=>line.bottom-delta<movableFloor+.5);
+  if(!affected.length)return {boundary:rawBoundary,overflowedBlockIds:[],overflowedLineIds:[]};
 
   const pad=Math.max(.65,Math.min(2,Number(safetyGap||4)*.18));
-  let boundary=clamp(Math.max(...affected.map(block=>block.top))+pad,footerGuardTop,cutY);
+  let boundary=clamp(Math.max(...affected.map(line=>line.top))+pad,footerGuardTop,cutY);
 
-  // Never let the slice boundary pass through another text block. Lift the
-  // boundary repeatedly until it falls entirely inside whitespace.
-  for(let i=0;i<16;i++){
-    const crossing=blocks.filter(block=>block.bottom<boundary-.2&&block.top>boundary+.2);
+  // The boundary must land in whitespace between visual lines. If it crosses a
+  // glyph box, lift it above that entire line and retry.
+  for(let i=0;i<24;i++){
+    const crossing=lines.filter(line=>line.bottom<boundary-.2&&line.top>boundary+.2);
     if(!crossing.length)break;
-    const next=clamp(Math.max(...crossing.map(block=>block.top))+pad,footerGuardTop,cutY);
+    const next=clamp(Math.max(...crossing.map(line=>line.top))+pad,footerGuardTop,cutY);
     if(next<=boundary+.05)break;
     boundary=next;
   }
 
-  const overflowedBlockIds=blocks.filter(block=>block.top<=boundary+.75).map(block=>block.id).filter(Boolean);
-  return {boundary,overflowedBlockIds};
+  const overflowed=lines.filter(line=>line.top<=boundary+.75);
+  const overflowedLineIds=overflowed.map(line=>line.lineId).filter(Boolean);
+
+  const totals=new Map(),movedCounts=new Map();
+  for(const line of lines){
+    if(!line.blockId)continue;
+    totals.set(line.blockId,Math.max(totals.get(line.blockId)||0,line.blockLineCount||1));
+  }
+  for(const line of overflowed){
+    if(!line.blockId)continue;
+    movedCounts.set(line.blockId,(movedCounts.get(line.blockId)||0)+1);
+  }
+  const overflowedBlockIds=[];
+  for(const [blockId,count] of movedCounts){
+    if(count>=(totals.get(blockId)||1))overflowedBlockIds.push(blockId);
+  }
+  return {boundary,overflowedBlockIds,overflowedLineIds};
 }
 
 function inspectAnnotations(doc,page){
@@ -173,14 +196,15 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
 
   const delta=Math.max(0,flowTopY+safetyGap-textBottomY);
   if(delta<.5){
-    return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],bandLeft,bandRight,footerGuardTop}};
+    return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],overflowedLineIds:[],bandLeft,bandRight,footerGuardTop}};
   }
   if(delta>height*.72)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
 
   const overflowNeeded=contentBottomY-delta<movableFloor;
-  const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[]};
+  const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[],overflowedLineIds:[]};
   const overflowBoundary=snapped.boundary;
   const overflowedBlockIds=snapped.overflowedBlockIds;
+  const overflowedLineIds=snapped.overflowedLineIds;
   const linkSafety=validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,movableFloor,bandLeft,bandRight,footerGuardTop});
   if(!linkSafety.ok)return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
 
@@ -223,7 +247,7 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     overflowPageCount:0,
     metric:{
       transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta,flowTopY,contentBottomY,overflowBoundary,
-      overflowPageCount:0,appendedPageCount,cascadedPageCount,overflowedBlockIds,preservedLinkCount:annotationInfo.links.length,
+      overflowPageCount:0,appendedPageCount,cascadedPageCount,overflowedBlockIds,overflowedLineIds,preservedLinkCount:annotationInfo.links.length,
       bandLeft,bandRight,bandWidth,footerGuardTop,footerGuardEnabled:footerGuard.enabled,
       mode:overflowNeeded?'CASCADE_EXISTING_PAGES':(plan.mode||'VERTICAL_CONTENT_BAND_REFLOW'),
     },
