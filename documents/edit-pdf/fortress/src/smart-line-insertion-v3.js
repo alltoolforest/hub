@@ -3,6 +3,7 @@ import { applyToPoint } from './utils/matrices.js';
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 function isEditableBlock(block){return block?.tier==='DIRECT_EDIT'||block?.tier==='FONT_SUBSTITUTION';}
+function overlap(a1,a2,b1,b2){return Math.max(0,Math.min(a2,b2)-Math.max(a1,b1));}
 
 function selectedFontSize(app){
   const precise=Number(app.querySelector('.pdf-precision-size-input')?.value);
@@ -11,7 +12,7 @@ function selectedFontSize(app){
   return Number.isFinite(selected)?clamp(selected,6,72):12;
 }
 
-function currentVisualBaseline(block,state,matrix){
+function currentVisualLine(block,state,matrix){
   const line=block?.lines?.[0];
   if(!line||!matrix)return null;
   let y=Number(line.y);
@@ -22,8 +23,15 @@ function currentVisualBaseline(block,state,matrix){
     if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta)||0;
   }
   const x=Number.isFinite(Number(line.minX))?Number(line.minX):Number(block?.bounds?.x||0);
-  const point=applyToPoint(matrix,x,y);
-  return {x:point.x,y:point.y,pdfY:y};
+  const maxX=Number.isFinite(Number(line.maxX))?Number(line.maxX):x+Number(block?.bounds?.width||1);
+  const leftPoint=applyToPoint(matrix,x,y);
+  const rightPoint=applyToPoint(matrix,maxX,y);
+  return {
+    left:Math.min(leftPoint.x,rightPoint.x),
+    right:Math.max(leftPoint.x,rightPoint.x),
+    baselineY:leftPoint.y,
+    pdfY:y,
+  };
 }
 
 function estimateVisualLines(text,input,fontPx){
@@ -37,7 +45,7 @@ function estimateVisualLines(text,input,fontPx){
   return Math.max(1,total);
 }
 
-function classifyWhitespace(app,state,input,layer){
+function classifyWhitespace(app,state,input,layer,anchor){
   const matrix=layer?.__matrix;
   if(!matrix||!state?.analysis?.blocks?.length)return null;
 
@@ -45,38 +53,71 @@ function classifyWhitespace(app,state,input,layer){
   const fontSize=selectedFontSize(app);
   const fontPx=Math.max(16,fontSize*scale);
   const lineHeight=Math.max(fontPx,fontPx*1.2);
-  const baselineY=input.offsetTop+fontPx*.88;
+  const anchorTop=anchor&&anchor.pageIndex===state.pageIndex&&anchor.layer===layer?anchor.top:input.offsetTop;
+  const anchorLeft=anchor&&anchor.pageIndex===state.pageIndex&&anchor.layer===layer?anchor.left:input.offsetLeft;
+  const baselineY=anchorTop+fontPx*.88;
   const visualLines=estimateVisualLines(input.value,input,fontPx);
   const insertedBottom=baselineY+(visualLines-1)*lineHeight+fontPx*.30;
+  const insertedLeft=anchorLeft;
+  const insertedRight=anchorLeft+Math.max(40,input.clientWidth||180);
   const safety=Math.max(3,fontPx*.22);
 
   const below=[];
   for(const block of state.analysis.blocks){
     if(!isEditableBlock(block))continue;
-    const baseline=currentVisualBaseline(block,state,matrix);
-    if(!baseline)continue;
+    const visual=currentVisualLine(block,state,matrix);
+    if(!visual)continue;
+    if(overlap(insertedLeft,insertedRight,visual.left,visual.right)<Math.min(8,Math.max(1,visual.right-visual.left)*.2))continue;
     const blockSize=Math.max(8,Number(block?.lines?.[0]?.fontSize||block?.fontSize)||fontSize)*scale;
-    const blockTop=baseline.y-blockSize*.92;
-    const blockBottom=baseline.y+blockSize*.30;
+    const blockTop=visual.baselineY-blockSize*.92;
+    const blockBottom=visual.baselineY+blockSize*.30;
     if(blockBottom<=insertedBottom+safety)continue;
     below.push({block,top:blockTop,bottom:blockBottom,distance:blockTop-insertedBottom});
   }
 
   below.sort((a,b)=>a.top-b.top);
   const nearest=below[0]||null;
-  const fits=!nearest||nearest.distance>=safety;
-  return {fits,belowBlocks:below.map(item=>item.block),nearestDistance:nearest?.distance??Infinity,fontPx,visualLines};
+  if(!nearest)return {passthrough:true};
+  const fits=nearest.distance>=safety;
+  return {
+    passthrough:false,
+    fits,
+    belowBlocks:below.map(item=>item.block),
+    nearestDistance:nearest.distance,
+    fontPx,
+    visualLines,
+  };
 }
 
 /**
- * V3 leaves the working editor and V2 alignment code intact. Its only job is to
- * prevent unnecessary reflow when an inserted line already fits in real visual
- * whitespace. If movement is required, it restricts the planner to content that
- * is actually below the inserted text so the reference list cannot be moved.
+ * V3 keeps the working editor and V2 alignment behavior intact. It only fixes
+ * the insertion/reflow handoff:
+ *   1. capture the true smart insertion anchor before the bottom-page UI bridge
+ *      visually moves the textarea;
+ *   2. if the new line fits in real whitespace, prevent unnecessary reflow;
+ *   3. if movement is really required, expose only content below the inserted
+ *      line to the existing planner so reference lines cannot be moved.
  */
 export function attachSmartLineInsertion({app,getEditor}){
   if(!app)throw new Error('Edit PDF app element is required');
   let destroyed=false;
+  let pendingAnchor=null;
+
+  function captureSyntheticAnchor(event){
+    if(destroyed||event.isTrusted)return;
+    const layer=event.target?.closest?.('.pdf-hit-layer');
+    const state=getEditor?.()?.getState?.();
+    if(!layer||!app.contains(layer)||!state?.addTextMode)return;
+    if(event.target?.closest?.('textarea,.pdf-insert-actions,.pdf-format-tools'))return;
+    const rect=layer.getBoundingClientRect();
+    pendingAnchor={
+      layer,
+      pageIndex:state.pageIndex,
+      left:event.clientX-rect.left,
+      top:event.clientY-rect.top,
+      capturedAt:performance.now(),
+    };
+  }
 
   function onInsertDoneCapture(event){
     if(destroyed)return;
@@ -87,27 +128,33 @@ export function attachSmartLineInsertion({app,getEditor}){
     const state=getEditor?.()?.getState?.();
     if(!input||!layer||!state?.analysis?.blocks?.length)return;
 
-    const classification=classifyWhitespace(app,state,input,layer);
-    if(!classification)return;
+    const recentAnchor=pendingAnchor&&performance.now()-pendingAnchor.capturedAt<120000?pendingAnchor:null;
+    const classification=classifyWhitespace(app,state,input,layer,recentAnchor);
+    if(!classification||classification.passthrough)return;
 
     const originalBlocks=state.analysis.blocks;
     state.analysis.blocks=classification.fits?[]:classification.belowBlocks;
 
-    // The core Done handler computes the transaction/reflow plan synchronously
-    // before its first await. Restore the full analysis immediately afterwards
-    // so rendering, editing and later operations continue to see every block.
+    // main.js computes the insertion transaction and its reflow plan
+    // synchronously before queueInsertion reaches its first await. Restore the
+    // full analysis immediately after the event dispatch completes.
     queueMicrotask(()=>{
       if(state.analysis)state.analysis.blocks=originalBlocks;
     });
+    setTimeout(()=>{pendingAnchor=null;},0);
   }
 
-  // Register before V2 so this guard is already active when V2 automates Done.
+  // Register before V2. The synthetic smart click generated by V2 bubbles
+  // through this listener, allowing us to retain the real insertion anchor.
+  app.addEventListener('click',captureSyntheticAnchor,true);
   app.addEventListener('click',onInsertDoneCapture,true);
   const v2=attachV2({app,getEditor});
 
   return {
     destroy(){
       destroyed=true;
+      pendingAnchor=null;
+      app.removeEventListener('click',captureSyntheticAnchor,true);
       app.removeEventListener('click',onInsertDoneCapture,true);
       v2?.destroy?.();
     }
