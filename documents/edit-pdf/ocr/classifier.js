@@ -20,20 +20,18 @@ function adaptiveSampleLimit(pageCount){
 }
 
 function classifyEvidence({chars,textItems,imageOps}){
-  // OCR routing must be conservative. A logo/title page with a little real PDF
-  // text is mixed, not scanned. Only image-dominant pages with essentially no
-  // selectable text earn high-confidence scanned status.
+  // Per-page OCR ownership is intentionally strict. Only pages with image
+  // evidence and no selectable text are routed automatically to OCR. A native
+  // title/signature page with a logo plus even sparse real text remains mixed
+  // and therefore stays on the conservative Fortress/native path.
   if(imageOps>0&&chars===0&&textItems===0){
     return {kind:'scanned',confidence:1,reason:'IMAGE_ONLY_PAGE'};
-  }
-  if(imageOps>0&&chars<=8&&textItems<=2){
-    return {kind:'scanned',confidence:.85,reason:'IMAGE_DOMINANT_WITH_TRACE_TEXT'};
   }
   if(chars>=80||textItems>=12){
     if(imageOps>0&&chars<180)return {kind:'mixed',confidence:.78,reason:'SELECTABLE_TEXT_WITH_IMAGES'};
     return {kind:'native',confidence:.92,reason:'SUBSTANTIAL_SELECTABLE_TEXT'};
   }
-  if(imageOps>0&&chars>0)return {kind:'mixed',confidence:.68,reason:'SPARSE_SELECTABLE_TEXT_WITH_IMAGES'};
+  if(imageOps>0&&chars>0)return {kind:'mixed',confidence:.72,reason:'SPARSE_SELECTABLE_TEXT_WITH_IMAGES'};
   if(chars>0)return {kind:'native',confidence:.74,reason:'SPARSE_SELECTABLE_TEXT'};
   return {kind:'unknown',confidence:.25,reason:'NO_TEXT_OR_IMAGE_EVIDENCE'};
 }
