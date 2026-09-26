@@ -95,12 +95,12 @@ function inferGeometry(lines,tx,{width,height,preferredPitch=null}){
   const bandRight=clamp(sourceWide||source.left<=width*.30?Math.max(relatedRight+pad,width-rightMargin):relatedRight+pad,bandLeft+60,width);
   if(bandRight-bandLeft<Math.max(100,width*.24))return {ok:false,reason:'COMPACTION_CONTENT_BAND_UNSAFE'};
 
-  // Prefer the released source-line boundary over the top of the next text
-  // line. In Word/resume PDFs this keeps the cut in the real inter-row gap,
-  // so complete table/list regions below can move as a unit instead of being
-  // sliced through their vertical borders.
+  // Collapse from the top edge of the deleted visual row. For Word/resume
+  // PDFs this lets a segmented row border and everything below it travel as
+  // one unit. A genuinely continuous table border still crosses this cut and
+  // is rejected by vectorSafety, so this does not weaken the fail-closed rule.
   const cutPad=Math.max(.8,Math.min(2,fontSize*.10));
-  const cutY=clamp(Math.max(nearest.top+cutPad,source.bottom-cutPad),2,height-2);
+  const cutY=clamp(Math.max(nearest.top+cutPad,source.top),2,height-2);
   const maxSafeShift=Math.max(0,source.top-nearest.top+.5),shiftY=Math.min(pitch,maxSafeShift);
   if(shiftY<Math.max(2,fontSize*.35))return {ok:false,reason:'COMPACTION_RELEASED_SPACE_TOO_SMALL'};
   if(shiftY>height*.18)return {ok:false,reason:'COMPACTION_SHIFT_TOO_LARGE'};
