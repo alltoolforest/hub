@@ -1,5 +1,5 @@
 import { exportEditedPdf as exportEditedPdfCore } from './exporter-core.js';
-import { applyUpwardCompaction } from './upward-compaction.js';
+import { applyUpwardCompaction } from './upward-compaction-v2.js';
 
 export async function exportEditedPdf(originalBytes,transactions,options={}){
   const result=await exportEditedPdfCore(originalBytes,transactions,options);
