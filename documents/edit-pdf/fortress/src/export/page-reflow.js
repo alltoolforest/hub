@@ -65,8 +65,6 @@ function snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandL
   const pad=Math.max(.65,Math.min(2,Number(safetyGap||4)*.18));
   let boundary=clamp(Math.max(...affected.map(line=>line.top))+pad,footerGuardTop,cutY);
 
-  // The boundary must land in whitespace between visual lines. If it crosses a
-  // glyph box, lift it above that entire line and retry.
   for(let i=0;i<24;i++){
     const crossing=lines.filter(line=>line.bottom<boundary-.2&&line.top>boundary+.2);
     if(!crossing.length)break;
@@ -123,10 +121,6 @@ function classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop}){
   if(outsideBand)return 'STATIC';
   const crossesBand=(left<bandLeft-.5&&right>bandLeft+.5)||(left<bandRight-.5&&right>bandRight+.5);
   if(crossesBand)return 'CROSSES_BAND';
-  // Link rectangles are often slightly taller than their visible glyphs. If a
-  // simple link straddles the visual cut, classify it by its vertical centre
-  // instead of rejecting safe reflow. The linked text line itself has already
-  // been snapped wholly to one side of cutY by the line-aware planner.
   if(bottom<cutY-.5&&top>cutY+.5)return ((bottom+top)/2<=cutY?'MOVED':'STATIC');
   if(top<=cutY+.5)return 'MOVED';
   return 'STATIC';
@@ -246,16 +240,17 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const footerGuard=normalizedFooterGuard(plan,height,bottomMargin,cutY);
   const footerGuardTop=footerGuard.top;
   const movableFloor=Math.min(cutY-1,footerGuardTop+safetyGap);
+  const requestedDelta=Number(plan.requestedDelta);
   const textBottomY=Number(layout?.bottomY);
-  if(!Number.isFinite(textBottomY))return {applied:false,reason:'REFLOW_TEXT_GEOMETRY_MISSING',overflowPageCount:0};
+  if(!Number.isFinite(requestedDelta)&&!Number.isFinite(textBottomY))return {applied:false,reason:'REFLOW_TEXT_GEOMETRY_MISSING',overflowPageCount:0};
 
-  const delta=Math.max(0,flowTopY+safetyGap-textBottomY);
-  if(delta<.5){
-    return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],overflowedLineIds:[],bandLeft,bandRight,footerGuardTop}};
+  const delta=Number.isFinite(requestedDelta)?requestedDelta:Math.max(0,flowTopY+safetyGap-textBottomY);
+  if(Math.abs(delta)<.5){
+    return {applied:false,reason:Number.isFinite(requestedDelta)?'COMPACTION_NOT_NEEDED':'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],overflowedLineIds:[],bandLeft,bandRight,footerGuardTop}};
   }
-  if(delta>height*.72)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
+  if(Math.abs(delta)>height*.72)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
 
-  const overflowNeeded=contentBottomY-delta<movableFloor;
+  const overflowNeeded=delta>0&&contentBottomY-delta<movableFloor;
   const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[],overflowedLineIds:[]};
   const overflowBoundary=snapped.boundary;
   const overflowedBlockIds=snapped.overflowedBlockIds;
