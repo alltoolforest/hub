@@ -176,7 +176,8 @@ export function planInsertionReflow({
       if(!rect)continue;
       for(const metric of existingMetrics||[]){
         if(metric?.pageIndex!==block?.pageIndex)continue;
-        if(rect.top<=Number(metric.cutY)+.75)rect=shiftedRect(rect,-Math.max(0,Number(metric.delta)||0));
+        const delta=Number(metric?.delta)||0;
+        if(rect.top<=Number(metric.cutY)+.75&&Math.abs(delta)>.01)rect=shiftedRect(rect,-delta);
       }
       lines.push({block,line:blockLines[lineIndex],lineIndex,lineId,rect});
     }
@@ -239,5 +240,102 @@ export function planInsertionReflow({
     flowBlocks:flowLines,
     cascadePages:followingCascadePages(sourcePageIndex),
     confidence:footerGuard.confidence==='SEPARATED_STATIC_FOOTER'?'LINE_AWARE_STATIC_FOOTER_REFLOW':(footerGuard.confidence==='PREPARED_PAGE_FOOTER_GUARD'?'LINE_AWARE_STABLE_FOOTER_REFLOW':(footerGuard.enabled?'LINE_AWARE_TEXT_BAND_MARGIN_AND_FOOTER_SAFE_CUT':'LINE_AWARE_TEXT_BAND_AND_MARGIN_SAFE_CUT')),
+  };
+}
+
+function visibleReplacementLineCount(value){
+  const normalized=String(value??'').replace(/\r\n?/g,'\n');
+  if(!normalized.trim())return 0;
+  return normalized.split('\n').filter(line=>line.trim().length>0).length;
+}
+
+function medianPositive(values,fallback){
+  const list=(values||[]).filter(v=>Number.isFinite(v)&&v>0).sort((a,b)=>a-b);
+  if(!list.length)return fallback;
+  const middle=Math.floor(list.length/2);
+  return list.length%2?list[middle]:(list[middle-1]+list[middle])/2;
+}
+
+function replacementLineStep(block,size){
+  const lines=block?.lines||[];
+  const baselines=lines.map(line=>Number(line?.y)).filter(Number.isFinite).sort((a,b)=>b-a);
+  const gaps=[];
+  for(let i=1;i<baselines.length;i++){
+    const gap=baselines[i-1]-baselines[i];
+    if(gap>size*.55&&gap<size*3)gaps.push(gap);
+  }
+  if(gaps.length)return medianPositive(gaps,size*1.2);
+  const rect=rectOf(block);
+  if(rect&&lines.length>0)return Math.max(size,Math.min(size*1.65,rect.height/Math.max(1,lines.length)));
+  return size*1.2;
+}
+
+/**
+ * Plan the inverse of insertion reflow when an existing text block loses one
+ * or more visual lines. The plan only compacts content already below the edited
+ * block on the same source page. Original page breaks are never crossed here.
+ */
+export function planReplacementCompaction({
+  blocks=[],block=null,replacementUnicode='',pageWidth=595,pageHeight=842,pageRotation=0,existingMetrics=[],
+}={}){
+  if(!block)return {enabled:false,reason:'COMPACTION_BLOCK_MISSING'};
+  const rotation=((Number(pageRotation)||0)%360+360)%360;
+  if(rotation!==0)return {enabled:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED',pageRotation:rotation};
+
+  const lines=block?.lines?.length?block.lines:[];
+  const originalLineCount=Math.max(1,lines.length||String(block?.text||'').replace(/\r\n?/g,'\n').split('\n').filter(line=>line.trim()).length||1);
+  const replacementLineCount=Math.min(originalLineCount,visibleReplacementLineCount(replacementUnicode));
+  const removedLineCount=Math.max(0,originalLineCount-replacementLineCount);
+  if(!removedLineCount)return {enabled:false,reason:'NO_VERTICAL_SHRINK'};
+
+  const size=clamp(Number(lines[0]?.fontSize||block?.fontSize)||12,6,72);
+  let sourceRect=rectOf(block);
+  if(!sourceRect)return {enabled:false,reason:'COMPACTION_GEOMETRY_MISSING'};
+  for(const metric of existingMetrics||[]){
+    const delta=Number(metric?.delta)||0;
+    if(metric?.pageIndex===block?.pageIndex&&sourceRect.top<=Number(metric?.cutY)+.75&&Math.abs(delta)>.01)sourceRect=shiftedRect(sourceRect,-delta);
+  }
+
+  const pageRight=Math.max(sourceRect.right,Number(pageWidth)-Math.max(12,size));
+  const maxWidth=Math.max(sourceRect.width,Math.min(Number(pageWidth)-sourceRect.left-4,pageRight-sourceRect.left));
+  const base=planInsertionReflow({
+    blocks,
+    x:sourceRect.left,
+    y:sourceRect.bottom-size*.30,
+    maxWidth,
+    fontSize:size,
+    pageWidth,
+    pageHeight,
+    pageRotation:rotation,
+    existingMetrics,
+  });
+  if(!base.enabled)return {...base,mode:'VERTICAL_CONTENT_BAND_COMPACTION'};
+
+  const lineStep=replacementLineStep(block,size);
+  const desiredShrink=removedLineCount*lineStep;
+  let ceiling=sourceRect.top;
+  if(replacementLineCount>0&&lines.length){
+    const keptLine=lines[Math.min(replacementLineCount-1,lines.length-1)];
+    let keptRect=lineRectOf(block,keptLine);
+    if(keptRect){
+      for(const metric of existingMetrics||[]){
+        const delta=Number(metric?.delta)||0;
+        if(metric?.pageIndex===block?.pageIndex&&keptRect.top<=Number(metric?.cutY)+.75&&Math.abs(delta)>.01)keptRect=shiftedRect(keptRect,-delta);
+      }
+      ceiling=keptRect.bottom-Math.max(2,size*.22);
+    }
+  }
+  const safeShrink=Math.max(0,ceiling-Number(base.flowTopY));
+  const shrink=Math.min(desiredShrink,safeShrink,Number(pageHeight)*.35);
+  if(shrink<.5)return {...base,enabled:false,reason:'COMPACTION_CLEARANCE_INSUFFICIENT',mode:'VERTICAL_CONTENT_BAND_COMPACTION'};
+
+  return {
+    ...base,
+    enabled:true,
+    mode:'VERTICAL_CONTENT_BAND_COMPACTION',
+    requestedDelta:-shrink,
+    compaction:{originalLineCount,replacementLineCount,removedLineCount,lineStep,desiredShrink,shrink,ceiling},
+    cascadePages:[],
+    confidence:'LINE_AWARE_UPWARD_COMPACTION',
   };
 }
