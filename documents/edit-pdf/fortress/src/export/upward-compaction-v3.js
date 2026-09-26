@@ -95,10 +95,10 @@ function inferGeometry(lines,tx,{width,height,preferredPitch=null}){
   const bandRight=clamp(sourceWide||source.left<=width*.30?Math.max(relatedRight+pad,width-rightMargin):relatedRight+pad,bandLeft+60,width);
   if(bandRight-bandLeft<Math.max(100,width*.24))return {ok:false,reason:'COMPACTION_CONTENT_BAND_UNSAFE'};
 
-  // Collapse from the top edge of the deleted visual row. For Word/resume
-  // PDFs this lets a segmented row border and everything below it travel as
-  // one unit. A genuinely continuous table border still crosses this cut and
-  // is rejected by vectorSafety, so this does not weaken the fail-closed rule.
+  // Start close to the top edge of the deleted visual row. vectorSafety can
+  // snap this cut a few points upward to a real segmented vector boundary.
+  // That lets simple resume/table enclosures contract without allowing cuts
+  // through genuine internal table dividers.
   const cutPad=Math.max(.8,Math.min(2,fontSize*.10));
   const cutY=clamp(Math.max(nearest.top+cutPad,source.top),2,height-2);
   const maxSafeShift=Math.max(0,source.top-nearest.top+.5),shiftY=Math.min(pitch,maxSafeShift);
@@ -133,19 +133,51 @@ function preserveLinks(doc,replacement,info,links,shiftY){if(!info.raw)return;fo
 function crosses(bottom,top,y,tolerance=1){return Number.isFinite(y)&&bottom<y-tolerance&&top>y+tolerance;}
 async function vectorSafety(bytes,pageIndex,g){
   try{
-    const p=await loadPdfjs(),task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true}),pdf=await task.promise,page=await pdf.getPage(pageIndex+1),ops=await page.getOperatorList(),bad=[];
+    const p=await loadPdfjs(),task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true}),pdf=await task.promise,page=await pdf.getPage(pageIndex+1),ops=await page.getOperatorList(),shapes=[];
     for(let i=0;i<ops.fnArray.length;i++){
       if(ops.fnArray[i]!==p.OPS.constructPath)continue;const raw=ops.argsArray[i]?.[2];if(!raw)continue;
       const a=Number(raw[0]),b=Number(raw[1]),c=Number(raw[2]),d=Number(raw[3]);if(![a,b,c,d].every(Number.isFinite))continue;
       const x0=Math.min(a,c),x1=Math.max(a,c),y0=Math.min(b,d),y1=Math.max(b,d),w=x1-x0,h=y1-y0,hOverlap=overlap(x0,x1,g.bandLeft,g.bandRight),bandWidth=Math.max(1,g.bandRight-g.bandLeft);
       const vertical=w<=2.5&&h>=10&&((x0+x1)/2)>=g.bandLeft-1&&((x0+x1)/2)<=g.bandRight+1,horizontal=h<=2.5&&w>=12&&hOverlap>=8,cell=w>=8&&h>=6&&w<=bandWidth*.92&&h<=180&&hOverlap>=Math.min(8,w*.20);
-      // A horizontal rule wholly above or below the cut is safe: it will be
-      // embedded completely with that side. Refuse only if the cut actually
-      // passes through the rule; keep the existing strict checks for vertical
-      // borders and cell-like vector geometry.
-      if((vertical&&crosses(y0,y1,g.cutY))||(horizontal&&crosses(y0,y1,g.cutY,.05))||(cell&&g.cutY>y0+.35&&g.cutY<y1-.35)){bad.push({x0,x1,y0,y1});if(bad.length>=8)break;}
+      if(vertical||horizontal||cell)shapes.push({x0,x1,y0,y1,w,h,vertical,horizontal,cell});
     }
-    try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}return bad.length?{ok:false,reason:'STRUCTURED_VECTOR_REFLOW_UNSAFE',boundaries:bad}:{ok:true};
+    const badAt=(cutY)=>{
+      const bad=[];
+      for(const shape of shapes){
+        const {x0,x1,y0,y1,vertical,horizontal,cell}=shape;
+        if((vertical&&crosses(y0,y1,cutY))||(horizontal&&crosses(y0,y1,cutY,.05))||(cell&&cutY>y0+.35&&cutY<y1-.35)){
+          bad.push({x0,x1,y0,y1});if(bad.length>=8)break;
+        }
+      }
+      return bad;
+    };
+    const initialBad=badAt(g.cutY);
+    if(!initialBad.length){try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}return {ok:true};}
+
+    // Word-generated resumes often draw enclosure borders as adjacent thin
+    // vertical rectangles. The visual text top can land 2-3pt inside one of
+    // those rectangles even though a real segment boundary is immediately
+    // above it. Snap only upward, only a few points, and accept the snap only
+    // when every structured-vector crossing disappears. Internal table lines
+    // therefore remain fail-closed.
+    const snapDistance=Math.max(3,Math.min(8,g.fontSize*.58));
+    const lower=g.cutY-.25,upper=Math.min(g.cutY+snapDistance,g.source.top+snapDistance);
+    const candidates=[];
+    for(const shape of shapes){
+      if(!shape.vertical)continue;
+      for(const y of [shape.y0,shape.y1]){
+        if(y>=lower&&y<=upper&&y>g.nearest.top+.5)candidates.push(y);
+      }
+    }
+    candidates.sort((a,b)=>Math.abs(a-g.cutY)-Math.abs(b-g.cutY)||a-b);
+    let snappedCutY=null;
+    for(const y of candidates){
+      if(snappedCutY!==null&&Math.abs(y-snappedCutY)<.05)continue;
+      if(!badAt(y).length){snappedCutY=y;break;}
+    }
+    try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}
+    if(Number.isFinite(snappedCutY))return {ok:true,snappedCutY,boundarySnap:true,snapDelta:snappedCutY-g.cutY};
+    return {ok:false,reason:'STRUCTURED_VECTOR_REFLOW_UNSAFE',boundaries:initialBad};
   }catch(error){return {ok:false,reason:'VECTOR_REFLOW_PREFLIGHT_FAILED',error:String(error)};}
 }
 async function pageLines(bytes,pageIndex,fontSize){const p=await loadPdfjs(),task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true}),pdf=await task.promise;try{const page=await pdf.getPage(pageIndex+1),tc=await page.getTextContent();return lineGroups(tc.items,fontSize);}finally{try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}}}
@@ -157,11 +189,13 @@ async function compactOne(doc,tx,sequenceIndex,candidates){
   const page=doc.getPage(pageIndex),rotation=((page.getRotation().angle||0)%360+360)%360;if(rotation!==0)return {applied:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED'};
   const {width,height}=page.getSize(),annotations=inspectAnnotations(doc,page);if(!annotations.ok)return {applied:false,reason:annotations.reason};
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false})),lines=await pageLines(donorBytes,pageIndex,Math.max(6,Number(tx.block?.fontSize)||12)),preferredPitch=originalTransactionPitch(tx,candidates,width),g=inferGeometry(lines,tx,{width,height,preferredPitch});if(!g.ok)return {applied:false,reason:g.reason};
-  const links=validateLinks(annotations,g,height);if(!links.ok)return {applied:false,reason:links.reason};const vectors=await vectorSafety(donorBytes,pageIndex,g);if(!vectors.ok)return {applied:false,reason:vectors.reason,vectorSafety:vectors};
+  const vectors=await vectorSafety(donorBytes,pageIndex,g);if(!vectors.ok)return {applied:false,reason:vectors.reason,vectorSafety:vectors};
+  if(Number.isFinite(vectors.snappedCutY))g.cutY=vectors.snappedCutY;
+  const links=validateLinks(annotations,g,height);if(!links.ok)return {applied:false,reason:links.reason};
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false}),donor=donorDoc.getPage(pageIndex);
   const top=await embed(doc,donor,{left:0,bottom:g.cutY,right:width,top:height}),footer=g.footerGuardTop>.5?await embed(doc,donor,{left:0,bottom:0,right:width,top:g.footerGuardTop}):null,moving=await embed(doc,donor,{left:g.bandLeft,bottom:g.footerGuardTop,right:g.bandRight,top:g.cutY}),left=g.bandLeft>1?await embed(doc,donor,{left:0,bottom:g.footerGuardTop,right:g.bandLeft,top:g.cutY}):null,right=g.bandRight<width-1?await embed(doc,donor,{left:g.bandRight,bottom:g.footerGuardTop,right:width,top:g.cutY}):null;
   const replacement=doc.insertPage(pageIndex,[width,height]);draw(replacement,top,{x:0,y:g.cutY,width,height:height-g.cutY});draw(replacement,footer,{x:0,y:0,width,height:g.footerGuardTop});draw(replacement,left,{x:0,y:g.footerGuardTop,width:g.bandLeft,height:g.cutY-g.footerGuardTop});draw(replacement,right,{x:g.bandRight,y:g.footerGuardTop,width:width-g.bandRight,height:g.cutY-g.footerGuardTop});draw(replacement,moving,{x:g.bandLeft,y:g.footerGuardTop+g.shiftY,width:g.bandWidth,height:g.cutY-g.footerGuardTop});preserveLinks(doc,replacement,annotations,links.links,g.shiftY);doc.removePage(pageIndex+1);
-  return {applied:true,metric:{transactionId:tx.id,pageIndex,sequenceIndex,direction:'UP',mode:'SAME_PAGE_UPWARD_COMPACTION',cutY:g.cutY,shiftY:g.shiftY,linePitch:g.pitch,delta:0,footerGuardTop:g.footerGuardTop,bandLeft:g.bandLeft,bandRight:g.bandRight,bandWidth:g.bandWidth,preservedLinkCount:annotations.links.length,cascadedPageCount:0,appendedPageCount:0,overflowPageCount:0}};
+  return {applied:true,metric:{transactionId:tx.id,pageIndex,sequenceIndex,direction:'UP',mode:'SAME_PAGE_UPWARD_COMPACTION',cutY:g.cutY,shiftY:g.shiftY,linePitch:g.pitch,delta:0,footerGuardTop:g.footerGuardTop,bandLeft:g.bandLeft,bandRight:g.bandRight,bandWidth:g.bandWidth,preservedLinkCount:annotations.links.length,vectorBoundarySnap:!!vectors.boundarySnap,cutSnapDelta:Number(vectors.snapDelta)||0,cascadedPageCount:0,appendedPageCount:0,overflowPageCount:0}};
 }
 function checks(txs){return (txs||[]).map(tx=>tx?.kind==='INSERT_TEXT'?{kind:'insert',pageIndex:Number(tx.pageIndex),newText:String(tx.replacementUnicode||'').replace(/\n/g,' '),oldText:''}:{kind:'replace',pageIndex:Number(tx.pageIndex),newText:String(tx?.replacementUnicode||'').replace(/\n/g,' '),oldText:String(tx?.originalUnicode||'').replace(/\n/g,' ')}).filter(x=>Number.isInteger(x.pageIndex)&&x.pageIndex>=0);}
 
