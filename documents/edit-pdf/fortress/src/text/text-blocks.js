@@ -1,8 +1,12 @@
 import { clusterVisualRuns } from './spatial-clusterer.js';
 import { blockId } from '../utils/ids.js';
 
+function runWidth(run){
+  return Number.isFinite(run?.inkWidth)?run.inkWidth:(Number(run?.width)||0);
+}
+
 function inferJoin(prev,cur){
-  const right=prev.x+prev.width;
+  const right=prev.x+runWidth(prev);
   const gap=cur.x-right;
   const size=Math.max(prev.fontSize,cur.fontSize,1);
   if(/^\s/.test(cur.text)||/\s$/.test(prev.text))return '';
@@ -16,7 +20,7 @@ function finalizeLine(line){
     text+=line.runs[i].text;
   }
   const minX=Math.min(...line.runs.map(r=>r.x));
-  const maxX=Math.max(...line.runs.map(r=>r.x+r.width));
+  const maxX=Math.max(...line.runs.map(r=>r.x+runWidth(r)));
   const size=Math.max(...line.runs.map(r=>r.fontSize));
   const descent=Math.max(size*0.24,1.5);
   const ascent=Math.max(size*0.86,2);
