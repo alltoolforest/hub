@@ -18,49 +18,78 @@ function shiftBlockInPlace(block,dy){
   for(const line of block.lines||[]){
     if(Number.isFinite(line.y))line.y+=dy;
     if(line.bounds&&Number.isFinite(line.bounds.y))line.bounds.y+=dy;
-    for(const run of line.runs||[])if(Number.isFinite(run.y))run.y+=dy;
   }
 }
-function negativeMetrics(state){
+function cloneGeometryBlock(block){
+  return {
+    ...block,
+    bounds:block?.bounds?{...block.bounds}:block?.bounds,
+    lines:(block?.lines||[]).map(line=>({...line,bounds:line?.bounds?{...line.bounds}:line?.bounds})),
+  };
+}
+function pageMetrics(state){
   return (state?.reflowMetrics||[])
-    .filter(metric=>Number(metric?.pageIndex)===Number(state?.pageIndex)&&Number(metric?.delta)<-.01)
+    .filter(metric=>Number(metric?.pageIndex)===Number(state?.pageIndex)&&Math.abs(Number(metric?.delta)||0)>.01)
     .sort((a,b)=>(Number(a.sequenceIndex)||0)-(Number(b.sequenceIndex)||0));
+}
+function snapshotGeometry(analysis){
+  const map=new Map();
+  for(const block of analysis?.blocks||[]){
+    map.set(block.id,{
+      bounds:block.bounds?{...block.bounds}:null,
+      lines:(block.lines||[]).map(line=>({y:line.y,bounds:line.bounds?{...line.bounds}:null})),
+    });
+  }
+  return map;
+}
+function restoreGeometry(analysis,snapshot){
+  for(const block of analysis?.blocks||[]){
+    const saved=snapshot.get(block.id);if(!saved)continue;
+    if(saved.bounds&&block.bounds)Object.assign(block.bounds,saved.bounds);
+    for(let i=0;i<(block.lines||[]).length;i++){
+      const line=block.lines[i],savedLine=saved.lines[i];if(!savedLine)continue;
+      line.y=savedLine.y;
+      if(savedLine.bounds&&line.bounds)Object.assign(line.bounds,savedLine.bounds);
+    }
+  }
+}
+function applyMetricsToBlock(block,metrics,predicate=()=>true){
+  for(const metric of metrics){
+    if(!predicate(metric))continue;
+    const top=(block.bounds?.y||0)+(block.bounds?.height||0);
+    if(top<=Number(metric.cutY)+.75)shiftBlockInPlace(block,-Number(metric.delta||0));
+  }
+  return block;
+}
+function setHitRect(hit,rect){
+  const values={left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`};
+  for(const [key,value] of Object.entries(values))if(hit.style[key]!==value)hit.style[key]=value;
 }
 
 /**
  * Fortress historically positions hit regions using positive/downward reflow
- * metrics only. Until the native core is fully generalized, mirror negative
- * metrics into its in-memory analysis so clicks, Add Text planning, and the
- * visible hit boxes follow the compacted PDF preview.
+ * metrics only. Mirror negative metrics into the in-memory analysis for future
+ * planning, while positioning hit boxes from the complete signed metric set.
  */
 export function attachSmartLineInsertion(options){
   const {app,getEditor}=options||{};
   if(!app)throw new Error('Edit PDF app element is required');
   const base=attachV8(options);
-  let destroyed=false,raf=0,lastAnalysis=null,lastSignature='';
+  let destroyed=false,raf=0,lastAnalysis=null,snapshot=new Map();
 
   function applyUpwardGeometry(){
     if(destroyed)return;
     const state=getEditor?.()?.getState?.();
     const analysis=state?.analysis;
-    const metrics=negativeMetrics(state);
-    if(!analysis||!metrics.length)return;
-    const signature=metrics.map(m=>`${m.transactionId||''}:${Number(m.cutY).toFixed(2)}:${Number(m.delta).toFixed(2)}`).join('|');
+    if(!analysis)return;
+    const metrics=pageMetrics(state);
+    const negative=metrics.filter(metric=>Number(metric.delta)<0);
+    if(lastAnalysis!==analysis){lastAnalysis=analysis;snapshot=snapshotGeometry(analysis);}
 
-    // analyzePage creates fresh block objects on each render. Apply each metric
-    // once per analysis object, never cumulatively to the same geometry.
-    if(lastAnalysis!==analysis){lastAnalysis=analysis;lastSignature='';}
-    if(lastSignature!==signature){
-      for(const block of analysis.blocks||[]){
-        let dy=0;
-        for(const metric of metrics){
-          const top=(block.bounds?.y||0)+(block.bounds?.height||0)+dy;
-          if(top<=Number(metric.cutY)+.75)dy-=Number(metric.delta)||0;
-        }
-        shiftBlockInPlace(block,dy);
-      }
-      lastSignature=signature;
-    }
+    // Always restore the fresh/original geometry first so undo/redo and repeated
+    // render notifications cannot accumulate the same shift twice.
+    restoreGeometry(analysis,snapshot);
+    for(const block of analysis.blocks||[])applyMetricsToBlock(block,negative);
 
     const layer=app.querySelector('.pdf-hit-layer');
     const matrix=layer?.__matrix;
@@ -69,12 +98,15 @@ export function attachSmartLineInsertion(options){
     let cursor=0;
     for(const block of analysis.blocks||[]){
       if(!isEditable(block))continue;
-      const lines=block.lines?.length?block.lines:[{...block.bounds,minX:block.bounds?.x,maxX:(block.bounds?.x||0)+(block.bounds?.width||1),y:(block.bounds?.y||0)+(block.fontSize||12)*.3,fontSize:block.fontSize||12}];
+      // analysis already contains negative shifts. Apply positive metrics only
+      // to a display clone, because the native planner already accounts for
+      // positive metrics and must not see them twice.
+      const shown=applyMetricsToBlock(cloneGeometryBlock(block),metrics,metric=>Number(metric.delta)>0);
+      const lines=shown.lines?.length?shown.lines:[{...shown.bounds,minX:shown.bounds?.x,maxX:(shown.bounds?.x||0)+(shown.bounds?.width||1),y:(shown.bounds?.y||0)+(shown.fontSize||12)*.3,fontSize:shown.fontSize||12}];
       for(const line of lines){
         const hit=hits[cursor++];
         if(!hit)continue;
-        const rect=pdfRectToScreen(matrix,lineHitBounds(line,block));
-        Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
+        setHitRect(hit,pdfRectToScreen(matrix,lineHitBounds(line,shown)));
       }
     }
   }
@@ -83,7 +115,7 @@ export function attachSmartLineInsertion(options){
     raf=requestAnimationFrame(()=>{raf=0;applyUpwardGeometry();});
   }
   const observer=new MutationObserver(schedule);
-  observer.observe(app,{subtree:true,childList:true,attributes:true,attributeFilter:['style','hidden']});
+  observer.observe(app,{subtree:true,childList:true});
   app.addEventListener('pointerup',schedule,true);
   app.addEventListener('click',schedule,true);
   schedule();
