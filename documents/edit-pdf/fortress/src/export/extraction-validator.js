@@ -28,14 +28,19 @@ export async function validateExtraction(bytes,checks){
     const normalizedPage=normalizeText(text);
     const normalizedNew=normalizeText(c.newText);
     const replacementPresent=!normalizedNew||normalizedPage.includes(normalizedNew)||compactWhitespace(text).includes(compactWhitespace(c.newText));
-    const oldTextStillPresent=!!normalizeText(c.oldText)&&(normalizedPage.includes(normalizeText(c.oldText))||compactWhitespace(text).includes(compactWhitespace(c.oldText)));
+    const normalizedOld=normalizeText(c.oldText);
+    const oldTextStillPresent=!!normalizedOld&&(normalizedPage.includes(normalizedOld)||compactWhitespace(text).includes(compactWhitespace(c.oldText)));
+    const deletionRequested=(c.kind||'replace')==='replace'&&!normalizedNew&&!!normalizedOld;
+    const deletionVerified=!deletionRequested||!oldTextStillPresent;
     results.push({
       kind:c.kind||'replace',
       pageIndex:c.pageIndex,
       replacementPresent,
       oldTextStillPresent,
+      deletionRequested,
+      deletionVerified,
       text,
     });
   }
-  return {ok:results.every(r=>r.replacementPresent),results};
+  return {ok:results.every(r=>r.replacementPresent&&r.deletionVerified),results};
 }
