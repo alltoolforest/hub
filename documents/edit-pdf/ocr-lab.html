@@ -38,11 +38,23 @@ let editor=null,downloadUrl=null;
 await configureWorkerSrc(new URL('./fortress/vendor/pdf.worker.compat.mjs',location.href).href);
 function setStatus(message=''){status.textContent=message;}
 function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downloadUrl=null;}downloads.replaceChildren();}
-function reset(){clearDownload();try{editor?.destroy();}catch{}editor=null;app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setStatus('');}
+async function destroyCurrentEditor(){
+  const current=editor;editor=null;
+  if(!current)return;
+  try{await current.destroy?.();}catch(error){console.warn('OCR editor cleanup failed:',error);}
+}
+async function reset(){
+  clearDownload();
+  await destroyCurrentEditor();
+  app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setStatus('');
+}
 
 input.addEventListener('change',async()=>{
   const file=input.files?.[0];if(!file)return;
-  clearDownload();setStatus('Checking PDF structure…');
+  clearDownload();
+  await destroyCurrentEditor();
+  app.replaceChildren();
+  setStatus('Checking PDF structure…');
   try{
     const classification=await classifyPdfForEditing(file);
     if(classification.kind!=='scanned')throw new Error(`OCR Lab only accepts scan-dominant PDFs. Detected: ${classification.kind}.`);
@@ -52,15 +64,15 @@ input.addEventListener('change',async()=>{
       onStatus:setStatus,
       onWarning:w=>setStatus(w?.message||w?.code||'OCR edit refused safely.'),
       onError:e=>setStatus(e?.message||'OCR editing failed safely.'),
-      onClose:reset,
+      onClose:()=>{reset().catch(console.error);},
       onExport:({blob,filename})=>{
         clearDownload();downloadUrl=URL.createObjectURL(blob);const a=document.createElement('a');a.href=downloadUrl;a.download=filename||'edited-scan.pdf';a.className='button primary';a.textContent='Download edited scanned PDF';downloads.append(a);a.click();
       },
     });
     await editor.open(file);
-  }catch(error){console.error(error);reset();setStatus(error?.message||'Could not open this scan safely.');}
+  }catch(error){console.error(error);await reset();setStatus(error?.message||'Could not open this scan safely.');}
 });
-window.addEventListener('pagehide',()=>{clearDownload();try{editor?.destroy();}catch{}},{once:true});
+window.addEventListener('pagehide',()=>{clearDownload();destroyCurrentEditor().catch(()=>{});},{once:true});
 </script>
 </body>
 </html>
