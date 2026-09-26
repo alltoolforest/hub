@@ -140,7 +140,8 @@ export function createHybridPdfEditor({
   }
 
   function nativeSettledFor(targetIndex){
-    if(!nativeEngine||nativeEngine.getState?.().pageIndex!==targetIndex)return false;
+    const state=nativeEngine?.getState?.();
+    if(!state||state.pageIndex!==targetIndex||state.analysis?.pageIndex!==targetIndex)return false;
     const status=nativeHost.querySelector('.pdf-fortress-status')?.textContent||'';
     return !NATIVE_BUSY_RE.test(status);
   }
@@ -194,26 +195,30 @@ export function createHybridPdfEditor({
     if(!page||page.route!=='ocr')throw new Error('Requested page is not routed to OCR.');
     const pageBytes=page.ocrBytes||await extractSinglePage(sourceBytes,pageIndex);
     const pageFile=makePdfFile(pageBytes,`${sourceName.replace(/\.pdf$/i,'')}-page-${pageIndex+1}.pdf`);
-    let captured=null;
     activeOcrPageIndex=pageIndex;
-    activeOcrEditor=createScannedPdfEditor({
+    const openingEditor=createScannedPdfEditor({
       container:ocrHost,
       allowGroupedEditing:false,
       onStatus:message=>{if(activeOcrPageIndex===pageIndex)setStatus(message||'');},
       onWarning:warning=>onWarning(warning),
       onError:error=>onError(error),
       onExport:result=>{
-        captured=result;
         const capture=pages[pageIndex]?.ocrCapture;
         if(typeof capture==='function')capture(result);
       },
       onClose:()=>{},
     });
-    await activeOcrEditor.open(pageFile);
-    // Retain capture through the editor callback closure; persistence installs a
-    // one-shot page capture before invoking save().
-    pages[pageIndex].lastOcrCapture=()=>captured;
-    hideOcrManagedControls(ocrHost);
+    activeOcrEditor=openingEditor;
+    try{
+      await openingEditor.open(pageFile);
+      if(activeOcrEditor!==openingEditor)throw new Error('OCR page session was replaced while opening.');
+      hideOcrManagedControls(ocrHost);
+    }catch(error){
+      if(activeOcrEditor===openingEditor){activeOcrEditor=null;activeOcrPageIndex=null;}
+      try{await openingEditor.destroy?.();}catch(cleanupError){console.warn('Failed OCR page cleanup:',cleanupError);}
+      ocrHost.replaceChildren();
+      throw error;
+    }
   }
 
   async function activatePage(pageIndex,{skipOcrFlush=false}={}){
