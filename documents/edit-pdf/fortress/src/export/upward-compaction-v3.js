@@ -95,7 +95,12 @@ function inferGeometry(lines,tx,{width,height,preferredPitch=null}){
   const bandRight=clamp(sourceWide||source.left<=width*.30?Math.max(relatedRight+pad,width-rightMargin):relatedRight+pad,bandLeft+60,width);
   if(bandRight-bandLeft<Math.max(100,width*.24))return {ok:false,reason:'COMPACTION_CONTENT_BAND_UNSAFE'};
 
-  const cutPad=Math.max(.8,Math.min(2,fontSize*.10)),cutY=clamp(nearest.top+cutPad,2,height-2);
+  // Prefer the released source-line boundary over the top of the next text
+  // line. In Word/resume PDFs this keeps the cut in the real inter-row gap,
+  // so complete table/list regions below can move as a unit instead of being
+  // sliced through their vertical borders.
+  const cutPad=Math.max(.8,Math.min(2,fontSize*.10));
+  const cutY=clamp(Math.max(nearest.top+cutPad,source.bottom-cutPad),2,height-2);
   const maxSafeShift=Math.max(0,source.top-nearest.top+.5),shiftY=Math.min(pitch,maxSafeShift);
   if(shiftY<Math.max(2,fontSize*.35))return {ok:false,reason:'COMPACTION_RELEASED_SPACE_TOO_SMALL'};
   if(shiftY>height*.18)return {ok:false,reason:'COMPACTION_SHIFT_TOO_LARGE'};
@@ -134,7 +139,11 @@ async function vectorSafety(bytes,pageIndex,g){
       const a=Number(raw[0]),b=Number(raw[1]),c=Number(raw[2]),d=Number(raw[3]);if(![a,b,c,d].every(Number.isFinite))continue;
       const x0=Math.min(a,c),x1=Math.max(a,c),y0=Math.min(b,d),y1=Math.max(b,d),w=x1-x0,h=y1-y0,hOverlap=overlap(x0,x1,g.bandLeft,g.bandRight),bandWidth=Math.max(1,g.bandRight-g.bandLeft);
       const vertical=w<=2.5&&h>=10&&((x0+x1)/2)>=g.bandLeft-1&&((x0+x1)/2)<=g.bandRight+1,horizontal=h<=2.5&&w>=12&&hOverlap>=8,cell=w>=8&&h>=6&&w<=bandWidth*.92&&h<=180&&hOverlap>=Math.min(8,w*.20);
-      if((vertical&&crosses(y0,y1,g.cutY))||(horizontal&&Math.abs((y0+y1)/2-g.cutY)<=1.25)||(cell&&g.cutY>y0+.35&&g.cutY<y1-.35)){bad.push({x0,x1,y0,y1});if(bad.length>=8)break;}
+      // A horizontal rule wholly above or below the cut is safe: it will be
+      // embedded completely with that side. Refuse only if the cut actually
+      // passes through the rule; keep the existing strict checks for vertical
+      // borders and cell-like vector geometry.
+      if((vertical&&crosses(y0,y1,g.cutY))||(horizontal&&crosses(y0,y1,g.cutY,.05))||(cell&&g.cutY>y0+.35&&g.cutY<y1-.35)){bad.push({x0,x1,y0,y1});if(bad.length>=8)break;}
     }
     try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}return bad.length?{ok:false,reason:'STRUCTURED_VECTOR_REFLOW_UNSAFE',boundaries:bad}:{ok:true};
   }catch(error){return {ok:false,reason:'VECTOR_REFLOW_PREFLIGHT_FAILED',error:String(error)};}
