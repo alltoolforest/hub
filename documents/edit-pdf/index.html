@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Edit PDF | AllToolForest</title>
-  <meta name="description" content="Edit existing PDF text, add new text or paragraphs, and save a new PDF copy in your browser.">
+  <meta name="description" content="Edit existing PDF text, add new text or paragraphs, edit scanned pages with OCR, and save one new PDF copy in your browser.">
   <meta name="theme-color" content="#145940">
   <meta property="og:title" content="Edit PDF | AllToolForest">
-  <meta property="og:description" content="Edit existing PDF text, add new text, and save a new PDF copy.">
+  <meta property="og:description" content="Edit native PDF text and scanned pages in one browser-based PDF editor.">
   <meta property="og:type" content="website">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%200%2064%2064%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23145940%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2243%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2231%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%3EAF%3C%2Ftext%3E%3C%2Fsvg%3E">
   <link rel="manifest" href="../../site.webmanifest">
@@ -26,7 +26,12 @@
     .fortress-integration-status{margin:.8rem 0 0;color:var(--muted,#667085);font-size:.9rem}
     .fortress-downloads{margin-top:12px}
     .fortress-downloads a{display:inline-flex}
-    @media(max-width:700px){.fortress-shell,.fortress-picker,#fortress-app{min-height:560px}.fortress-picker{padding:18px}#fortress-app{height:calc(100svh - 84px)}}
+    .hybrid-pdf-editor{height:100%;display:flex;flex-direction:column;min-height:0;background:var(--surface,#fff)}
+    .hybrid-toolbar{flex:0 0 auto;border-bottom:1px solid var(--line,#e5e7eb)}
+    .hybrid-native-host,.hybrid-ocr-host{flex:1 1 auto;min-height:0;height:100%;overflow:auto}
+    .hybrid-native-host[hidden],.hybrid-ocr-host[hidden]{display:none!important}
+    .hybrid-page-label{font-weight:600;white-space:nowrap}
+    @media(max-width:700px){.fortress-shell,.fortress-picker,#fortress-app{min-height:560px}.fortress-picker{padding:18px}#fortress-app{height:calc(100svh - 84px)}.hybrid-toolbar{gap:6px;flex-wrap:wrap}.hybrid-page-label{order:-1;width:100%;text-align:center}}
   </style>
 </head>
 <body>
@@ -34,28 +39,27 @@
 <header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a href="../../work/">Work</a><a class="active" href="../../documents/">Documents</a><a href="../../images/">Images</a><a href="../../calculators/">Calculators</a></nav><span class="header-note"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6"/></svg>No account needed</span></div></header>
 <main class="container" id="main">
   <div class="breadcrumb"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>Edit PDF</div>
-  <section class="page-intro"><h1>Edit PDF</h1><p>Open a PDF, edit native text or scanned text detected with OCR, add new text where supported, then save a new PDF copy.</p></section>
+  <section class="page-intro"><h1>Edit PDF</h1><p>Open one PDF and edit native text or scanned pages with OCR. Each page is routed to the safest editor automatically, then saved back into one PDF copy.</p></section>
   <div class="tool-layout">
     <section class="workspace fortress-shell" aria-label="Edit PDF workspace">
       <div id="fortress-picker" class="fortress-picker">
         <h2>Open a PDF to edit</h2>
-        <p>Select a PDF from your device. Processing stays in this browser. Click existing text to replace it, or use Add text to place a new paragraph.</p>
+        <p>Select a PDF from your device. Processing stays in this browser. Native pages keep direct PDF editing; image-only scanned pages use OCR inside the same document session.</p>
         <input id="fortress-file" type="file" accept="application/pdf,.pdf" aria-label="Open a PDF to edit">
-        <small>Text-based PDFs use the native editor. Scan-dominant PDFs are detected automatically and use the isolated OCR editor.</small>
+        <small>Mixed PDFs are handled page by page. Uncertain pages stay on the conservative native path rather than being rasterized.</small>
       </div>
       <div id="fortress-app" hidden></div>
     </section>
-    <aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing for this editor happens in your browser. Your document is not uploaded to an AllToolForest server.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>How to edit</h2><p><strong>Existing text:</strong> click or tap the text, type the replacement, then press Done.</p><p><strong>Font size:</strong> the exact detected size is preserved, including decimal sizes such as 12.5 pt. Type a size directly or use − / + for 0.5 pt adjustments.</p><p><strong>New paragraph:</strong> choose Add text, select the font size/style, click where the paragraph should start, type, then press Done.</p><p>When finished, use Save a copy to validate and download the edited PDF.</p><div id="fortress-downloads" class="fortress-downloads"></div><p id="fortress-integration-status" class="fortress-integration-status" role="status" aria-live="polite"></p></aside>
+    <aside class="side-note"><h2>Your work stays yours.</h2><p>PDF processing for this editor happens in your browser. Your document is not uploaded to an AllToolForest server.</p><a href="../../privacy/">How your data is handled ↗</a><hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h2>How to edit</h2><p><strong>Native page:</strong> click or tap existing text to replace it, or choose Add text for a new paragraph.</p><p><strong>Scanned page:</strong> choose Run OCR, then click a recognized word to replace or remove it safely.</p><p><strong>Font size:</strong> native text preserves the detected size, including decimal sizes such as 12.5 pt. Type a size directly or use − / + for 0.5 pt adjustments.</p><p>When finished, use Save a copy. Native edits and OCR patches are validated and combined into one new PDF.</p><div id="fortress-downloads" class="fortress-downloads"></div><p id="fortress-integration-status" class="fortress-integration-status" role="status" aria-live="polite"></p></aside>
   </div>
 </main>
 <footer class="site-footer"><span>© 2026 AllToolForest · Made for everyday work.</span><div class="footer-links"><a href="../../about/">About</a><a href="../../privacy/">Privacy</a><a href="../../request/">Request a tool</a></div></footer>
 <script type="module">
-import {createAdvancedPdfTextEngine,configurePdfWorker} from './fortress/src/main.js';
+import {configurePdfWorker} from './fortress/src/main.js';
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 import {attachInsertAnchorBridge} from './fortress/src/insert-anchor-bridge.js';
 import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v8.js';
-import {choosePdfEditorRoute} from './ocr/editor-router.js';
-import {createScannedPdfEditor} from './ocr/scan-editor.js';
+import {createHybridPdfEditor} from './ocr/hybrid-editor.js';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
@@ -67,17 +71,17 @@ let downloadUrl=null;
 
 function setIntegrationStatus(message=''){integrationStatus.textContent=message;}
 function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downloadUrl=null;}downloads.replaceChildren();}
-function showPicker(){clearDownload();app.hidden=true;picker.hidden=false;input.value='';setIntegrationStatus('');editor=null;}
+function showPickerUi(){clearDownload();app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setIntegrationStatus('');}
+async function destroyCurrentEditor(){
+  const current=editor;editor=null;
+  if(!current)return;
+  try{await current.destroy?.();}catch(error){console.warn('Edit PDF cleanup failed:',error);}
+}
 
 await configurePdfWorker(new URL('./fortress/vendor/pdf.worker.compat.mjs',location.href).href);
 const precisionFontSize=attachPrecisionFontSize({app,getEditor:()=>editor});
 const insertAnchorBridge=attachInsertAnchorBridge({app,getEditor:()=>editor});
 const smartLineInsertion=attachSmartLineInsertion({app,getEditor:()=>editor});
-
-const closeObserver=new MutationObserver(()=>{
-  if(!app.hidden && app.childElementCount===0) showPicker();
-});
-closeObserver.observe(app,{childList:true});
 
 function handleExport({blob,filename}){
   clearDownload();
@@ -95,46 +99,34 @@ input.addEventListener('change',async()=>{
   const file=input.files?.[0];
   if(!file)return;
   clearDownload();
-  setIntegrationStatus('Checking PDF structure…');
+  await destroyCurrentEditor();
+  app.replaceChildren();
+  picker.hidden=true;
+  app.hidden=false;
+  setIntegrationStatus('Starting hybrid PDF analysis…');
   try{
-    const route=await choosePdfEditorRoute(file);
-    picker.hidden=true;
-    app.hidden=false;
-
-    if(route.mode==='ocr'){
-      setIntegrationStatus('Scanned PDF detected. Opening OCR editor…');
-      editor=createScannedPdfEditor({
-        container:app,
-        allowGroupedEditing:false,
-        onStatus:message=>setIntegrationStatus(message||''),
-        onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This scanned text cannot be edited safely.'),
-        onError:error=>setIntegrationStatus(error?.message||'The scanned PDF could not be edited safely.'),
-        onExport:handleExport,
-        onClose:showPicker,
-      });
-      await editor.open(file);
-      return;
-    }
-
-    if(route.classifierError)console.warn('PDF classification failed; preserving the native editor route.',route.classifierError);
-    setIntegrationStatus('Opening PDF…');
-    await smartLineInsertion.prepareDocument(file);
-    editor=createAdvancedPdfTextEngine({
+    editor=createHybridPdfEditor({
       container:app,
+      prepareNativeDocument:fileOrBytes=>smartLineInsertion.prepareDocument(fileOrBytes),
       onStatus:message=>setIntegrationStatus(message||''),
-      onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This text cannot be edited safely.'),
+      onWarning:warning=>setIntegrationStatus(warning?.message||warning?.code||'This PDF change cannot be made safely.'),
       onError:error=>setIntegrationStatus(error?.message||'The PDF could not be edited safely.'),
       onExport:handleExport,
+      onClose:()=>{editor=null;showPickerUi();},
     });
     await editor.open(file);
   }catch(error){
     console.error(error);
-    try{await editor?.destroy?.();}catch{}
-    showPicker();
+    await destroyCurrentEditor();
+    showPickerUi();
     setIntegrationStatus(error?.message||'Could not open this PDF safely.');
   }
 });
-window.addEventListener('pagehide',()=>{clearDownload();smartLineInsertion.destroy();insertAnchorBridge.destroy();precisionFontSize.destroy();try{editor?.destroy();}catch{}},{once:true});
+window.addEventListener('pagehide',()=>{
+  clearDownload();
+  destroyCurrentEditor().catch(()=>{});
+  smartLineInsertion.destroy();insertAnchorBridge.destroy();precisionFontSize.destroy();
+},{once:true});
 </script>
 </body>
 </html>
