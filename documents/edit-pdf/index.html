@@ -54,11 +54,14 @@
   </div>
 </main>
 <footer class="site-footer"><span>© 2026 AllToolForest · Made for everyday work.</span><div class="footer-links"><a href="../../about/">About</a><a href="../../privacy/">Privacy</a><a href="../../request/">Request a tool</a></div></footer>
+<script type="importmap">
+{"imports":{"./fortress/src/export/exporter.js":"./fortress/src/export/exporter-upward.js"}}
+</script>
 <script type="module">
 import {configurePdfWorker} from './fortress/src/main.js';
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 import {attachInsertAnchorBridge} from './fortress/src/insert-anchor-bridge.js';
-import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v8.js';
+import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v9.js';
 import {createHybridPdfEditor} from './ocr/hybrid-editor.js';
 
 const picker=document.querySelector('#fortress-picker');
