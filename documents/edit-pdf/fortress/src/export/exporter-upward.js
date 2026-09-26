@@ -125,6 +125,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
 
   const conflict=compactionConflict(txs,candidates);
   if(conflict)throw conflict;
+  const deletedBlockIds=new Set(candidates.map(tx=>tx?.block?.id||tx?.blockId).filter(Boolean));
 
   // Let the proven exporter perform all text/operator mutations first. We
   // validate only after the inverse-layout pass so the user never receives an
@@ -153,7 +154,8 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
         continue;
       }
 
-      const flowBlocks=relatedFlowBlocks(blocks.filter(block=>block.id!==sourceBlock.id),sourceBlock);
+      const spacingBlocks=relatedFlowBlocks(blocks.filter(block=>block.id!==sourceBlock.id),sourceBlock);
+      const flowBlocks=spacingBlocks.filter(block=>!deletedBlockIds.has(block.id));
       let plan=planReplacementCompaction({
         blocks:flowBlocks,
         block:sourceBlock,
@@ -163,7 +165,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
         pageRotation:info.rotation,
         existingMetrics:metricForPage(reflowMetrics,pageIndex),
       });
-      plan=refineSingleLineShrink(plan,sourceBlock,flowBlocks,info.height);
+      plan=refineSingleLineShrink(plan,sourceBlock,spacingBlocks,info.height);
       if(!plan?.enabled){
         warnings.push({code:'UPWARD_REFLOW_REFUSED',pageIndex,transactionId:tx.id,reason:plan?.reason||'COMPACTION_UNAVAILABLE'});
         continue;
