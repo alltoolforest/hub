@@ -1,0 +1,359 @@
+import { PDFDocument, StandardFonts, degrees, rgb } from '../core/pdf-lib.js';
+import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream } from '../core/document-model.js';
+import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
+import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
+import { validateReplacementLayout } from '../editing/collision-detector.js';
+import { validateRoundTrip } from './roundtrip-validator.js';
+import { applyVerticalRegionReflow } from './page-reflow.js';
+
+function sourceBucket(map,pageIndex,run){
+  const sourceKind=run?.sourceKind==='form'?'form':'page';
+  if(sourceKind==='form'){
+    const formRefKey=run?.formRefKey||run?.streamRef;
+    const formResourceName=run?.formResourceName;
+    if(!formRefKey||!formResourceName)throw Object.assign(new Error('Form XObject source metadata is incomplete.'),{code:'FORM_SOURCE_METADATA_MISSING'});
+    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}`;
+    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,edits:[]});
+    return map.get(key);
+  }
+  const streamIndex=Number(run?.streamIndex);
+  if(!Number.isInteger(streamIndex))throw Object.assign(new Error('Page source stream metadata is incomplete.'),{code:'SOURCE_STREAM_METADATA_MISSING'});
+  const key=`page:${pageIndex}:${streamIndex}`;
+  if(!map.has(key))map.set(key,{sourceKind:'page',pageIndex,streamIndex,edits:[]});
+  return map.get(key);
+}
+
+function standardFontForChoice(family,bold=false,italic=false){
+  if(family==='mono'){
+    if(bold&&italic)return StandardFonts.CourierBoldOblique;
+    if(bold)return StandardFonts.CourierBold;
+    if(italic)return StandardFonts.CourierOblique;
+    return StandardFonts.Courier;
+  }
+  if(family==='sans'){
+    if(bold&&italic)return StandardFonts.HelveticaBoldOblique;
+    if(bold)return StandardFonts.HelveticaBold;
+    if(italic)return StandardFonts.HelveticaOblique;
+    return StandardFonts.Helvetica;
+  }
+  if(bold&&italic)return StandardFonts.TimesRomanBoldItalic;
+  if(bold)return StandardFonts.TimesRomanBold;
+  if(italic)return StandardFonts.TimesRomanItalic;
+  return StandardFonts.TimesRoman;
+}
+
+function standardFontForBlock(block,tx=null){
+  if(tx?.styleChanged){
+    return standardFontForChoice(tx.fontFamily||'serif',!!tx.bold,!!tx.italic);
+  }
+  const raw=[block.fontName,block.lines?.[0]?.fontName,block.sourceRuns?.[0]?.fontContext?.baseFont].filter(Boolean).join(' ').toLowerCase();
+  const bold=/bold|black|semibold|demi/.test(raw);
+  const italic=/italic|oblique/.test(raw);
+  if(/courier|mono/.test(raw))return standardFontForChoice('mono',bold,italic);
+  if(/times|serif|roman/.test(raw))return standardFontForChoice('serif',bold,italic);
+  return standardFontForChoice('sans',bold,italic);
+}
+
+function standardFontForInsert(tx){
+  return standardFontForChoice(tx.fontFamily||'serif',!!tx.bold,!!tx.italic);
+}
+
+async function getEmbeddedStandardFont(doc,cache,name){
+  if(!cache.has(name))cache.set(name,await doc.embedFont(name));
+  return cache.get(name);
+}
+
+async function drawReconstructedText(doc,item,fontCache,warnings){
+  const {tx,block}=item;
+  const page=doc.getPage(tx.pageIndex);
+  const pageSize=page.getSize();
+  const fontName=standardFontForBlock(block,tx);
+  const font=await getEmbeddedStandardFont(doc,fontCache,fontName);
+  const outputLines=String(tx.replacementUnicode).split('\n');
+  for(let i=0;i<outputLines.length;i++){
+    const text=outputLines[i];
+    if(!text)continue;
+    try{font.encodeText(text);}catch(error){
+      throw Object.assign(new Error('Replacement contains characters unavailable in the selected PDF font.'),{code:'RECONSTRUCT_FONT_UNSUPPORTED',cause:error});
+    }
+    const line=block.lines?.[i]||block.lines?.at(-1);
+    if(!line)throw Object.assign(new Error('Missing visual line geometry for reconstructed text.'),{code:'RECONSTRUCT_GEOMETRY_MISSING'});
+    const originalSize=Math.max(1,line.fontSize||block.fontSize||12);
+    const minX=Number.isFinite(line.minX)?line.minX:(block.bounds?.x??0);
+    const maxX=Number.isFinite(line.maxX)?line.maxX:(minX+(block.bounds?.width??1));
+    const targetWidth=Math.max(1,maxX-minX);
+    let size=tx.styleChanged&&Number.isFinite(Number(tx.fontSize))?Math.max(6,Math.min(72,Number(tx.fontSize))):originalSize;
+    let width=font.widthOfTextAtSize(text,size);
+
+    if(tx.styleChanged){
+      const pageAvailable=Math.max(1,pageSize.width-minX-4);
+      if(width>pageAvailable){
+        throw Object.assign(new Error('The selected font size makes this text extend beyond the page.'),{code:'LAYOUT_COLLISION'});
+      }
+      if(width>targetWidth*1.18){
+        throw Object.assign(new Error('Formatted text would extend beyond the mapped text region.'),{code:'LAYOUT_COLLISION'});
+      }
+      if(width>targetWidth*1.04){
+        warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is slightly wider than the original text region.'});
+      }
+    }else{
+      if(width>targetWidth*1.04){
+        size=Math.max(6,size*(targetWidth/Math.max(width,1)));
+        width=font.widthOfTextAtSize(text,size);
+      }
+      if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
+    }
+
+    const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
+    const angle=line.runs?.[0]?.angle||0;
+    page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
+  }
+  warnings.push({code:tx.styleChanged?'STYLE_APPLIED':'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:tx.styleChanged?'Selected font formatting was written into the PDF.':'Replacement was reconstructed with a safe standard PDF font.'});
+}
+
+function splitLongWord(word,font,size,maxWidth){
+  const out=[];
+  let current='';
+  for(const ch of Array.from(word)){
+    const next=current+ch;
+    if(current&&font.widthOfTextAtSize(next,size)>maxWidth){out.push(current);current=ch;}
+    else current=next;
+  }
+  if(current)out.push(current);
+  return out;
+}
+
+function wrapParagraph(text,font,size,maxWidth){
+  const wrapped=[];
+  const sourceLines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+  for(const source of sourceLines){
+    if(!source.trim()){wrapped.push('');continue;}
+    const words=source.trim().split(/\s+/);
+    let line='';
+    for(const originalWord of words){
+      const pieces=font.widthOfTextAtSize(originalWord,size)>maxWidth?splitLongWord(originalWord,font,size,maxWidth):[originalWord];
+      for(const word of pieces){
+        const candidate=line?`${line} ${word}`:word;
+        if(line&&font.widthOfTextAtSize(candidate,size)>maxWidth){wrapped.push(line);line=word;}
+        else line=candidate;
+      }
+    }
+    if(line)wrapped.push(line);
+  }
+  return wrapped.length?wrapped:[''];
+}
+
+async function prepareInsertedText(doc,tx,fontCache){
+  const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'INSERT_PAGE_MISSING'});
+  const pageSize=page.getSize();
+  const x=Number(tx.x),y=Number(tx.y);
+  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>pageSize.width||y<0||y>pageSize.height){
+    throw Object.assign(new Error('New text position is outside the page.'),{code:'INSERT_POSITION_INVALID'});
+  }
+  const fontName=standardFontForInsert(tx);
+  const font=await getEmbeddedStandardFont(doc,fontCache,fontName);
+  const size=Math.max(6,Math.min(72,Number(tx.fontSize)||12));
+  const lineHeight=Math.max(size,Number(tx.lineHeight)||size*1.2);
+  const availableWidth=Math.max(40,Math.min(Number(tx.maxWidth)||300,pageSize.width-x-8));
+  const lines=wrapParagraph(tx.replacementUnicode,font,size,availableWidth);
+  for(const text of lines){
+    if(!text)continue;
+    try{font.encodeText(text);}catch(error){
+      throw Object.assign(new Error('New text contains characters unavailable in the selected PDF font.'),{code:'INSERT_FONT_UNSUPPORTED',cause:error});
+    }
+  }
+  const bottomY=y-(Math.max(0,lines.length-1)*lineHeight)-size*.28;
+  return {pageSize,font,fontName,size,lineHeight,availableWidth,lines,bottomY};
+}
+
+function validateInsertedDesignRegion(tx,layout){
+  const guardTop=Number(tx?.reflowPlan?.footerGuard?.top);
+  if(!Number.isFinite(guardTop))return;
+  const guardGap=Math.max(2,Number(tx?.reflowPlan?.safetyGap)||4);
+  if(Number(layout?.bottomY)<guardTop+guardGap){
+    throw Object.assign(new Error('New text would enter a protected footer or design region.'),{code:'INSERT_DESIGN_REGION_UNSAFE'});
+  }
+}
+
+function drawInsertedLayout(doc,tx,layout,warnings){
+  const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'INSERT_PAGE_MISSING'});
+  if(layout.bottomY<-layout.size){
+    throw Object.assign(new Error('The new paragraph extends below the page.'),{code:'INSERT_TEXT_OVERFLOW'});
+  }
+  for(let i=0;i<layout.lines.length;i++){
+    const text=layout.lines[i];
+    if(!text)continue;
+    page.drawText(text,{x:Number(tx.x),y:Number(tx.y)-i*layout.lineHeight,size:layout.size,font:layout.font,color:rgb(0,0,0)});
+  }
+  tx._renderedLineCount=layout.lines.length;
+  tx._renderedWidth=layout.availableWidth;
+  warnings.push({code:'TEXT_INSERTED',pageIndex:tx.pageIndex,transactionId:tx.id,lineCount:layout.lines.length});
+}
+
+function neutralizeSourceLines(byStream,tx,sourceLines){
+  for(const seq of sourceLines){
+    for(const run of seq||[]){
+      const n=buildNeutralizerForSourceRun(run);
+      if(!n.success)throw Object.assign(new Error(`Cannot neutralize source text safely: ${n.reason}`),{code:n.reason});
+      sourceBucket(byStream,tx.pageIndex,run).edits.push({start:n.start,end:n.end,replacement:n.replacement});
+    }
+  }
+}
+
+function planDirectReplacement(block,replacementUnicode){
+  const outputLines=String(replacementUnicode).split('\n');
+  const sourceLines=block.sourceLines||[];
+  if(outputLines.length>sourceLines.length)return {success:false,reason:'TEXT_OVERFLOW'};
+  const layout=validateReplacementLayout(block,replacementUnicode);
+  if(!layout.ok)return {success:false,reason:layout.reason,layout};
+  const replacements=[];
+  for(let lineIndex=0;lineIndex<sourceLines.length;lineIndex++){
+    const seq=sourceLines[lineIndex];
+    if(!seq?.length)continue;
+    if(lineIndex>=outputLines.length)return {success:false,reason:'RECONSTRUCT_EMPTY_TRAILING_LINE'};
+    const r=buildReplacementForSourceLine(seq,outputLines[lineIndex]);
+    if(!r.success)return {success:false,reason:r.reason,unsupportedCharacters:r.unsupportedCharacters};
+    replacements.push({...r,sourceRun:seq[0]});
+  }
+  return {success:true,replacements,layout};
+}
+
+function finalSourcePageIndex(sourcePageIndex,overflowCounts){
+  let shift=0;
+  for(const [page,count] of overflowCounts){
+    if(page<sourcePageIndex)shift+=count;
+  }
+  return sourcePageIndex+shift;
+}
+
+export async function exportEditedPdf(originalBytes,transactions,{validate=true,preview=false}={}){
+  const doc=await PDFDocument.load(originalBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+  const byStream=new Map();
+  const checks=[];
+  const warnings=[];
+  const reconstructions=[];
+  const insertionsByPage=new Map();
+  const fontCache=new Map();
+  const reflowMetrics=[];
+  const overflowCounts=new Map();
+
+  for(let sequenceIndex=0;sequenceIndex<transactions.length;sequenceIndex++){
+    const tx=transactions[sequenceIndex];
+    if(tx.kind==='INSERT_TEXT'){
+      if(!String(tx.replacementUnicode||'').trim())continue;
+      if(!insertionsByPage.has(tx.pageIndex))insertionsByPage.set(tx.pageIndex,[]);
+      insertionsByPage.get(tx.pageIndex).push({tx,sequenceIndex});
+      checks.push({kind:'insert',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:''});
+      continue;
+    }
+
+    const block=tx.block;
+    if(!block||(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION'))throw new Error(`Block ${block?.id||tx.blockId||'unknown'} is not safely editable: ${block?.reason||block?.tier||'UNKNOWN'}`);
+    const sourceLines=block.sourceLines||[];
+    const usesFormXObject=sourceLines.some(seq=>(seq||[]).some(run=>run?.sourceKind==='form'));
+    if(usesFormXObject&&tx.styleChanged){
+      throw Object.assign(new Error('Formatting existing text inside a Form XObject is not enabled yet. Text replacement is supported when the original operators can be rewritten directly.'),{code:'FORM_XOBJECT_FORMATTING_UNSUPPORTED'});
+    }
+    const outputLines=String(tx.replacementUnicode).split('\n');
+    if(!sourceLines.length)throw Object.assign(new Error('Mapped source text disappeared.'),{code:'SOURCE_NOT_MAPPED'});
+    if(outputLines.length>sourceLines.length)throw Object.assign(new Error('Replacement requires additional source lines.'),{code:'TEXT_OVERFLOW'});
+
+    let usedDirect=false;
+    if(block.tier==='DIRECT_EDIT'&&!tx.styleChanged){
+      const direct=planDirectReplacement(block,tx.replacementUnicode);
+      tx.layoutValidation=direct.layout||null;
+      if(direct.success){
+        for(const r of direct.replacements){
+          sourceBucket(byStream,tx.pageIndex,r.sourceRun).edits.push({start:r.start,end:r.end,replacement:r.replacement});
+        }
+        usedDirect=true;
+      }else{
+        if(direct.reason==='LAYOUT_COLLISION'){
+          throw Object.assign(new Error(direct.layout?.message||'Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION',layout:direct.layout||null});
+        }
+        warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
+      }
+    }else if(tx.styleChanged){
+      warnings.push({code:'FORMATTING_REQUIRES_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id});
+    }
+
+    if(!usedDirect){
+      neutralizeSourceLines(byStream,tx,sourceLines);
+      reconstructions.push({tx,block});
+    }
+
+    checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
+  }
+
+  for(const bucket of byStream.values()){
+    const {pageIndex,edits}=bucket;
+    if(bucket.sourceKind==='form'){
+      const stream=getPageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey});
+      const rewritten=rewriteByteRanges(stream.bytes,edits);
+      replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
+      warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      continue;
+    }
+    const {streamIndex}=bucket;
+    const streams=getPageContentStreams(doc,pageIndex);
+    const stream=streams.find(s=>s.streamIndex===streamIndex);
+    if(!stream)throw new Error('SOURCE_STREAM_DISAPPEARED');
+    const rewritten=rewriteByteRanges(stream.bytes,edits);
+    const rep=replacePageContentStream(doc,pageIndex,streamIndex,rewritten);
+    if(rep.sharedCloned)warnings.push({code:'SHARED_STREAM_CLONED',pageIndex,streamIndex});
+  }
+
+  for(const item of reconstructions)await drawReconstructedText(doc,item,fontCache,warnings);
+
+  // Process pages from last to first. In final export, continuation pages are
+  // inserted immediately after their source page. Descending order prevents
+  // those insertions from invalidating indexes of pages still to be processed.
+  const insertionPages=[...insertionsByPage.keys()].sort((a,b)=>b-a);
+  for(const sourcePageIndex of insertionPages){
+    const items=insertionsByPage.get(sourcePageIndex)||[];
+    for(const {tx,sequenceIndex} of items){
+      const layout=await prepareInsertedText(doc,tx,fontCache);
+      let reflow=null;
+      if(tx.reflowPlan?.enabled){
+        reflow=await applyVerticalRegionReflow(doc,tx,layout,{preview,sequenceIndex});
+        if(reflow.metric)reflowMetrics.push(reflow.metric);
+        if(reflow.applied){
+          overflowCounts.set(sourcePageIndex,(overflowCounts.get(sourcePageIndex)||0)+(reflow.overflowPageCount||0));
+          warnings.push({
+            code:'LAYOUT_REFLOWED',
+            pageIndex:sourcePageIndex,
+            transactionId:tx.id,
+            delta:reflow.metric?.delta||0,
+            overflowPageCount:reflow.overflowPageCount||0,
+            message:reflow.overflowPageCount?'Content below the new text was moved and overflow continued on a new page.':'Content below the new text was moved down to preserve spacing.',
+          });
+        }else if(!['EXISTING_WHITESPACE_SUFFICIENT','NO_CONTENT_BELOW_INSERTION','REFLOW_DISABLED'].includes(reflow.reason)){
+          throw Object.assign(new Error('This text cannot be added here without risking overlap or layout damage.'),{code:reflow.reason||'INSERT_REFLOW_UNSAFE',reflow});
+        }
+      }
+      if(!reflow?.applied)validateInsertedDesignRegion(tx,layout);
+      drawInsertedLayout(doc,tx,layout,warnings);
+    }
+  }
+
+  const finalChecks=checks.map(check=>({
+    ...check,
+    pageIndex:finalSourcePageIndex(check.sourcePageIndex,overflowCounts),
+  }));
+
+  const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
+  const validation=validate?await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:finalChecks}):null;
+  if(validation&&!validation.ok)throw Object.assign(new Error('Export validation failed'),{code:'EXPORT_VALIDATION_FAILED',validation});
+  if(validation&&!validation.textVerified)warnings.push({code:'TEXT_EXTRACTION_VERIFICATION_DIFFERED',message:'The PDF structure and rendering passed, but extracted text segmentation differed from the editor check.'});
+  const overflowPageCount=[...overflowCounts.values()].reduce((sum,n)=>sum+n,0);
+  return {
+    bytes,
+    blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,
+    validation,
+    warnings,
+    reflowMetrics,
+    overflowPageCount,
+  };
+}
