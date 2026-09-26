@@ -35,7 +35,30 @@ function lineGroups(items,fontSize){
   return lines.sort((a,b)=>b.baseline-a.baseline);
 }
 function sameLane(line,source,pageWidth,fontSize){if(overlap(line.left,line.right,source.left,source.right)>Math.min(8,Math.max(1,source.width)*.15))return true;return source.left<=pageWidth*.30&&Math.abs(line.left-source.left)<=Math.max(24,fontSize*2.2);}
-function sourceLinePitch(lines,tx,source,{width,fontSize,baseline}){
+function originalTransactionPitch(tx,candidates,pageWidth){
+  const source=blockRect(tx?.block),baseline=blockBaseline(tx?.block);
+  const fontSize=Math.max(6,Number(tx?.block?.lines?.[0]?.fontSize||tx?.block?.fontSize)||12);
+  const sourceFont=tx?.block?.lines?.[0]?.fontName||tx?.block?.fontName||null;
+  if(!source||!Number.isFinite(baseline))return null;
+  const gaps=[];
+  for(const peer of candidates||[]){
+    if(peer===tx||Number(peer?.pageIndex)!==Number(tx?.pageIndex))continue;
+    const peerRect=blockRect(peer?.block),peerBaseline=blockBaseline(peer?.block);
+    if(!peerRect||!Number.isFinite(peerBaseline))continue;
+    const peerFontSize=Math.max(6,Number(peer?.block?.lines?.[0]?.fontSize||peer?.block?.fontSize)||12);
+    const peerFont=peer?.block?.lines?.[0]?.fontName||peer?.block?.fontName||null;
+    if(sourceFont&&peerFont&&sourceFont!==peerFont)continue;
+    if(Math.abs(peerFontSize-fontSize)>Math.max(1.1,fontSize*.16))continue;
+    const peerLine={left:peerRect.left,right:peerRect.right};
+    if(!sameLane(peerLine,source,pageWidth,fontSize))continue;
+    const gap=Math.abs(baseline-peerBaseline),scale=Math.max(fontSize,peerFontSize);
+    if(gap>=scale*.72&&gap<=scale*2.6)gaps.push(gap);
+  }
+  gaps.sort((a,b)=>a-b);
+  return gaps[0]||null;
+}
+function sourceLinePitch(lines,tx,source,{width,fontSize,baseline,preferredPitch=null}){
+  if(Number.isFinite(Number(preferredPitch))&&Number(preferredPitch)>=fontSize*.72&&Number(preferredPitch)<=fontSize*2.6)return Number(preferredPitch);
   const sourceFont=tx?.block?.lines?.[0]?.fontName||tx?.block?.fontName||null,candidates=[];
   for(const line of lines){
     if(!sameLane(line,source,width,fontSize))continue;
@@ -52,22 +75,20 @@ function footerGuardTop(lines,{pageHeight,fontSize,bottomMargin}){
   for(let i=1;i<low.length;i++){const line=low[i],gap=line.bottom-clusterTop;if(gap>=minGap&&clusterTop<=pageHeight*.16)return clamp(clusterTop+Math.max(5,fontSize*.45),bottomMargin,pageHeight*.18);clusterTop=Math.max(clusterTop,line.top);}
   return bottomMargin;
 }
-function inferGeometry(lines,tx,{width,height}){
+function inferGeometry(lines,tx,{width,height,preferredPitch=null}){
   const source=blockRect(tx.block);if(!source)return {ok:false,reason:'COMPACTION_SOURCE_GEOMETRY_MISSING'};
   const fontSize=Math.max(6,Number(tx.block?.lines?.[0]?.fontSize||tx.block?.fontSize)||12),baseline=blockBaseline(tx.block);
   if(!Number.isFinite(baseline))return {ok:false,reason:'COMPACTION_SOURCE_BASELINE_MISSING'};
   if(Number(tx.block?.pageRotation||0)!==0)return {ok:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED'};
   const downstream=lines.filter(line=>line.baseline<baseline-fontSize*.30),laneLines=downstream.filter(line=>sameLane(line,source,width,fontSize));
   if(!laneLines.length)return {ok:false,reason:'NO_CONTENT_BELOW_DELETED_LINE'};
-  const nearest=laneLines[0],pitch=sourceLinePitch(lines,tx,source,{width,fontSize,baseline});
+  const nearest=laneLines[0],pitch=sourceLinePitch(lines,tx,source,{width,fontSize,baseline,preferredPitch});
 
   const sourceWide=source.width>=width*.42;
   if(!sourceWide){const farRight=downstream.filter(line=>line.left>width*.54&&line.right-line.left>width*.15),leftColumn=downstream.filter(line=>line.left<width*.46&&line.right<width*.66);if(farRight.length>=2&&leftColumn.length>=2)return {ok:false,reason:'MULTI_COLUMN_COMPACTION_UNSAFE'};}
 
   const pad=Math.max(10,fontSize*.85),rightMargin=Math.max(18,width*.045);
   const related=laneLines.filter(line=>line.baseline<=nearest.baseline+.5).slice(0,32);
-  // Use the full related visual lane, not only the text's starting x. This
-  // captures bullet markers and table/list edges that belong to the same body.
   const relatedLeft=Math.min(source.left,nearest.left,...related.map(line=>line.left));
   const relatedRight=Math.max(source.right,nearest.right,...related.map(line=>line.right));
   const bandLeft=clamp(relatedLeft-pad,0,width);
@@ -122,11 +143,11 @@ async function pageLines(bytes,pageIndex,fontSize){const p=await loadPdfjs(),tas
 async function embed(doc,donor,{left=0,bottom=0,right,top}){return top>bottom&&right>left?doc.embedPage(donor,{left,bottom,right,top}):null;}
 function draw(page,obj,{x=0,y=0,width,height}){if(obj)page.drawPage(obj,{x,y,width,height});}
 
-async function compactOne(doc,tx,sequenceIndex){
+async function compactOne(doc,tx,sequenceIndex,candidates){
   const pageIndex=Number(tx.pageIndex);if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=doc.getPageCount())return {applied:false,reason:'COMPACTION_PAGE_MISSING'};
   const page=doc.getPage(pageIndex),rotation=((page.getRotation().angle||0)%360+360)%360;if(rotation!==0)return {applied:false,reason:'ROTATED_PAGE_REFLOW_UNSUPPORTED'};
   const {width,height}=page.getSize(),annotations=inspectAnnotations(doc,page);if(!annotations.ok)return {applied:false,reason:annotations.reason};
-  const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false})),lines=await pageLines(donorBytes,pageIndex,Math.max(6,Number(tx.block?.fontSize)||12)),g=inferGeometry(lines,tx,{width,height});if(!g.ok)return {applied:false,reason:g.reason};
+  const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false})),lines=await pageLines(donorBytes,pageIndex,Math.max(6,Number(tx.block?.fontSize)||12)),preferredPitch=originalTransactionPitch(tx,candidates,width),g=inferGeometry(lines,tx,{width,height,preferredPitch});if(!g.ok)return {applied:false,reason:g.reason};
   const links=validateLinks(annotations,g,height);if(!links.ok)return {applied:false,reason:links.reason};const vectors=await vectorSafety(donorBytes,pageIndex,g);if(!vectors.ok)return {applied:false,reason:vectors.reason,vectorSafety:vectors};
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false}),donor=donorDoc.getPage(pageIndex);
   const top=await embed(doc,donor,{left:0,bottom:g.cutY,right:width,top:height}),footer=g.footerGuardTop>.5?await embed(doc,donor,{left:0,bottom:0,right:width,top:g.footerGuardTop}):null,moving=await embed(doc,donor,{left:g.bandLeft,bottom:g.footerGuardTop,right:g.bandRight,top:g.cutY}),left=g.bandLeft>1?await embed(doc,donor,{left:0,bottom:g.footerGuardTop,right:g.bandLeft,top:g.cutY}):null,right=g.bandRight<width-1?await embed(doc,donor,{left:g.bandRight,bottom:g.footerGuardTop,right:width,top:g.cutY}):null;
@@ -141,7 +162,7 @@ export async function applyUpwardCompaction(result,transactions,{preview=false}=
   const pages=new Set(candidates.map(tx=>Number(tx.pageIndex)));if((transactions||[]).some(tx=>tx?.kind==='INSERT_TEXT'&&pages.has(Number(tx.pageIndex))))throw Object.assign(new Error('Finish line deletion compaction before adding new text on the same page.'),{code:'COMPACTION_WITH_INSERT_SAME_PAGE_UNSUPPORTED'});
   const doc=await PDFDocument.load(copyBytes(result.bytes),{ignoreEncryption:true,updateMetadata:false}),metrics=[...(result?.reflowMetrics||[])],warnings=[...(result?.warnings||[])];
   const ordered=[...candidates].sort((a,b)=>Number(a.pageIndex)-Number(b.pageIndex)||(Number(a.block?.bounds?.y)||0)-(Number(b.block?.bounds?.y)||0));let appliedCount=0,totalShift=0;
-  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===tx.id),applied=await compactOne(doc,tx,sequenceIndex);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;metrics.push(applied.metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
+  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===tx.id),applied=await compactOne(doc,tx,sequenceIndex,candidates);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;metrics.push(applied.metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
   if(!appliedCount)return result;
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));let validation=result?.validation||null;
   if(!preview){validation=await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:checks(transactions)});if(!validation.ok)throw Object.assign(new Error('Upward-compacted PDF failed final validation.'),{code:'UPWARD_COMPACTION_VALIDATION_FAILED',validation});}
