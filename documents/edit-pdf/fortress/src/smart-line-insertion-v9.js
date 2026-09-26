@@ -75,7 +75,7 @@ export function attachSmartLineInsertion(options){
   const {app,getEditor}=options||{};
   if(!app)throw new Error('Edit PDF app element is required');
   const base=attachV8(options);
-  let destroyed=false,raf=0,lastAnalysis=null,snapshot=new Map();
+  let destroyed=false,raf=0,lastAnalysis=null,snapshot=new Map(),hadNegative=false;
 
   function applyUpwardGeometry(){
     if(destroyed)return;
@@ -84,7 +84,9 @@ export function attachSmartLineInsertion(options){
     if(!analysis)return;
     const metrics=pageMetrics(state);
     const negative=metrics.filter(metric=>Number(metric.delta)<0);
-    if(lastAnalysis!==analysis){lastAnalysis=analysis;snapshot=snapshotGeometry(analysis);}
+    if(lastAnalysis!==analysis){lastAnalysis=analysis;snapshot=snapshotGeometry(analysis);hadNegative=false;}
+    if(!negative.length&&!hadNegative)return;
+    hadNegative=negative.length>0;
 
     // Always restore the fresh/original geometry first so undo/redo and repeated
     // render notifications cannot accumulate the same shift twice.
