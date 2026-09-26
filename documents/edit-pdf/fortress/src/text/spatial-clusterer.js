@@ -27,7 +27,10 @@ export function clusterVisualRuns(items){
     const t=item.transform||[1,0,0,1,0,0]; const fontSize=Math.hypot(t[0],t[1])||item.height||12;
     const text=item.str||'';const width=Math.max(0,Number(item.width)||0);const inkWidth=visualInkWidth(item,text,fontSize);
     return {index,item,text,x:t[4],y:t[5],width,inkWidth,height:item.height||fontSize,fontSize,fontName:item.fontName||'',angle:Math.atan2(t[1],t[0])};
-  }).filter(r=>r.text.length>0);
+  // PDF.js may synthesize whitespace-only TextItems to describe large visual
+  // gaps between independently positioned cells. Those spacer items are not
+  // editable content and must never bridge two cells into one logical block.
+  }).filter(r=>r.text.trim().length>0);
   runs.sort((a,b)=>Math.abs(b.y-a.y)>Math.max(a.fontSize,b.fontSize)*0.35?(b.y-a.y):(a.x-b.x));
   const lines=[];
   for(const run of runs){
