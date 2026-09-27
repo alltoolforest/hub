@@ -1,6 +1,7 @@
 import { PDFName } from '../core/pdf-lib.js';
 import { cascadeOverflowIntoExistingPages } from './cascade-page-flow.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
+import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 
@@ -157,7 +158,7 @@ function preserveAndMoveLinks(doc,replacement,annotationInfo,classifiedLinks,del
   replacement.node.set(ANN0TS,annotationInfo.raw);
 }
 
-async function embedSlice(destDoc,donorPage,{left=0,bottom=0,right,top}){if(!(top>bottom)||!(right>left))return null;return destDoc.embedPage(donorPage,{left,bottom,right,top});}
+async function embedSlice(destDoc,donorPage,{left=0,bottom=0,right,top}){return embedExtractionCleanPageSlice(destDoc,donorPage,{left,bottom,right,top});}
 function drawSlice(page,embedded,{x=0,y=0,width,height}){if(embedded)page.drawPage(embedded,{x,y,width,height});}
 async function buildStaticMarginSlices(doc,donorPage,{bandLeft,bandRight,width,bottom=0,top}){
   if(!(top>bottom))return {left:null,right:null};
