@@ -1,5 +1,6 @@
 import { PDFName } from '../core/pdf-lib.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
+import { normalizeKeepGroups, snapBoundaryToKeepGroup, partitionKeepGroups, placeIncomingKeepGroups } from '../layout/section-pagination.js';
 
 const ANN0TS=PDFName.of('Annots');
 const SUBTYPE=PDFName.of('Subtype');
@@ -15,8 +16,16 @@ function arrayItem(doc,array,index){try{if(typeof array?.lookup==='function')ret
 function numberValue(doc,value){const resolved=lookup(doc,value)||value;if(typeof resolved?.asNumber==='function')return resolved.asNumber();const n=Number(String(resolved));return Number.isFinite(n)?n:null;}
 function rectBounds(rect){return {left:Math.min(rect[0],rect[2]),right:Math.max(rect[0],rect[2]),bottom:Math.min(rect[1],rect[3]),top:Math.max(rect[1],rect[3])};}
 function runtimeMap(doc){let map=runtimeByDocument.get(doc);if(!map){map=new Map();runtimeByDocument.set(doc,map);}return map;}
-function runtimeBottom(doc,pageIndex,fallback){const value=runtimeMap(doc).get(pageIndex)?.textBottomY;return Number.isFinite(value)?value:fallback;}
-function recordRuntimeBottom(doc,pageIndex,value){if(Number.isFinite(value))runtimeMap(doc).set(pageIndex,{textBottomY:value});}
+function runtimeState(doc,pageIndex){return runtimeMap(doc).get(pageIndex)||null;}
+function runtimeBottom(doc,pageIndex,fallback){const value=runtimeState(doc,pageIndex)?.textBottomY;return Number.isFinite(value)?value:fallback;}
+function runtimeGroups(doc,pageIndex,fallback){const value=runtimeState(doc,pageIndex)?.keepGroups;return Array.isArray(value)?value:fallback;}
+function recordRuntime(doc,pageIndex,{textBottomY,keepGroups}={}){
+  const current=runtimeState(doc,pageIndex)||{};
+  const next={...current};
+  if(Number.isFinite(textBottomY))next.textBottomY=textBottomY;
+  if(Array.isArray(keepGroups))next.keepGroups=keepGroups.map(group=>({...group}));
+  runtimeMap(doc).set(pageIndex,next);
+}
 
 async function embedSlice(doc,page,{left=0,bottom=0,right,top}){return embedExtractionCleanPageSlice(doc,page,{left,bottom,right,top});}
 function drawSlice(page,embedded,{x=0,y=0,width,height}){if(embedded)page.drawPage(embedded,{x,y,width,height});}
@@ -94,7 +103,8 @@ function normalizedGeometry(raw,page){
   if(!Number.isFinite(textTopY)||!Number.isFinite(textBottomY))return null;
   const bodyTopY=clamp(Number(raw.bodyTopY)||textTopY+safetyGap,footerTop+40,height-topMargin);
   if(!(bodyTopY>footerTop+40))return null;
-  return {width,height,bandLeft:left,bandRight:right,bandWidth:right-left,topMargin,bottomMargin,safetyGap,footerTop,textTopY,textBottomY,bodyTopY};
+  const keepGroups=normalizeKeepGroups(raw.keepGroups||[],{footerTop,bodyTop:bodyTopY});
+  return {width,height,bandLeft:left,bandRight:right,bandWidth:right-left,topMargin,bottomMargin,safetyGap,footerTop,textTopY,textBottomY,bodyTopY,keepGroups};
 }
 
 function validateIncomingRegion(incoming,g){
@@ -105,7 +115,7 @@ function validateIncomingRegion(incoming,g){
   return {ok:true};
 }
 
-function preflightFollowingPage(doc,pageIndex,geometry,incoming){
+function preflightFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true}={}){
   if(pageIndex<0||pageIndex>=doc.getPageCount())return {ok:false,reason:'CASCADE_TARGET_PAGE_MISSING'};
   const live=doc.getPage(pageIndex);
   const rotation=((live.getRotation().angle||0)%360+360)%360;
@@ -113,40 +123,43 @@ function preflightFollowingPage(doc,pageIndex,geometry,incoming){
   const g=normalizedGeometry(geometry,live);
   if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
   g.textBottomY=runtimeBottom(doc,pageIndex,g.textBottomY);
+  g.keepGroups=runtimeGroups(doc,pageIndex,g.keepGroups);
   const incomingSafety=validateIncomingRegion(incoming,g);
   if(!incomingSafety.ok)return incomingSafety;
   const shift=incoming.height+g.safetyGap;
   if(shift>g.bodyTopY-g.footerTop-20)return {ok:false,reason:'CASCADE_INCOMING_TOO_TALL'};
   const movableFloor=g.footerTop+g.safetyGap;
   const overflowNeeded=g.textBottomY-shift<movableFloor;
-  const outgoingBoundary=overflowNeeded?clamp(shift+movableFloor,g.footerTop,g.bodyTopY):g.footerTop;
+  const rawOutgoingBoundary=overflowNeeded?clamp(shift+movableFloor,g.footerTop,g.bodyTopY):g.footerTop;
+  const semanticSnap=overflowNeeded&&allowSemantic?snapBoundaryToKeepGroup(rawOutgoingBoundary,g.keepGroups,{footerTop:g.footerTop,bodyTop:g.bodyTopY,safetyGap:g.safetyGap}):{boundary:overflowNeeded?rawOutgoingBoundary:g.footerTop,snapped:false,groupId:null,groupLabel:null};
+  const outgoingBoundary=semanticSnap.boundary;
   const linkInfo=inspectLinks(doc,live);
   if(!linkInfo.ok)return {ok:false,reason:linkInfo.reason};
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
   if(!classified.ok)return {ok:false,reason:classified.reason};
-  return {ok:true,g,shift,overflowNeeded,outgoingBoundary,nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null};
+  return {ok:true,g,shift,overflowNeeded,outgoingBoundary,semanticSnap,nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null};
 }
 
-function preflightCascade(doc,{sourcePageIndex,pages,incoming}){
+function preflightCascade(doc,{sourcePageIndex,pages,incoming,allowSemantic=true}){
   const targets=[];
   let simulation={...incoming};
   for(const raw of pages){
     const targetIndex=Number(raw.pageIndex);
     if(!Number.isInteger(targetIndex)||targetIndex<=sourcePageIndex||targetIndex>=doc.getPageCount())continue;
-    const check=preflightFollowingPage(doc,targetIndex,raw,simulation);
+    const check=preflightFollowingPage(doc,targetIndex,raw,simulation,{allowSemantic});
     if(!check.ok)return {ok:false,reason:check.reason};
     targets.push({raw,targetIndex,check});
-    if(!check.overflowNeeded)return {ok:true,targets,absorbed:true};
+    if(!check.overflowNeeded)return {ok:true,targets,absorbed:true,allowSemantic};
     simulation={...check.nextIncoming};
   }
-  return {ok:true,targets,absorbed:false,remaining:simulation};
+  return {ok:true,targets,absorbed:false,remaining:simulation,allowSemantic};
 }
 
-async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
+async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true}={}){
   const live=doc.getPage(pageIndex);
-  const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right});
+  const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right},{allowSemantic});
   if(!check.ok)return check;
-  const {g,shift,overflowNeeded,outgoingBoundary}=check;
+  const {g,shift,overflowNeeded,outgoingBoundary,semanticSnap}=check;
   const linkInfo=inspectLinks(doc,live);
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
 
@@ -170,13 +183,15 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming){
   doc.removePage(pageIndex+1);
 
   const nextBottom=overflowNeeded?g.footerTop+g.safetyGap:Math.max(g.footerTop+g.safetyGap,g.textBottomY-shift);
-  recordRuntimeBottom(doc,pageIndex,nextBottom);
+  const partitioned=partitionKeepGroups(g.keepGroups,{outgoingBoundary,footerTop:g.footerTop,bodyTop:g.bodyTopY,shift});
+  const incomingGroups=placeIncomingKeepGroups(incoming.keepGroups||[],incoming,{bodyTopY:g.bodyTopY});
+  recordRuntime(doc,pageIndex,{textBottomY:nextBottom,keepGroups:[...partitioned.stay,...incomingGroups]});
   if(!overflowNeeded){
     try{await donorDoc.destroy?.();}catch{}
-    return {ok:true,done:true,shift,overflow:false};
+    return {ok:true,done:true,shift,overflow:false,semanticSnap};
   }
-  const outgoing={donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc};
-  return {ok:true,done:false,shift,overflow:true,outgoing};
+  const outgoing={donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc,keepGroups:partitioned.outgoing};
+  return {ok:true,done:false,shift,overflow:true,outgoing,semanticSnap};
 }
 
 async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargin}){
@@ -194,16 +209,34 @@ async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargi
   return count;
 }
 
-export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height}){
-  if(!(overflowTop>overflowBottom))return {applied:false,reason:'NO_CASCADE_OVERFLOW',appendedPageCount:0,cascadedPageCount:0};
+function cascadePreflight(doc,{sourcePageIndex,plan,overflowBottom,overflowTop,bandLeft,bandRight}){
+  if(!(overflowTop>overflowBottom))return {ok:false,reason:'NO_CASCADE_OVERFLOW'};
   const pages=Array.isArray(plan?.cascadePages)?plan.cascadePages:[];
-  const preflight=preflightCascade(doc,{sourcePageIndex,pages,incoming:{height:overflowTop-overflowBottom,left:bandLeft,right:bandRight}});
+  const incomingProbe={height:overflowTop-overflowBottom,left:bandLeft,right:bandRight};
+  let preflight=preflightCascade(doc,{sourcePageIndex,pages,incoming:incomingProbe,allowSemantic:true});
+  if(!preflight.ok){
+    // Section grouping is an enhancement, never a reason to reject a cascade
+    // that the proven line-level engine could already perform safely.
+    const baseline=preflightCascade(doc,{sourcePageIndex,pages,incoming:incomingProbe,allowSemantic:false});
+    if(!baseline.ok)return baseline;
+    preflight=baseline;
+  }
+  return {...preflight,pages};
+}
+
+export function preflightCascadeOverflowIntoExistingPages(doc,args){
+  return cascadePreflight(doc,args);
+}
+
+export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height}){
+  const preflight=cascadePreflight(doc,{sourcePageIndex,plan,overflowBottom,overflowTop,bandLeft,bandRight});
   if(!preflight.ok)return {applied:false,reason:preflight.reason,appendedPageCount:0,cascadedPageCount:0};
+  const pages=preflight.pages||[];
 
   let incoming={donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
   let cascadedPageCount=0;
   for(const target of preflight.targets){
-    const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming);
+    const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming,{allowSemantic:preflight.allowSemantic!==false});
     if(!result.ok)return {applied:false,reason:result.reason,appendedPageCount:0,cascadedPageCount};
     cascadedPageCount++;
     if(result.done){if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};}
