@@ -1,4 +1,5 @@
 import { PDFName } from '../core/pdf-lib.js';
+import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
 const ANN0TS=PDFName.of('Annots');
 const SUBTYPE=PDFName.of('Subtype');
@@ -17,7 +18,7 @@ function runtimeMap(doc){let map=runtimeByDocument.get(doc);if(!map){map=new Map
 function runtimeBottom(doc,pageIndex,fallback){const value=runtimeMap(doc).get(pageIndex)?.textBottomY;return Number.isFinite(value)?value:fallback;}
 function recordRuntimeBottom(doc,pageIndex,value){if(Number.isFinite(value))runtimeMap(doc).set(pageIndex,{textBottomY:value});}
 
-async function embedSlice(doc,page,{left=0,bottom=0,right,top}){if(!(top>bottom)||!(right>left))return null;return doc.embedPage(page,{left,bottom,right,top});}
+async function embedSlice(doc,page,{left=0,bottom=0,right,top}){return embedExtractionCleanPageSlice(doc,page,{left,bottom,right,top});}
 function drawSlice(page,embedded,{x=0,y=0,width,height}){if(embedded)page.drawPage(embedded,{x,y,width,height});}
 
 function inspectLinks(doc,page){
