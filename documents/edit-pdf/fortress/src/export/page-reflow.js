@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName } from '../core/pdf-lib.js';
+import { PDFName } from '../core/pdf-lib.js';
 import { cascadeOverflowIntoExistingPages } from './cascade-page-flow.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 
@@ -266,8 +266,10 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
   const vectorSafety=await validateVectorReflow(donorBytes,pageIndex,{cutY,overflowBoundary,bandLeft,bandRight});
   if(!vectorSafety.ok)return {applied:false,reason:vectorSafety.reason,overflowPageCount:0,vectorSafety};
-  const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false});
-  const donorPage=donorDoc.getPage(pageIndex);
+  // Keep the donor page inside the same PDF context. Serializing and loading a
+  // second PDF before every reflow forces pdf-lib to import the page resources
+  // again when embedding slices, multiplying fonts/XObjects on repeated edits.
+  const donorPage=livePage;
 
   let cascadeInfo={applied:false,appendedPageCount:0,cascadedPageCount:0};
   if(overflowNeeded&&overflowBoundary>footerGuardTop+.5){
