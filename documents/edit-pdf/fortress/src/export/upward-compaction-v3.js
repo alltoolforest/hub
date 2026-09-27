@@ -1,6 +1,7 @@
 import { PDFDocument, PDFName } from '../core/pdf-lib.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
+import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
 const ANN0TS=PDFName.of('Annots');
 const SUBTYPE=PDFName.of('Subtype');
@@ -181,7 +182,7 @@ async function vectorSafety(bytes,pageIndex,g){
   }catch(error){return {ok:false,reason:'VECTOR_REFLOW_PREFLIGHT_FAILED',error:String(error)};}
 }
 async function pageLines(bytes,pageIndex,fontSize){const p=await loadPdfjs(),task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true}),pdf=await task.promise;try{const page=await pdf.getPage(pageIndex+1),tc=await page.getTextContent();return lineGroups(tc.items,fontSize);}finally{try{await pdf.destroy?.();}catch{}try{await task.destroy?.();}catch{}}}
-async function embed(doc,donor,{left=0,bottom=0,right,top}){return top>bottom&&right>left?doc.embedPage(donor,{left,bottom,right,top}):null;}
+async function embed(doc,donor,{left=0,bottom=0,right,top}){return embedExtractionCleanPageSlice(doc,donor,{left,bottom,right,top});}
 function draw(page,obj,{x=0,y=0,width,height}){if(obj)page.drawPage(obj,{x,y,width,height});}
 
 async function compactOne(doc,tx,sequenceIndex,candidates){
