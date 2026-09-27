@@ -9,9 +9,21 @@ function estimatedInkWidth(text,fontSize){
   return Math.max(fontSize*.5,(visible*fontSize*1.08)+(spaces*fontSize*.62));
 }
 
+function compactTokenInkWidth(text,fontSize){
+  const token=String(text||'').trim();
+  // Numeric/reference values are common in reports, invoices and tables.
+  // Some PDFs encode a large positioning advance in the same TextItem width;
+  // clamp only an extreme outlier so that the advance cannot swallow the next
+  // independently positioned cell. Ordinary text keeps the existing path.
+  if(!/^[\d.,%+\-/:()\[\]]{1,16}$/u.test(token))return null;
+  return Math.max(fontSize*.5,Array.from(token).length*fontSize*.62);
+}
+
 function visualInkWidth(item,text,fontSize){
   const raw=Math.max(0,Number(item?.width)||0);
   if(!raw)return 0;
+  const compactEstimate=compactTokenInkWidth(text,fontSize);
+  if(compactEstimate>0&&raw>compactEstimate*1.7&&raw-compactEstimate>fontSize*1.5)return compactEstimate;
   const estimate=estimatedInkWidth(text,fontSize);
   // PDF.js can occasionally include a large positioning advance in item.width
   // even though the visible glyphs occupy only the beginning of that span.
