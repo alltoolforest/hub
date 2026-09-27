@@ -1,5 +1,6 @@
 import { getDocument } from '../vendor/pdf.mjs';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
+import { detectSectionKeepGroups } from './layout/section-pagination.js';
 import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js';
 
 const ORIGINAL_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
@@ -55,9 +56,10 @@ function geometryFromTextItems(pageIndex,width,height,rotation,items){
     :bottomMargin;
   const bodyTopY=clamp(textTopY+safetyGap,footerGuardTop+40,height-topMargin);
 
+  const keepGroups=detectSectionKeepGroups(items,{pageHeight:height});
   return {
     pageIndex,width,height,rotation,textTopY,textBottomY,bodyTopY,footerGuardTop,
-    topMargin,bottomMargin,safetyGap,contentBand:{left,right,width:right-left},
+    topMargin,bottomMargin,safetyGap,contentBand:{left,right,width:right-left},keepGroups,
     confidence:'PDFJS_TEXT_BOUNDS',
   };
 }
