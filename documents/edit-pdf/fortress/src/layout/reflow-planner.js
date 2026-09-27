@@ -1,3 +1,4 @@
+import { annotateFlowLinesWithKeepGroups } from './section-pagination.js';
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
 
 let cascadePageGeometry=[];
@@ -136,13 +137,14 @@ function followingCascadePages(sourcePageIndex){
 function flowLineGeometry(moved,contentBand){
   return moved
     .filter(({rect})=>horizontalOverlap(rect.left,rect.right,contentBand.left,contentBand.right)>Math.min(8,rect.width*.2))
-    .map(({block,lineIndex,lineId,rect})=>({
+    .map(({block,line,lineIndex,lineId,rect})=>({
       id:block?.id||null,
       blockId:block?.id||null,
       lineId,
       lineIndex,
       blockLineCount:Math.max(1,block?.lines?.length||1),
       left:rect.left,right:rect.right,bottom:rect.bottom,top:rect.top,width:rect.width,height:rect.height,
+      text:String(line?.text||block?.text||''),
     }))
     .filter(item=>Number.isFinite(item.bottom)&&Number.isFinite(item.top)&&item.top>item.bottom)
     .sort((a,b)=>b.top-a.top);
@@ -225,7 +227,7 @@ export function planInsertionReflow({
     return {enabled:false,reason:'CONTENT_BAND_UNSAFE',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
   }
 
-  const flowLines=flowLineGeometry(movable,contentBand);
+  const flowLines=annotateFlowLinesWithKeepGroups(flowLineGeometry(movable,contentBand),{pageHeight});
   if(!flowLines.length){
     return {enabled:false,reason:'NO_FLOW_LINES_ABOVE_FOOTER',safetyGap,bottomMargin,topMargin,pageWidth,pageHeight,pageRotation:rotation,sourcePageIndex,cascadePages:followingCascadePages(sourcePageIndex),footerGuard};
   }
