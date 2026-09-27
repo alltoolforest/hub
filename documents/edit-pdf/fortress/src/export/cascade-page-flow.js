@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName } from '../core/pdf-lib.js';
+import { PDFName } from '../core/pdf-lib.js';
 
 const ANN0TS=PDFName.of('Annots');
 const SUBTYPE=PDFName.of('Subtype');
@@ -73,9 +73,9 @@ function preserveLinks(doc,replacement,info,classified,shift){
 }
 
 async function snapshotPage(doc,pageIndex){
-  const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
-  const donorDoc=await PDFDocument.load(bytes,{ignoreEncryption:true,updateMetadata:false});
-  return {donorDoc,donorPage:donorDoc.getPage(pageIndex)};
+  // A removed PDFPage remains a valid embed source because its objects stay in
+  // the document context. Reusing it avoids importing duplicate page resources.
+  return {donorDoc:null,donorPage:doc.getPage(pageIndex)};
 }
 
 function normalizedGeometry(raw,page){
