@@ -4,7 +4,7 @@ import { mappingConfidence, DIRECT_EDIT_THRESHOLD } from './confidence.js';
 import { inspectFontResource, inspectFontResourceFromResources } from '../fonts/font-inspector.js';
 import { classifyFontSupport } from '../fonts/font-support.js';
 import { PDFName, PDFDict, PDFArray, PDFRawStream, PDFRef, decodePDFRawStream } from '../core/pdf-lib.js';
-import { IDENTITY, multiply } from '../utils/matrices.js';
+import { IDENTITY, multiply, applyToPoint } from '../utils/matrices.js';
 
 const norm=(s)=>String(s||'').replace(/\s+/g,' ').trim();
 const compact=(s)=>norm(s).replace(/\s+/g,'');
@@ -30,6 +30,22 @@ function matrixFromArray(value){
   const out=[];
   for(let i=0;i<6;i++){const n=numberOf(value.get(i));if(!Number.isFinite(n))return IDENTITY.slice();out.push(n);}
   return out;
+}
+function rectFromArray(value){
+  if(!(value instanceof PDFArray)||value.size()<4)return null;
+  const out=[];
+  for(let i=0;i<4;i++){const n=numberOf(value.get(i));if(!Number.isFinite(n))return null;out.push(n);}
+  return {left:Math.min(out[0],out[2]),bottom:Math.min(out[1],out[3]),right:Math.max(out[0],out[2]),top:Math.max(out[1],out[3])};
+}
+function transformRect(rect,m){
+  if(!rect)return null;
+  const pts=[applyToPoint(m,rect.left,rect.bottom),applyToPoint(m,rect.left,rect.top),applyToPoint(m,rect.right,rect.bottom),applyToPoint(m,rect.right,rect.top)];
+  return {left:Math.min(...pts.map(p=>p.x)),bottom:Math.min(...pts.map(p=>p.y)),right:Math.max(...pts.map(p=>p.x)),top:Math.max(...pts.map(p=>p.y))};
+}
+function baselineInside(bounds,run,t=.6){
+  if(!bounds)return true;
+  const x=Number(run?.trm?.[4]),y=Number(run?.trm?.[5]);
+  return Number.isFinite(x)&&Number.isFinite(y)&&x>=bounds.left-t&&x<=bounds.right+t&&y>=bounds.bottom-t&&y<=bounds.top+t;
 }
 function decodedRawStream(ctx,value){
   const raw=value instanceof PDFRawStream?value:lookup(ctx,value);
@@ -67,6 +83,8 @@ function directFormInvocations(pdfDoc,pageIndex,streams){
       const subtype=nameOf(resolved.dict.lookup(PDFName.of('Subtype')));
       if(subtype!=='Form')continue;
       const matrix=matrixFromArray(resolved.dict.lookup(PDFName.of('Matrix')));
+      const initialCtm=multiply(matrix,ctm);
+      const visibleBounds=transformRect(rectFromArray(resolved.dict.lookup(PDFName.of('BBox'))),initialCtm);
       const resources=resolved.dict.lookup(PDFName.of('Resources'))||pageResources;
       const ref=rawRef instanceof PDFRef?rawRef:null;
       invocations.push({
@@ -80,7 +98,8 @@ function directFormInvocations(pdfDoc,pageIndex,streams){
         resources,
         pageStreamIndex:stream.streamIndex,
         invocationOperatorIndex:operatorIndex,
-        initialCtm:multiply(matrix,ctm),
+        initialCtm,
+        visibleBounds,
       });
     }
   }
@@ -136,7 +155,7 @@ export function extractSourceRunsFromStreams(pdfDoc,pageIndex,streams){
       streamRef:form.formRefKey,
       streamIndex,
       initialCtm:form.initialCtm,
-    });
+    }).filter(run=>baselineInside(form.visibleBounds,run));
     sourceRuns.push(...runs.map((r)=>({
       ...r,
       sourceKind:'form',
