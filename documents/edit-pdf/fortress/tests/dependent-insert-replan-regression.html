@@ -3,15 +3,15 @@
 <title>Edit PDF Task 7 dependent replan regression</title>
 <pre id="out">Running…</pre>
 <script type="module">
-  import { runDependentInsertReplanRegression } from './dependent-insert-replan-regression.js';
-  const out=document.querySelector('#out');
-  try{
-    const cases=await runDependentInsertReplanRegression();
-    out.textContent=`PASS ${cases.length}/${cases.length}\n`+cases.map(item=>`✓ ${item.name}`).join('\n');
-    document.documentElement.dataset.result='pass';
-  }catch(error){
-    out.textContent=`FAIL\n${error?.stack||error}`;
-    document.documentElement.dataset.result='fail';
-    throw error;
-  }
+import {runDependentInsertReplanRegression} from './dependent-insert-replan-regression.js';
+const out=document.querySelector('#out');
+try{
+  const cases=await runDependentInsertReplanRegression();
+  out.textContent=`PASS ${cases.length}/${cases.length}\n`+cases.map(item=>`✓ ${item.name}`).join('\n');
+  document.body.dataset.result='pass';
+}catch(error){
+  out.textContent=`FAIL\n${error?.stack||error}`;
+  document.body.dataset.result='fail';
+  throw error;
+}
 </script>
