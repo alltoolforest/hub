@@ -2,6 +2,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:98": "node ./tests/run-hardening-98.mjs && node ./tests/form-invocation-rewriter-regression.mjs && node ./tests/table-cell-safety-regression.mjs"
+    "test:98": "node ./tests/run-hardening-98.mjs && node ./tests/font-fallback-policy-regression.mjs && node ./tests/deletion-compaction-regression.mjs && node ./tests/transaction-dependency-graph-regression.mjs && node ./tests/list-semantic-units-regression.mjs && node ./tests/visual-geometry-validator-regression.mjs && node ./tests/table-cell-safety-regression.mjs && node ./tests/form-invocation-rewriter-regression.mjs && node ./tests/form-invocation-isolation-integration.mjs && node ./tests/run-dependent-insert-replan.mjs"
   }
 }
