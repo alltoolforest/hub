@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {inferContainingTableCell,replacementWidthLimit} from '../src/export/table-cell-safety.js';
+import {inferContainingTableCell,replacementWidthLimit} from '../src/export/table-cell-geometry.js';
 const cases=[];const test=(name,fn)=>{fn();cases.push(name);};
 const textRect={left:120,right:175,bottom:500,top:514,width:55,height:14,cx:147.5,cy:507};
 
