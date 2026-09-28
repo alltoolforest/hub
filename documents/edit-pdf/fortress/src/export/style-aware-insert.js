@@ -1,4 +1,5 @@
 import { loadPdfjs } from '../rendering/pdfjs.js';
+import { createStyleMetricLayout } from './style-metric-layout.js';
 
 const STRUCTURE_WORDS=/\b(experience|education|qualification|certification|project|interest|profile|skills?|summary|objective|employment|career)\b/i;
 const BULLET_RE=/^\s*([•●▪◦\-*])\s+(.+)$/u;
@@ -37,9 +38,6 @@ function structuredLines(text){
 }
 
 async function pageHints(bytes,pageIndex){
-  // The production editor runs this in the browser. Node-based regression
-  // tests intentionally skip PDF.js visual hint extraction and exercise the
-  // conservative fallback styles instead.
   if(typeof window==='undefined'||typeof document==='undefined')return [];
   const p=await loadPdfjs();
   const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
@@ -83,15 +81,9 @@ function styleHints(items,tx){
   };
 }
 function styleForRole(role,hints){return role==='heading'?hints.heading:(role==='subheading'?hints.subheading:hints.body);}
-function approxWrappedLines(text,size,width){
-  const words=clean(text).split(/\s+/).filter(Boolean);if(!words.length)return 1;
-  const cap=Math.max(5,width/Math.max(3,size*.58));
-  let lines=1,used=0;
-  for(const word of words){const n=Math.max(1,Array.from(word).length)+(used?1:0);if(used&&used+n>cap){lines++;used=Array.from(word).length;}else used+=n;}
-  return Math.max(1,lines);
-}
 function cloneTx(tx,patch){return {...tx,...patch,reflowPlan:null,status:tx.status||'COMMITTED'};}
-function expandOne(tx,hints){
+
+async function expandOne(tx,hints,metrics){
   const parsed=structuredLines(tx.replacementUnicode);
   if(tx?.kind!=='INSERT_TEXT'||!parsed.hasStructure||hasExplicitInsertStyle(tx))return [tx];
   const baseX=Number(tx.x)||0,baseY=Number(tx.y)||0,maxWidth=Math.max(80,Number(tx.maxWidth)||300);
@@ -116,13 +108,15 @@ function expandOne(tx,hints){
       const bodyWidth=Math.max(60,maxWidth-indent-hang);
       push({replacementUnicode:marker,x:baseX+indent,y,fontSize:size,lineHeight,maxWidth:hang*.9,fontFamily:style.fontFamily,bold:false,italic:false});
       push({replacementUnicode:body,x:baseX+indent+hang,y,fontSize:size,lineHeight,maxWidth:bodyWidth,fontFamily:style.fontFamily,bold:false,italic:false});
-      y-=approxWrappedLines(body,size,bodyWidth)*lineHeight+Math.max(1,size*.08);
+      const lines=await metrics.lineCount(body,{...style,bold:false,italic:false},bodyWidth);
+      y-=lines*lineHeight+Math.max(1,size*.08);
       continue;
     }
 
     const width=Math.max(70,maxWidth-(role==='body'?0:2));
     push({replacementUnicode:text,x:baseX,y,fontSize:size,lineHeight,maxWidth:width,fontFamily:style.fontFamily,bold:style.bold,italic:style.italic});
-    y-=approxWrappedLines(text,size,width)*lineHeight;
+    const lines=await metrics.lineCount(text,style,width);
+    y-=lines*lineHeight;
     if(role==='heading')y-=Math.max(3,size*.35);
     else if(role==='subheading')y-=Math.max(2,size*.16);
   }
@@ -133,15 +127,14 @@ function expandOne(tx,hints){
   carrier.reflowPlan=tx.reflowPlan;
   carrier._styleAwareCarrier=true;
   carrier._styleAwareOriginalText=tx.replacementUnicode;
-  // Reflow must happen before any of the other newly drawn fragments. This
-  // prevents fragments below the cut from being mistaken for original page
-  // content and shifted a second time by the slice-based reflow engine.
+  carrier._styleMetricLayout=true;
   return [carrier,...components.filter(c=>c!==carrier)];
 }
 
 export async function expandStyleAwareInsertTransactions(originalBytes,transactions=[]){
   const pageCache=new Map();
   const out=[];
+  let metrics=null;
   for(const tx of transactions){
     if(tx?.kind!=='INSERT_TEXT'||hasExplicitInsertStyle(tx)){out.push(tx);continue;}
     const parsed=structuredLines(tx.replacementUnicode);
@@ -154,7 +147,8 @@ export async function expandStyleAwareInsertTransactions(originalBytes,transacti
       }
       items=pageCache.get(pageIndex)||[];
     }
-    out.push(...expandOne(tx,styleHints(items,tx)));
+    metrics||=await createStyleMetricLayout();
+    out.push(...await expandOne(tx,styleHints(items,tx),metrics));
   }
   return out;
 }
