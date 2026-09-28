@@ -1,10 +1,25 @@
 export const EFFECT={NONE:'NONE',GROW:'GROW',SHRINK:'SHRINK',MOVE:'MOVE',UNKNOWN:'UNKNOWN'};
 
+const STATIC_INSERT_REASONS=new Set(['EXISTING_WHITESPACE_SUFFICIENT','NO_CONTENT_BELOW_INSERTION']);
 function text(value){return String(value??'');}
+function deletionBaseline(tx){
+  const lineY=Number(tx?.block?.lines?.[0]?.y);
+  if(Number.isFinite(lineY))return lineY;
+  const y=Number(tx?.block?.bounds?.y),height=Number(tx?.block?.bounds?.height),size=Math.max(1,Number(tx?.block?.fontSize)||12);
+  if(Number.isFinite(y))return y+(Number.isFinite(height)?height:0)-size*.24;
+  return null;
+}
+
+export function isStaticNonFlowInsert(tx){
+  if(tx?.kind!=='INSERT_TEXT')return false;
+  const plan=tx?.reflowPlan;
+  return plan?.enabled===false&&STATIC_INSERT_REASONS.has(String(plan?.reason||''));
+}
+
 export function transactionStructuralEffect(tx){
   if(!tx||typeof tx!=='object')return EFFECT.NONE;
   if(tx.structuralEffect&&Object.values(EFFECT).includes(tx.structuralEffect))return tx.structuralEffect;
-  if(tx.kind==='INSERT_TEXT')return EFFECT.GROW;
+  if(tx.kind==='INSERT_TEXT')return isStaticNonFlowInsert(tx)?EFFECT.NONE:EFFECT.GROW;
   if(tx.kind==='REPLACE_TEXT'){
     const before=text(tx.originalUnicode??tx.block?.text).trim();
     const after=text(tx.replacementUnicode).trim();
@@ -50,6 +65,43 @@ export function assertMoveDependencySafety(transactions,targetId){
     throw Object.assign(new Error('A later structural edit has unknown layout impact.'),{code:'MOVE_DEPENDENCY_UNKNOWN_UNSAFE',dependentId:unknown.id});
   }
   return downstream;
+}
+
+export function transactionsForUpwardCompaction(transactions=[]){
+  const deletionsByPage=new Map();
+  for(const tx of transactions||[]){
+    if(transactionStructuralEffect(tx)!==EFFECT.SHRINK)continue;
+    const pageIndex=Number(tx?.pageIndex);
+    if(!Number.isInteger(pageIndex))continue;
+    if(!deletionsByPage.has(pageIndex))deletionsByPage.set(pageIndex,[]);
+    deletionsByPage.get(pageIndex).push(tx);
+  }
+  if(!deletionsByPage.size)return [...(transactions||[])];
+
+  const filtered=[];
+  for(const tx of transactions||[]){
+    if(tx?.kind!=='INSERT_TEXT'){filtered.push(tx);continue;}
+    const pageIndex=Number(tx?.pageIndex),deletions=deletionsByPage.get(pageIndex)||[];
+    if(!deletions.length){filtered.push(tx);continue;}
+    if(!isStaticNonFlowInsert(tx)){
+      throw Object.assign(new Error('This same-page insertion changes flow and cannot yet be combined atomically with deletion compaction.'),{code:'COMPACTION_WITH_FLOW_INSERT_SAME_PAGE_UNSUPPORTED',pageIndex,transactionId:tx?.id});
+    }
+    const insertY=Number(tx?.y);
+    if(!Number.isFinite(insertY)){
+      throw Object.assign(new Error('Static insertion geometry is incomplete for mixed compaction.'),{code:'COMPACTION_STATIC_INSERT_GEOMETRY_MISSING',pageIndex,transactionId:tx?.id});
+    }
+    for(const deletion of deletions){
+      const baseline=deletionBaseline(deletion);
+      const size=Math.max(6,Number(deletion?.block?.fontSize||deletion?.block?.lines?.[0]?.fontSize)||12);
+      if(!Number.isFinite(baseline)||insertY<=baseline+Math.max(2,size*.35)){
+        throw Object.assign(new Error('A static insertion lies in or below a region that will compact upward, so the mixed edit was refused.'),{code:'COMPACTION_WITH_DOWNSTREAM_STATIC_INSERT_UNSUPPORTED',pageIndex,transactionId:tx?.id,deletionId:deletion?.id});
+      }
+    }
+    // This insert is explicitly no-reflow and is above every contraction on
+    // the page. Exclude it from the compaction transaction list so the v3
+    // compactor does not reject an operation that cannot intersect its slice.
+  }
+  return filtered;
 }
 
 export function validateDependencySession(transactions=[]){
