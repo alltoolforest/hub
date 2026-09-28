@@ -59,6 +59,38 @@ export async function runDependentInsertReplanRegression(){
     assert(code==='MOVE_TRANSACTION_UNSAFE','Generated expansion insert should fail closed');
   });
 
+  await record('later generated expansion dependency fails closed',async()=>{
+    const a=insert('a');
+    const generated={...insert('generated'),expandedFromBlockId:'block-1'};
+    let code='';
+    try{
+      await replanDependentInsertions({
+        transactions:[a,generated],targetId:'a',patch:{x:130},blocks:[],
+        geometryForPage:()=>({width:595,height:842,rotation:0}),
+        previewTransactions:async list=>({bytes:new Uint8Array([1]),reflowMetrics:list.map((tx,index)=>({transactionId:tx.id,pageIndex:tx.pageIndex,sequenceIndex:index,delta:10}))}),
+        planner:()=>({enabled:true}),
+      });
+    }catch(error){code=error?.code||'';}
+    assert(code==='MOVE_DEPENDENCY_EXPANDED_INSERT_UNSAFE','Later generated paragraph should block dependency move');
+  });
+
+  await record('cross-page cascade through another added page fails closed',async()=>{
+    const a=insert('a'),b=insert('b'),page2=insert('page2',1);
+    let code='';
+    try{
+      await replanDependentInsertions({
+        transactions:[a,b,page2],targetId:'a',patch:{x:140},blocks:[],
+        geometryForPage:()=>({width:595,height:842,rotation:0}),
+        previewTransactions:async list=>({
+          bytes:new Uint8Array([1]),
+          reflowMetrics:list.filter(tx=>tx.pageIndex===0).map((tx,index)=>({transactionId:tx.id,pageIndex:0,sequenceIndex:index,delta:10,cascadedPageCount:tx.id==='a'?1:0,appendedPageCount:0})),
+        }),
+        planner:()=>({enabled:true,cascadePages:[{pageIndex:1}]}),
+      });
+    }catch(error){code=error?.code||'';}
+    assert(code==='MOVE_CROSS_PAGE_DEPENDENCY_UNSAFE','Cross-page added-text dependency should fail closed');
+  });
+
   await record('preview safety failure aborts without mutating originals',async()=>{
     const a=insert('a'),b=insert('b');
     const before=JSON.stringify([a,b]);
