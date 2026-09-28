@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from '../core/pdf-lib.js';
-import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream } from '../core/document-model.js';
+import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream, replacePageFormXObjectInvocationStream } from '../core/document-model.js';
 import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
@@ -12,9 +12,16 @@ function sourceBucket(map,pageIndex,run){
   if(sourceKind==='form'){
     const formRefKey=run?.formRefKey||run?.streamRef;
     const formResourceName=run?.formResourceName;
+    const formRequiresIsolation=!!run?.formRequiresIsolation;
+    const formPageStreamIndex=Number(run?.formPageStreamIndex);
+    const formInvocationOperatorIndex=Number(run?.formInvocationOperatorIndex);
     if(!formRefKey||!formResourceName)throw Object.assign(new Error('Form XObject source metadata is incomplete.'),{code:'FORM_SOURCE_METADATA_MISSING'});
-    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}`;
-    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,edits:[]});
+    if(formRequiresIsolation&&(!Number.isInteger(formPageStreamIndex)||formPageStreamIndex<0||!Number.isInteger(formInvocationOperatorIndex)||formInvocationOperatorIndex<0)){
+      throw Object.assign(new Error('Repeated Form invocation metadata is incomplete.'),{code:'FORM_INVOCATION_IDENTITY_MISSING'});
+    }
+    const identity=formRequiresIsolation?`${formPageStreamIndex}:${formInvocationOperatorIndex}`:'unique';
+    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}:${identity}`;
+    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,formRequiresIsolation,formPageStreamIndex,formInvocationOperatorIndex,edits:[]});
     return map.get(key);
   }
   const streamIndex=Number(run?.streamIndex);
@@ -319,8 +326,25 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     if(bucket.sourceKind==='form'){
       const stream=getPageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey});
       const rewritten=rewriteByteRanges(stream.bytes,edits);
-      replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
-      warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      if(bucket.formRequiresIsolation){
+        const isolated=replacePageFormXObjectInvocationStream(doc,pageIndex,{
+          resourceName:bucket.formResourceName,
+          expectedRefKey:bucket.formRefKey,
+          pageStreamIndex:bucket.formPageStreamIndex,
+          invocationOperatorIndex:bucket.formInvocationOperatorIndex,
+        },rewritten);
+        warnings.push({
+          code:'FORM_XOBJECT_INVOCATION_ISOLATED_FOR_EDIT',
+          pageIndex,
+          originalResourceName:bucket.formResourceName,
+          isolatedResourceName:isolated.resourceName,
+          pageStreamIndex:bucket.formPageStreamIndex,
+          invocationOperatorIndex:bucket.formInvocationOperatorIndex,
+        });
+      }else{
+        replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
+        warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      }
       continue;
     }
     const {streamIndex}=bucket;
