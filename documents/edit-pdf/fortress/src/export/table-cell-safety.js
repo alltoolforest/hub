@@ -24,7 +24,18 @@ async function pageShapes(pdfjs,pdf,pageIndex){
   return {shapes,pageWidth:Math.abs(Number(view[2])-Number(view[0]))||595,pageHeight:Math.abs(Number(view[3])-Number(view[1]))||842};
 }
 
-export async function prepareTableCellTransactions(originalBytes,transactions=[]){
+function analysisError(error){
+  if(error?.code==='TABLE_CELL_ANALYSIS_FAILED')return error;
+  return Object.assign(new Error('Table/vector geometry could not be analyzed safely, so this edit was stopped before PDF mutation.'),{
+    code:'TABLE_CELL_ANALYSIS_FAILED',
+    cause:error,
+  });
+}
+
+export async function prepareTableCellTransactions(originalBytes,transactions=[],{
+  loadRuntime=loadPdfjs,
+  readPageShapes=pageShapes,
+}={}){
   const candidates=(transactions||[]).filter(tx=>{
     if(Number(tx?.pageRotation||tx?.block?.pageRotation||0)!==0)return false;
     if(tx?.kind==='REPLACE_TEXT')return !!tx?.block?.bounds;
@@ -34,13 +45,20 @@ export async function prepareTableCellTransactions(originalBytes,transactions=[]
   if(!candidates.length)return transactions;
   let pdf=null,task=null;
   try{
-    const pdfjs=await loadPdfjs();
-    task=pdfjs.getDocument({data:originalBytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});pdf=await task.promise;
+    const pdfjs=await loadRuntime();
+    task=pdfjs.getDocument({data:originalBytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
+    pdf=await task.promise;
     const cache=new Map(),cellById=new Map();
     for(const tx of candidates){
-      const pageIndex=Number(tx.pageIndex);if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=pdf.numPages)continue;
-      if(!cache.has(pageIndex))cache.set(pageIndex,await pageShapes(pdfjs,pdf,pageIndex));
+      const pageIndex=Number(tx.pageIndex);
+      if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=pdf.numPages){
+        throw Object.assign(new Error('Table/vector geometry target page is unavailable.'),{code:'TABLE_CELL_ANALYSIS_FAILED',transactionId:tx?.id,pageIndex});
+      }
+      if(!cache.has(pageIndex))cache.set(pageIndex,await readPageShapes(pdfjs,pdf,pageIndex));
       const page=cache.get(pageIndex);
+      if(!page||!Array.isArray(page.shapes)){
+        throw Object.assign(new Error('Table/vector geometry analysis returned an invalid page model.'),{code:'TABLE_CELL_ANALYSIS_FAILED',transactionId:tx?.id,pageIndex});
+      }
       const cell=tx.kind==='INSERT_TEXT'
         ?inferContainingTableCellAtPoint(page.shapes,{x:Number(tx.x),y:Number(tx.y)},{pageWidth:page.pageWidth,pageHeight:page.pageHeight})
         :inferContainingTableCell(page.shapes,rectOfBlock(tx.block),{pageWidth:page.pageWidth,pageHeight:page.pageHeight});
@@ -52,10 +70,14 @@ export async function prepareTableCellTransactions(originalBytes,transactions=[]
       if(tx.kind==='INSERT_TEXT')return {...tx,tableCell:cell};
       return {...tx,tableCell:cell,block:{...tx.block,tableCell:cell}};
     });
-  }catch{return transactions;}
-  finally{try{await pdf?.destroy?.();}catch{}try{await task?.destroy?.();}catch{}}
+  }catch(error){
+    throw analysisError(error);
+  }finally{
+    try{await pdf?.destroy?.();}catch{}
+    try{await task?.destroy?.();}catch{}
+  }
 }
 
-export async function prepareTableCellReplacementTransactions(originalBytes,transactions=[]){
-  return prepareTableCellTransactions(originalBytes,transactions);
+export async function prepareTableCellReplacementTransactions(originalBytes,transactions=[],options={}){
+  return prepareTableCellTransactions(originalBytes,transactions,options);
 }
