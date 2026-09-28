@@ -115,6 +115,45 @@ function installByteCompat(){
   if(typeof Response!=='undefined')defineValue(Response.prototype,'bytes',async function bytes(){return new Uint8Array(await this.arrayBuffer());});
 }
 
+export function installReadableStreamAsyncIteration(StreamCtor=globalThis.ReadableStream){
+  if(!StreamCtor?.prototype||typeof Symbol==='undefined'||!Symbol.asyncIterator)return false;
+  const proto=StreamCtor.prototype;
+  if(typeof proto.values!=='function'){
+    defineValue(proto,'values',function values({preventCancel=false}={}){
+      const reader=this.getReader();
+      let finished=false,released=false;
+      const release=()=>{if(released)return;released=true;try{reader.releaseLock?.();}catch{}};
+      const iterator={
+        async next(){
+          if(finished)return {value:undefined,done:true};
+          try{
+            const result=await reader.read();
+            if(result?.done){finished=true;release();}
+            return result;
+          }catch(error){finished=true;release();throw error;}
+        },
+        async return(value){
+          if(finished)return {value,done:true};
+          finished=true;
+          try{if(!preventCancel&&typeof reader.cancel==='function')await reader.cancel(value);}finally{release();}
+          return {value,done:true};
+        },
+        async throw(error){
+          finished=true;
+          try{if(typeof reader.cancel==='function')await reader.cancel(error);}finally{release();}
+          throw error;
+        },
+      };
+      defineValue(iterator,Symbol.asyncIterator,function asyncIterator(){return this;});
+      return iterator;
+    });
+  }
+  if(typeof proto[Symbol.asyncIterator]!=='function'){
+    defineValue(proto,Symbol.asyncIterator,function asyncIterator(){return this.values();});
+  }
+  return typeof proto.values==='function'&&typeof proto[Symbol.asyncIterator]==='function';
+}
+
 function readBlobWithFileReader(blob){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -147,7 +186,7 @@ function installWeakReferenceFallbacks(){
 }
 
 export function ensurePdfjsRuntimeCompat(){
-  installUrlParse();installPromiseCompat();installAbortSignalAny();installCollectionCompat();installNumericCompat();installByteCompat();installBlobArrayBuffer();installWeakReferenceFallbacks();
+  installUrlParse();installPromiseCompat();installAbortSignalAny();installCollectionCompat();installNumericCompat();installByteCompat();installReadableStreamAsyncIteration();installBlobArrayBuffer();installWeakReferenceFallbacks();
 }
 
 export function pdfjsRuntimeReport(){
@@ -158,6 +197,7 @@ export function pdfjsRuntimeReport(){
   if(typeof URL==='undefined')missing.push('URL');
   if(typeof TextDecoder==='undefined'||typeof TextEncoder==='undefined')missing.push('TextEncoder/TextDecoder');
   if(typeof ReadableStream==='undefined')missing.push('ReadableStream');
+  else if(typeof Symbol==='undefined'||!Symbol.asyncIterator||typeof ReadableStream.prototype.values!=='function'||typeof ReadableStream.prototype[Symbol.asyncIterator]!=='function')missing.push('ReadableStream async iteration');
   if(typeof AbortController==='undefined'||typeof AbortSignal==='undefined')missing.push('AbortController');
   return {ok:missing.length===0,missing};
 }
