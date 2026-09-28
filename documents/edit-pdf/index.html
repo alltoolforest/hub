@@ -68,8 +68,10 @@ const app=document.querySelector('#fortress-app');
 const integrationStatus=document.querySelector('#fortress-integration-status');
 const pickerError=document.querySelector('#fortress-picker-error');
 const downloads=document.querySelector('#fortress-downloads');
+const workerUrl=new URL('./fortress/vendor/pdf.worker.compat.mjs',location.href).href;
 let editor=null;
 let downloadUrl=null;
+let pdfRuntimeReady=null;
 
 function setIntegrationStatus(message=''){integrationStatus.textContent=message;}
 function setPickerError(message=''){pickerError.textContent=message;pickerError.hidden=!message;}
@@ -80,8 +82,13 @@ async function destroyCurrentEditor(){
   if(!current)return;
   try{await current.destroy?.();}catch(error){console.warn('Edit PDF cleanup failed:',error);}
 }
+async function ensurePdfRuntime(){
+  if(!pdfRuntimeReady){
+    pdfRuntimeReady=configurePdfWorker(workerUrl).catch(error=>{pdfRuntimeReady=null;throw error;});
+  }
+  return pdfRuntimeReady;
+}
 
-await configurePdfWorker(new URL('./fortress/vendor/pdf.worker.compat.mjs',location.href).href);
 const precisionFontSize=attachPrecisionFontSize({app,getEditor:()=>editor});
 const insertAnchorBridge=attachInsertAnchorBridge({app,getEditor:()=>editor});
 const smartLineInsertion=attachSmartLineInsertion({app,getEditor:()=>editor});
@@ -103,11 +110,13 @@ input.addEventListener('change',async()=>{
   if(!file)return;
   clearDownload();setPickerError('');
   await destroyCurrentEditor();
-  app.replaceChildren();
-  picker.hidden=true;
-  app.hidden=false;
-  setIntegrationStatus('Starting hybrid PDF analysis…');
+  setIntegrationStatus('Preparing the PDF engine for this browser…');
   try{
+    await ensurePdfRuntime();
+    app.replaceChildren();
+    picker.hidden=true;
+    app.hidden=false;
+    setIntegrationStatus('Starting hybrid PDF analysis…');
     editor=createHybridPdfEditor({
       container:app,
       prepareNativeDocument:fileOrBytes=>smartLineInsertion.prepareDocument(fileOrBytes),
