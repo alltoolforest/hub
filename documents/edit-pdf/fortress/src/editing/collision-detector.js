@@ -1,4 +1,5 @@
 import { buildReplacementForSourceLine } from '../mutation/text-operator-rewriter.js';
+import { replacementWidthLimit } from '../export/table-cell-safety.js';
 
 function visualLineWidth(block,lineIndex){
   const line=block?.lines?.[lineIndex]||block?.lines?.at?.(-1);
@@ -14,14 +15,9 @@ function fallbackGrowth(original,replacement){
 }
 
 /**
- * Refuse direct replacements whose rendered glyph advance is wider than the
- * visual source line. The previous character-count-only guard skipped blocks
- * wider than 200pt, which allowed wide table/cell text to collide visually.
- *
- * When source font metrics are available, buildReplacementForSourceLine gives
- * us the real replacement advance in that PDF font. We normalize that advance
- * to the visual line width so PDF text-space scaling does not create false
- * comparisons. Character growth is retained only as a conservative fallback.
+ * Refuse replacements whose measured glyph advance exceeds the safe visual
+ * region. When Task 14 identifies a real table cell, the right cell boundary
+ * becomes authoritative instead of the looser source-line growth allowance.
  */
 export function validateReplacementLayout(block,newText,{maxGrowth=1.45,maxVisualOverflow=1.12}={}){
   const lines=String(newText).split('\n');
@@ -35,6 +31,7 @@ export function validateReplacementLayout(block,newText,{maxGrowth=1.45,maxVisua
     const replacement=lines[lineIndex];
     const sourceLine=block?.sourceLines?.[lineIndex];
     const visualWidth=visualLineWidth(block,lineIndex);
+    const widthLimit=replacementWidthLimit(block,lineIndex,visualWidth,{maxVisualOverflow});
     let estimatedWidth=null;
 
     if(sourceLine?.length&&visualWidth>0){
@@ -47,28 +44,29 @@ export function validateReplacementLayout(block,newText,{maxGrowth=1.45,maxVisua
     }
 
     if(Number.isFinite(estimatedWidth)){
-      if(estimatedWidth>visualWidth*maxVisualOverflow){
+      if(estimatedWidth>widthLimit.limit){
         return {
           ok:false,
-          reason:'LAYOUT_COLLISION',
-          message:'Replacement is wider than the safely mapped visual text region.',
+          reason:widthLimit.reason,
+          message:widthLimit.cellAware?'Replacement would cross the detected table-cell boundary.':'Replacement is wider than the safely mapped visual text region.',
           visualWidth,
+          safeWidth:widthLimit.limit,
           estimatedWidth,
           lineIndex,
+          tableCell:widthLimit.cell||null,
         };
       }
       continue;
     }
 
     const growth=fallbackGrowth(originalLines[lineIndex]??originalLines.at(-1)??'',replacement);
-    if(growth>maxGrowth){
-      return {
-        ok:false,
-        reason:'LAYOUT_COLLISION',
-        message:'Replacement is substantially wider than the original mapped region.',
-        growth,
-        lineIndex,
-      };
+    if(widthLimit.cellAware&&visualWidth>0){
+      const fallbackEstimate=visualWidth*growth;
+      if(fallbackEstimate>widthLimit.limit){
+        return {ok:false,reason:'TABLE_CELL_WIDTH_OVERFLOW',message:'Replacement is estimated to cross the detected table-cell boundary.',growth,visualWidth,safeWidth:widthLimit.limit,estimatedWidth:fallbackEstimate,lineIndex,tableCell:widthLimit.cell};
+      }
+    }else if(growth>maxGrowth){
+      return {ok:false,reason:'LAYOUT_COLLISION',message:'Replacement is substantially wider than the original mapped region.',growth,lineIndex};
     }
   }
   return {ok:true,reason:null};
