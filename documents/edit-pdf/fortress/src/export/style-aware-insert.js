@@ -37,6 +37,10 @@ function structuredLines(text){
 }
 
 async function pageHints(bytes,pageIndex){
+  // The production editor runs this in the browser. Node-based regression
+  // tests intentionally skip PDF.js visual hint extraction and exercise the
+  // conservative fallback styles instead.
+  if(typeof window==='undefined'||typeof document==='undefined')return [];
   const p=await loadPdfjs();
   const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
   const pdf=await task.promise;
@@ -129,6 +133,9 @@ function expandOne(tx,hints){
   carrier.reflowPlan=tx.reflowPlan;
   carrier._styleAwareCarrier=true;
   carrier._styleAwareOriginalText=tx.replacementUnicode;
+  // Reflow must happen before any of the other newly drawn fragments. This
+  // prevents fragments below the cut from being mistaken for original page
+  // content and shifted a second time by the slice-based reflow engine.
   return [carrier,...components.filter(c=>c!==carrier)];
 }
 
