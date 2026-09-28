@@ -4,6 +4,13 @@ function defineValue(target,key,value){
   catch{try{target[key]=value;}catch{}}
 }
 
+function isIosLike(){
+  if(typeof navigator==='undefined')return false;
+  const ua=String(navigator.userAgent||'');
+  const platform=String(navigator.platform||'');
+  return /iPad|iPhone|iPod/i.test(ua)||(platform==='MacIntel'&&Number(navigator.maxTouchPoints)>1);
+}
+
 function decodeBase64(value,{alphabet='base64'}={}){
   let source=String(value||'').replace(/\s+/g,'');
   if(alphabet==='base64url')source=source.replace(/-/g,'+').replace(/_/g,'/');
@@ -108,18 +115,30 @@ function installByteCompat(){
   if(typeof Response!=='undefined')defineValue(Response.prototype,'bytes',async function bytes(){return new Uint8Array(await this.arrayBuffer());});
 }
 
-function installBlobArrayBuffer(){
-  if(typeof Blob==='undefined'||typeof Blob.prototype.arrayBuffer==='function'||typeof FileReader==='undefined')return;
-  defineValue(Blob.prototype,'arrayBuffer',function arrayBuffer(){
-    const blob=this;
-    return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onerror=()=>reject(reader.error||new Error('Could not read binary data.'));
-      reader.onabort=()=>reject(new Error('Binary read was cancelled.'));
-      reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(reader.result):reject(new Error('Binary read did not return an ArrayBuffer.'));
-      try{reader.readAsArrayBuffer(blob);}catch(error){reject(error);}
-    });
+function readBlobWithFileReader(blob){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(reader.error||new Error('Could not read binary data.'));
+    reader.onabort=()=>reject(new Error('Binary read was cancelled.'));
+    reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(reader.result):reject(new Error('Binary read did not return an ArrayBuffer.'));
+    try{reader.readAsArrayBuffer(blob);}catch(error){reject(error);}
   });
+}
+
+function installBlobArrayBuffer(){
+  if(typeof Blob==='undefined'||typeof FileReader==='undefined')return;
+  const nativeArrayBuffer=typeof Blob.prototype.arrayBuffer==='function'?Blob.prototype.arrayBuffer:null;
+  if(nativeArrayBuffer&&!isIosLike())return;
+  const compatibleArrayBuffer=function arrayBuffer(){
+    const blob=this;
+    if(isIosLike()){
+      return readBlobWithFileReader(blob).catch(error=>nativeArrayBuffer?nativeArrayBuffer.call(blob):Promise.reject(error));
+    }
+    if(nativeArrayBuffer)return nativeArrayBuffer.call(blob);
+    return readBlobWithFileReader(blob);
+  };
+  try{Object.defineProperty(Blob.prototype,'arrayBuffer',{configurable:true,writable:true,value:compatibleArrayBuffer});}
+  catch{if(!nativeArrayBuffer)try{Blob.prototype.arrayBuffer=compatibleArrayBuffer;}catch{}}
 }
 
 function installWeakReferenceFallbacks(){
