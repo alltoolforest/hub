@@ -4,6 +4,7 @@ import { expandDeletionCompactionTransactions } from './deletion-compaction-plan
 import { validateDependencySession } from '../transaction-dependency-graph.js';
 import { addDeletionMarkerCompanions } from './list-marker-companions.js';
 import { prepareTableCellTransactions } from './table-cell-safety.js';
+import { preflightTableCellInsertions } from './table-cell-insert-preflight.js';
 import { prepareStructuredVectorTransactions } from './structured-vector-plan.js';
 import { expandStyleAwareInsertTransactions } from './style-aware-insert.js';
 import { validateVisualLayout } from './visual-validator.js';
@@ -27,17 +28,18 @@ export async function exportEditedPdf(originalBytes,transactions,options={}){
   const cellAwareTransactions=await prepareTableCellTransactions(originalBytes,preparedTransactions);
   const structuredTransactions=await prepareStructuredVectorTransactions(originalBytes,cellAwareTransactions);
   const styledTransactions=await expandStyleAwareInsertTransactions(originalBytes,structuredTransactions);
-  const dependencySession=validateDependencySession(styledTransactions);
+  const cellSafeTransactions=await preflightTableCellInsertions(originalBytes,styledTransactions);
+  const dependencySession=validateDependencySession(cellSafeTransactions);
   if(!dependencySession.ok){
     const conflict=dependencySession.conflicts[0];
     throw Object.assign(new Error('This combination of structural edits cannot yet be recomputed safely as one page transaction.'),{code:conflict?.code||'TRANSACTION_DEPENDENCY_UNSAFE',pageIndex:conflict?.pageIndex,conflicts:dependencySession.conflicts});
   }
-  const result=await exportEditedPdfCore(originalBytes,styledTransactions,options);
-  const compactionTransactions=expandDeletionCompactionTransactions(styledTransactions);
+  const result=await exportEditedPdfCore(originalBytes,cellSafeTransactions,options);
+  const compactionTransactions=expandDeletionCompactionTransactions(cellSafeTransactions);
   const compacted=await applyUpwardCompaction(result,compactionTransactions,{preview:!!options.preview});
   if(options.preview)return compacted;
 
-  const visual=await validateVisualLayout(compacted.bytes,visualMappings(styledTransactions),{baselineBytes:originalBytes});
+  const visual=await validateVisualLayout(compacted.bytes,visualMappings(cellSafeTransactions),{baselineBytes:originalBytes});
   if(!visual.ok){
     throw Object.assign(new Error('The exported PDF is structurally valid but the visual layout contains a new collision, duplicate, or clipped text region.'),{code:'VISUAL_EXPORT_VALIDATION_FAILED',visual});
   }
