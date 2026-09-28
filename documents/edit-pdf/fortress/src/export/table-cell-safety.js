@@ -1,6 +1,6 @@
 import { loadPdfjs } from '../rendering/pdfjs.js';
-import { inferContainingTableCell, replacementWidthLimit } from './table-cell-geometry.js';
-export { inferContainingTableCell, replacementWidthLimit } from './table-cell-geometry.js';
+import { inferContainingTableCell, inferContainingTableCellAtPoint, replacementWidthLimit } from './table-cell-geometry.js';
+export { inferContainingTableCell, inferContainingTableCellAtPoint, replacementWidthLimit } from './table-cell-geometry.js';
 
 function rectOfBlock(block){
   const b=block?.bounds;if(!b)return null;
@@ -24,8 +24,13 @@ async function pageShapes(pdfjs,pdf,pageIndex){
   return {shapes,pageWidth:Math.abs(Number(view[2])-Number(view[0]))||595,pageHeight:Math.abs(Number(view[3])-Number(view[1]))||842};
 }
 
-export async function prepareTableCellReplacementTransactions(originalBytes,transactions=[]){
-  const candidates=(transactions||[]).filter(tx=>tx?.kind==='REPLACE_TEXT'&&tx?.block?.bounds&&Number(tx?.block?.pageRotation||0)===0);
+export async function prepareTableCellTransactions(originalBytes,transactions=[]){
+  const candidates=(transactions||[]).filter(tx=>{
+    if(Number(tx?.pageRotation||tx?.block?.pageRotation||0)!==0)return false;
+    if(tx?.kind==='REPLACE_TEXT')return !!tx?.block?.bounds;
+    if(tx?.kind==='INSERT_TEXT')return Number.isFinite(Number(tx?.x))&&Number.isFinite(Number(tx?.y));
+    return false;
+  });
   if(!candidates.length)return transactions;
   let pdf=null,task=null;
   try{
@@ -35,15 +40,22 @@ export async function prepareTableCellReplacementTransactions(originalBytes,tran
     for(const tx of candidates){
       const pageIndex=Number(tx.pageIndex);if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=pdf.numPages)continue;
       if(!cache.has(pageIndex))cache.set(pageIndex,await pageShapes(pdfjs,pdf,pageIndex));
-      const page=cache.get(pageIndex),rect=rectOfBlock(tx.block);if(!rect)continue;
-      const cell=inferContainingTableCell(page.shapes,rect,{pageWidth:page.pageWidth,pageHeight:page.pageHeight});
+      const page=cache.get(pageIndex);
+      const cell=tx.kind==='INSERT_TEXT'
+        ?inferContainingTableCellAtPoint(page.shapes,{x:Number(tx.x),y:Number(tx.y)},{pageWidth:page.pageWidth,pageHeight:page.pageHeight})
+        :inferContainingTableCell(page.shapes,rectOfBlock(tx.block),{pageWidth:page.pageWidth,pageHeight:page.pageHeight});
       if(cell)cellById.set(tx.id,cell);
     }
     if(!cellById.size)return transactions;
     return (transactions||[]).map(tx=>{
       const cell=cellById.get(tx?.id);if(!cell)return tx;
+      if(tx.kind==='INSERT_TEXT')return {...tx,tableCell:cell};
       return {...tx,tableCell:cell,block:{...tx.block,tableCell:cell}};
     });
   }catch{return transactions;}
   finally{try{await pdf?.destroy?.();}catch{}try{await task?.destroy?.();}catch{}}
+}
+
+export async function prepareTableCellReplacementTransactions(originalBytes,transactions=[]){
+  return prepareTableCellTransactions(originalBytes,transactions);
 }
