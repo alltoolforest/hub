@@ -26,6 +26,7 @@ function isLatestMovableOnPage(state,tx){
   const page=insertedTransactions(state);
   return isMovableTransaction(tx)&&page.length>0&&page.at(-1)?.id===tx?.id;
 }
+function transactionIndex(state,tx){return (state?.transactions||[]).findIndex(item=>item?.id===tx?.id);}
 function layerGeometry(layer,matrix){
   const width=Math.max(1,layer?.clientWidth||Number.parseFloat(layer?.style?.width)||1);
   const height=Math.max(1,layer?.clientHeight||Number.parseFloat(layer?.style?.height)||1);
@@ -38,11 +39,13 @@ function screenDeltaToPdf(matrix,dx,dy){
   return {x:b.x-a.x,y:b.y-a.y};
 }
 function priorMetrics(state,tx){
-  const own=String(tx?.id||'');
+  const index=transactionIndex(state,tx);
+  if(index<=0)return [];
+  const priorIds=(state?.transactions||[]).slice(0,index).map(item=>String(item?.id||'')).filter(Boolean);
   return (state?.reflowMetrics||[]).filter(metric=>{
     if(Number(metric?.pageIndex)!==Number(tx?.pageIndex))return false;
     const id=String(metric?.transactionId||'');
-    return id!==own&&!id.startsWith(`${own}:styled:`);
+    return priorIds.some(prior=>id===prior||id.startsWith(`${prior}:styled:`));
   });
 }
 
@@ -50,7 +53,6 @@ export function computeMovedInsert({state,tx,layer,matrix,screenDx=0,screenDy=0,
   if(!state||!tx||!layer||!Array.isArray(matrix)||matrix.length<6)return {ok:false,reason:'MOVE_GEOMETRY_MISSING'};
   if(state.addTextMode)return {ok:false,reason:'MOVE_DISABLED_DURING_ADD_TEXT'};
   if(!isMovableTransaction(tx))return {ok:false,reason:'MOVE_TRANSACTION_UNSAFE'};
-  if(!isLatestMovableOnPage(state,tx))return {ok:false,reason:'MOVE_DEPENDENCY_UNSAFE'};
   if(Math.abs(Number(matrix[1])||0)>.02||Math.abs(Number(matrix[2])||0)>.02)return {ok:false,reason:'ROTATED_MOVE_UNSUPPORTED'};
 
   const page=layerGeometry(layer,matrix);
@@ -90,7 +92,7 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
     const hits=[...app.querySelectorAll(HIT_SELECTOR)];
     for(let i=0;i<hits.length;i++){
       const hit=hits[i],tx=inserted[i];
-      const canMove=!!tx&&isLatestMovableOnPage(state,tx)&&!state?.addTextMode;
+      const canMove=!!tx&&isMovableTransaction(tx)&&!state?.addTextMode;
       hit.dataset.movableInsert=canMove?'true':'false';
       hit.style.cursor=canMove?'move':'';
       if(canMove){
@@ -120,9 +122,29 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
   }
 
   async function commitMove(hit,move,{clientX=0,clientY=0}={}){
+    const editor=getEditor?.();
     const state=editorState();
     const tx=txForHit(app,hit,state);
     if(!tx||tx.id!==move.txId)return false;
+
+    if(typeof editor?.moveInsertTransaction==='function'){
+      try{
+        const result=await editor.moveInsertTransaction({id:tx.id,x:move.x,y:move.y,maxWidth:move.maxWidth});
+        const dependent=Math.max(0,Number(result?.replannedCount||0)-1);
+        nativeStatus(dependent?`Added text moved safely — ${dependent} later insertion${dependent===1?'':'s'} replanned. Undo restores the previous layout.`:'Added text moved safely — Undo restores its previous position.');
+        scheduleDecorate();
+        return true;
+      }catch(error){
+        nativeStatus(error?.code||error?.message||'That move was rejected by PDF safety checks. The original layout was preserved.','error');
+        scheduleDecorate();
+        return false;
+      }
+    }
+
+    if(!isLatestMovableOnPage(state,tx)){
+      nativeStatus('This browser session cannot safely replan later insertions yet. Move the most recently added item instead.','error');
+      return false;
+    }
     const snapshot=snapshotTx(tx);
     tx.x=move.x;tx.y=move.y;tx.maxWidth=move.maxWidth;tx.reflowPlan=move.reflowPlan;
     const layer=hit.closest('.pdf-hit-layer');
@@ -191,7 +213,7 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
     const tx=txForHit(app,hit,state);
     const layer=hit.closest('.pdf-hit-layer');
     const matrix=layer?.__matrix;
-    if(!tx||!layer||!matrix||!isLatestMovableOnPage(state,tx))return;
+    if(!tx||!layer||!matrix||!isMovableTransaction(tx))return;
     const layerRect=layer.getBoundingClientRect();
     const start={x:event.clientX,y:event.clientY,localX:event.clientX-layerRect.left,localY:event.clientY-layerRect.top};
     const session={hit,tx,layer,matrix,start,dragging:false,ghost:null,lastDx:0,lastDy:0};
@@ -215,7 +237,7 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
       const currentState=editorState();
       const currentTx=findTxById(currentState,tx.id);
       const moved=computeMovedInsert({state:currentState,tx:currentTx,layer,matrix,screenDx:dx,screenDy:dy});
-      if(!moved.ok){nativeStatus(moved.reason==='MOVE_DEPENDENCY_UNSAFE'?'Move the most recently added item first so page-flow dependencies stay safe.':'This added text cannot be moved safely in the current layout.','error');return;}
+      if(!moved.ok){nativeStatus('This added text cannot be moved safely in the current layout.','error');return;}
       await commitMove(hit,{...moved,txId:tx.id},{clientX:targetClientX,clientY:targetClientY});
     };
     session.onCancel=()=>clearActive();
