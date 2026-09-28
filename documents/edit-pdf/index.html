@@ -112,11 +112,11 @@ input.addEventListener('change',async()=>{
   await destroyCurrentEditor();
   setIntegrationStatus('Preparing the PDF engine for this browser…');
   try{
-    await ensurePdfRuntime();
+    const runtime=await ensurePdfRuntime();
     app.replaceChildren();
     picker.hidden=true;
     app.hidden=false;
-    setIntegrationStatus('Starting hybrid PDF analysis…');
+    setIntegrationStatus(runtime?.mode==='legacy'?'Safari-compatible PDF engine ready — analyzing document…':'Starting hybrid PDF analysis…');
     editor=createHybridPdfEditor({
       container:app,
       prepareNativeDocument:fileOrBytes=>smartLineInsertion.prepareDocument(fileOrBytes),
@@ -134,11 +134,12 @@ input.addEventListener('change',async()=>{
     showPickerUi({message});
   }
 });
-window.addEventListener('pagehide',()=>{
+window.addEventListener('pagehide',event=>{
+  if(event.persisted)return;
   clearDownload();
   destroyCurrentEditor().catch(()=>{});
   smartLineInsertion.destroy();insertAnchorBridge.destroy();precisionFontSize.destroy();
-},{once:true});
+});
 </script>
 </body>
 </html>
