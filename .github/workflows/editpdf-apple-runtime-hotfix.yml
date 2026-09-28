@@ -1,0 +1,47 @@
+name: Edit PDF Apple runtime hotfix
+
+on:
+  pull_request:
+    paths:
+      - 'documents/edit-pdf/fortress/src/rendering/pdfjs.js'
+      - 'documents/edit-pdf/fortress/vendor/pdf.legacy.mjs'
+      - 'documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs'
+      - 'documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression.mjs'
+      - '.github/workflows/editpdf-apple-runtime-hotfix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apple-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce Apple-hotfix-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          bad="$(git diff --name-only origin/main...HEAD | grep -Ev '^(documents/edit-pdf/fortress/src/rendering/pdfjs\.js|documents/edit-pdf/fortress/vendor/pdf\.legacy\.mjs|documents/edit-pdf/fortress/vendor/pdf\.worker\.legacy\.mjs|documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression\.mjs|\.github/workflows/editpdf-apple-runtime-hotfix\.yml)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected files in Apple runtime hotfix:'
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+      - name: Syntax check loader and local Safari runtime
+        run: |
+          node --check documents/edit-pdf/fortress/src/rendering/pdfjs.js
+          node --check documents/edit-pdf/fortress/vendor/pdf.legacy.mjs
+          node --check documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs
+      - name: Verify local runtime payloads are real
+        shell: bash
+        run: |
+          test "$(wc -c < documents/edit-pdf/fortress/vendor/pdf.legacy.mjs)" -gt 500000
+          test "$(wc -c < documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs)" -gt 1000000
+      - name: Verify iPhone iPad and macOS Safari routing
+        run: node documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression.mjs
