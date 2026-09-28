@@ -3,6 +3,7 @@ import { applyUpwardCompaction } from './upward-compaction-v3.js';
 import { expandDeletionCompactionTransactions } from './deletion-compaction-plan.js';
 import { validateDependencySession } from '../transaction-dependency-graph.js';
 import { addDeletionMarkerCompanions } from './list-marker-companions.js';
+import { prepareTableCellReplacementTransactions } from './table-cell-safety.js';
 import { prepareStructuredVectorTransactions } from './structured-vector-plan.js';
 import { expandStyleAwareInsertTransactions } from './style-aware-insert.js';
 import { validateVisualLayout } from './visual-validator.js';
@@ -23,7 +24,8 @@ function visualMappings(transactions=[]){
 
 export async function exportEditedPdf(originalBytes,transactions,options={}){
   const preparedTransactions=await addDeletionMarkerCompanions(originalBytes,transactions);
-  const structuredTransactions=await prepareStructuredVectorTransactions(originalBytes,preparedTransactions);
+  const cellAwareTransactions=await prepareTableCellReplacementTransactions(originalBytes,preparedTransactions);
+  const structuredTransactions=await prepareStructuredVectorTransactions(originalBytes,cellAwareTransactions);
   const styledTransactions=await expandStyleAwareInsertTransactions(originalBytes,structuredTransactions);
   const dependencySession=validateDependencySession(styledTransactions);
   if(!dependencySession.ok){
