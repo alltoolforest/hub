@@ -8,6 +8,10 @@ function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 function clean(text){return String(text||'').replace(/\s+/g,' ').trim();}
 function familyFromCss(value){const v=String(value||'').toLowerCase();return /mono|courier/.test(v)?'mono':(/serif|times|roman|book/.test(v)?'serif':'sans');}
 function isAllCaps(text){const letters=text.replace(/[^A-Za-z]/g,'');return letters.length>=4&&letters===letters.toUpperCase();}
+function hasExplicitInsertStyle(tx){
+  const family=tx?.fontFamily||'serif',size=Number(tx?.fontSize)||12;
+  return !!tx?.bold||!!tx?.italic||family!=='serif'||Math.abs(size-12)>.15;
+}
 function looksHeading(text,index,lines){
   const t=clean(text);
   if(!t||t.length>72||BULLET_RE.test(t)||NUMBERED_RE.test(t)||/:$/.test(t))return false;
@@ -69,7 +73,7 @@ function styleHints(items,tx){
   const responsibilities=nearest(items,i=>/^responsibilities\s*:?$/i.test(i.text),{x,y,maxDy:360,maxDx:180});
   const baseSize=clamp(Number(tx.fontSize)||body?.size||12,6,72);
   return {
-    body:{fontFamily:body?.fontFamily||tx.fontFamily||'serif',fontSize:clamp(body?.size||baseSize,6,72),bold:!!tx.bold,italic:!!tx.italic},
+    body:{fontFamily:body?.fontFamily||tx.fontFamily||'serif',fontSize:clamp(body?.size||baseSize,6,72),bold:false,italic:false},
     heading:{fontFamily:heading?.fontFamily||tx.fontFamily||body?.fontFamily||'serif',fontSize:clamp(heading?.size||Math.max(baseSize,12),6,72),bold:true,italic:false},
     subheading:{fontFamily:responsibilities?.fontFamily||heading?.fontFamily||tx.fontFamily||'serif',fontSize:clamp(responsibilities?.size||heading?.size||baseSize,6,72),bold:true,italic:false},
   };
@@ -85,7 +89,7 @@ function approxWrappedLines(text,size,width){
 function cloneTx(tx,patch){return {...tx,...patch,reflowPlan:null,status:tx.status||'COMMITTED'};}
 function expandOne(tx,hints){
   const parsed=structuredLines(tx.replacementUnicode);
-  if(tx?.kind!=='INSERT_TEXT'||!parsed.hasStructure)return [tx];
+  if(tx?.kind!=='INSERT_TEXT'||!parsed.hasStructure||hasExplicitInsertStyle(tx))return [tx];
   const baseX=Number(tx.x)||0,baseY=Number(tx.y)||0,maxWidth=Math.max(80,Number(tx.maxWidth)||300);
   let y=baseY;
   const components=[];
@@ -106,8 +110,8 @@ function expandOne(tx,hints){
       const marker=bullet[1],body=clean(bullet[2]);
       const indent=Math.max(7,size*.72),hang=Math.max(10,size*.92);
       const bodyWidth=Math.max(60,maxWidth-indent-hang);
-      push({replacementUnicode:marker,x:baseX+indent,y,fontSize:size,lineHeight,maxWidth:hang*.9,fontFamily:style.fontFamily,bold:false,italic:style.italic});
-      push({replacementUnicode:body,x:baseX+indent+hang,y,fontSize:size,lineHeight,maxWidth:bodyWidth,fontFamily:style.fontFamily,bold:style.bold,italic:style.italic});
+      push({replacementUnicode:marker,x:baseX+indent,y,fontSize:size,lineHeight,maxWidth:hang*.9,fontFamily:style.fontFamily,bold:false,italic:false});
+      push({replacementUnicode:body,x:baseX+indent+hang,y,fontSize:size,lineHeight,maxWidth:bodyWidth,fontFamily:style.fontFamily,bold:false,italic:false});
       y-=approxWrappedLines(body,size,bodyWidth)*lineHeight+Math.max(1,size*.08);
       continue;
     }
@@ -125,9 +129,6 @@ function expandOne(tx,hints){
   carrier.reflowPlan=tx.reflowPlan;
   carrier._styleAwareCarrier=true;
   carrier._styleAwareOriginalText=tx.replacementUnicode;
-  // Reflow must happen before any of the other newly drawn fragments. This
-  // prevents fragments below the cut from being mistaken for original page
-  // content and shifted a second time by the slice-based reflow engine.
   return [carrier,...components.filter(c=>c!==carrier)];
 }
 
@@ -135,7 +136,7 @@ export async function expandStyleAwareInsertTransactions(originalBytes,transacti
   const pageCache=new Map();
   const out=[];
   for(const tx of transactions){
-    if(tx?.kind!=='INSERT_TEXT'){out.push(tx);continue;}
+    if(tx?.kind!=='INSERT_TEXT'||hasExplicitInsertStyle(tx)){out.push(tx);continue;}
     const parsed=structuredLines(tx.replacementUnicode);
     if(!parsed.hasStructure){out.push(tx);continue;}
     const pageIndex=Number(tx.pageIndex);
