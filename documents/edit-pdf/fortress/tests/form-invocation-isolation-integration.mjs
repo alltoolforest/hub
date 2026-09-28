@@ -45,6 +45,8 @@ const result=replacePageFormXObjectInvocationStream(doc,0,{
 
 assert.notEqual(result.resourceName,'Fm1');
 assert.equal(result.resourceName.length,'Fm1'.length);
+assert.notEqual(result.newRef.toString(),formRef.toString());
+assert.equal(dec(rawStreamBytes(ctx,formRef)),dec(originalFormBytes));
 
 const rewrittenPage=getPageContentStreams(doc,0)[0].bytes;
 const text=dec(rewrittenPage);
@@ -56,6 +58,7 @@ assert.equal((text.match(new RegExp(`/${result.resourceName} Do`,'g'))||[]).leng
 const originalAfter=getPageFormXObjectStream(doc,0,{resourceName:'Fm1',expectedRefKey:formRef.toString()});
 assert.equal(dec(originalAfter.bytes),dec(originalFormBytes));
 const isolated=getPageFormXObjectStream(doc,0,{resourceName:result.resourceName});
+assert.notEqual(isolated.refKey,formRef.toString());
 assert.equal(dec(isolated.bytes),dec(replacementFormBytes));
 
 const saved=await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false});
