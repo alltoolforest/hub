@@ -3,10 +3,12 @@ name: Edit PDF Apple runtime hotfix
 on:
   pull_request:
     paths:
+      - 'documents/edit-pdf/fortress/src/rendering/browser-compat.js'
       - 'documents/edit-pdf/fortress/src/rendering/pdfjs.js'
       - 'documents/edit-pdf/fortress/vendor/pdf.legacy.mjs'
       - 'documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs'
       - 'documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression.mjs'
+      - 'documents/edit-pdf/fortress/tests/readable-stream-safari-regression.mjs'
       - '.github/workflows/editpdf-apple-runtime-hotfix.yml'
 
 permissions:
@@ -27,17 +29,19 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
-          bad="$(git diff --name-only origin/main...HEAD | grep -Ev '^(documents/edit-pdf/fortress/src/rendering/pdfjs\.js|documents/edit-pdf/fortress/vendor/pdf\.legacy\.mjs|documents/edit-pdf/fortress/vendor/pdf\.worker\.legacy\.mjs|documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression\.mjs|\.github/workflows/editpdf-apple-runtime-hotfix\.yml)$' || true)"
+          bad="$(git diff --name-only origin/main...HEAD | grep -Ev '^(documents/edit-pdf/fortress/src/rendering/browser-compat\.js|documents/edit-pdf/fortress/src/rendering/pdfjs\.js|documents/edit-pdf/fortress/vendor/pdf\.legacy\.mjs|documents/edit-pdf/fortress/vendor/pdf\.worker\.legacy\.mjs|documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression\.mjs|documents/edit-pdf/fortress/tests/readable-stream-safari-regression\.mjs|\.github/workflows/editpdf-apple-runtime-hotfix\.yml)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected files in Apple runtime hotfix:'
             printf '%s\n' "$bad"
             exit 1
           fi
-      - name: Syntax check loader and local Safari runtime
+      - name: Syntax check Apple compatibility layer and local Safari runtime
         run: |
+          node --check documents/edit-pdf/fortress/src/rendering/browser-compat.js
           node --check documents/edit-pdf/fortress/src/rendering/pdfjs.js
           node --check documents/edit-pdf/fortress/vendor/pdf.legacy.mjs
           node --check documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs
+          node --check documents/edit-pdf/fortress/tests/readable-stream-safari-regression.mjs
       - name: Verify local runtime payloads are real
         shell: bash
         run: |
@@ -45,3 +49,5 @@ jobs:
           test "$(wc -c < documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs)" -gt 1000000
       - name: Verify iPhone iPad and macOS Safari routing
         run: node documents/edit-pdf/fortress/tests/pdfjs-runtime-policy-regression.mjs
+      - name: Verify Safari ReadableStream async iteration compatibility
+        run: node documents/edit-pdf/fortress/tests/readable-stream-safari-regression.mjs
