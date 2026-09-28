@@ -46,6 +46,7 @@
         <h2>Open a PDF to edit</h2>
         <p>Select a PDF from your device. Processing stays in this browser. Native pages keep direct PDF editing; image-only scanned pages use OCR inside the same document session.</p>
         <input id="fortress-file" type="file" accept="application/pdf,.pdf" aria-label="Open a PDF to edit">
+        <p id="fortress-picker-error" role="alert" hidden style="color:#b42318;max-width:620px;margin:0"></p>
         <small>Mixed PDFs are handled page by page. Uncertain pages stay on the conservative native path rather than being rasterized.</small>
       </div>
       <div id="fortress-app" hidden></div>
@@ -65,13 +66,15 @@ const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
 const app=document.querySelector('#fortress-app');
 const integrationStatus=document.querySelector('#fortress-integration-status');
+const pickerError=document.querySelector('#fortress-picker-error');
 const downloads=document.querySelector('#fortress-downloads');
 let editor=null;
 let downloadUrl=null;
 
 function setIntegrationStatus(message=''){integrationStatus.textContent=message;}
+function setPickerError(message=''){pickerError.textContent=message;pickerError.hidden=!message;}
 function clearDownload(){if(downloadUrl){URL.revokeObjectURL(downloadUrl);downloadUrl=null;}downloads.replaceChildren();}
-function showPickerUi(){clearDownload();app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setIntegrationStatus('');}
+function showPickerUi({message=''}={}){clearDownload();app.replaceChildren();app.hidden=true;picker.hidden=false;input.value='';setPickerError(message);setIntegrationStatus(message);}
 async function destroyCurrentEditor(){
   const current=editor;editor=null;
   if(!current)return;
@@ -98,7 +101,7 @@ function handleExport({blob,filename}){
 input.addEventListener('change',async()=>{
   const file=input.files?.[0];
   if(!file)return;
-  clearDownload();
+  clearDownload();setPickerError('');
   await destroyCurrentEditor();
   app.replaceChildren();
   picker.hidden=true;
@@ -118,8 +121,8 @@ input.addEventListener('change',async()=>{
   }catch(error){
     console.error(error);
     await destroyCurrentEditor();
-    showPickerUi();
-    setIntegrationStatus(error?.message||'Could not open this PDF safely.');
+    const message=error?.message||'Could not open this PDF safely.';
+    showPickerUi({message});
   }
 });
 window.addEventListener('pagehide',()=>{

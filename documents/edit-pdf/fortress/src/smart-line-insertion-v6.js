@@ -1,4 +1,4 @@
-import { getDocument } from '../vendor/pdf.mjs';
+import { loadPdfjs } from './rendering/pdfjs.js';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
 import { detectSectionKeepGroups } from './layout/section-pagination.js';
 import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js';
@@ -69,8 +69,8 @@ async function measureDocument(fileOrBytes){
   if(fileOrBytes instanceof Uint8Array)bytes=fileOrBytes.slice();
   else if(fileOrBytes instanceof ArrayBuffer)bytes=new Uint8Array(fileOrBytes.slice(0));
   else bytes=new Uint8Array(await fileOrBytes.arrayBuffer());
-
-  const task=getDocument({data:bytes,isEvalSupported:false,useWorkerFetch:false});
+  const pdfjs=await loadPdfjs();
+  const task=pdfjs.getDocument({data:bytes,isEvalSupported:false,useWorkerFetch:false});
   const pdf=await task.promise;
   const pages=[];
   try{
