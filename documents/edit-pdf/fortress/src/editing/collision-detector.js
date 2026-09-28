@@ -1,5 +1,5 @@
 import { buildReplacementForSourceLine } from '../mutation/text-operator-rewriter.js';
-import { replacementWidthLimit } from '../export/table-cell-safety.js';
+import { replacementWidthLimit } from '../export/table-cell-geometry.js';
 
 function visualLineWidth(block,lineIndex){
   const line=block?.lines?.[lineIndex]||block?.lines?.at?.(-1);
