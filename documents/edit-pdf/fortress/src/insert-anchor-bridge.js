@@ -1,3 +1,5 @@
+import { attachAddedTextMover } from './added-text-mover.js';
+
 const PAGE_LAYER='.pdf-hit-layer';
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
@@ -47,12 +49,18 @@ function restoreVisualEditor(layer,originalHeight,originalStyleHeight){
  * position. On the next task the layer height is restored and only the textarea
  * UI is moved upward for visibility. PDF coordinates and editor UI coordinates
  * are thereby decoupled without changing the text engine or reflow engine.
+ *
+ * The added-text mover is composed here because it also operates strictly at
+ * the hit-layer boundary. It never rewrites original PDF objects directly: it
+ * reuses the existing Add Text commit, reflow, validation, History and Undo
+ * paths, so unsafe moves are refused and rolled back.
  */
 export function attachInsertAnchorBridge({app,getEditor}){
   if(!app)throw new Error('Edit PDF app element is required');
   let destroyed=false;
   let active=null;
   let timer=null;
+  const addedTextMover=attachAddedTextMover({app,getEditor});
 
   function prime(event){
     if(destroyed||active)return;
@@ -83,6 +91,7 @@ export function attachInsertAnchorBridge({app,getEditor}){
   return {
     destroy(){
       destroyed=true;
+      addedTextMover.destroy();
       app.removeEventListener('click',prime,true);
       if(timer){clearTimeout(timer);timer=null;}
       if(active){
