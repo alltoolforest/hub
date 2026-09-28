@@ -16,6 +16,44 @@ function metricsForPage(preview,pageIndex){
     .sort((a,b)=>(Number(a.sequenceIndex)||0)-(Number(b.sequenceIndex)||0));
 }
 
+function metricOwner(metric,transactions){
+  const id=String(metric?.transactionId||'');
+  if(!id)return null;
+  return (transactions||[]).find(tx=>{
+    const own=String(tx?.id||'');
+    return own&&(id===own||id.startsWith(`${own}:styled:`));
+  })||null;
+}
+
+function assertNoCrossPageInsertDependency(preview,transactions,changedIds,targetPage){
+  const changed=new Set(changedIds||[]);
+  const insertedByPage=new Map();
+  for(const tx of transactions||[]){
+    if(tx?.kind!=='INSERT_TEXT'||Number(tx.pageIndex)===Number(targetPage))continue;
+    const page=Number(tx.pageIndex);
+    if(!Number.isInteger(page))continue;
+    if(!insertedByPage.has(page))insertedByPage.set(page,[]);
+    insertedByPage.get(page).push(tx.id);
+  }
+  if(!insertedByPage.size)return;
+
+  for(const metric of preview?.reflowMetrics||[]){
+    const owner=metricOwner(metric,transactions);
+    if(!owner||!changed.has(owner.id)||Number(owner.pageIndex)!==Number(targetPage))continue;
+    const cascaded=Math.max(0,Number(metric?.cascadedPageCount)||0);
+    const appended=Math.max(0,Number(metric?.appendedPageCount)||0);
+    if(appended>0){
+      throw Object.assign(new Error('The move would create continuation pages while other pages already contain added text.'),{code:'MOVE_CROSS_PAGE_DEPENDENCY_UNSAFE',transactionId:owner.id});
+    }
+    if(!cascaded)continue;
+    const pages=(owner?.reflowPlan?.cascadePages||[]).slice(0,cascaded).map(item=>Number(item?.pageIndex)).filter(Number.isInteger);
+    const conflict=pages.find(page=>insertedByPage.has(page));
+    if(Number.isInteger(conflict)){
+      throw Object.assign(new Error('The move would cascade through a page that already contains added text.'),{code:'MOVE_CROSS_PAGE_DEPENDENCY_UNSAFE',transactionId:owner.id,pageIndex:conflict});
+    }
+  }
+}
+
 export async function replanDependentInsertions({
   transactions=[],
   targetId,
@@ -46,11 +84,15 @@ export async function replanDependentInsertions({
   let prefixPreview=prefix.length?await previewTransactions(prefix):null;
   let previewLength=prefix.length?prefix.length:0;
   let replannedCount=0;
+  const changedIds=[];
 
   for(let i=targetIndex;i<working.length;i++){
     const tx=working[i];
     const affected=tx?.kind==='INSERT_TEXT'&&Number(tx.pageIndex)===targetPage;
     if(affected){
+      if(i>targetIndex&&tx?.expandedFromBlockId){
+        throw Object.assign(new Error('A later generated paragraph depends on this layout and cannot be replanned independently.'),{code:'MOVE_DEPENDENCY_EXPANDED_INSERT_UNSAFE',dependentId:tx.id});
+      }
       // Rebuild the prefix preview if unrelated transactions were appended
       // since the last affected insert. REPLACE_TEXT/upward-compaction entries
       // can contribute page-flow metrics too, so a later insert must see them.
@@ -71,6 +113,7 @@ export async function replanDependentInsertions({
         existingMetrics:metricsForPage(prefixPreview,tx.pageIndex),
       });
       replannedCount++;
+      changedIds.push(tx.id);
     }
     prefix.push(tx);
     if(affected){
@@ -82,6 +125,7 @@ export async function replanDependentInsertions({
   const preview=previewLength===working.length&&prefixPreview
     ?prefixPreview
     :await previewTransactions(working);
+  assertNoCrossPageInsertDependency(preview,working,changedIds,targetPage);
 
-  return {transactions:working,preview,replannedCount,targetIndex};
+  return {transactions:working,preview,replannedCount,targetIndex,changedIds};
 }
