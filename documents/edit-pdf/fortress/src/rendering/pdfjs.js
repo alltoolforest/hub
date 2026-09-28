@@ -2,19 +2,11 @@ import { assertPdfjsRuntimeCompatible, ensurePdfjsRuntimeCompat } from './browse
 
 ensurePdfjsRuntimeCompat();
 
-const PDFJS_VERSION='6.3.289';
-const LEGACY_CANDIDATES=[
-  {
-    module:`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
-    worker:`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
-    source:'jsdelivr',
-  },
-  {
-    module:`https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
-    worker:`https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
-    source:'unpkg',
-  },
-];
+export const PDFJS_VERSION='6.3.289';
+export const MODERN_MODULE_PATH='../../vendor/pdf.mjs';
+export const LEGACY_MODULE_PATH='../../vendor/pdf.legacy.mjs';
+export const LEGACY_WORKER_PATH='../../vendor/pdf.worker.legacy.mjs';
+export const STANDARD_FONT_DATA_PATH='../../vendor/standard_fonts/';
 
 let promise=null;
 let activeMode=null;
@@ -35,11 +27,10 @@ function ensureNodeDomMatrix(){
   globalThis.DOMMatrix=DOMMatrixPolyfill;
 }
 
-function browserIdentity(){
-  if(typeof navigator==='undefined')return {ios:false,safari:false,webkit:false};
-  const ua=String(navigator.userAgent||'');
-  const platform=String(navigator.platform||'');
-  const ios=/iPad|iPhone|iPod/i.test(ua)||(platform==='MacIntel'&&Number(navigator.maxTouchPoints)>1);
+export function classifyBrowserIdentity({userAgent='',platform='',maxTouchPoints=0}={}){
+  const ua=String(userAgent||'');
+  const currentPlatform=String(platform||'');
+  const ios=/iPad|iPhone|iPod/i.test(ua)||(currentPlatform==='MacIntel'&&Number(maxTouchPoints)>1);
   const webkit=/AppleWebKit/i.test(ua);
   const chromium=/Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|SamsungBrowser/i.test(ua);
   const firefox=/Firefox|FxiOS/i.test(ua);
@@ -47,28 +38,55 @@ function browserIdentity(){
   return {ios,safari,webkit,ua};
 }
 
-export function prefersLegacyPdfjs(){
-  const identity=browserIdentity();
-  // Every browser on iOS uses WebKit. PDF.js itself recommends the legacy
-  // distribution for older browser runtimes, and Safari remains the browser
-  // family with the largest compatibility surface for the modern bundle.
-  return identity.ios||identity.safari;
+function browserIdentity(){
+  if(typeof navigator==='undefined')return {ios:false,safari:false,webkit:false,ua:''};
+  return classifyBrowserIdentity({
+    userAgent:navigator.userAgent,
+    platform:navigator.platform,
+    maxTouchPoints:navigator.maxTouchPoints,
+  });
+}
+
+export function prefersLegacyPdfjs(identity=browserIdentity()){
+  // Every browser on iOS uses WebKit. Safari/iOS use the pinned legacy build;
+  // no PDF bytes or runtime code is fetched from a third-party CDN.
+  return !!(identity?.ios||identity?.safari);
+}
+
+export function localStandardFontDataUrl(){
+  return new URL(STANDARD_FONT_DATA_PATH,import.meta.url).href;
+}
+
+export function withLocalPdfjsAssets(source){
+  // All AllToolForest callers currently use the PDF.js object form. Keep the
+  // helper conservative for external/primitive call shapes and never override
+  // an explicit caller policy.
+  if(!source||typeof source!=='object'||ArrayBuffer.isView(source)||source instanceof ArrayBuffer)return source;
+  if(source.standardFontDataUrl)return source;
+  return {...source,standardFontDataUrl:localStandardFontDataUrl()};
+}
+
+export function pdfjsRuntimePolicy(){
+  return {
+    version:PDFJS_VERSION,
+    modernModule:MODERN_MODULE_PATH,
+    legacyModule:LEGACY_MODULE_PATH,
+    legacyWorker:LEGACY_WORKER_PATH,
+    standardFontData:STANDARD_FONT_DATA_PATH,
+    externalRuntime:false,
+    externalStandardFonts:false,
+  };
 }
 
 async function loadModern(){
-  const module=await import('../../vendor/pdf.mjs');
+  const module=await import(MODERN_MODULE_PATH);
   return {module,mode:'modern',worker:null,source:'local'};
 }
 
 async function loadLegacy(){
-  let lastError=null;
-  for(const candidate of LEGACY_CANDIDATES){
-    try{
-      const module=await import(candidate.module);
-      return {module,mode:'legacy',worker:candidate.worker,source:candidate.source};
-    }catch(error){lastError=error;}
-  }
-  throw lastError||new Error('The Safari-compatible PDF engine could not be loaded.');
+  const module=await import(LEGACY_MODULE_PATH);
+  const worker=new URL(LEGACY_WORKER_PATH,import.meta.url).href;
+  return {module,mode:'legacy',worker,source:'local'};
 }
 
 async function chooseBuild(){
@@ -97,13 +115,23 @@ function applyWorker(module){
   if(worker)module.GlobalWorkerOptions.workerSrc=worker;
 }
 
+function wrapPdfjsModule(module){
+  const getDocument=source=>module.getDocument(withLocalPdfjsAssets(source));
+  return new Proxy(module,{
+    get(target,property,receiver){
+      if(property==='getDocument')return getDocument;
+      return Reflect.get(target,property,receiver);
+    },
+  });
+}
+
 export async function loadPdfjs(){
   if(!promise){
     promise=chooseBuild().then(result=>{
       activeMode=result.mode;
       activeLegacyWorker=result.worker||null;
       applyWorker(result.module);
-      return result.module;
+      return wrapPdfjsModule(result.module);
     }).catch(error=>{
       promise=null;activeMode=null;activeLegacyWorker=null;
       if(error?.code==='PDFJS_ALL_BUILDS_FAILED'||error?.code==='BROWSER_PDF_RUNTIME_UNSUPPORTED')throw error;
