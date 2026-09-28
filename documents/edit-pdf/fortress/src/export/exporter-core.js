@@ -293,8 +293,12 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
         usedDirect=true;
       }else{
         directFailure=direct;
-        if(direct.reason==='LAYOUT_COLLISION'){
-          throw Object.assign(new Error(direct.layout?.message||'Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION',layout:direct.layout||null});
+        // A detected table-cell boundary is authoritative: reconstruction must
+        // not bypass it. Ordinary text that is merely wider than its original
+        // line may be reconstructed with a coverage-checked fallback font and
+        // re-measured/shrunk into the mapped region instead of being refused.
+        if(direct.reason==='TABLE_CELL_WIDTH_OVERFLOW'){
+          throw Object.assign(new Error(direct.layout?.message||'Replacement would cross the detected table-cell boundary.'),{code:'TABLE_CELL_WIDTH_OVERFLOW',layout:direct.layout||null});
         }
         warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
       }
