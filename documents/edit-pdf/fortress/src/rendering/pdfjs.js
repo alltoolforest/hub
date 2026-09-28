@@ -6,6 +6,7 @@ export const PDFJS_VERSION='6.3.289';
 export const MODERN_MODULE_PATH='../../vendor/pdf.mjs';
 export const LEGACY_MODULE_PATH='../../vendor/pdf.legacy.mjs';
 export const LEGACY_WORKER_PATH='../../vendor/pdf.worker.legacy.mjs';
+export const STANDARD_FONT_DATA_PATH='../../vendor/standard_fonts/';
 
 let promise=null;
 let activeMode=null;
@@ -52,13 +53,28 @@ export function prefersLegacyPdfjs(identity=browserIdentity()){
   return !!(identity?.ios||identity?.safari);
 }
 
+export function localStandardFontDataUrl(){
+  return new URL(STANDARD_FONT_DATA_PATH,import.meta.url).href;
+}
+
+export function withLocalPdfjsAssets(source){
+  // All AllToolForest callers currently use the PDF.js object form. Keep the
+  // helper conservative for external/primitive call shapes and never override
+  // an explicit caller policy.
+  if(!source||typeof source!=='object'||ArrayBuffer.isView(source)||source instanceof ArrayBuffer)return source;
+  if(source.standardFontDataUrl)return source;
+  return {...source,standardFontDataUrl:localStandardFontDataUrl()};
+}
+
 export function pdfjsRuntimePolicy(){
   return {
     version:PDFJS_VERSION,
     modernModule:MODERN_MODULE_PATH,
     legacyModule:LEGACY_MODULE_PATH,
     legacyWorker:LEGACY_WORKER_PATH,
+    standardFontData:STANDARD_FONT_DATA_PATH,
     externalRuntime:false,
+    externalStandardFonts:false,
   };
 }
 
@@ -99,13 +115,23 @@ function applyWorker(module){
   if(worker)module.GlobalWorkerOptions.workerSrc=worker;
 }
 
+function wrapPdfjsModule(module){
+  const getDocument=source=>module.getDocument(withLocalPdfjsAssets(source));
+  return new Proxy(module,{
+    get(target,property,receiver){
+      if(property==='getDocument')return getDocument;
+      return Reflect.get(target,property,receiver);
+    },
+  });
+}
+
 export async function loadPdfjs(){
   if(!promise){
     promise=chooseBuild().then(result=>{
       activeMode=result.mode;
       activeLegacyWorker=result.worker||null;
       applyWorker(result.module);
-      return result.module;
+      return wrapPdfjsModule(result.module);
     }).catch(error=>{
       promise=null;activeMode=null;activeLegacyWorker=null;
       if(error?.code==='PDFJS_ALL_BUILDS_FAILED'||error?.code==='BROWSER_PDF_RUNTIME_UNSUPPORTED')throw error;
