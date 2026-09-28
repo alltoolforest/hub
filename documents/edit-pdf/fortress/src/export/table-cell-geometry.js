@@ -42,6 +42,13 @@ export function inferContainingTableCell(shapes=[],rect,{pageWidth=595,pageHeigh
   return {left,right,bottom,top,width,height,area:width*height,padding,confidence:'GRID_BOUNDARIES'};
 }
 
+export function inferContainingTableCellAtPoint(shapes=[],point,{pageWidth=595,pageHeight=842,padding=2.5}={}){
+  const x=Number(point?.x),y=Number(point?.y);
+  if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+  const rect={left:x-.5,right:x+.5,bottom:y-.5,top:y+.5,width:1,height:1,cx:x,cy:y};
+  return inferContainingTableCell(shapes,rect,{pageWidth,pageHeight,padding});
+}
+
 export function replacementWidthLimit(block,lineIndex,visualWidth,{maxVisualOverflow=1.12}={}){
   const line=block?.lines?.[lineIndex]||block?.lines?.at?.(-1);
   const lineX=Number.isFinite(Number(line?.minX))?Number(line.minX):Number(block?.bounds?.x);
@@ -52,4 +59,29 @@ export function replacementWidthLimit(block,lineIndex,visualWidth,{maxVisualOver
     return {limit:available,reason:'TABLE_CELL_WIDTH_OVERFLOW',cellAware:true,cell};
   }
   return {limit:Math.max(0,Number(visualWidth)||0)*maxVisualOverflow,reason:'LAYOUT_COLLISION',cellAware:false,cell:null};
+}
+
+export function tableCellInsertionLimits(cell,{x,y,fontSize=12,lineHeight=null,lineCount=1,minWidth=8}={}){
+  if(!cell)return {ok:true,cellAware:false,availableWidth:Infinity,reason:null};
+  const left=Number(cell.left),right=Number(cell.right),bottom=Number(cell.bottom),top=Number(cell.top);
+  const px=Number(x),py=Number(y),size=Math.max(1,Number(fontSize)||12);
+  const leading=Math.max(size,Number(lineHeight)||size*1.2),count=Math.max(1,Math.floor(Number(lineCount)||1));
+  if(![left,right,bottom,top,px,py].every(Number.isFinite)||right<=left||top<=bottom){
+    return {ok:false,cellAware:true,availableWidth:0,reason:'TABLE_CELL_GEOMETRY_INVALID'};
+  }
+  const padding=Math.max(1,Number(cell.padding)||2.5);
+  const innerLeft=left+padding,innerRight=right-padding,innerBottom=bottom+padding,innerTop=top-padding;
+  const availableWidth=Math.max(0,innerRight-px);
+  const textTop=py+size*.90;
+  const textBottom=py-(count-1)*leading-size*.28;
+  if(px<innerLeft-.5||px>innerRight+.5||availableWidth<Math.max(1,Number(minWidth)||8)){
+    return {ok:false,cellAware:true,availableWidth,reason:'TABLE_CELL_INSERT_WIDTH_UNSAFE',innerLeft,innerRight,innerBottom,innerTop,textTop,textBottom};
+  }
+  if(textTop>innerTop+.5){
+    return {ok:false,cellAware:true,availableWidth,reason:'TABLE_CELL_INSERT_TOP_OVERFLOW',innerLeft,innerRight,innerBottom,innerTop,textTop,textBottom};
+  }
+  if(textBottom<innerBottom-.5){
+    return {ok:false,cellAware:true,availableWidth,reason:'TABLE_CELL_INSERT_BOTTOM_OVERFLOW',innerLeft,innerRight,innerBottom,innerTop,textTop,textBottom};
+  }
+  return {ok:true,cellAware:true,availableWidth,reason:null,innerLeft,innerRight,innerBottom,innerTop,textTop,textBottom};
 }
