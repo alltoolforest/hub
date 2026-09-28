@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import { PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from '../src/core/pdf-lib.js';
-import { getPageContentStreams, getPageFormXObjectStream, replacePageFormXObjectInvocationStream } from '../src/core/document-model.js';
-import { parseContentStream } from '../src/parser/content-stream-parser.js';
+import { createRequire } from 'node:module';
+
+// Production loads the vendored UMD build in a browser, where it installs
+// globalThis.PDFLib. Reproduce that browser global explicitly in Node before
+// dynamically importing the Fortress ESM facade.
+const require=createRequire(import.meta.url);
+globalThis.PDFLib=require('../../../../assets/vendor/pdf-lib.js');
+
+const { PDFDocument, PDFName, PDFRawStream, decodePDFRawStream }=await import('../src/core/pdf-lib.js');
+const { getPageContentStreams, getPageFormXObjectStream, replacePageFormXObjectInvocationStream }=await import('../src/core/document-model.js');
+const { parseContentStream }=await import('../src/parser/content-stream-parser.js');
 
 const enc=value=>new TextEncoder().encode(value);
 const dec=value=>new TextDecoder('latin1').decode(value);
