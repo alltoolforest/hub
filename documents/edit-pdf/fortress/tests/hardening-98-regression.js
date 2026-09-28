@@ -3,6 +3,7 @@ import { deletedVisualLineCount, expandDeletionCompactionTransactions } from '..
 import { validateDependencySession, assertMoveDependencySafety } from '../src/transaction-dependency-graph.js';
 import { resolveListSemanticUnit, listRunKey } from '../src/export/list-semantic-units.js';
 import { assessVisualGeometry, compareVisualGeometry } from '../src/export/visual-geometry-validator.js';
+import { inferContainingTableCell, replacementWidthLimit } from '../src/export/table-cell-geometry.js';
 
 function fail(message){throw new Error(message||'Assertion failed');}
 function assert(condition,message){if(!condition)fail(message);}
@@ -58,6 +59,14 @@ export function runHardening98Regressions(){
     const baseline=assessVisualGeometry([rect('Safe',10,10,60,22,20)],{width:200,height:200});
     const output=assessVisualGeometry([rect('Safe',10,10,60,22,20),rect('Clip',180,30,230,42,40)],{width:200,height:200});
     equal(compareVisualGeometry(output,baseline).failures[0].code,'VISUAL_TEXT_OUT_OF_BOUNDS');
+  });
+  test('T98-CELL-01 table cell is inferred from vector enclosure',()=>{
+    const target={left:120,right:175,bottom:500,top:514,width:55,height:14,cx:147.5,cy:507};
+    const cell=inferContainingTableCell([{left:100,right:200,bottom:480,top:530,kind:'CELL'}],target,{pageWidth:595,pageHeight:842});assert(cell);equal(cell.right,200);
+  });
+  test('T98-CELL-02 replacement width is capped by cell boundary',()=>{
+    const block={bounds:{x:120,y:500,width:55,height:14},lines:[{minX:120,maxX:175}],tableCell:{left:100,right:200,bottom:480,top:530,padding:3}};
+    const limit=replacementWidthLimit(block,0,55);equal(limit.cellAware,true);equal(limit.limit,77);equal(limit.reason,'TABLE_CELL_WIDTH_OVERFLOW');
   });
 
   return cases;
