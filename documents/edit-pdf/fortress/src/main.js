@@ -12,6 +12,7 @@ import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
 import { exportEditedPdf } from './export/exporter.js';
 import { planInsertionReflow } from './layout/reflow-planner.js';
+import { replanDependentInsertions } from './dependent-insert-replan.js';
 
 export { configurePdfWorker };
 
@@ -634,6 +635,77 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     return preview;
   }
 
+
+  function transactionMapKey(tx){
+    return tx?.kind==='INSERT_TEXT'?tx.id:(tx?.blockId||tx?.id);
+  }
+
+  function applyTransactionList(transactions){
+    txByBlock.clear();
+    for(const tx of transactions||[]){
+      const key=transactionMapKey(tx);
+      if(key)txByBlock.set(key,tx);
+    }
+  }
+
+  function planningGeometry(index){
+    if(Number(index)===Number(pageIndex)&&currentPageGeometry)return {...currentPageGeometry};
+    const page=model?.page?.(Number(index));
+    const box=page?.cropBox||page?.mediaBox||{};
+    return {
+      width:Math.max(1,Number(box.width)||595),
+      height:Math.max(1,Number(box.height)||842),
+      rotation:Number(page?.rotation)||0,
+    };
+  }
+
+  async function moveInsertTransaction({id,x,y,maxWidth}={}){
+    const current=[...txByBlock.values()];
+    const target=current.find(tx=>tx?.id===id);
+    if(!target)throw Object.assign(new Error('The added text could not be found.'),{code:'MOVE_TRANSACTION_MISSING'});
+    if(Number(target.pageIndex)!==Number(pageIndex)){
+      throw Object.assign(new Error('Open the page containing this added text before moving it.'),{code:'MOVE_PAGE_NOT_ACTIVE'});
+    }
+
+    const oldTransactions=current.slice();
+    setStatus('Moving added text and recalculating dependent page flow…');
+    const replanned=await replanDependentInsertions({
+      transactions:current,
+      targetId:id,
+      patch:{x,y,maxWidth},
+      blocks:analysis?.blocks||[],
+      geometryForPage:planningGeometry,
+      previewTransactions:buildPreviewForTransactions,
+    });
+    const nextRenderer=new PdfRenderer(replanned.preview.bytes);
+    await nextRenderer.load();
+
+    const oldPreviewRenderer=previewRenderer;
+    const oldReflowMetrics=previewReflowMetrics;
+    applyTransactionList(replanned.transactions);
+    previewToken++;
+    previewRenderer=nextRenderer;previewReflowMetrics=replanned.preview.reflowMetrics||[];
+    try{
+      await renderPage({announce:false});
+    }catch(error){
+      applyTransactionList(oldTransactions);
+      previewToken++;
+      previewRenderer=oldPreviewRenderer;previewReflowMetrics=oldReflowMetrics;
+      nextRenderer.destroy();
+      try{await renderPage({announce:false});}catch{}
+      throw error;
+    }
+    oldPreviewRenderer?.destroy();
+    history.push({
+      undo:()=>{applyTransactionList(oldTransactions);onChange([...txByBlock.values()]);},
+      redo:()=>{applyTransactionList(replanned.transactions);onChange([...txByBlock.values()]);},
+    });
+    updateHistory();onChange([...txByBlock.values()]);
+    const dependent=Math.max(0,replanned.replannedCount-1);
+    setStatus(dependent?`Added text moved safely — ${dependent} later insertion${dependent===1?'':'s'} replanned. Undo restores the previous layout.`:'Added text moved safely — Undo restores its previous position.');
+    return {...replanned,transactions:[...txByBlock.values()]};
+  }
+
   async function saveCopy(){
     if(!originalBytes)throw new Error('No PDF open');
     try{
@@ -677,5 +749,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }
