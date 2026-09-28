@@ -368,6 +368,15 @@ export function createHybridPdfEditor({
   }
   async function undo(){if(activePage()?.route==='native')return nativeEngine?.undo?.();}
   async function redo(){if(activePage()?.route==='native')return nativeEngine?.redo?.();}
+  async function moveInsertTransaction(request){
+    if(activePage()?.route!=='native')throw Object.assign(new Error('Added native text can only be moved on a native PDF page.'),{code:'HYBRID_MOVE_NOT_NATIVE'});
+    if(busy)throw Object.assign(new Error('The PDF editor is busy.'),{code:'HYBRID_EDITOR_BUSY'});
+    const engine=await ensureNativeEngine();
+    if(typeof engine?.moveInsertTransaction!=='function')throw Object.assign(new Error('Dependent text movement is unavailable in this editor session.'),{code:'MOVE_DEPENDENCY_UNAVAILABLE'});
+    setBusy(true);
+    try{return await engine.moveInsertTransaction(request);}
+    finally{setBusy(false);}
+  }
 
   async function destroy(){
     if(destroyed)return;destroyed=true;
@@ -384,5 +393,5 @@ export function createHybridPdfEditor({
   close.addEventListener('click',()=>{destroy().then(()=>onClose()).catch(onError);});
   updateToolbar();
 
-  return {open,destroy,getState,setMode,undo,redo,save:saveCopy};
+  return {open,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
 }
