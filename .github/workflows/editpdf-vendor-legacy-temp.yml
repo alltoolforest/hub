@@ -1,0 +1,47 @@
+name: TEMP Vendor Edit PDF Legacy PDF.js
+
+on:
+  push:
+    branches: [editpdf-98-task20-local-pdfjs-legacy]
+    paths:
+      - '.github/workflows/editpdf-vendor-legacy-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  vendor-legacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: editpdf-98-task20-local-pdfjs-legacy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch exact pinned PDF.js distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pdfjs-vendor
+          mkdir -p /tmp/pdfjs-vendor
+          cd /tmp/pdfjs-vendor
+          npm pack pdfjs-dist@6.3.289 --silent
+          tar -xzf pdfjs-dist-6.3.289.tgz
+          test -s package/legacy/build/pdf.mjs
+          test -s package/legacy/build/pdf.worker.mjs
+          cp package/legacy/build/pdf.mjs "$GITHUB_WORKSPACE/documents/edit-pdf/fortress/vendor/pdf.legacy.mjs"
+          cp package/legacy/build/pdf.worker.mjs "$GITHUB_WORKSPACE/documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs"
+      - name: Record vendored files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add documents/edit-pdf/fortress/vendor/pdf.legacy.mjs documents/edit-pdf/fortress/vendor/pdf.worker.legacy.mjs
+          if git diff --cached --quiet; then
+            echo "Pinned legacy files already current."
+            exit 0
+          fi
+          git commit -m "Task 20: vendor pinned PDF.js legacy runtime"
+          git push origin HEAD:editpdf-98-task20-local-pdfjs-legacy
