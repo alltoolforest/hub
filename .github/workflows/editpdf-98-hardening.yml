@@ -15,9 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Enforce Edit PDF-only change scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          bad="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -Ev '^(documents/edit-pdf/|\.github/workflows/editpdf-98-hardening\.yml$)' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected files changed outside Edit PDF hardening scope:'
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+          echo 'Scope check passed: only Edit PDF files and its read-only CI gate changed.'
       - name: Syntax check Edit PDF hardening integration
         run: |
           node --check documents/edit-pdf/fortress/src/mapping/source-mapper.js
