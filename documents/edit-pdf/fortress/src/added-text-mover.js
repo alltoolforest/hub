@@ -26,7 +26,6 @@ function isLatestMovableOnPage(state,tx){
   const page=insertedTransactions(state);
   return isMovableTransaction(tx)&&page.length>0&&page.at(-1)?.id===tx?.id;
 }
-function transactionIndex(state,tx){return (state?.transactions||[]).findIndex(item=>item?.id===tx?.id);}
 function layerGeometry(layer,matrix){
   const width=Math.max(1,layer?.clientWidth||Number.parseFloat(layer?.style?.width)||1);
   const height=Math.max(1,layer?.clientHeight||Number.parseFloat(layer?.style?.height)||1);
@@ -39,13 +38,11 @@ function screenDeltaToPdf(matrix,dx,dy){
   return {x:b.x-a.x,y:b.y-a.y};
 }
 function priorMetrics(state,tx){
-  const index=transactionIndex(state,tx);
-  if(index<=0)return [];
-  const priorIds=(state?.transactions||[]).slice(0,index).map(item=>String(item?.id||'')).filter(Boolean);
+  const own=String(tx?.id||'');
   return (state?.reflowMetrics||[]).filter(metric=>{
     if(Number(metric?.pageIndex)!==Number(tx?.pageIndex))return false;
     const id=String(metric?.transactionId||'');
-    return priorIds.some(prior=>id===prior||id.startsWith(`${prior}:styled:`));
+    return id!==own&&!id.startsWith(`${own}:styled:`);
   });
 }
 
@@ -65,13 +62,14 @@ export function computeMovedInsert({state,tx,layer,matrix,screenDx=0,screenDy=0,
   const x=clamp((Number(tx.x)||0)+delta.x,minX,maxX);
   const y=clamp((Number(tx.y)||0)+delta.y,minY,maxY);
   const maxWidth=Math.max(40,Math.min(Number(tx.maxWidth)||300,page.right-x-8));
-  const reflowPlan=planInsertionReflow({
+  const dependencyReplan=!isLatestMovableOnPage(state,tx);
+  const reflowPlan=dependencyReplan?copyPlan(tx.reflowPlan):planInsertionReflow({
     blocks:state.analysis?.blocks||[],
     x,y,maxWidth,fontSize:size,
     pageWidth:page.width,pageHeight:page.height,pageRotation:0,
     existingMetrics:priorMetrics(state,tx),
   });
-  return {ok:true,x,y,maxWidth,reflowPlan,delta,page};
+  return {ok:true,x,y,maxWidth,reflowPlan,delta,page,dependencyReplan};
 }
 
 export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
@@ -127,7 +125,11 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
     const tx=txForHit(app,hit,state);
     if(!tx||tx.id!==move.txId)return false;
 
-    if(typeof editor?.moveInsertTransaction==='function'){
+    if(!isLatestMovableOnPage(state,tx)){
+      if(typeof editor?.moveInsertTransaction!=='function'){
+        nativeStatus('This browser session cannot safely replan later insertions yet. Move the most recently added item instead.','error');
+        return false;
+      }
       try{
         const result=await editor.moveInsertTransaction({id:tx.id,x:move.x,y:move.y,maxWidth:move.maxWidth});
         const dependent=Math.max(0,Number(result?.replannedCount||0)-1);
@@ -135,15 +137,14 @@ export function attachAddedTextMover({app,getEditor,onStatus=()=>{}}={}){
         scheduleDecorate();
         return true;
       }catch(error){
-        nativeStatus(error?.code||error?.message||'That move was rejected by PDF safety checks. The original layout was preserved.','error');
+        const messages={
+          MOVE_DEPENDENCY_EXPANDED_INSERT_UNSAFE:'A later generated paragraph depends on this layout, so the move was rejected safely.',
+          MOVE_CROSS_PAGE_DEPENDENCY_UNSAFE:'This move would cascade through another page that already contains added text, so it was rejected safely.',
+        };
+        nativeStatus(messages[error?.code]||error?.code||error?.message||'That move was rejected by PDF safety checks. The original layout was preserved.','error');
         scheduleDecorate();
         return false;
       }
-    }
-
-    if(!isLatestMovableOnPage(state,tx)){
-      nativeStatus('This browser session cannot safely replan later insertions yet. Move the most recently added item instead.','error');
-      return false;
     }
     const snapshot=snapshotTx(tx);
     tx.x=move.x;tx.y=move.y;tx.maxWidth=move.maxWidth;tx.reflowPlan=move.reflowPlan;
