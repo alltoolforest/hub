@@ -1,6 +1,6 @@
 import { inferSourceFontTraits, isCoverageFailure } from '../src/fonts/font-fallback-policy.js';
 import { deletedVisualLineCount, expandDeletionCompactionTransactions } from '../src/export/deletion-compaction-plan.js';
-import { validateDependencySession, assertMoveDependencySafety } from '../src/transaction-dependency-graph.js';
+import { validateDependencySession, assertMoveDependencySafety, transactionsForUpwardCompaction } from '../src/transaction-dependency-graph.js';
 import { resolveListSemanticUnit, listRunKey } from '../src/export/list-semantic-units.js';
 import { assessVisualGeometry, compareVisualGeometry } from '../src/export/visual-geometry-validator.js';
 import { inferContainingTableCell, replacementWidthLimit } from '../src/export/table-cell-geometry.js';
@@ -11,6 +11,7 @@ function equal(actual,expected,message){if(actual!==expected)fail(`${message||'V
 function same(actual,expected,message){if(JSON.stringify(actual)!==JSON.stringify(expected))fail(`${message||'Values differ'}\nexpected ${JSON.stringify(expected)}\nactual ${JSON.stringify(actual)}`);}
 function run(text,x,y,{size=11,advance=8,index=0}={}){return {text,x,y,fontSize:size,advance,operatorIndex:index,streamIndex:0};}
 function insert(id,pageIndex=0){return {id,kind:'INSERT_TEXT',pageIndex,replacementUnicode:id};}
+function staticInsert(id,y,pageIndex=0){return {id,kind:'INSERT_TEXT',pageIndex,x:80,y,maxWidth:240,replacementUnicode:id,reflowPlan:{enabled:false,reason:'EXISTING_WHITESPACE_SUFFICIENT'}};}
 function deletion(id,pageIndex=0,lines=1){return {id,kind:'REPLACE_TEXT',pageIndex,originalUnicode:'old',replacementUnicode:'',block:{id:`b-${id}`,text:'old',fontSize:11,bounds:{x:80,y:500,width:300,height:lines*14},lines:Array.from({length:lines},(_,i)=>({text:`line ${i+1}`,y:600-i*14,minX:80,maxX:360,fontSize:11}))}};}
 function rect(text,left,top,right,bottom,baseline=(top+bottom)/2){return {text,left,top,right,bottom,baseline,angle:0};}
 
@@ -33,6 +34,18 @@ export function runHardening98Regressions(){
   });
   test('T98-GRAPH-02 moving before later contraction fails closed',()=>{
     let code='';try{assertMoveDependencySafety([insert('i'),deletion('d')],'i');}catch(error){code=error?.code||'';}equal(code,'MOVE_DEPENDENCY_CONTRACTION_UNSAFE');
+  });
+  test('T98-GRAPH-03 proven no-reflow insertion above deletion is safe for compaction',()=>{
+    const txs=[staticInsert('static-above',700),deletion('d')];
+    equal(validateDependencySession(txs).ok,true);
+    const filtered=transactionsForUpwardCompaction(txs);
+    equal(filtered.length,1);equal(filtered[0].id,'d');
+  });
+  test('T98-GRAPH-04 downstream static insertion still fails closed',()=>{
+    const txs=[staticInsert('static-below',540),deletion('d')];
+    equal(validateDependencySession(txs).ok,true);
+    let code='';try{transactionsForUpwardCompaction(txs);}catch(error){code=error?.code||'';}
+    equal(code,'COMPACTION_WITH_DOWNSTREAM_STATIC_INSERT_UNSUPPORTED');
   });
   test('T98-LIST-01 wrapped bullet owns marker and continuation',()=>{
     const runs=[run('•',60,600,{index:1}),run('First line',82,600,{index:2}),run('continued',82,586,{index:3}),run('•',60,572,{index:4}),run('Next',82,572,{index:5})];
