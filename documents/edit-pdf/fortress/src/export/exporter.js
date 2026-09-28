@@ -1,7 +1,7 @@
 import { exportEditedPdf as exportEditedPdfCore } from './exporter-core.js';
 import { applyUpwardCompaction } from './upward-compaction-v3.js';
 import { expandDeletionCompactionTransactions } from './deletion-compaction-plan.js';
-import { validateDependencySession } from '../transaction-dependency-graph.js';
+import { validateDependencySession, transactionsForUpwardCompaction } from '../transaction-dependency-graph.js';
 import { addDeletionMarkerCompanions } from './list-marker-companions.js';
 import { prepareTableCellTransactions } from './table-cell-safety.js';
 import { preflightTableCellInsertions } from './table-cell-insert-preflight.js';
@@ -35,7 +35,8 @@ export async function exportEditedPdf(originalBytes,transactions,options={}){
     throw Object.assign(new Error('This combination of structural edits cannot yet be recomputed safely as one page transaction.'),{code:conflict?.code||'TRANSACTION_DEPENDENCY_UNSAFE',pageIndex:conflict?.pageIndex,conflicts:dependencySession.conflicts});
   }
   const result=await exportEditedPdfCore(originalBytes,cellSafeTransactions,options);
-  const compactionTransactions=expandDeletionCompactionTransactions(cellSafeTransactions);
+  const safeCompactionInput=transactionsForUpwardCompaction(cellSafeTransactions);
+  const compactionTransactions=expandDeletionCompactionTransactions(safeCompactionInput);
   const compacted=await applyUpwardCompaction(result,compactionTransactions,{preview:!!options.preview});
   if(options.preview)return compacted;
 
