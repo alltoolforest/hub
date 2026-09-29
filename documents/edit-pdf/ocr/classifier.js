@@ -40,7 +40,8 @@ export async function createPdfPageClassifier(source){
   const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(await source.arrayBuffer());
   const pdfjs=await loadPdfjs();
   const task=pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
-  const pdf=await task.promise;
+  let pdf;
+  try{pdf=await task.promise;}catch(error){try{await task.destroy();}catch{}throw error;}
   const pageCount=pdf.numPages;
   const cache=new Map();
   let destroyed=false;
@@ -50,6 +51,7 @@ export async function createPdfPageClassifier(source){
     if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=pageCount)throw new RangeError('PDF page index is out of range.');
     if(cache.has(pageIndex))return cache.get(pageIndex);
     const page=await pdf.getPage(pageIndex+1);
+    try{
     const [textContent,ops]=await Promise.all([page.getTextContent(),page.getOperatorList()]);
     const chars=meaningfulChars(textContent.items);
     const imageOps=imageOpCount(pdfjs,ops);
@@ -58,6 +60,7 @@ export async function createPdfPageClassifier(source){
     const result={pageIndex,...decision,chars,textItems,imageOps};
     cache.set(pageIndex,result);
     return result;
+    }finally{page.cleanup();}
   }
 
   async function classifyAll({onProgress=()=>{}}={}){

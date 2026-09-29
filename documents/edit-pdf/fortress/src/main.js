@@ -112,6 +112,12 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   const viewportCtl=new ViewportController(docArea);
   let inline=null;
   let insertEditorCleanup=null;
+  function hasPendingEdit(){return !!activeTextInput?.isConnected;}
+  function requireFinishedEdit(){
+    if(!hasPendingEdit())return true;
+    setStatus('Press Done to finish this text edit before saving, changing pages, zooming, or using Undo/Redo.','warning');
+    activeTextInput.focus();return false;
+  }
 
   function button(text,label,kind=''){
     const b=document.createElement('button');
@@ -337,6 +343,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
 
   function beginEdit(sourceBlock,shownBlock,layer,matrix,evt){
+    if(!requireFinishedEdit())return;
     insertEditorCleanup?.();insertEditorCleanup=null;
     inline?.cancel();
     const existing=txByBlock.get(sourceBlock.id);
@@ -372,6 +379,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
   async function beginInsertEditor(layer,matrix,evt,existingTx=null){
     evt?.preventDefault?.();
+    if(!requireFinishedEdit())return;
     inline?.cancel();
     insertEditorCleanup?.();insertEditorCleanup=null;
     const layerRect=layer.getBoundingClientRect();
@@ -708,6 +716,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
   async function saveCopy(){
     if(!originalBytes)throw new Error('No PDF open');
+    if(!requireFinishedEdit())throw new Error('Press Done to finish this text edit before saving.');
     try{
       setStatus('Validating edited PDF…');
       const result=await exportEditedPdf(originalBytes,[...txByBlock.values()]);
@@ -730,11 +739,11 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
 
   function setMode(mode){setAddTextMode(mode==='add-text');}
-  async function undoAction(){if(history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
-  async function redoAction(){if(history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
-  function destroy(){previewToken++;insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;previewReflowMetrics=[];currentPageGeometry=null;}
+  async function undoAction(){if(requireFinishedEdit()&&history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
+  async function redoAction(){if(requireFinishedEdit()&&history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
+  function destroy(){previewToken++;viewportCtl.stop();insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;previewReflowMetrics=[];currentPageGeometry=null;}
 
-  addText.addEventListener('click',()=>setAddTextMode(!addTextMode));
+  addText.addEventListener('click',()=>{if(requireFinishedEdit())setAddTextMode(!addTextMode);});
   familySelect.addEventListener('change',updateActiveInputFormatting);
   sizeSelect.addEventListener('change',updateActiveInputFormatting);
   bold.addEventListener('click',()=>{setToggle(bold,bold.getAttribute('aria-pressed')!=='true');updateActiveInputFormatting();});
@@ -743,11 +752,18 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   undo.addEventListener('click',()=>undoAction().catch(()=>{}));
   redo.addEventListener('click',()=>redoAction().catch(()=>{}));
   save.addEventListener('click',()=>saveCopy().catch(()=>{}));
-  prev.addEventListener('click',async()=>{if(pageIndex>0){pageIndex--;await renderPage();}});
-  next.addEventListener('click',async()=>{if(pdfDoc&&pageIndex<pdfDoc.getPageCount()-1){pageIndex++;await renderPage();}});
-  zoomOut.addEventListener('click',async()=>{zoom=Math.max(.6,zoom-.15);await renderPage();});
-  zoomIn.addEventListener('click',async()=>{zoom=Math.min(2,zoom+.15);await renderPage();});
+  let viewBusy=false;
+  async function changeView(change){
+    if(viewBusy||!requireFinishedEdit())return;
+    viewBusy=true;
+    try{change();await renderPage();}catch(error){setStatus(error.message,'error');onError(error);}
+    finally{viewBusy=false;}
+  }
+  prev.addEventListener('click',()=>{if(pageIndex>0)changeView(()=>pageIndex--);});
+  next.addEventListener('click',()=>{if(pdfDoc&&pageIndex<pdfDoc.getPageCount()-1)changeView(()=>pageIndex++);});
+  zoomOut.addEventListener('click',()=>changeView(()=>{zoom=Math.max(.6,zoom-.15);}));
+  zoomIn.addEventListener('click',()=>changeView(()=>{zoom=Math.min(2,zoom+.15);}));
   updateHistory();updatePageLabel();
 
-  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
+  return {open,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }

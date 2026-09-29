@@ -1,11 +1,12 @@
 import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
-import { loadPdfjs } from '../fortress/src/rendering/pdfjs.js';
+import { withPdfDocument } from '../fortress/src/rendering/with-document.js';
 import { createAdvancedPdfTextEngine } from '../fortress/src/main.js';
 import { createPdfPageClassifier } from './classifier.js';
 import { createScannedPdfEditor } from './scan-editor.js';
+import { DEFAULT_LIMITS } from '../fortress/src/core/pdf-loader.js';
 
 const OCR_PAGE_CONFIDENCE_MIN=.85;
-const NATIVE_BUSY_RE=/Reading document|Finding editable text|Applying edits|Adding text|Updating added text|Validating edited PDF/i;
+const NATIVE_BUSY_RE=/Reading document|Finding editable text|Applying edit|Adding text|Updating added text|Validating edited PDF/i;
 
 function button(label,className=''){
   const b=document.createElement('button');
@@ -49,20 +50,14 @@ async function verifyHybridPdf(bytes,{expectedPages,touchedPages=[]}={}){
   if(structural.getPageCount()!==expectedPages){
     throw Object.assign(new Error('Hybrid export page-count validation failed.'),{code:'HYBRID_PAGE_COUNT_MISMATCH',expectedPages,actualPages:structural.getPageCount()});
   }
-  const pdfjs=await loadPdfjs();
-  const task=pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
-  const pdf=await task.promise;
-  try{
+  await withPdfDocument(bytes,async pdf=>{
     if(pdf.numPages!==expectedPages)throw Object.assign(new Error('Hybrid render validation page count differs.'),{code:'HYBRID_RENDER_PAGE_COUNT_MISMATCH'});
     const checks=new Set([0,Math.max(0,expectedPages-1),...touchedPages].filter(i=>Number.isInteger(i)&&i>=0&&i<expectedPages));
     for(const pageIndex of checks){
       const page=await pdf.getPage(pageIndex+1);
-      await page.getOperatorList();
+      try{await page.getOperatorList();}finally{page.cleanup();}
     }
-  }finally{
-    try{await pdf.destroy?.();}catch{}
-    try{await task.destroy?.();}catch{}
-  }
+  });
 }
 
 function hideNativeManagedControls(host){
@@ -114,6 +109,18 @@ export function createHybridPdfEditor({
     close.disabled=busy;
   }
   function setBusy(value){busy=!!value;updateToolbar();}
+  function requireFinishedEdit(){
+    const native=nativeEngine?.getState?.();
+    const scan=activeOcrEditor?.getState?.();
+    if(native?.hasPendingEdit||scan?.hasPendingEdit){
+      const message=scan?.hasPendingEdit?'Apply or cancel the scanned-text edit first.':'Press Done to finish this text edit before saving or changing pages.';
+      onWarning({code:'HYBRID_PENDING_EDIT',message});setStatus(message);return false;
+    }
+    if(native?.viewBusy||scan?.busy||NATIVE_BUSY_RE.test(nativeHost.querySelector('.pdf-fortress-status')?.textContent||'')){
+      setStatus('Please wait for the current PDF operation to finish.');return false;
+    }
+    return true;
+  }
   function markNativeDirty(transactions=[]){
     for(const page of pages)page.nativeDirty=false;
     for(const tx of transactions){const page=pages[Number(tx?.pageIndex)];if(page)page.nativeDirty=true;}
@@ -303,7 +310,7 @@ export function createHybridPdfEditor({
 
   async function saveCopy(){
     if(!sourceBytes)throw new Error('No PDF open.');
-    if(busy)return null;
+    if(busy||!requireFinishedEdit())return null;
     const reopenOcr=activePage()?.route==='ocr';
     setBusy(true);
     try{
@@ -325,25 +332,29 @@ export function createHybridPdfEditor({
 
   async function open(file){
     if(destroyed)throw new Error('Hybrid editor has been destroyed.');
+    if((file?.byteLength??file?.size??0)>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
     sourceFile=file instanceof Uint8Array?null:file;
     sourceName=file?.name||'document.pdf';
     sourceBytes=file instanceof Uint8Array?copyBytes(file):new Uint8Array(await file.arrayBuffer());
+    if(sourceBytes.byteLength>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
     setBusy(true);
     try{
       setStatus('Analyzing every PDF page for native or OCR editing…');
       classifier=await createPdfPageClassifier(sourceBytes);
       pageCount=classifier.pageCount;
       if(!pageCount)throw new Error('This PDF has no pages.');
+      if(pageCount>DEFAULT_LIMITS.maxPages)throw new Error(`PDF exceeds ${DEFAULT_LIMITS.maxPages}-page limit.`);
       const classifications=await classifier.classifyAll({onProgress:({pageIndex,pageCount})=>setStatus(`Checking page ${pageIndex+1} of ${pageCount}…`)});
       pages=classifications.map(classification=>({classification,route:pageRoute(classification),nativeDirty:false,ocrDirty:false,ocrBytes:null,ocrEditCount:0,ocrCapture:null}));
       await classifier.destroy();classifier=null;
       const nativeCount=pages.filter(page=>page.route==='native').length;
       const ocrCount=pageCount-nativeCount;
       setStatus(`Hybrid routing ready — ${nativeCount} native page${nativeCount===1?'':'s'}, ${ocrCount} OCR page${ocrCount===1?'':'s'}.`);
-      setBusy(false);
       await activatePage(0,{skipOcrFlush:true});
+      setBusy(false);
       return getState();
     }catch(error){
+      try{await classifier?.destroy();}catch{}classifier=null;
       setBusy(false);onError(error);throw error;
     }
   }
@@ -387,8 +398,8 @@ export function createHybridPdfEditor({
     classifier=null;pages=[];sourceBytes=null;sourceFile=null;container.replaceChildren();
   }
 
-  prev.addEventListener('click',()=>{if(!busy&&activePageIndex>0){setBusy(true);activatePage(activePageIndex-1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the previous page.');}).finally(()=>setBusy(false));}});
-  next.addEventListener('click',()=>{if(!busy&&activePageIndex<pageCount-1){setBusy(true);activatePage(activePageIndex+1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the next page.');}).finally(()=>setBusy(false));}});
+  prev.addEventListener('click',()=>{if(!busy&&activePageIndex>0&&requireFinishedEdit()){setBusy(true);activatePage(activePageIndex-1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the previous page.');}).finally(()=>setBusy(false));}});
+  next.addEventListener('click',()=>{if(!busy&&activePageIndex<pageCount-1&&requireFinishedEdit()){setBusy(true);activatePage(activePageIndex+1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the next page.');}).finally(()=>setBusy(false));}});
   save.addEventListener('click',()=>{saveCopy().catch(()=>{});});
   close.addEventListener('click',()=>{destroy().then(()=>onClose()).catch(onError);});
   updateToolbar();

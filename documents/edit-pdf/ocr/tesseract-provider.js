@@ -15,10 +15,10 @@ function loadScript(url){
     }
     const script=document.createElement('script');
     script.src=url;script.async=true;script.crossOrigin='anonymous';script.dataset.alltoolforestOcr=url;
-    script.onload=()=>globalThis.Tesseract?.createWorker?resolve(globalThis.Tesseract):reject(new Error('OCR runtime loaded without a worker API.'));
-    script.onerror=()=>reject(new Error('OCR runtime could not be downloaded. Check your connection and try again.'));
+    script.onload=()=>{if(globalThis.Tesseract?.createWorker)resolve(globalThis.Tesseract);else{script.remove();reject(new Error('OCR runtime loaded without a worker API.'));}};
+    script.onerror=()=>{script.remove();reject(new Error('OCR runtime could not be downloaded. Check your connection and try again.'));};
     document.head.append(script);
-  });
+  }).catch(error=>{scriptPromise=null;throw error;});
   return scriptPromise;
 }
 
@@ -37,11 +37,18 @@ export function parseTsvWords(tsv,{minConfidence=45}={}){
 }
 
 export class TesseractOcrProvider{
-  constructor({language='eng',scriptUrl=DEFAULT_SCRIPT,onProgress=null}={}){this.language=language;this.scriptUrl=scriptUrl;this.onProgress=onProgress;this.worker=null;}
+  constructor({language='eng',scriptUrl=DEFAULT_SCRIPT,onProgress=null}={}){this.language=language;this.scriptUrl=scriptUrl;this.onProgress=onProgress;this.worker=null;this.pending=null;this.closed=false;}
   async ensureWorker(){
-    if(this.worker)return this.worker;const Tesseract=await loadScript(this.scriptUrl);
-    this.worker=await Tesseract.createWorker(this.language,1,{logger:message=>{const progress=Number(message?.progress);this.onProgress?.({status:message?.status||'ocr',progress:Number.isFinite(progress)?progress:null});}});
-    return this.worker;
+    if(this.closed)throw new Error('OCR session is closed.');
+    if(this.worker)return this.worker;
+    if(!this.pending)this.pending=(async()=>{
+      const Tesseract=await loadScript(this.scriptUrl);
+      if(this.closed)throw new Error('OCR session is closed.');
+      const worker=await Tesseract.createWorker(this.language,1,{logger:message=>{if(this.closed)return;const progress=Number(message?.progress);this.onProgress?.({status:message?.status||'ocr',progress:Number.isFinite(progress)?progress:null});}});
+      if(this.closed){await worker.terminate();throw new Error('OCR session is closed.');}
+      this.worker=worker;return worker;
+    })().finally(()=>{this.pending=null;});
+    return this.pending;
   }
   async recognize(image,{minConfidence=45}={}){
     const worker=await this.ensureWorker();
@@ -49,7 +56,7 @@ export class TesseractOcrProvider{
     const words=parseTsvWords(result?.data?.tsv,{minConfidence});
     return {text:result?.data?.text||'',words,layout:groupOcrWords(words)};
   }
-  async terminate(){if(!this.worker)return;const worker=this.worker;this.worker=null;try{await worker.terminate();}catch{}}
+  async terminate(){this.closed=true;const worker=this.worker;this.worker=null;try{await worker?.terminate();}catch{}}
 }
 
 export const OCR_RUNTIME={name:'Tesseract.js',version:'6.0.1',scriptUrl:DEFAULT_SCRIPT};

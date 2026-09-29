@@ -1,4 +1,4 @@
-import { loadPdfjs } from '../rendering/pdfjs.js';
+import { withPdfDocument } from '../rendering/with-document.js';
 
 function normalizeText(value){
   return String(value||'')
@@ -11,19 +11,24 @@ function normalizeText(value){
 function compactWhitespace(value){return normalizeText(value).replace(/\s+/g,'');}
 
 export async function extractPageText(bytes,pageIndex){
-  const p=await loadPdfjs();
-  const task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true});
-  const doc=await task.promise;
+  return withPdfDocument(bytes,doc=>readPageText(doc,pageIndex));
+}
+
+async function readPageText(doc,pageIndex){
   const page=await doc.getPage(pageIndex+1);
-  const tc=await page.getTextContent();
-  return tc.items.map(x=>x.str).join(' ');
+  try{
+    const tc=await page.getTextContent();
+    return tc.items.map(x=>x.str).join(' ');
+  }finally{page.cleanup();}
 }
 
 export async function validateExtraction(bytes,checks){
+  if(!checks?.length)return {ok:true,results:[]};
+  return withPdfDocument(bytes,async doc=>{
   const byPage=new Map();
   const results=[];
   for(const c of checks||[]){
-    if(!byPage.has(c.pageIndex))byPage.set(c.pageIndex,await extractPageText(bytes,c.pageIndex));
+    if(!byPage.has(c.pageIndex))byPage.set(c.pageIndex,await readPageText(doc,c.pageIndex));
     const text=byPage.get(c.pageIndex);
     const normalizedPage=normalizeText(text);
     const normalizedNew=normalizeText(c.newText);
@@ -43,4 +48,5 @@ export async function validateExtraction(bytes,checks){
     });
   }
   return {ok:results.every(r=>r.replacementPresent&&r.deletionVerified),results};
+  });
 }

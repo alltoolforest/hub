@@ -72,8 +72,9 @@ async function drawBlobToCanvas(blob,canvas){
 
 export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onExport=()=>{},onClose=()=>{},allowGroupedEditing=false}={}){
   if(!container)throw new Error('OCR editor container is required.');
-  let sourceBytes=null,sourceName='document.pdf',pdf=null,pageCount=0,pageIndex=0,destroyed=false,selectedTarget=null,granularity='word';
+  let sourceBytes=null,sourceName='document.pdf',pdf=null,pageCount=0,pageIndex=0,destroyed=false,selectedTarget=null,granularity='word',ocrBusy=false;
   const pages=new Map();
+  let loadingTask=null;
   const provider=new TesseractOcrProvider({onProgress:({status,progress})=>onStatus(progress==null?`OCR: ${status}`:`OCR: ${status} ${Math.round(progress*100)}%`)});
 
   const root=document.createElement('div');root.className='ocr-editor';
@@ -143,14 +144,14 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   }
 
   async function runOcr(){
-    const state=pages.get(pageIndex);if(!state?.base)return;run.disabled=true;
+    const state=pages.get(pageIndex);if(!state?.base||ocrBusy||destroyed)return;ocrBusy=true;run.disabled=true;let pre=null;
     try{
-      onStatus(`Running OCR on page ${pageIndex+1}…`);const pre=makeOcrInputCanvas(state.base);
-      const result=await provider.recognize(pre.canvas,{minConfidence:45});releaseCanvas(pre.canvas);
+      onStatus(`Running OCR on page ${pageIndex+1}…`);pre=makeOcrInputCanvas(state.base);
+      const result=await provider.recognize(pre.canvas,{minConfidence:45});if(destroyed)return;
       state.words=result.words;state.layout=result.layout;renderOverlay(state);
       onStatus(`${state.words.length} OCR words detected. ${pre.inverted?'Dark-page OCR normalization used. ':''}${allowGroupedEditing?'Choose Word, Line, or Paragraph and click text to edit.':'Click a recognized word to edit.'}`);
       if(!state.words.length)onWarning({code:'OCR_NO_TEXT',message:'No reliable text was detected on this scanned page.'});
-    }catch(error){onError(error);onStatus(error?.message||'OCR failed on this page.');}finally{run.disabled=false;}
+    }catch(error){onError(error);onStatus(error?.message||'OCR failed on this page.');}finally{releaseCanvas(pre?.canvas);ocrBusy=false;run.disabled=false;}
   }
 
   function removeWordsInside(state,bbox){state.words=(state.words||[]).filter(w=>!boxesOverlap(w.bbox,bbox));}
@@ -199,9 +200,21 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     }catch(error){onError(error);onStatus(error?.message||'Could not save this scanned PDF safely.');}finally{updateToolbar();}
   }
 
-  async function open(file){sourceName=file?.name||'document.pdf';sourceBytes=file instanceof Uint8Array?file:new Uint8Array(await file.arrayBuffer());const pdfjs=await loadPdfjs();const task=pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,useWorkerFetch:false});pdf=await task.promise;pageCount=pdf.numPages;if(!pageCount)throw new Error('This PDF has no pages.');await renderPage(0);return getState();}
-  function getState(){return {mode:'ocr-scan',pageIndex,pageCount,granularity,allowGroupedEditing,editedPages:[...pages.entries()].filter(([,s])=>s.edited).map(([i])=>i),editCount:[...pages.values()].reduce((n,s)=>n+s.edits.length,0),renderPlans:[...pages.entries()].map(([i,s])=>({pageIndex:i,...s.renderPlan}))};}
-  async function destroy(){if(destroyed)return;destroyed=true;cancelEdit();try{await provider.terminate();}catch{}try{await pdf?.destroy?.();}catch{}for(const state of pages.values()){releaseCanvas(state.canvas);releaseCanvas(state.base);}pages.clear();container.replaceChildren();}
+  async function open(file){
+    if(destroyed)throw new Error('OCR session is closed.');
+    sourceName=file?.name||'document.pdf';sourceBytes=file instanceof Uint8Array?file:new Uint8Array(await file.arrayBuffer());
+    const pdfjs=await loadPdfjs();
+    if(destroyed)throw new Error('OCR session is closed.');
+    const task=pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,useWorkerFetch:false});loadingTask=task;
+    try{
+      pdf=await task.promise;
+      if(destroyed)throw new Error('OCR session is closed.');
+      pageCount=pdf.numPages;if(!pageCount)throw new Error('This PDF has no pages.');
+      await renderPage(0);return getState();
+    }catch(error){try{await task.destroy();}catch{}if(loadingTask===task)loadingTask=null;pdf=null;throw error;}
+  }
+  function getState(){return {mode:'ocr-scan',busy:ocrBusy,hasPendingEdit:!!selectedTarget,pageIndex,pageCount,granularity,allowGroupedEditing,editedPages:[...pages.entries()].filter(([,s])=>s.edited).map(([i])=>i),editCount:[...pages.values()].reduce((n,s)=>n+s.edits.length,0),renderPlans:[...pages.entries()].map(([i,s])=>({pageIndex:i,...s.renderPlan}))};}
+  async function destroy(){if(destroyed)return;destroyed=true;cancelEdit();try{await provider.terminate();}catch{}try{await loadingTask?.destroy();}catch{}loadingTask=null;pdf=null;sourceBytes=null;for(const state of pages.values()){releaseCanvas(state.canvas);releaseCanvas(state.base);}pages.clear();container.replaceChildren();}
 
   prev.addEventListener('click',()=>pageIndex>0&&renderPage(pageIndex-1));next.addEventListener('click',()=>pageIndex<pageCount-1&&renderPage(pageIndex+1));run.addEventListener('click',runOcr);save.addEventListener('click',exportCopy);close.addEventListener('click',async()=>{await destroy();onClose();});
   apply.addEventListener('click',()=>applyReplacement(false));remove.addEventListener('click',()=>applyReplacement(true));cancel.addEventListener('click',cancelEdit);mode.addEventListener('change',()=>{granularity=mode.value;const state=pages.get(pageIndex);if(state?.layout)renderOverlay(state);onStatus(`${granularity[0].toUpperCase()+granularity.slice(1)} selection enabled.`);});
