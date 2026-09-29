@@ -1,5 +1,6 @@
 import { PDFName, PDFArray, PDFDict, PDFRawStream, PDFRef, decodePDFRawStream } from './pdf-lib.js';
 import { inspectFontResource } from '../fonts/font-inspector.js';
+import { allocateSameLengthResourceName, rewriteFormInvocationName } from '../export/form-invocation-rewriter.js';
 
 function key(ref){return ref?.toString?.() ?? String(ref);}
 function contentsRefs(page){
@@ -13,6 +14,30 @@ function decodedStream(ctx,ref){
   if(!(obj instanceof PDFRawStream)) return null;
   const bytes=decodePDFRawStream(obj).getBytes();
   return {obj,bytes:new Uint8Array(bytes)};
+}
+function xObjectNames(dict){
+  const names=[];
+  if(!(dict instanceof PDFDict))return names;
+  for(const [name] of dict.entries()){
+    const value=name?.asString?.()?.replace(/^\//,'')||name?.toString?.()?.replace(/^\//,'');
+    if(value)names.push(value);
+  }
+  return names;
+}
+function assertFormStream(ctx,rawRef,expectedRefKey=null){
+  if(!rawRef)throw new Error('FORM_XOBJECT_DISAPPEARED');
+  if(expectedRefKey&&key(rawRef)!==expectedRefKey)throw new Error('FORM_XOBJECT_CHANGED');
+  const oldRaw=rawRef instanceof PDFRawStream?rawRef:ctx.lookup(rawRef);
+  if(!(oldRaw instanceof PDFRawStream))throw new Error('FORM_XOBJECT_STREAM_MISSING');
+  const subtype=oldRaw.dict.lookup(PDFName.of('Subtype'));
+  const subtypeName=subtype?.asString?.()?.replace(/^\//,'')||subtype?.toString?.()?.replace(/^\//,'');
+  if(subtypeName!=='Form')throw new Error('FORM_XOBJECT_TYPE_CHANGED');
+  return oldRaw;
+}
+function cloneDecodedStreamDict(ctx,rawStream){
+  const dict=rawStream.dict.clone(ctx);
+  for(const k of ['Length','Filter','DecodeParms','DL','F','FFilter','FDecodeParms'])dict.delete(PDFName.of(k));
+  return dict;
 }
 
 export function getPageContentStreams(pdfDoc,pageIndex){
@@ -49,14 +74,10 @@ export function getPageFormXObjectStream(pdfDoc,pageIndex,{resourceName,expected
   const xobjects=resources.lookup(PDFName.of('XObject'));
   if(!(xobjects instanceof PDFDict))throw new Error('PAGE_XOBJECTS_MISSING');
   const rawRef=xobjects.get(PDFName.of(resourceName));
-  if(!rawRef)throw new Error('FORM_XOBJECT_DISAPPEARED');
-  if(expectedRefKey&&key(rawRef)!==expectedRefKey)throw new Error('FORM_XOBJECT_CHANGED');
+  const raw=assertFormStream(ctx,rawRef,expectedRefKey);
   const d=decodedStream(ctx,rawRef);
   if(!d)throw new Error('FORM_XOBJECT_STREAM_MISSING');
-  const subtype=d.obj.dict.lookup(PDFName.of('Subtype'));
-  const subtypeName=subtype?.asString?.()?.replace(/^\//,'')||subtype?.toString?.()?.replace(/^\//,'');
-  if(subtypeName!=='Form')throw new Error('FORM_XOBJECT_TYPE_CHANGED');
-  return {resourceName,ref:rawRef,refKey:key(rawRef),bytes:d.bytes,rawStream:d.obj};
+  return {resourceName,ref:rawRef,refKey:key(rawRef),bytes:d.bytes,rawStream:raw};
 }
 
 export function replacePageFormXObjectStream(pdfDoc,pageIndex,{resourceName,expectedRefKey=null}={},newBytes){
@@ -68,16 +89,8 @@ export function replacePageFormXObjectStream(pdfDoc,pageIndex,{resourceName,expe
   if(!(xobjects instanceof PDFDict))throw new Error('PAGE_XOBJECTS_MISSING');
   const name=PDFName.of(resourceName);
   const oldRef=xobjects.get(name);
-  if(!oldRef)throw new Error('FORM_XOBJECT_DISAPPEARED');
-  if(expectedRefKey&&key(oldRef)!==expectedRefKey)throw new Error('FORM_XOBJECT_CHANGED');
-  const oldRaw=oldRef instanceof PDFRawStream?oldRef:ctx.lookup(oldRef);
-  if(!(oldRaw instanceof PDFRawStream))throw new Error('FORM_XOBJECT_STREAM_MISSING');
-  const subtype=oldRaw.dict.lookup(PDFName.of('Subtype'));
-  const subtypeName=subtype?.asString?.()?.replace(/^\//,'')||subtype?.toString?.()?.replace(/^\//,'');
-  if(subtypeName!=='Form')throw new Error('FORM_XOBJECT_TYPE_CHANGED');
-
-  const dict=oldRaw.dict.clone(ctx);
-  for(const k of ['Length','Filter','DecodeParms','DL','F','FFilter','FDecodeParms'])dict.delete(PDFName.of(k));
+  const oldRaw=assertFormStream(ctx,oldRef,expectedRefKey);
+  const dict=cloneDecodedStreamDict(ctx,oldRaw);
   const newRef=ctx.register(PDFRawStream.of(dict,newBytes));
 
   // Page resource dictionaries are frequently shared. Clone both dictionaries
@@ -89,6 +102,52 @@ export function replacePageFormXObjectStream(pdfDoc,pageIndex,{resourceName,expe
   resourcesClone.set(PDFName.of('XObject'),xobjectsClone);
   page.node.set(PDFName.of('Resources'),resourcesClone);
   return {oldRef,newRef,resourceName,resourcesCloned:true};
+}
+
+export function replacePageFormXObjectInvocationStream(pdfDoc,pageIndex,{resourceName,expectedRefKey=null,pageStreamIndex,invocationOperatorIndex}={},newBytes){
+  if(!resourceName)throw Object.assign(new Error('Form resource name is missing.'),{code:'FORM_RESOURCE_NAME_MISSING'});
+  const streamIndex=Number(pageStreamIndex),operatorIndex=Number(invocationOperatorIndex);
+  if(!Number.isInteger(streamIndex)||streamIndex<0||!Number.isInteger(operatorIndex)||operatorIndex<0){
+    throw Object.assign(new Error('Form invocation identity is incomplete.'),{code:'FORM_INVOCATION_IDENTITY_MISSING'});
+  }
+  const page=pdfDoc.getPage(pageIndex); const ctx=pdfDoc.context;
+  const resources=page.node.Resources();
+  if(!(resources instanceof PDFDict))throw Object.assign(new Error('Page resources are unavailable.'),{code:'PAGE_RESOURCES_MISSING'});
+  const xobjects=resources.lookup(PDFName.of('XObject'));
+  if(!(xobjects instanceof PDFDict))throw Object.assign(new Error('Page XObjects are unavailable.'),{code:'PAGE_XOBJECTS_MISSING'});
+  const oldName=PDFName.of(resourceName);
+  const oldRef=xobjects.get(oldName);
+  const oldRaw=assertFormStream(ctx,oldRef,expectedRefKey);
+
+  const streams=getPageContentStreams(pdfDoc,pageIndex);
+  const pageStream=streams.find(item=>item.streamIndex===streamIndex);
+  if(!pageStream)throw Object.assign(new Error('The page stream containing this Form invocation disappeared.'),{code:'FORM_INVOCATION_PAGE_STREAM_MISSING'});
+
+  const newResourceName=allocateSameLengthResourceName(new Set(xObjectNames(xobjects)),resourceName,{seed:streamIndex*4099+operatorIndex});
+  if(!newResourceName){
+    throw Object.assign(new Error('No safe same-length Form resource name is available for invocation isolation.'),{code:'FORM_INVOCATION_RESOURCE_NAME_UNAVAILABLE'});
+  }
+  const renamed=rewriteFormInvocationName(pageStream.bytes,{operatorIndex,expectedResourceName:resourceName,newResourceName});
+
+  const formDict=cloneDecodedStreamDict(ctx,oldRaw);
+  const newFormRef=ctx.register(PDFRawStream.of(formDict,newBytes));
+  const xobjectsClone=xobjects.clone(ctx);
+  xobjectsClone.set(PDFName.of(newResourceName),newFormRef);
+  const resourcesClone=resources.clone(ctx);
+  resourcesClone.set(PDFName.of('XObject'),xobjectsClone);
+
+  const pageReplacement=replacePageContentStream(pdfDoc,pageIndex,streamIndex,renamed.bytes);
+  page.node.set(PDFName.of('Resources'),resourcesClone);
+  return {
+    oldRef,
+    newRef:newFormRef,
+    originalResourceName:resourceName,
+    resourceName:newResourceName,
+    pageStreamIndex:streamIndex,
+    invocationOperatorIndex:operatorIndex,
+    pageStreamCloned:!!pageReplacement.sharedCloned,
+    resourcesCloned:true,
+  };
 }
 
 export function listPageFontContexts(pdfDoc,pageIndex){
