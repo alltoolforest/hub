@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Edit PDF 98 hardening regression</title></head>
+<body>
+<pre id="out">Running…</pre>
+<script type="module">
+import {runHardening98Regressions} from './hardening-98-regression.js';
+const out=document.querySelector('#out');
+try{
+  const cases=runHardening98Regressions();
+  out.textContent=`PASS ${cases.length}/${cases.length}\n`+cases.map(item=>`✓ ${item.name}`).join('\n');
+  document.body.dataset.result='pass';
+}catch(error){
+  out.textContent=`FAIL\n${error?.stack||error}`;
+  document.body.dataset.result='fail';
+  throw error;
+}
+</script>
+</body>
+</html>
