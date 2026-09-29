@@ -25,4 +25,3 @@ function prepayImpact(){if(!current)return;const extra=Number($('#prepay').value
 $('#prepay-btn').addEventListener('click',prepayImpact);
 const helps={reducing:'Reducing balance: each month’s interest is calculated on the outstanding principal. This is the standard fixed-EMI model used here.',flat:'Flat rate: total interest is calculated on the original principal for the full tenure, then spread across payments.',simple:'Simple interest: principal × annual rate × time. For this planning view, principal and total interest are spread across the selected term.',"interest-only":'Interest-only: monthly payments cover interest; this estimate assumes the entire principal is repaid with the final payment.'};
 function updateHelp(){$('#method-help').textContent=helps[$('#interest-method').value]}$('#interest-method').addEventListener('change',updateHelp);updateHelp();
-export{reducing,flat,simple,interestOnly,calculate};
