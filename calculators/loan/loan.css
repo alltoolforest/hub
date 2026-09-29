@@ -7,3 +7,4 @@
 @supports not (display:grid){.loan-shell,.loan-grid,.result-grid,.tenure-row{display:block}.loan-card,.loan-grid label,.result-grid div,.tenure-row>*{margin-bottom:14px}}
 @media (hover:hover){.loan-primary:hover{filter:brightness(.96)}.loan-secondary:hover,.view-btn:hover{filter:brightness(.97)}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
+.table-wrap:focus{outline:3px solid #77aa96;outline-offset:2px}@media(max-width:520px){.loan-grid input,.loan-grid select{font-size:16px}}
