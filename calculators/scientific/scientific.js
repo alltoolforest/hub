@@ -83,9 +83,9 @@ function press(act){
  insert(act);
 }
 function addKeys(target,keys){for(const [label,act,cls=''] of keys){const b=el('button',{type:'button',class:'button '+cls,text:label,'aria-label':label});b.onclick=()=>press(act);target.append(b)}}
-addKeys(quick,[['sin','sin('],['cos','cos('],['tan','tan('],['log','log('],['ln','ln('],['√','sqrt('],['x²','^2'],['xʸ','^'],['π','pi'],['(', '(']]);
-addKeys(advancedGrid,[['asin','asin('],['acos','acos('],['atan','atan('],['∛','cbrt('],['abs','abs('],['1/x','recip'],['!','!'],['e','e'],['EXP','exp'],[')',')']]);
-addKeys(keypad,[['AC','clear','sc-op'],['⌫','back','sc-op'],['%','%','sc-op'],['÷','/','sc-op'],['7','7'],['8','8'],['9','9'],['×','*','sc-op'],['4','4'],['5','5'],['6','6'],['−','-','sc-op'],['1','1'],['2','2'],['3','3'],['+','+','sc-op'],['0','0'],['.','.'],['Ans','ans'],['=','eq','sc-eq']]);
-addKeys(secondary,[['MC','mc'],['MR','mr'],['M+','mp'],['M−','mm'],[')',' )'.trim()]]);
+addKeys(quick,[['sin','sin('],['cos','cos('],['tan','tan('],['log','log('],['ln','ln('],['√','sqrt('],['x²','^2'],['xʸ','^'],['π','pi'],['e','e']]);
+addKeys(advancedGrid,[['asin','asin('],['acos','acos('],['atan','atan('],['∛','cbrt('],['abs','abs('],['1/x','recip'],['!','!'],['EXP','exp']]);
+addKeys(keypad,[['AC','clear','sc-op'],['⌫','back','sc-op'],['%','%','sc-op'],['÷','/','sc-op'],['×','*','sc-op'],['−','-','sc-op'],['+','+','sc-op'],['.','.'],['(', '('],[')',')'],['Ans','ans'],['=','eq','sc-eq']]);
+addKeys(secondary,[['MC','mc'],['MR','mr'],['M+','mp'],['M−','mm']]);
 expr.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calculate()}else if(e.key==='Escape'){e.preventDefault();press('clear')}});
 setupStatus(root);notice(root,'Strict scientific parser with DEG/RAD modes. Memory and history stay on this device for the current page session only.');
