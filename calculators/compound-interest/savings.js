@@ -13,7 +13,14 @@ const add=(id,label,type='number',value='',opts={})=>{
 const select=(id,label,options,value=Array.isArray(options[0])?options[0][0]:options[0])=>
   add(id,label,'select',value,{options});
 
-select('currency','Currency',[[\'USD\',\'USD — US Dollar ($)\'],[\'EUR\',\'EUR — Euro (€)\'],[\'GBP\',\'GBP — British Pound (£)\'],[\'INR\',\'INR — Indian Rupee (₹)\'],[\'JPY\',\'JPY — Japanese Yen (¥)\'],[\'CNY\',\'CNY — Chinese Yuan (CN¥)\'],[\'AUD\',\'AUD — Australian Dollar (A$)\'],[\'CAD\',\'CAD — Canadian Dollar (C$)\'],[\'CHF\',\'CHF — Swiss Franc (CHF)\'],[\'SGD\',\'SGD — Singapore Dollar (S$)\'],[\'AED\',\'AED — UAE Dirham (AED)\']],'USD');\n\nadd('starting','Starting balance','number','10000',{min:'0',max:'1000000000000',step:'0.01'});
+select('currency','Currency',[
+ ['USD','USD — US Dollar ($)'],['EUR','EUR — Euro (€)'],['GBP','GBP — British Pound (£)'],
+ ['INR','INR — Indian Rupee (₹)'],['JPY','JPY — Japanese Yen (¥)'],['CNY','CNY — Chinese Yuan (CN¥)'],
+ ['AUD','AUD — Australian Dollar (A$)'],['CAD','CAD — Canadian Dollar (C$)'],['CHF','CHF — Swiss Franc (CHF)'],
+ ['SGD','SGD — Singapore Dollar (S$)'],['AED','AED — UAE Dirham (AED)']
+],'USD');
+
+add('starting','Starting balance','number','10000',{min:'0',max:'1000000000000',step:'0.01'});
 add('contribution','Periodic contribution','number','500',{min:'0',max:'1000000000',step:'0.01'});
 select('contribution-frequency','Contribution frequency',[
  ['0','No contributions'],['12','Monthly'],['4','Quarterly'],['2','Semi-annually'],['1','Annually']
