@@ -12,3 +12,8 @@ for(const [code,base] of Object.entries({US:{filing:'single',stateRate:0},GB:{re
 for(const target of [1000,3000,5000,10000]){const v={inputType:'net',amount:target,hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,manualTaxRate:20,manualSocialRate:5},z=E.run(v,C.OTHER);ok(close(z.monthlyNet,target,.02),'reverse round trip '+target)}
 let threw=false;try{E.run({inputType:'annualGross',amount:1000,hours:40,bonus:0,pretax:0,otherDeductions:2000,employerBenefits:0,manualTaxRate:0,manualSocialRate:0},C.OTHER)}catch{threw=true}ok(threw,'reject excessive deductions');
 console.log('Deep audit tests passed:',pass);
+// India surcharge / marginal-relief boundaries
+function indiaTax(income,regime='new'){return E.run({inputType:'annualGross',amount:income+(regime==='new'?75000:50000),hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,regime,residency:'resident',ageBand:'under60',pfRate:0,pfWage:0,professionalTax:0,oldDeductions:0},C.IN).tax}
+for(const t of [5000000,10000000,20000000]){const at=indiaTax(t),above=indiaTax(t+1);ok(above>=at&&above-at<=1.05,'India new marginal boundary '+t)}
+for(const t of [5000000,10000000,20000000,50000000]){const at=indiaTax(t,'old'),above=indiaTax(t+1,'old');ok(above>=at&&above-at<=1.05,'India old marginal boundary '+t)}
+ok(indiaTax(60000000,'old')>indiaTax(60000000,'new'),'India old 37% surcharge above 5cr');
