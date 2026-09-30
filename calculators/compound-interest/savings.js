@@ -75,11 +75,14 @@ function money(value){
 }
 function pct(value){return new Intl.NumberFormat(undefined,{maximumFractionDigits:4}).format(value*100)+'%';}
 
-function contributionMonths(freq,totalMonths){
+function contributionMonths(freq,totalMonths,timing){
   if(!freq) return new Set();
   const interval=12/freq;
   const set=new Set();
-  for(let m=0;m<totalMonths;m++) if(m%interval===0) set.add(m);
+  for(let m=0;m<totalMonths;m++){
+    if(timing==='beginning'&&m%interval===0) set.add(m);
+    if(timing==='end'&&(m+1)%interval===0) set.add(m);
+  }
   return set;
 }
 
@@ -91,52 +94,21 @@ function calculateProjection(){
   if(Math.abs(totalMonths-years*12)>1e-6) throw Error('Enter a term in whole months (for example 10, 10.5, or 10.25 years).');
   const freq=Number(read('contribution-frequency'));
   const timing=read('contribution-timing');
-  const nominal=read('rate-type')==='nominal';
-  const annual=num('rate',{min:-99,max:100})/100;
-  const compoundFreq=periodsPerYear();
-  if(nominal&&annual<0&&1+annual/compoundFreq<=0) throw Error('This nominal rate is incompatible with the selected compounding frequency.');
-  const effectiveMonthly=nominal?null:monthlyRate();
-  const compoundMonths=nominal?12/compoundFreq:null;
-  const nominalPeriodRate=nominal?annual/compoundFreq:null;
-  const contributionAt=contributionMonths(freq,totalMonths);
+  const effectiveMonthly=monthlyRate();
+  const contributionAt=contributionMonths(freq,totalMonths,timing);
   let balance=starting,contributed=starting,interest=0;
-  let periodBase=starting,periodContribWeighted=0;
   const rows=[];
   let yearInterest=0,yearContrib=0;
 
   for(let m=0;m<totalMonths;m++){
-    const monthInPeriod=nominal?(m%compoundMonths):0;
     if(timing==='beginning'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
-      if(nominal){
-        const remaining=(compoundMonths-monthInPeriod)/compoundMonths;
-        periodContribWeighted+=contribution*remaining;
-      }
     }
-
-    if(nominal){
-      const periodEnd=(m+1)%compoundMonths===0;
-      const projectionEnd=m===totalMonths-1;
-      if(periodEnd||projectionEnd){
-        const fraction=periodEnd?1:(monthInPeriod+1)/compoundMonths;
-        const earned=periodBase*nominalPeriodRate*fraction+periodContribWeighted*nominalPeriodRate;
-        balance+=earned; interest+=earned; yearInterest+=earned;
-        periodBase=balance; periodContribWeighted=0;
-      }
-    }else{
-      const earned=balance*effectiveMonthly;
-      balance+=earned; interest+=earned; yearInterest+=earned;
-    }
-
+    const earned=balance*effectiveMonthly;
+    balance+=earned; interest+=earned; yearInterest+=earned;
     if(timing==='end'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
-      if(nominal){
-        const remaining=(compoundMonths-(monthInPeriod+1))/compoundMonths;
-        periodContribWeighted+=contribution*remaining;
-        if((m+1)%compoundMonths===0||m===totalMonths-1) periodBase=balance;
-      }
     }
-
     if((m+1)%12===0||m===totalMonths-1){
       rows.push({year:(m+1)/12,contributions:yearContrib,interest:yearInterest,totalContributed:contributed,balance});
       yearInterest=0; yearContrib=0;
@@ -209,7 +181,7 @@ function calculate(){
   resultItem(grid,'Effective annual rate',pct(x.eff));
   if(x.realValue!==null) resultItem(grid,'Inflation-adjusted value',money(x.realValue));
   result.append(grid,drawChart(x.rows),annualTable(x.rows));
-  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Currency selection changes presentation only; no foreign-exchange conversion is performed. APY/effective rates are modeled through an equivalent monthly rate. Nominal rates follow the selected annual, semiannual, quarterly or monthly compounding schedule. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
+  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Currency selection changes presentation only; no foreign-exchange conversion is performed. The selected annual rate is converted to its effective annual rate, then to an equivalent monthly growth rate so contributions with different frequencies can be compared consistently. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
 }
 
 function sync(){
@@ -244,6 +216,6 @@ root.append(el('div',{class:'actions'},[
  })
 ]),result);
 
-notice(root,'APY / effective annual rate already includes compounding effects. A nominal annual rate does not, so its compounding frequency matters. Inflation adjustment is an estimate of purchasing power, not a prediction of future inflation. This calculator is for projections, not financial advice.');
+notice(root,'APY / effective annual rate already includes compounding effects. A nominal annual rate does not, so its compounding frequency is used to derive the effective annual rate. Inflation adjustment is an estimate of purchasing power, not a prediction of future inflation. This calculator is for projections, not financial advice.');
 setupStatus(root);
 sync();
