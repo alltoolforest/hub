@@ -13,7 +13,7 @@ const add=(id,label,type='number',value='',opts={})=>{
 const select=(id,label,options,value=Array.isArray(options[0])?options[0][0]:options[0])=>
   add(id,label,'select',value,{options});
 
-add('starting','Starting balance','number','10000',{min:'0',max:'1000000000000',step:'0.01'});
+select('currency','Currency',[[\'USD\',\'USD — US Dollar ($)\'],[\'EUR\',\'EUR — Euro (€)\'],[\'GBP\',\'GBP — British Pound (£)\'],[\'INR\',\'INR — Indian Rupee (₹)\'],[\'JPY\',\'JPY — Japanese Yen (¥)\'],[\'CNY\',\'CNY — Chinese Yuan (CN¥)\'],[\'AUD\',\'AUD — Australian Dollar (A$)\'],[\'CAD\',\'CAD — Canadian Dollar (C$)\'],[\'CHF\',\'CHF — Swiss Franc (CHF)\'],[\'SGD\',\'SGD — Singapore Dollar (S$)\'],[\'AED\',\'AED — UAE Dirham (AED)\']],'USD');\n\nadd('starting','Starting balance','number','10000',{min:'0',max:'1000000000000',step:'0.01'});
 add('contribution','Periodic contribution','number','500',{min:'0',max:'1000000000',step:'0.01'});
 select('contribution-frequency','Contribution frequency',[
  ['0','No contributions'],['12','Monthly'],['4','Quarterly'],['2','Semi-annually'],['1','Annually']
@@ -59,10 +59,12 @@ function monthlyRate(){
   return Math.pow(1+eff,1/12)-1;
 }
 
+const currencyLocales={USD:'en-US',EUR:'de-DE',GBP:'en-GB',INR:'en-IN',JPY:'ja-JP',CNY:'zh-CN',AUD:'en-AU',CAD:'en-CA',CHF:'de-CH',SGD:'en-SG',AED:'en-AE'};
 function money(value){
   if(!Number.isFinite(value)) throw Error('The result is outside the supported range. Check the inputs.');
-  try{return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2}).format(value)}
-  catch{return value.toLocaleString(undefined,{maximumFractionDigits:2})}
+  const currency=read('currency'),locale=currencyLocales[currency]||undefined;
+  try{return new Intl.NumberFormat(locale,{style:'currency',currency,maximumFractionDigits:currency==='JPY'?0:2}).format(value)}
+  catch{return currency+' '+value.toLocaleString(undefined,{maximumFractionDigits:currency==='JPY'?0:2})}
 }
 function pct(value){return new Intl.NumberFormat(undefined,{maximumFractionDigits:4}).format(value*100)+'%';}
 
@@ -174,7 +176,7 @@ function calculate(){
   resultItem(grid,'Effective annual rate',pct(x.eff));
   if(x.realValue!==null) resultItem(grid,'Inflation-adjusted value',money(x.realValue));
   result.append(grid,drawChart(x.rows),annualTable(x.rows));
-  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Interest is modeled through an equivalent monthly growth rate so contribution timing can be handled consistently. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
+  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Currency selection changes presentation only; no foreign-exchange conversion is performed. Interest is modeled through an equivalent monthly growth rate so contribution timing can be handled consistently. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
 }
 
 function sync(){
@@ -194,7 +196,7 @@ for(const input of form.querySelectorAll('input,select')) input.addEventListener
 });
 
 const defaults={
- starting:'10000',contribution:'500','contribution-frequency':'12','contribution-timing':'end',
+ currency:'USD',starting:'10000',contribution:'500','contribution-frequency':'12','contribution-timing':'end',
  years:'10','rate-type':'effective',rate:'5',compounding:'12','inflation-mode':'off',inflation:'2.5'
 };
 
