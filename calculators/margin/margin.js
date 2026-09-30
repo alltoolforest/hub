@@ -51,7 +51,7 @@ function money(v){
  try{return new Intl.NumberFormat(item[2],{style:'currency',currency:item[0],maximumFractionDigits:item[0]==='JPY'?0:2}).format(v)}
  catch{return item[0]+' '+Number(v).toLocaleString(undefined,{maximumFractionDigits:2})}
 }
-function pct(v){return Number.isFinite(v)?new Intl.NumberFormat(undefined,{maximumFractionDigits:4}).format(v)+'%':'Undefined'}
+function pct(v,zeroLabel='Undefined'){return Number.isFinite(v)?new Intl.NumberFormat(undefined,{maximumFractionDigits:4}).format(v)+'%':zeroLabel}
 function sync(){
  const m=mode.value;
  sellingPrice.disabled=m!=='evaluate';
@@ -91,7 +91,7 @@ function calculate(){
  const grid=el('div',{class:'result-grid'});
  const items=[
   ['Product cost',money(cost)],['Optional costs',money(ship+fee+extra)],['All-in / break-even cost',money(allIn)],
-  ['Selling price',money(price)],['Gross profit before optional costs',money(grossProfit)],['Profit after entered costs',money(profit)],['Profit margin',pct(margin)],['Markup on all-in cost',pct(effectiveMarkup)]
+  ['Selling price',money(price)],['Gross profit before optional costs',money(grossProfit)],['Profit after entered costs',money(profit)],['Profit margin',pct(margin,price===0?'Undefined (zero selling price)':'Undefined')],['Markup on all-in cost',pct(effectiveMarkup,allIn===0?'Undefined (zero cost)':'Undefined')]
  ];
  for(const [label,value] of items)grid.append(el('div',{class:'result-item'},[el('small',{text:label}),el('strong',{text:value})]));
  results.append(grid,el('div',{class:'margin-explain',text:'Profit margin here uses profit after all entered costs as a percentage of selling price. Markup uses that profit as a percentage of all-in cost. Gross profit before optional costs is selling price minus product cost. Break-even price equals all-in cost when no additional seller-borne costs or price-dependent fees are omitted.'}));
