@@ -3,7 +3,6 @@ const root=$('#workspace');if(!root)throw Error('Scientific Calculator workspace
 let angleMode='DEG',memory=0,lastAnswer=0,history=[];
 function finite(n){if(!Number.isFinite(n))throw Error('Result is outside the supported numeric range.');return n}
 const format=formatScientific;
-const css=el('style',{text:`.sc{max-width:720px;margin:auto}.sc-display{background:var(--surface-2,#f5f7f6);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}.sc-expression{width:100%;font-size:20px;min-height:52px}.sc-result{min-height:46px;text-align:right;font-size:30px;font-weight:700;padding-top:10px;overflow-wrap:anywhere}.sc-head{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap}.sc-mode{display:flex;gap:6px}.sc-mode button[aria-pressed="true"]{font-weight:800;outline:2px solid currentColor}.sc-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.sc-grid button{min-height:48px;padding:8px;font-size:15px}.sc-eq{grid-column:span 2}.sc-history{margin-top:16px}.sc-history-list{display:grid;gap:7px;max-height:220px;overflow:auto}.sc-history button{text-align:left;width:100%;white-space:normal}.sc-note{font-size:13px;color:var(--muted);margin-top:12px}@media(max-width:700px){.sc-grid{gap:6px}.sc-grid button{font-size:14px;min-height:46px;padding:6px}.sc-expression{font-size:18px}input,button{font-size:16px}}`});
 const MAXLEN=500,MAXDEPTH=60,MAXFACT=170;
 const FUNCTIONS=['asin','acos','atan','sqrt','cbrt','sin','cos','tan','log','ln','abs'];
 function factorial(n){if(!Number.isInteger(n)||n<0)throw Error('Factorial requires a non-negative whole number.');if(n>MAXFACT)throw Error('Factorial is limited to 170 to avoid overflow.');let r=1;for(let i=2;i<=n;i++)r*=i;return r}
@@ -53,32 +52,40 @@ function evaluateScientific(expression,mode='DEG',ans=0){
 }
 function formatScientific(n){if(!Number.isFinite(n))throw Error('Result is outside the supported numeric range.');if(Object.is(n,-0)||Math.abs(n)<1e-15)n=0;const a=Math.abs(n);if(a!==0&&(a>=1e15||a<1e-12))return n.toExponential(12).replace(/\.0+e/,'e').replace(/(\.\d*?[1-9])0+e/,'$1e');return n.toLocaleString(undefined,{maximumSignificantDigits:15,useGrouping:false})}
 
+const css=el('style',{text:`.sc{max-width:620px;margin:auto}.sc-display{background:var(--surface-2,#f5f7f6);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}.sc-top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.sc-mode{display:flex;gap:5px}.sc-mode button{min-height:38px;padding:6px 12px}.sc-mode button[aria-pressed="true"]{font-weight:800;outline:2px solid currentColor}.sc-expression{width:100%;font-size:18px;min-height:48px}.sc-result{min-height:44px;text-align:right;font-size:30px;font-weight:700;padding-top:8px;overflow-wrap:anywhere}.sc-tools{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}.sc-tools button{min-height:42px;padding:6px;font-size:14px}.sc-advanced{margin-bottom:10px}.sc-advanced summary{cursor:pointer;font-weight:700;padding:9px 2px}.sc-keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.sc-keypad button{min-height:54px;font-size:18px;padding:8px}.sc-keypad .sc-op{font-weight:800}.sc-keypad .sc-eq{font-weight:800}.sc-secondary{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}.sc-secondary button{min-height:38px;padding:5px;font-size:13px}.sc-history{margin-top:12px}.sc-history-list{display:grid;gap:6px;max-height:190px;overflow:auto}.sc-history button{text-align:left;width:100%;white-space:normal}.sc-note{font-size:13px;color:var(--muted);margin-top:10px}@media(max-width:700px){.sc{max-width:100%}.sc-display{padding:12px}.sc-tools{gap:5px}.sc-tools button{font-size:13px;min-height:40px}.sc-keypad{gap:7px}.sc-keypad button{min-height:52px;font-size:18px}.sc-expression,input,button{font-size:16px}.sc-result{font-size:28px}}`});
 root.prepend(css);
-const expr=el('input',{class:'sc-expression',type:'text',value:'sin(30) + sqrt(16)',autocomplete:'off',spellcheck:'false','aria-label':'Scientific expression'});
-const res=el('div',{class:'sc-result','aria-live':'polite',text:'4.5'});
+const expr=el('input',{class:'sc-expression',type:'text',value:'',placeholder:'Enter calculation',autocomplete:'off',spellcheck:'false','aria-label':'Scientific expression'});
+const res=el('div',{class:'sc-result','aria-live':'polite',text:'0'});
 const deg=el('button',{type:'button',class:'button',text:'DEG','aria-pressed':'true'}),rad=el('button',{type:'button',class:'button',text:'RAD','aria-pressed':'false'});
 const memLabel=el('span',{text:'M: 0','aria-live':'polite'});
-const head=el('div',{class:'sc-head'},[el('div',{class:'sc-mode'},[deg,rad]),memLabel]);
-const display=el('div',{class:'sc-display'},[head,expr,res]);
-const grid=el('div',{class:'sc-grid'});
+const display=el('div',{class:'sc-display'},[el('div',{class:'sc-top'},[el('div',{class:'sc-mode'},[deg,rad]),memLabel]),expr,res]);
+const quick=el('div',{class:'sc-tools'});
+const advancedGrid=el('div',{class:'sc-tools'});
+const advanced=el('details',{class:'sc-advanced'},[el('summary',{text:'More scientific functions'}),advancedGrid]);
+const keypad=el('div',{class:'sc-keypad'});
+const secondary=el('div',{class:'sc-secondary'});
 const historyList=el('div',{class:'sc-history-list'}),historyBox=el('details',{class:'sc-history'},[el('summary',{text:'History'}),historyList]);
-root.append(el('div',{class:'sc'},[display,grid,historyBox,el('div',{class:'sc-note',text:'Keyboard: numbers and operators type normally; Enter calculates; Escape clears; Backspace deletes. DEG/RAD affects trigonometric and inverse-trigonometric functions.'})]));
-function insert(s,back=0){const a=expr.selectionStart==null?expr.value.length:expr.selectionStart,b=expr.selectionEnd==null?a:expr.selectionEnd;expr.setRangeText(s,a,b,'end');if(back){const p=expr.selectionStart-back;expr.setSelectionRange(p,p)}expr.focus()}
-function calculate(){try{const raw=expr.value,v=evaluateScientific(raw,angleMode,lastAnswer);lastAnswer=v;res.textContent=format(v);history.unshift({e:raw,r:format(v),m:angleMode});history=history.slice(0,20);renderHistory();status('Calculated.');return v}catch(e){res.textContent='Error';status(e.message||'Calculation failed.',true);return null}}
+root.append(el('div',{class:'sc'},[display,quick,advanced,keypad,secondary,historyBox,el('div',{class:'sc-note',text:'Tip: use the main keypad for everyday calculations. Open More scientific functions only when needed. Enter calculates; Escape clears.'})]));
+function insert(s){const a=expr.selectionStart==null?expr.value.length:expr.selectionStart,b=expr.selectionEnd==null?a:expr.selectionEnd;expr.setRangeText(s,a,b,'end');expr.focus()}
+function calculate(){try{const raw=expr.value;if(!raw.trim()){res.textContent='0';return null}const v=evaluateScientific(raw,angleMode,lastAnswer);lastAnswer=v;res.textContent=format(v);history.unshift({e:raw,r:format(v),m:angleMode});history=history.slice(0,20);renderHistory();status('Calculated.');return v}catch(e){res.textContent='Error';status(e.message||'Calculation failed.',true);return null}}
 function renderHistory(){historyList.replaceChildren(...history.map(h=>el('button',{type:'button',class:'button',text:h.e+' = '+h.r+' ('+h.m+')',onclick:()=>{expr.value=h.e;angleMode=h.m;syncMode();calculate()}})))}
 function syncMode(){deg.setAttribute('aria-pressed',String(angleMode==='DEG'));rad.setAttribute('aria-pressed',String(angleMode==='RAD'))}
 deg.onclick=()=>{angleMode='DEG';syncMode()};rad.onclick=()=>{angleMode='RAD';syncMode()};
-const keys=[
- ['MC','mc'],['MR','mr'],['M+','mp'],['M−','mm'],['AC','clear'],
- ['sin','sin('],['cos','cos('],['tan','tan('],['asin','asin('],['acos','acos('],
- ['atan','atan('],['log','log('],['ln','ln('],['√','sqrt('],['∛','cbrt('],
- ['x²','^2'],['xʸ','^'],['1/x','recip'],['!','!'],['%','%'],
- ['π','pi'],['e','e'],['Ans','ans'],['(', '('],[')',')'],
- ['7','7'],['8','8'],['9','9'],['÷','/'],['⌫','back'],
- ['4','4'],['5','5'],['6','6'],['×','*'],['−','-'],
- ['1','1'],['2','2'],['3','3'],['+','+'],['.','.'],
- ['0','0'],['00','00'],['EXP','exp'],['abs','abs('],['=','eq']
-];
-for(const [label,act] of keys){const b=el('button',{type:'button',class:'button'+(act==='eq'?' sc-eq':''),text:label});b.onclick=()=>{if(act==='eq')calculate();else if(act==='clear'){expr.value='';res.textContent='0';expr.focus()}else if(act==='back'){const a=expr.selectionStart||0,bp=expr.selectionEnd||a;if(a!==bp)expr.setRangeText('',a,bp,'end');else if(a>0)expr.setRangeText('',a-1,a,'end');expr.focus()}else if(act==='recip'){const s=expr.value.trim();expr.value=s?'1/('+s+')':'1/(';expr.focus()}else if(act==='mc'){memory=0;memLabel.textContent='M: 0'}else if(act==='mr')insert(format(memory));else if(act==='mp'||act==='mm'){const v=calculate();if(v!==null){memory=finite(memory+(act==='mp'?v:-v));memLabel.textContent='M: '+format(memory)}}else if(act==='exp'){const a=expr.selectionStart==null?expr.value.length:expr.selectionStart,bp=expr.selectionEnd==null?a:expr.selectionEnd;const before=expr.value.slice(0,a);if(!/(?:\d\.?\d*|\.\d+)$/.test(before)){status('Enter a number before EXP.',true);return}expr.setRangeText('E',a,bp,'end');expr.focus()}else insert(act)};grid.append(b)}
-expr.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calculate()}else if(e.key==='Escape'){e.preventDefault();expr.value='';res.textContent='0'}});
-setupStatus(root);notice(root,'Scientific Calculator V2 uses a strict mathematical parser—no eval. Factorial is limited to 170!, history is session-only, and calculations use JavaScript double-precision floating point.');calculate();
+function press(act){
+ if(act==='eq')return calculate();
+ if(act==='clear'){expr.value='';res.textContent='0';status('Cleared.');return expr.focus()}
+ if(act==='back'){const a=expr.selectionStart||0,b=expr.selectionEnd||a;if(a!==b)expr.setRangeText('',a,b,'end');else if(a>0)expr.setRangeText('',a-1,a,'end');return expr.focus()}
+ if(act==='recip'){const s=expr.value.trim();expr.value=s?'1/('+s+')':'1/(';return expr.focus()}
+ if(act==='mc'){memory=0;memLabel.textContent='M: 0';return}
+ if(act==='mr')return insert(format(memory));
+ if(act==='mp'||act==='mm'){const v=calculate();if(v!==null){memory=finite(memory+(act==='mp'?v:-v));memLabel.textContent='M: '+format(memory)}return}
+ if(act==='exp'){const a=expr.selectionStart==null?expr.value.length:expr.selectionStart,b=expr.selectionEnd==null?a:expr.selectionEnd,before=expr.value.slice(0,a);if(!/(?:\d\.?\d*|\.\d+)$/.test(before))return status('Enter a number before EXP.',true);expr.setRangeText('E',a,b,'end');return expr.focus()}
+ insert(act);
+}
+function addKeys(target,keys){for(const [label,act,cls=''] of keys){const b=el('button',{type:'button',class:'button '+cls,text:label,'aria-label':label});b.onclick=()=>press(act);target.append(b)}}
+addKeys(quick,[['sin','sin('],['cos','cos('],['tan','tan('],['log','log('],['ln','ln('],['√','sqrt('],['x²','^2'],['xʸ','^'],['π','pi'],['(', '(']]);
+addKeys(advancedGrid,[['asin','asin('],['acos','acos('],['atan','atan('],['∛','cbrt('],['abs','abs('],['1/x','recip'],['!','!'],['e','e'],['EXP','exp'],[')',')']]);
+addKeys(keypad,[['AC','clear','sc-op'],['⌫','back','sc-op'],['%','%','sc-op'],['÷','/','sc-op'],['7','7'],['8','8'],['9','9'],['×','*','sc-op'],['4','4'],['5','5'],['6','6'],['−','-','sc-op'],['1','1'],['2','2'],['3','3'],['+','+','sc-op'],['0','0'],['.','.'],['Ans','ans'],['=','eq','sc-eq']]);
+addKeys(secondary,[['MC','mc'],['MR','mr'],['M+','mp'],['M−','mm'],[')',' )'.trim()]]);
+expr.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calculate()}else if(e.key==='Escape'){e.preventDefault();press('clear')}});
+setupStatus(root);notice(root,'Strict scientific parser with DEG/RAD modes. Memory and history stay on this device for the current page session only.');
