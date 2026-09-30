@@ -99,6 +99,8 @@ function calculate(){
    base=inclusive/(1+totalRate);taxTotal=inclusive-base;finalTotal=inclusive-(discountOrder.value==='after'?discountAmount:0);
  }
  if(finalTotal<0){results.replaceChildren();status('Discount produces a negative final total.',true);return}
+ const maxPreciseMoney=Number.MAX_SAFE_INTEGER/100;
+ if([entered,discountAmount,base,taxTotal,finalTotal].some(x=>!Number.isFinite(x)||Math.abs(x)>maxPreciseMoney)){results.replaceChildren();status('This combination is too large to preserve reliable currency precision. Reduce the amount, quantity or tax rates.',true);return}
  const values={entered,discountAmount,base,taxTotal,finalTotal};
  for(const k in values)values[k]=roundValue(values[k]);
  results.replaceChildren(el('h2',{text:'Tax calculation'}));
