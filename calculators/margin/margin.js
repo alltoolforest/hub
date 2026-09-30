@@ -83,6 +83,7 @@ function calculate(){
  }
  const maxPreciseMoney=Number.MAX_SAFE_INTEGER/100;
  if(!Number.isFinite(price)||price>maxPreciseMoney){fail('This result is too large to preserve reliable currency precision. Reduce the costs or target percentage.');return}
+ const grossProfit=price-cost;
  const profit=price-allIn;
  const margin=price===0?(profit===0?null:-Infinity):profit/price*100;
  const effectiveMarkup=allIn===0?(profit===0?null:Infinity):profit/allIn*100;
@@ -90,10 +91,10 @@ function calculate(){
  const grid=el('div',{class:'result-grid'});
  const items=[
   ['Product cost',money(cost)],['Optional costs',money(ship+fee+extra)],['All-in / break-even cost',money(allIn)],
-  ['Selling price',money(price)],['Gross profit',money(profit)],['Profit margin',pct(margin)],['Markup on all-in cost',pct(effectiveMarkup)]
+  ['Selling price',money(price)],['Gross profit before optional costs',money(grossProfit)],['Profit after entered costs',money(profit)],['Profit margin',pct(margin)],['Markup on all-in cost',pct(effectiveMarkup)]
  ];
  for(const [label,value] of items)grid.append(el('div',{class:'result-item'},[el('small',{text:label}),el('strong',{text:value})]));
- results.append(grid,el('div',{class:'margin-explain',text:'Margin measures profit as a percentage of selling price. Markup measures profit as a percentage of all-in cost. Break-even price equals all-in cost when no additional seller-borne costs or price-dependent fees are omitted.'}));
+ results.append(grid,el('div',{class:'margin-explain',text:'Profit margin here uses profit after all entered costs as a percentage of selling price. Markup uses that profit as a percentage of all-in cost. Gross profit before optional costs is selling price minus product cost. Break-even price equals all-in cost when no additional seller-borne costs or price-dependent fees are omitted.'}));
  status('Calculated. Currency changes formatting only; it does not convert values.');
 }
 function reset(){
