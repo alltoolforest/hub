@@ -94,6 +94,7 @@ function calculateProjection(){
   const nominal=read('rate-type')==='nominal';
   const annual=num('rate',{min:-99,max:100})/100;
   const compoundFreq=periodsPerYear();
+  if(nominal&&annual<0&&1+annual/compoundFreq<=0) throw Error('This nominal rate is incompatible with the selected compounding frequency.');
   const effectiveMonthly=nominal?null:monthlyRate();
   const compoundMonths=nominal?12/compoundFreq:null;
   const nominalPeriodRate=nominal?annual/compoundFreq:null;
@@ -223,6 +224,9 @@ function sync(){
 }
 
 for(const id of ['rate-type','contribution-frequency','inflation-mode']) $('#'+id).addEventListener('change',sync);
+$('#currency').addEventListener('change',()=>{
+  if(!result.hidden){result.hidden=true;status('Currency display changed. Calculate again to refresh formatted results.')}
+});
 for(const input of form.querySelectorAll('input,select')) input.addEventListener('input',()=>{
   if(!result.hidden){result.hidden=true;status('Input changed. Calculate again to refresh the projection.')}
 });
