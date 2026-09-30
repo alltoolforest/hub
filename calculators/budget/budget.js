@@ -24,6 +24,24 @@ const defaults={
 };
 let state=structuredClone(defaults);
 
+
+const budgetStyle=el('style',{text:`
+.budget-top{display:grid;grid-template-columns:minmax(0,260px);margin-bottom:20px}
+.budget-editor{display:grid;gap:22px}
+.budget-section{border:1px solid var(--line);border-radius:12px;padding:18px}
+.budget-section-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}
+.budget-section-head h2,.budget-summary h2,.budget-breakdown h2{font-size:17px;margin:0 0 4px}
+.budget-section-head p{font-size:13px;color:var(--muted);margin:0;max-width:600px}
+.budget-rows{display:grid;gap:10px}.budget-row{display:grid;grid-template-columns:minmax(130px,2fr) minmax(100px,1fr) minmax(110px,1fr) minmax(150px,1.4fr) auto;gap:9px;align-items:center}
+.budget-section:nth-child(1) .budget-row,.budget-section:nth-child(3) .budget-row{grid-template-columns:minmax(160px,2fr) minmax(110px,1fr) auto}
+.budget-row button{min-height:46px}.budget-summary,.budget-breakdown{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.budget-sub{display:block;font-size:12px;color:var(--muted);margin-top:3px}.budget-compare{margin-top:22px}.budget-compare h3{font-size:15px;margin:0 0 4px}.budget-compare p{font-size:13px;color:var(--muted);margin:0 0 12px}
+.budget-reference{display:grid;gap:7px}.budget-ref-row{display:grid;grid-template-columns:minmax(150px,2fr) .7fr 1fr 1.2fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.budget-bars{display:grid;gap:13px}.budget-bar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px}.budget-bar-track{height:9px;background:#e1e9e4;border-radius:999px;overflow:hidden}.budget-bar-fill{display:block;height:100%;background:var(--green);border-radius:999px}
+@media(max-width:700px){.budget-section{padding:14px}.budget-section-head{display:block}.budget-section-head button{width:100%;margin-top:10px}.budget-row,.budget-section:nth-child(1) .budget-row,.budget-section:nth-child(3) .budget-row{grid-template-columns:1fr}.budget-row button{width:100%}.budget-ref-row{grid-template-columns:1fr 1fr}.budget-bar-label{display:block}.budget-bar-label strong{display:block}.budget-top{grid-template-columns:1fr}}
+`});
+root.prepend(budgetStyle);
+
 const top=el('div',{class:'budget-top'});
 const currencyLabel=el('label',{for:'budget-currency',text:'Currency'});
 const currency=el('select',{id:'budget-currency'});
