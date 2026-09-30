@@ -19,7 +19,7 @@ export function evaluateScientific(expression,mode='DEG',ans=0){
  if(mode!=='DEG'&&mode!=='RAD')throw Error('Angle mode must be DEG or RAD.');
  const tokens=tokenize(expression);let i=0,depth=0;const peek=()=>tokens[i],eat=()=>tokens[i++];
  function sum(){let a=product();while(peek()==='+'||peek()==='-'){const op=eat(),b=product();a=finite(op==='+'?a+b:a-b)}return a}
- function product(){let a=unary();while(peek()==='*'||peek()==='/'){const op=eat(),b=unary();if(op==='/'&&b===0)throw Error('Cannot divide by zero.');a=finite(op==='*'?a*b:a/b)}return a}
+ function product(){let a=unary();for(;;){if(peek()==='*'||peek()==='/'){const op=eat(),b=unary();if(op==='/'&&b===0)throw Error('Cannot divide by zero.');a=finite(op==='*'?a*b:a/b);continue}const t=peek();if(t==='('||t==='pi'||t==='e'||t==='ans'||FUNCTIONS.includes(t)){a=finite(a*unary());continue}break}return a}
  function unary(){if(peek()==='+'){eat();return unary()}if(peek()==='-'){eat();return -unary()}return power()}
  function power(){let a=postfix();if(peek()==='^'){eat();a=finite(Math.pow(a,unary()))}return a}
  function postfix(){let a=primary();while(peek()==='!'||peek()==='%'){a=eat()==='!'?factorial(a):a/100}return finite(a)}
