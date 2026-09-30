@@ -24,8 +24,8 @@ const modes=[['age','Exact age'],['ondate','Age on a date'],['birthday','Next bi
 const dateInput=v=>el('input',{type:'date',value:v,min:'0001-01-01',max:'9999-12-31'});
 const numberInput=v=>el('input',{type:'number',value:String(v),min:'0',max:'1000000',step:'1',inputmode:'numeric'});
 const field=(label,c,full)=>{const w=el('div',{class:'field'+(full?' ad-full':'')});c.setAttribute('aria-label',label);w.append(el('label',{text:label}),c);return w};
-function todayUTC(){const x=new Date();return{x:x.getFullYear(),y:x.getFullYear(),m:x.getMonth()+1,d:x.getDate()}}
-function todayString(){const t=todayUTC();return fmt(t)}
+function todayLocal(){const x=new Date();return{y:x.getFullYear(),m:x.getMonth()+1,d:x.getDate()}}
+function todayString(){return fmt(todayLocal())}
 function result(items,note){results.replaceChildren(el('h2',{text:'Result'}));const g=el('div',{class:'result-grid'});items.forEach(i=>g.append(el('div',{class:'result-item'},[el('small',{text:i[0]}),el('strong',{text:i[1]})])));results.append(g);if(note)results.append(el('div',{class:'ad-note',text:note}));status('Calculated. Dates are treated as calendar dates, not times of day.')}
 function fail(s){results.replaceChildren();status(s,true)}
 function render(){
