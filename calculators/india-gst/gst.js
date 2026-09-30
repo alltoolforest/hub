@@ -20,14 +20,14 @@ select('gst-mode','GST treatment',[
   ['inclusive','Inclusive of GST — extract / reverse GST']
 ],'exclusive');
 
-add('amount','Amount before discount (₹)','number','10000',{
-  min:'0',max:'100000000000000',step:'0.01',
-  hint:'Enter the price before discount. Its GST treatment is controlled above.'
+add('amount','Entered amount (₹)','number','10000',{
+  min:'0',max:'1000000000000',step:'0.01',
+  hint:'Enter the amount before discount; choose whether that amount is GST-exclusive or GST-inclusive.'
 });
 
 select('gst-rate','GST rate',[
   ['0','Nil / 0%'],['0.25','0.25%'],['3','3%'],['5','5%'],
-  ['12','12%'],['18','18%'],['28','28%'],['custom','Custom rate']
+  ['12','12% — legacy / special'],['18','18%'],['28','28% — legacy / special'],['40','40% — special de-merit'],['custom','Custom rate']
 ],'18');
 
 const customRateWrap=add('custom-rate','Custom GST rate (%)','number','18',{
@@ -60,11 +60,11 @@ select('rounding','Display rounding',[
 const rateResponsibility=el('div',{class:'notice'});
 rateResponsibility.append(
   el('strong',{text:'GST rate responsibility: '}),
-  document.createTextNode('GST rates depend on classification, exemptions and applicable conditions. Verify the rate for your goods or services before relying on this result. '),
+  document.createTextNode('GST rates changed materially from 22 September 2025 and still depend on classification, exemptions and applicable conditions. 5% and 18% are the broad current rates; 40% applies to specified de-merit supplies, while some other rates can remain relevant in special or legacy situations. Verify the rate for your supply before relying on this result. '),
   el('a',{
     href:'https://cbic-gst.gov.in/gst-goods-services-rates.html',
     target:'_blank',rel:'noopener',
-    text:'Check CBIC GST rates ↗'
+    text:'Check official GST rate information ↗'
   })
 );
 root.append(rateResponsibility);
@@ -77,15 +77,20 @@ function getRate(){
 function getDiscount(amount){
   const type=read('discount-type');
   if(type==='none') return {amount:0,label:'No discount'};
-  const value=num('discount-value',{min:0,max:type==='percent'?100:100000000000000});
+  const value=num('discount-value',{min:0,max:type==='percent'?100:1000000000000});
   const discount=type==='percent'?amount*value/100:value;
   if(discount>amount) throw Error('Fixed discount cannot exceed the entered amount.');
   return {amount:discount,label:type==='percent'?value+'%':'₹ discount'};
 }
 
+function roundHalfUp(value,digits){
+  const factor=10**digits;
+  return Math.round((value+Number.EPSILON)*factor)/factor;
+}
+
 function money(value){
   const digits=read('rounding')==='rupee'?0:2;
-  const rounded=read('rounding')==='rupee'?Math.round((value+Number.EPSILON)):Math.round((value+Number.EPSILON)*100)/100;
+  const rounded=roundHalfUp(value,digits);
   try{
     return new Intl.NumberFormat('en-IN',{
       style:'currency',currency:'INR',
@@ -108,7 +113,7 @@ function row(grid,label,value,emphasis=false){
 }
 
 function calculate(){
-  const amount=num('amount',{min:0,max:100000000000000});
+  const amount=num('amount',{min:0,max:1000000000000});
   const rate=getRate();
   const discount=getDiscount(amount);
   const afterDiscount=amount-discount.amount;
@@ -145,7 +150,7 @@ function calculate(){
   const detail=inclusive
     ? 'Inclusive / reverse calculation extracts GST from the discounted inclusive amount; it does not mean GST reverse charge.'
     : 'Exclusive calculation adds GST to the taxable value after the discount.';
-  result.append(el('p',{class:'notice',text:detail+' Internal calculations keep full precision; only displayed values use the selected rounding.'}));
+  result.append(el('p',{class:'notice',text:detail+' Internal calculations keep full precision; only displayed values use the selected rounding. In nearest-rupee view, each displayed tax component is rounded independently, so displayed component sums can occasionally differ by ₹1 from a separately rounded aggregate.'}));
 }
 
 function sync(){
@@ -171,9 +176,13 @@ function sync(){
   }
 }
 
-$('#gst-rate').addEventListener('change',sync);
-$('#discount-type').addEventListener('change',sync);
-$('#rounding').addEventListener('change',()=>{if(!result.hidden) calculate()});
+function refreshIfVisible(){
+  if(result.hidden) return;
+  try{ calculate(); status('Result updated.'); }catch(e){ result.hidden=true; status(e.message||String(e),true); }
+}
+$('#gst-rate').addEventListener('change',()=>{sync();refreshIfVisible()});
+$('#discount-type').addEventListener('change',()=>{sync();refreshIfVisible()});
+for(const id of ['gst-mode','supply-type','rounding']) $('#'+id).addEventListener('change',refreshIfVisible);
 
 const defaults={
   'gst-mode':'exclusive','amount':'10000','gst-rate':'18','custom-rate':'18',
@@ -191,6 +200,6 @@ const actions=el('div',{class:'actions'},[
 ]);
 root.append(actions,result);
 
-notice(root,'Focused calculation only — not tax advice or GST-compliance software. Supply type and GST rate are your inputs. Discounts are treated as reductions before GST calculation; post-supply discounts can have additional legal conditions. Compensation cess, HSN/SAC classification, GSTIN validation, ITC, returns and e-invoicing are outside this calculator.');
+notice(root,'Focused calculation only — not tax advice or GST-compliance software. The preset list is a convenience, not a classification engine. Supply type and GST rate are your inputs. Discounts are treated as reductions before GST calculation; post-supply discounts can have additional legal conditions. Compensation cess, HSN/SAC classification, GSTIN validation, ITC, returns and e-invoicing are outside this calculator.');
 setupStatus(root);
 sync();
