@@ -1,7 +1,7 @@
 import {$,el,notice,setupStatus,status} from '../../assets/js/core.js';
 const root=$('#workspace');if(!root)throw Error('Age & Date workspace unavailable.');
 const DAY=86400000;
-const pad=n=>String(n).padStart(2,'0');
+function pad(n){return n<10?'0'+n:String(n)}
 function leap(y){return y%4===0&&(y%100!==0||y%400===0)}
 function dim(y,m){return [31,leap(y)?29:28,31,30,31,30,31,31,30,31,30,31][m-1]}
 function parse(s){const a=String(s).split('-').map(Number);if(a.length!==3||!Number.isInteger(a[0])||a[0]<1||a[0]>9999||a[1]<1||a[1]>12||a[2]<1||a[2]>dim(a[0],a[1]))return null;return{y:a[0],m:a[1],d:a[2]}}
@@ -12,7 +12,7 @@ function pretty(d){return new Intl.DateTimeFormat(undefined,{year:'numeric',mont
 function weekday(d){return new Intl.DateTimeFormat(undefined,{weekday:'long',timeZone:'UTC'}).format(new Date(Date.UTC(d.y,d.m-1,d.d)))}
 function fromSerial(n){const x=new Date(n*DAY);return{y:x.getUTCFullYear(),m:x.getUTCMonth()+1,d:x.getUTCDate()}}
 function addDays(d,n){return fromSerial(serial(d)+n)}
-function addMonths(d,n){let total=(d.y*12+d.m-1)+n,y=Math.floor(total/12),m=((total%12)+12)%12+1;if(total<0&&m===12)y++;return{y:y,m:m,d:Math.min(d.d,dim(y,m))}}
+function addMonths(d,n){const total=d.y*12+(d.m-1)+n,y=Math.floor(total/12),m=total-y*12+1;return{y:y,m:m,d:Math.min(d.d,dim(y,m))}}
 function addYears(d,n){const y=d.y+n;return{y:y,m:d.m,d:Math.min(d.d,dim(y,d.m))}}
 function exactAge(a,b){if(cmp(a,b)>0)return null;let y=b.y-a.y,m=b.m-a.m,d=b.d-a.d;if(d<0){m--;const pm=b.m===1?12:b.m-1,py=b.m===1?b.y-1:b.y;d+=dim(py,pm)}if(m<0){y--;m+=12}return{y,m,d}}
 function anniversary(birth,y,rule){if(birth.m===2&&birth.d===29&&!leap(y))return rule==='feb28'?{y:y,m:2,d:28}:{y:y,m:3,d:1};return{y:y,m:birth.m,d:birth.d}}
