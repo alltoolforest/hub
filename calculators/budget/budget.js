@@ -83,7 +83,7 @@ function row(kind,item,index){
    type.addEventListener('change',()=>{item.type=type.value;renderSummary()});
    group.addEventListener('change',()=>{item.group=group.value;renderSummary()});
  }
- const remove=el('button',{type:'button',class:'quiet',text:'Remove','aria-label':'Remove '+kind.toLowerCase()});
+ const remove=el('button',{type:'button',class:'quiet',text:'Remove','aria-label':'Remove '+kind.toLowerCase()+' row '+(index+1)});
  remove.addEventListener('click',()=>{state[kind==='Income'?'incomes':kind==='Expense'?'expenses':'goals'].splice(index,1);render()});
  name.addEventListener('input',()=>{item.name=name.value;renderSummary()});
  amount.addEventListener('input',()=>{
@@ -186,7 +186,7 @@ function safeState(raw){
 }
 
 function saveLocal(){
- try{requireValidAmounts();localStorage.setItem(storageKey,JSON.stringify(state));status('Budget saved on this browser/device.')}
+ try{requireValidAmounts();localStorage.setItem(storageKey,JSON.stringify(safeState(state)));status('Budget saved on this browser/device.')}
  catch{status('Local saving is unavailable in this browser mode. Use Export instead.',true)}
 }
 function loadLocal(){
@@ -195,7 +195,7 @@ function loadLocal(){
 }
 function exportBudget(){
  try{requireValidAmounts()}catch(e){status(e.message,true);return}
- const payload={version:2,savedAt:new Date().toISOString(),...state};
+ const payload={version:2,savedAt:new Date().toISOString(),...safeState(state)};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=el('a',{href:url,download:'alltoolforest-budget.json'});
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Budget exported as JSON.');
@@ -203,10 +203,9 @@ function exportBudget(){
 function exportCSV(){
  try{requireValidAmounts()}catch(e){status(e.message,true);return}
  const esc=v=>'"'+String(v).replaceAll('"','""')+'"';
- const rows=[['Section','Name','Amount','Type','Budget group']];
- state.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
- state.expenses.forEach(x=>rows.push(['Expense',x.name,x.amount,x.type,x.group]));
- state.goals.forEach(x=>rows.push(['Savings goal',x.name,x.amount,'','financial']));
+ const clean=safeState(state);\n const rows=[['Section','Name','Amount','Type','Budget group']];\n clean.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
+ clean.expenses.forEach(x=>rows.push(['Expense',x.name,x.amount,x.type,x.group]));
+ clean.goals.forEach(x=>rows.push(['Savings goal',x.name,x.amount,'','financial']));
  const blob=new Blob([rows.map(r=>r.map(esc).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=el('a',{href:url,download:'alltoolforest-budget.csv'});
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Budget exported as CSV.');
