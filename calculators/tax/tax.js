@@ -34,11 +34,11 @@ const quantity=input({type:'number',value:'1',min:'0',max:'1000000',step:'0.001'
 const discountType=select([['none','No discount'],['percent','Percentage discount'],['fixed','Fixed amount discount']],'none');
 const discount=input({type:'number',value:'0',min:'0',max:'1000000000000',step:'0.01',inputmode:'decimal'});
 const discountOrder=select([['before','Discount before tax'],['after','Discount after tax']],'before');
-const rounding=select([['none','Full-precision calculation'],['2','Round calculated amounts to 2 decimals'],['0','Round calculated amounts to whole currency units']],'none');
+const rounding=select([['currency','Currency-default display'],['2','Display 2 decimal places'],['0','Display whole currency units']],'currency');
 
 for(const [label,control] of [
  ['Currency',currency],['Calculation',mode],['Unit price / entered price',unitPrice],['Quantity',quantity],
- ['Discount type',discountType],['Discount value',discount],['Discount ordering',discountOrder],['Rounding',rounding]
+ ['Discount type',discountType],['Discount value',discount],['Discount ordering',discountOrder],['Display rounding',rounding]
 ]) form.append(field(label,control));
 
 const compWrap=el('div',{class:'tax-full'});
@@ -74,10 +74,11 @@ function readNumber(control,min,max){
 }
 function money(v){
  const item=currencies.find(x=>x[0]===currency.value)||currencies[0];
- try{return new Intl.NumberFormat(item[2],{style:'currency',currency:item[0],maximumFractionDigits:item[0]==='JPY'?0:2}).format(v)}
+ const digits=rounding.value==='currency'?(item[0]==='JPY'?0:2):Number(rounding.value);
+ try{return new Intl.NumberFormat(item[2],{style:'currency',currency:item[0],minimumFractionDigits:digits,maximumFractionDigits:digits}).format(v)}
  catch{return item[0]+' '+Number(v).toLocaleString(undefined,{maximumFractionDigits:2})}
 }
-function roundValue(v){return rounding.value==='none'?v:Math.round((v+Number.EPSILON)*10**Number(rounding.value))/10**Number(rounding.value)}
+function roundValue(v){return v}
 function calculate(){
  const price=readNumber(unitPrice,0,1e12),qty=readNumber(quantity,0,1e6),disc=readNumber(discount,0,1e12);
  const rates=components.map(x=>Number(x.rate));
@@ -117,11 +118,11 @@ function calculate(){
 }
 function item(label,value){return el('div',{class:'result-item'},[el('small',{text:label}),el('strong',{text:value})])}
 function reset(){
- currency.value='USD';mode.value='exclusive';unitPrice.value='100';quantity.value='1';discountType.value='none';discount.value='0';discountOrder.value='before';rounding.value='none';
+ currency.value='USD';mode.value='exclusive';unitPrice.value='100';quantity.value='1';discountType.value='none';discount.value='0';discountOrder.value='before';rounding.value='currency';
  components=[{name:'Tax',rate:10}];renderComponents();calculate();status('Inputs reset. Rates remain manual and jurisdiction-neutral.');
 }
 for(const c of [currency,mode,unitPrice,quantity,discountType,discount,discountOrder,rounding])c.addEventListener('input',calculate);
 renderComponents();
-notice(root,'Country-neutral calculator. Currency changes formatting only and does not convert values. Tax rates and components are manual inputs; this tool does not determine jurisdiction-specific law, registration rules, exemptions, product classification, filing obligations or tax advice.');
+notice(root,'Country-neutral calculator. Currency and display rounding change presentation only and do not convert or alter calculated values. Tax rates and components are manual inputs; this tool does not determine jurisdiction-specific law, registration rules, exemptions, product classification, filing obligations or tax advice.');
 setupStatus(root);
 calculate();
