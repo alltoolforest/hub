@@ -172,6 +172,7 @@ function annualTable(rows){
 
 function calculate(){
   const x=calculateProjection();
+  queueMicrotask(sync);
   result.hidden=false;
   result.replaceChildren(el('h2',{text:'Savings projection'}));
   const grid=el('div',{class:'result-grid'});
@@ -212,7 +213,7 @@ root.append(el('div',{class:'actions'},[
  action('Calculate growth',calculate,true),
  action('Reset',()=>{
    for(const [id,value] of Object.entries(defaults)) $('#'+id).value=value;
-   result.hidden=true;sync();status('Inputs reset.');
+   result.hidden=true;sync();queueMicrotask(sync);status('Inputs reset.');
  })
 ]),result);
 
