@@ -183,6 +183,12 @@ function refreshIfVisible(){
 $('#gst-rate').addEventListener('change',()=>{sync();refreshIfVisible()});
 $('#discount-type').addEventListener('change',()=>{sync();refreshIfVisible()});
 for(const id of ['gst-mode','supply-type','rounding']) $('#'+id).addEventListener('change',refreshIfVisible);
+for(const id of ['amount','custom-rate','discount-value']) $('#'+id).addEventListener('input',()=>{
+  if(!result.hidden){
+    result.hidden=true;
+    status('Input changed. Calculate again to refresh the result.');
+  }
+});
 
 const defaults={
   'gst-mode':'exclusive','amount':'10000','gst-rate':'18','custom-rate':'18',
