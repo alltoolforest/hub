@@ -34,7 +34,7 @@ const budgetStyle=el('style',{text:`
 .budget-section-head p{font-size:13px;color:var(--muted);margin:0;max-width:600px}
 .budget-rows{display:grid;gap:10px}.budget-row{display:grid;grid-template-columns:minmax(130px,2fr) minmax(100px,1fr) minmax(110px,1fr) minmax(150px,1.4fr) auto;gap:9px;align-items:center}
 .budget-section:nth-child(1) .budget-row,.budget-section:nth-child(3) .budget-row{grid-template-columns:minmax(160px,2fr) minmax(110px,1fr) auto}
-.budget-row button{min-height:46px}.budget-summary,.budget-breakdown{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.budget-row button{min-height:46px}.budget-invalid{border-color:#a33131!important;outline:2px solid #a3313122}.budget-summary,.budget-breakdown{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
 .budget-sub{display:block;font-size:12px;color:var(--muted);margin-top:3px}.budget-compare{margin-top:22px}.budget-compare h3{font-size:15px;margin:0 0 4px}.budget-compare p{font-size:13px;color:var(--muted);margin:0 0 12px}
 .budget-reference{display:grid;gap:7px}.budget-ref-row{display:grid;grid-template-columns:minmax(150px,2fr) .7fr 1fr 1.2fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
 .budget-bars{display:grid;gap:13px}.budget-bar-label{display:flex;justify-content:space-between;gap:12px;font-size:13px}.budget-bar-track{height:9px;background:#e1e9e4;border-radius:999px;overflow:hidden}.budget-bar-fill{display:block;height:100%;background:var(--green);border-radius:999px}
@@ -53,6 +53,9 @@ const editor=el('div',{class:'budget-editor'});
 root.append(editor);
 
 function cleanAmount(v){const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=1e12?n:0}
+function parseAmount(v){if(String(v).trim()==='')return null;const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=1e12?n:null}
+function hasInvalidAmounts(){return [...editor.querySelectorAll('input[type="number"]')].some(x=>parseAmount(x.value)===null)}
+function requireValidAmounts(){if(hasInvalidAmounts())throw Error('Fix highlighted amount fields before saving or exporting.')}
 function locale(){return currencies.find(x=>x[0]===state.currency)?.[2]||undefined}
 function money(v){
  try{return new Intl.NumberFormat(locale(),{style:'currency',currency:state.currency,maximumFractionDigits:state.currency==='JPY'?0:2}).format(v)}
@@ -83,7 +86,12 @@ function row(kind,item,index){
  const remove=el('button',{type:'button',class:'quiet',text:'Remove','aria-label':'Remove '+kind.toLowerCase()});
  remove.addEventListener('click',()=>{state[kind==='Income'?'incomes':kind==='Expense'?'expenses':'goals'].splice(index,1);render()});
  name.addEventListener('input',()=>{item.name=name.value;renderSummary()});
- amount.addEventListener('input',()=>{item.amount=cleanAmount(amount.value);renderSummary()});
+ amount.addEventListener('input',()=>{
+   const value=parseAmount(amount.value),invalid=value===null;
+   amount.setAttribute('aria-invalid',invalid?'true':'false');
+   amount.classList.toggle('budget-invalid',invalid);
+   if(!invalid){item.amount=value;renderSummary()}
+ });
  r.append(remove);return r;
 }
 
@@ -178,7 +186,7 @@ function safeState(raw){
 }
 
 function saveLocal(){
- try{localStorage.setItem(storageKey,JSON.stringify(state));status('Budget saved on this browser/device.')}
+ try{requireValidAmounts();localStorage.setItem(storageKey,JSON.stringify(state));status('Budget saved on this browser/device.')}
  catch{status('Local saving is unavailable in this browser mode. Use Export instead.',true)}
 }
 function loadLocal(){
@@ -186,12 +194,14 @@ function loadLocal(){
  catch(e){status(e.message||'Could not load the saved budget.',true)}
 }
 function exportBudget(){
+ try{requireValidAmounts()}catch(e){status(e.message,true);return}
  const payload={version:2,savedAt:new Date().toISOString(),...state};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=el('a',{href:url,download:'alltoolforest-budget.json'});
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Budget exported as JSON.');
 }
 function exportCSV(){
+ try{requireValidAmounts()}catch(e){status(e.message,true);return}
  const esc=v=>'"'+String(v).replaceAll('"','""')+'"';
  const rows=[['Section','Name','Amount','Type','Budget group']];
  state.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
