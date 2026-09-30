@@ -9,7 +9,8 @@ const currencies=[
  ['AUD','AUD — Australian Dollar (A$)','en-AU'],['CAD','CAD — Canadian Dollar (C$)','en-CA'],['CHF','CHF — Swiss Franc (CHF)','de-CH'],
  ['SGD','SGD — Singapore Dollar (S$)','en-SG'],['AED','AED — UAE Dirham (AED)','en-AE']
 ];
-const storageKey='alltoolforest-budget-v2';\nconst clone=v=>typeof structuredClone==='function'?structuredClone(v):JSON.parse(JSON.stringify(v));
+const storageKey='alltoolforest-budget-v2';
+const clone=v=>typeof structuredClone==='function'?structuredClone(v):JSON.parse(JSON.stringify(v));
 const defaults={
  currency:'USD',
  incomes:[{name:'Primary income',amount:5000}],
@@ -204,10 +205,13 @@ function exportBudget(){
 function exportCSV(){
  try{requireValidAmounts()}catch(e){status(e.message,true);return}
  const esc=v=>'"'+String(v).replaceAll('"','""')+'"';
- const clean=safeState(state);\n const rows=[['Section','Name','Amount','Type','Budget group']];\n clean.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
+ const clean=safeState(state);
+ const rows=[['Section','Name','Amount','Type','Budget group']];
+ clean.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
  clean.expenses.forEach(x=>rows.push(['Expense',x.name,x.amount,x.type,x.group]));
  clean.goals.forEach(x=>rows.push(['Savings goal',x.name,x.amount,'','financial']));
- const blob=new Blob([rows.map(r=>r.map(esc).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
+ const blob=new Blob([rows.map(r=>r.map(esc).join(',')).join('
+')],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=el('a',{href:url,download:'alltoolforest-budget.csv'});
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Budget exported as CSV.');
 }
