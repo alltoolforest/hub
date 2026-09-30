@@ -188,7 +188,8 @@ function safeState(raw){
 }
 
 function saveLocal(){
- try{requireValidAmounts();localStorage.setItem(storageKey,JSON.stringify(safeState(state)));status('Budget saved on this browser/device.')}
+ try{requireValidAmounts()}catch(e){status(e.message,true);return}
+ try{localStorage.setItem(storageKey,JSON.stringify(safeState(state)));status('Budget saved on this browser/device.')}
  catch{status('Local saving is unavailable in this browser mode. Use Export instead.',true)}
 }
 function loadLocal(){
