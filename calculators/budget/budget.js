@@ -142,7 +142,7 @@ function renderSummary(){
  for(const [label,value,target] of refs){
    const actual=income?value/income*100:0;
    table.append(el('div',{class:'budget-ref-row'},[
-    el('span',{text:label}),el('strong',{text:income?percent(actual):'—'}),el('span',{text:'Reference '+target+'%'}),el('span',{text:income?'Difference '+(actual-target>=0?'+':'')+percent(actual-target):'—'})
+    el('span',{text:label}),el('strong',{text:income?percent(actual):'—'}),el('span',{text:'Reference '+target+'%'}),el('span',{text:income?'Vs reference '+(actual-target>=0?'+':'')+percent(actual-target):'—'})
    ]));
  }
  compare.append(table);summary.append(compare);
@@ -175,7 +175,8 @@ function render(){
 }
 
 function safeState(raw){
- if(!raw||typeof raw!=='object')throw Error('Saved budget data is invalid.');
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Saved budget data is invalid.');
+ if(!Array.isArray(raw.incomes)||!Array.isArray(raw.expenses)||!Array.isArray(raw.goals))throw Error('Saved budget data is missing required sections.');
  const code=currencies.some(x=>x[0]===raw.currency)?raw.currency:'USD';
  const cleanRows=(rows,kind)=>(Array.isArray(rows)?rows:[]).slice(0,100).map(x=>({
    name:String(x?.name||'').slice(0,60)||'Untitled',
