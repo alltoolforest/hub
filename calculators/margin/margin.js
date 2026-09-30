@@ -76,6 +76,7 @@ function calculate(){
   if(m===null||m>=100){fail('Target margin must be at least 0% and below 100%.');return}
   price=allIn/(1-m/100);
  }else{
+  if(allIn===0){fail('Markup-based pricing is undefined when all-in cost is zero. Use target margin or enter a positive cost.');return}
   const control=mode.value==='markup-price'?markup:targetMarkup;
   const mk=n(control,100000);
   if(mk===null){fail('Enter a valid non-negative markup percentage.');return}
