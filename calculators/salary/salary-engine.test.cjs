@@ -19,3 +19,8 @@ for(const t of [5000000,10000000,20000000,50000000]){const at=indiaTax(t,'old'),
 ok(indiaTax(60000000,'old')>indiaTax(60000000,'new'),'India old 37% surcharge above 5cr');
 // India 87A marginal relief immediately above ₹12 lakh taxable income
 const i12=indiaTax(1200000),i120001=indiaTax(1200001),i125=indiaTax(1250000);ok(close(i12,0),'India 87A at 12L');ok(i120001>0&&i120001<=1.05,'India 87A marginal relief +1');ok(i125<=52000.05,'India 87A marginal relief 12.5L');
+// Release-blocker regression cases
+x=E.run({inputType:'annualGross',amount:36000,hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,regime:'new',residency:'resident',ageBand:'under60',pfRate:0,pfWage:0,region:'Telangana',professionalTax:0,oldDeductions:0},C.IN);ok(close(x.social,2400),'Telangana PT');
+x=E.run({inputType:'annualGross',amount:40000,hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,pension:'yes',studentLoan:'p5',postgradLoan:'yes',region:'England / Northern Ireland'},C.GB);ok(close(x.social,2194.4+1350+1140),'UK NI + Plan5 + postgraduate');
+x=E.run({inputType:'annualGross',amount:96000,hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,resident:'resident',cpfStatus:'citizen',cpfAge:'55under',cpf:0,reliefs:0},C.SG);ok(close(x.social,19200),'Singapore employee CPF');ok(close(x.employerCost,112320),'Singapore employer CPF in cost');
+x=E.run({inputType:'annualGross',amount:100000,hours:40,bonus:0,pretax:0,otherDeductions:0,employerBenefits:0,region:'Ontario'},C.CA);ok(x.tax>0&&x.social>0,'Canada Ontario modeled payroll');
