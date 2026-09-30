@@ -211,8 +211,8 @@ function exportCSV(){
  clean.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
  clean.expenses.forEach(x=>rows.push(['Expense',x.name,x.amount,x.type,x.group]));
  clean.goals.forEach(x=>rows.push(['Savings goal',x.name,x.amount,'','financial']));
- const blob=new Blob([rows.map(r=>r.map(esc).join(',')).join('
-')],{type:'text/csv;charset=utf-8'});
+ const csv=rows.map(r=>r.map(esc).join(',')).join(String.fromCharCode(13,10));
+ const blob=new Blob([String.fromCharCode(65279)+csv],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=el('a',{href:url,download:'alltoolforest-budget.csv'});
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Budget exported as CSV.');
 }
