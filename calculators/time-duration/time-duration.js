@@ -12,7 +12,8 @@ function leap(y){return y%4===0&&(y%100!==0||y%400===0)}
 function dim(y,m){return [31,leap(y)?29:28,31,30,31,30,31,31,30,31,30,31][m-1]}
 function dateParts(s){const a=String(s).split('-').map(Number);if(a.length!==3||!Number.isInteger(a[0])||a[0]<1||a[0]>9999||a[1]<1||a[1]>12||a[2]<1||a[2]>dim(a[0],a[1]))return null;return{y:a[0],m:a[1],d:a[2]}}
 function dateSerial(d){const x=new Date(0);x.setUTCFullYear(d.y,d.m-1,d.d);x.setUTCHours(0,0,0,0);return Math.floor(x.getTime()/86400000)}
-function timeMin(s){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(s))return null;const a=s.split(':').map(Number);return a[0]*60+a[1]}
+function timeMin(s){s=String(s).trim();if(formatChoice.value==='12'){const m=s.match(/^(0?[1-9]|1[0-2]):([0-5]\\d)\\s*(AM|PM)$/i);if(!m)return null;let h=Number(m[1])%12;if(m[3].toUpperCase()==='PM')h+=12;return h*60+Number(m[2])}if(!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(s))return null;const p=s.split(':').map(Number);return p[0]*60+p[1]}
+function timeInput(v){if(formatChoice.value==='24')return input('time',v);const p=v.split(':').map(Number),suffix=p[0]>=12?'PM':'AM',h=p[0]%12||12;return input('text',h+':'+two(p[1])+' '+suffix,{placeholder:'h:mm AM'})}
 function num(v,min=0,max=1e9){const n=Number(v);return Number.isFinite(n)&&n>=min&&n<=max?n:null}
 function durationMin(h,m){const a=num(h,0,1000000),b=num(m,0,59);return a===null||b===null?null:Math.round(a*60+b)}
 function dur(mins){const sign=mins<0?'-':'';let n=Math.abs(Math.round(mins)),d=Math.floor(n/MIN_DAY);n%=MIN_DAY;const h=Math.floor(n/60),m=n%60;const p=[];if(d)p.push(d+' '+(d===1?'day':'days'));if(h)p.push(h+' '+(h===1?'hour':'hours'));if(m||!p.length)p.push(m+' '+(m===1?'minute':'minutes'));return sign+p.join(', ')}
