@@ -12,9 +12,9 @@ function fmt(d){return d.y+'-'+pad(d.m)+'-'+pad(d.d)}
 function pretty(d){return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'long',day:'numeric',timeZone:'UTC'}).format(utcDate(d))}
 function weekday(d){return new Intl.DateTimeFormat(undefined,{weekday:'long',timeZone:'UTC'}).format(utcDate(d))}
 function fromSerial(n){const x=new Date(n*DAY);return{y:x.getUTCFullYear(),m:x.getUTCMonth()+1,d:x.getUTCDate()}}
-function addDays(d,n){return fromSerial(serial(d)+n)}
-function addMonths(d,n){const total=d.y*12+(d.m-1)+n,y=Math.floor(total/12),m=total-y*12+1;return{y:y,m:m,d:Math.min(d.d,dim(y,m))}}
-function addYears(d,n){const y=d.y+n;return{y:y,m:d.m,d:Math.min(d.d,dim(y,d.m))}}
+function addDays(d,n){const r=fromSerial(serial(d)+n);if(r.y<1||r.y>9999)throw Error('date range');return r}
+function addMonths(d,n){const total=d.y*12+(d.m-1)+n,y=Math.floor(total/12),m=total-y*12+1;if(y<1||y>9999)throw Error('date range');return{y:y,m:m,d:Math.min(d.d,dim(y,m))}}
+function addYears(d,n){const y=d.y+n;if(y<1||y>9999)throw Error('date range');return{y:y,m:d.m,d:Math.min(d.d,dim(y,d.m))}}
 function exactAge(a,b){if(cmp(a,b)>0)return null;let y=b.y-a.y,anchor=addYears(a,y);if(cmp(anchor,b)>0){y--;anchor=addYears(a,y)}let m=(b.y-anchor.y)*12+(b.m-anchor.m),monthAnchor=addMonths(anchor,m);if(cmp(monthAnchor,b)>0){m--;monthAnchor=addMonths(anchor,m)}return{y:y,m:m,d:cmp(b,monthAnchor)}}
 function anniversary(birth,y,rule){if(birth.m===2&&birth.d===29&&!leap(y))return rule==='feb28'?{y:y,m:2,d:28}:{y:y,m:3,d:1};return{y:y,m:birth.m,d:birth.d}}
 function nextBirthday(birth,asof,rule){let n=anniversary(birth,asof.y,rule);if(cmp(n,asof)<0)n=anniversary(birth,asof.y+1,rule);return n}
