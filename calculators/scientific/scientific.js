@@ -77,7 +77,7 @@ function press(act){
  if(act==='back'){const a=expr.selectionStart||0,b=expr.selectionEnd||a;if(a!==b)expr.setRangeText('',a,b,'end');else if(a>0)expr.setRangeText('',a-1,a,'end');return expr.focus()}
  if(act==='recip'){const s=expr.value.trim();expr.value=s?'1/('+s+')':'1/(';return expr.focus()}
  if(act==='mc'){memory=0;memLabel.textContent='M: 0';return}
- if(act==='mr')return insert(format(memory));
+ if(act==='mr')return insert(String(memory));
  if(act==='mp'||act==='mm'){const v=calculate();if(v!==null){memory=finite(memory+(act==='mp'?v:-v));memLabel.textContent='M: '+format(memory)}return}
  if(act==='exp'){const a=expr.selectionStart==null?expr.value.length:expr.selectionStart,b=expr.selectionEnd==null?a:expr.selectionEnd,before=expr.value.slice(0,a);if(!/(?:\d\.?\d*|\.\d+)$/.test(before))return status('Enter a number before EXP.',true);expr.setRangeText('E',a,b,'end');return expr.focus()}
  insert(act);
