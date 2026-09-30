@@ -5,11 +5,12 @@ function pad(n){return n<10?'0'+n:String(n)}
 function leap(y){return y%4===0&&(y%100!==0||y%400===0)}
 function dim(y,m){return [31,leap(y)?29:28,31,30,31,30,31,31,30,31,30,31][m-1]}
 function parse(s){const a=String(s).split('-').map(Number);if(a.length!==3||!Number.isInteger(a[0])||a[0]<1||a[0]>9999||a[1]<1||a[1]>12||a[2]<1||a[2]>dim(a[0],a[1]))return null;return{y:a[0],m:a[1],d:a[2]}}
-function serial(d){return Math.floor(Date.UTC(d.y,d.m-1,d.d)/DAY)}
+function utcDate(d){const x=new Date(0);x.setUTCFullYear(d.y,d.m-1,d.d);x.setUTCHours(0,0,0,0);return x}
+function serial(d){return Math.floor(utcDate(d).getTime()/DAY)}
 function cmp(a,b){return serial(a)-serial(b)}
 function fmt(d){return d.y+'-'+pad(d.m)+'-'+pad(d.d)}
-function pretty(d){return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'long',day:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(d.y,d.m-1,d.d)))}
-function weekday(d){return new Intl.DateTimeFormat(undefined,{weekday:'long',timeZone:'UTC'}).format(new Date(Date.UTC(d.y,d.m-1,d.d)))}
+function pretty(d){return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'long',day:'numeric',timeZone:'UTC'}).format(utcDate(d))}
+function weekday(d){return new Intl.DateTimeFormat(undefined,{weekday:'long',timeZone:'UTC'}).format(utcDate(d))}
 function fromSerial(n){const x=new Date(n*DAY);return{y:x.getUTCFullYear(),m:x.getUTCMonth()+1,d:x.getUTCDate()}}
 function addDays(d,n){return fromSerial(serial(d)+n)}
 function addMonths(d,n){const total=d.y*12+(d.m-1)+n,y=Math.floor(total/12),m=total-y*12+1;return{y:y,m:m,d:Math.min(d.d,dim(y,m))}}
