@@ -39,7 +39,7 @@ select('rate-type','Annual rate type',[
 add('rate','Annual interest / return rate (%)','number','5',{min:'-99',max:'100',step:'0.01'});
 
 const compoundingWrap=select('compounding','Compounding frequency',[
- ['1','Annually'],['2','Semi-annually'],['4','Quarterly'],['12','Monthly'],['365','Daily']
+ ['1','Annually'],['2','Semi-annually'],['4','Quarterly'],['12','Monthly']
 ],'12');
 
 select('inflation-mode','Inflation adjustment',[
@@ -91,9 +91,13 @@ function calculateProjection(){
   if(Math.abs(totalMonths-years*12)>1e-6) throw Error('Enter a term in whole months (for example 10, 10.5, or 10.25 years).');
   const freq=Number(read('contribution-frequency'));
   const timing=read('contribution-timing');
-  const r=monthlyRate();
+  const nominal=read('rate-type')==='nominal';
+  const annual=num('rate',{min:-99,max:100})/100;
+  const compoundFreq=periodsPerYear();
+  const r=nominal?null:monthlyRate();
+  const compoundInterval=nominal?12/compoundFreq:null;
   const contributionAt=contributionMonths(freq,totalMonths);
-  let balance=starting,contributed=starting,interest=0;
+  let balance=starting,contributed=starting,interest=0,accrued=0;
   const rows=[];
   let yearInterest=0,yearContrib=0;
 
@@ -101,8 +105,15 @@ function calculateProjection(){
     if(timing==='beginning'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
     }
-    const earned=balance*r;
-    balance+=earned; interest+=earned; yearInterest+=earned;
+    if(nominal){
+      accrued+=(balance+accrued)*(annual/compoundFreq);
+      if((m+1)%compoundInterval===0){
+        balance+=accrued; interest+=accrued; yearInterest+=accrued; accrued=0;
+      }
+    }else{
+      const earned=balance*r;
+      balance+=earned; interest+=earned; yearInterest+=earned;
+    }
     if(timing==='end'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
     }
@@ -117,6 +128,7 @@ function calculateProjection(){
       yearInterest=0; yearContrib=0;
     }
   }
+  if(nominal&&Math.abs(accrued)>0){balance+=accrued;interest+=accrued;if(rows.length) rows[rows.length-1].balance=balance;}
   const eff=effectiveAnnualRate();
   let realValue=null;
   if(read('inflation-mode')==='on'){
@@ -183,7 +195,7 @@ function calculate(){
   resultItem(grid,'Effective annual rate',pct(x.eff));
   if(x.realValue!==null) resultItem(grid,'Inflation-adjusted value',money(x.realValue));
   result.append(grid,drawChart(x.rows),annualTable(x.rows));
-  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Currency selection changes presentation only; no foreign-exchange conversion is performed. Interest is modeled through an equivalent monthly growth rate so contribution timing can be handled consistently. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
+  result.append(el('p',{class:'notice',text:'Projection assumes the entered rate remains constant. Currency selection changes presentation only; no foreign-exchange conversion is performed. APY/effective rates are modeled through an equivalent monthly rate. Nominal rates follow the selected annual, semiannual, quarterly or monthly compounding schedule. Taxes, fees, rate changes and institution-specific posting rules are not included.'}));
 }
 
 function sync(){
