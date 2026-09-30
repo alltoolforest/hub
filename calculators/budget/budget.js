@@ -205,7 +205,7 @@ function exportBudget(){
 }
 function exportCSV(){
  try{requireValidAmounts()}catch(e){status(e.message,true);return}
- const esc=v=>'"'+String(v).replaceAll('"','""')+'"';
+ const esc=v=>'"'+String(v).replace(/"/g,'""')+'"';
  const clean=safeState(state);
  const rows=[['Section','Name','Amount','Type','Budget group']];
  clean.incomes.forEach(x=>rows.push(['Income',x.name,x.amount,'','']));
