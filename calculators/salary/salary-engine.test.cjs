@@ -17,3 +17,5 @@ function indiaTax(income,regime='new'){return E.run({inputType:'annualGross',amo
 for(const t of [5000000,10000000,20000000]){const at=indiaTax(t),above=indiaTax(t+1);ok(above>=at&&above-at<=1.05,'India new marginal boundary '+t)}
 for(const t of [5000000,10000000,20000000,50000000]){const at=indiaTax(t,'old'),above=indiaTax(t+1,'old');ok(above>=at&&above-at<=1.05,'India old marginal boundary '+t)}
 ok(indiaTax(60000000,'old')>indiaTax(60000000,'new'),'India old 37% surcharge above 5cr');
+// India 87A marginal relief immediately above ₹12 lakh taxable income
+const i12=indiaTax(1200000),i120001=indiaTax(1200001),i125=indiaTax(1250000);ok(close(i12,0),'India 87A at 12L');ok(i120001>0&&i120001<=1.05,'India 87A marginal relief +1');ok(i125<=52000.05,'India 87A marginal relief 12.5L');
