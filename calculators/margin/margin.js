@@ -20,7 +20,7 @@ root.prepend(style);
 
 const form=el('div',{class:'margin-grid'});root.append(form);
 const field=(label,control,full=false)=>{const w=el('div',{class:'field'+(full?' margin-full':'')});control.setAttribute('aria-label',label);w.append(el('label',{text:label}),control);return w};
-const input=(value,opts={})=>{const x=el('input',{type:'number',value:String(value),min:opts.min??'0',max:opts.max??'1000000000000',step:opts.step??'0.01',inputmode:'decimal'});x.value=String(value);return x};
+const input=(value,opts={})=>{const x=el('input',{type:'number',value:String(value),min:opts.min===undefined?'0':opts.min,max:opts.max===undefined?'1000000000000':opts.max,step:opts.step===undefined?'0.01':opts.step,inputmode:'decimal'});x.value=String(value);return x};
 const select=(options,value)=>{const x=el('select');for(const [v,l] of options)x.append(el('option',{value:v,text:l}));x.value=value;return x};
 
 const currency=select(currencies.map(x=>[x[0],x[1]]),'USD');
@@ -83,11 +83,12 @@ function calculate(){
   price=allIn*(1+mk/100);
  }
  const maxPreciseMoney=Number.MAX_SAFE_INTEGER/100;
- if(!Number.isFinite(price)||price>maxPreciseMoney){fail('This result is too large to preserve reliable currency precision. Reduce the costs or target percentage.');return}
+ if(!Number.isFinite(price)||Math.abs(price)>maxPreciseMoney){fail('This result is too large to preserve reliable currency precision. Reduce the costs or target percentage.');return}
  const grossProfit=price-cost;
  const profit=price-allIn;
  const margin=price===0?(profit===0?null:-Infinity):profit/price*100;
  const effectiveMarkup=allIn===0?(profit===0?null:Infinity):profit/allIn*100;
+ if([allIn,ship+fee+extra,grossProfit,profit].some(v=>!Number.isFinite(v)||Math.abs(v)>maxPreciseMoney)){fail('This combination is too large to preserve reliable currency precision. Reduce the monetary inputs.');return}
  results.replaceChildren(el('h2',{text:'Profitability result'}));
  const grid=el('div',{class:'result-grid'});
  const items=[
