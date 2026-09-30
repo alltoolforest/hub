@@ -56,7 +56,7 @@ function renderComponents(){
   const rate=input({type:'number',value:item.rate,min:'0',max:'1000',step:'0.001',inputmode:'decimal','aria-label':'Tax component '+(i+1)+' rate percent'});
   const remove=el('button',{type:'button',class:'quiet',text:'Remove','aria-label':'Remove tax component '+(i+1)});
   name.addEventListener('input',()=>{item.name=name.value;calculate()});
-  rate.addEventListener('input',()=>{const v=readNumber(rate,0,1000);if(v!==null){item.rate=v;calculate()}});
+  rate.addEventListener('input',()=>{const v=readNumber(rate,0,1000);if(v===null){item.rate=NaN;calculate();return}item.rate=v;calculate()});
   remove.addEventListener('click',()=>{components.splice(i,1);renderComponents();calculate()});
   rows.append(el('div',{class:'tax-component'},[field('Component name',name),field('Rate (%)',rate),remove]));
  });
@@ -81,11 +81,11 @@ function roundValue(v){return rounding.value==='none'?v:Math.round((v+Number.EPS
 function calculate(){
  const price=readNumber(unitPrice,0,1e12),qty=readNumber(quantity,0,1e6),disc=readNumber(discount,0,1e12);
  const rates=components.map(x=>Number(x.rate));
- if(price===null||qty===null||disc===null||rates.some(x=>!Number.isFinite(x)||x<0||x>1000)){status('Enter valid non-negative values within the supported limits.',true);return}
+ if(price===null||qty===null||disc===null||rates.some(x=>!Number.isFinite(x)||x<0||x>1000)){results.replaceChildren();status('Enter valid non-negative values within the supported limits.',true);return}
  const entered=price*qty;
  let discountAmount=discountType.value==='none'?0:discountType.value==='percent'?entered*disc/100:disc;
- if(discountType.value==='percent'&&disc>100){status('Percentage discount cannot exceed 100%.',true);return}
- if(discountAmount>entered){status('Discount cannot exceed the entered subtotal.',true);return}
+ if(discountType.value==='percent'&&disc>100){results.replaceChildren();status('Percentage discount cannot exceed 100%.',true);return}
+ if(discountAmount>entered){results.replaceChildren();status('Discount cannot exceed the entered subtotal.',true);return}
  const totalRate=rates.reduce((a,b)=>a+b,0)/100;
  let base,taxTotal,finalTotal;
  if(mode.value==='exclusive'){
@@ -96,14 +96,14 @@ function calculate(){
    const inclusive=entered-before;
    base=inclusive/(1+totalRate);taxTotal=inclusive-base;finalTotal=inclusive-(discountOrder.value==='after'?discountAmount:0);
  }
- if(finalTotal<0){status('Discount produces a negative final total.',true);return}
+ if(finalTotal<0){results.replaceChildren();status('Discount produces a negative final total.',true);return}
  const values={entered,discountAmount,base,taxTotal,finalTotal};
  for(const k in values)values[k]=roundValue(values[k]);
  results.replaceChildren(el('h2',{text:'Tax calculation'}));
  const grid=el('div',{class:'result-grid'});
  grid.append(
   item('Entered subtotal',money(values.entered)),
-  item('Discount',money(values.discountAmount)),
+  item(discountOrder.value==='before'?'Discount before tax':'Discount after tax',money(values.discountAmount)),
   item(mode.value==='inclusive'?'Extracted taxable base':'Taxable base',money(values.base)),
   item('Total tax',money(values.taxTotal)),
   item('Final total',money(values.finalTotal))
