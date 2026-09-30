@@ -94,41 +94,54 @@ function calculateProjection(){
   const nominal=read('rate-type')==='nominal';
   const annual=num('rate',{min:-99,max:100})/100;
   const compoundFreq=periodsPerYear();
-  const r=nominal?null:monthlyRate();
-  const compoundInterval=nominal?12/compoundFreq:null;
+  const effectiveMonthly=nominal?null:monthlyRate();
+  const compoundMonths=nominal?12/compoundFreq:null;
+  const nominalPeriodRate=nominal?annual/compoundFreq:null;
   const contributionAt=contributionMonths(freq,totalMonths);
-  let balance=starting,contributed=starting,interest=0,accrued=0;
+  let balance=starting,contributed=starting,interest=0;
+  let periodBase=starting,periodContribWeighted=0;
   const rows=[];
   let yearInterest=0,yearContrib=0;
 
   for(let m=0;m<totalMonths;m++){
+    const monthInPeriod=nominal?(m%compoundMonths):0;
     if(timing==='beginning'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
+      if(nominal){
+        const remaining=(compoundMonths-monthInPeriod)/compoundMonths;
+        periodContribWeighted+=contribution*remaining;
+      }
     }
+
     if(nominal){
-      accrued+=(balance+accrued)*(annual/compoundFreq);
-      if((m+1)%compoundInterval===0){
-        balance+=accrued; interest+=accrued; yearInterest+=accrued; accrued=0;
+      const periodEnd=(m+1)%compoundMonths===0;
+      const projectionEnd=m===totalMonths-1;
+      if(periodEnd||projectionEnd){
+        const fraction=periodEnd?1:(monthInPeriod+1)/compoundMonths;
+        const earned=periodBase*nominalPeriodRate*fraction+periodContribWeighted*nominalPeriodRate;
+        balance+=earned; interest+=earned; yearInterest+=earned;
+        periodBase=balance; periodContribWeighted=0;
       }
     }else{
-      const earned=balance*r;
+      const earned=balance*effectiveMonthly;
       balance+=earned; interest+=earned; yearInterest+=earned;
     }
+
     if(timing==='end'&&contributionAt.has(m)){
       balance+=contribution; contributed+=contribution; yearContrib+=contribution;
+      if(nominal){
+        const remaining=(compoundMonths-(monthInPeriod+1))/compoundMonths;
+        periodContribWeighted+=contribution*remaining;
+        if((m+1)%compoundMonths===0||m===totalMonths-1) periodBase=balance;
+      }
     }
+
     if((m+1)%12===0||m===totalMonths-1){
-      rows.push({
-        year:(m+1)/12,
-        contributions:yearContrib,
-        interest:yearInterest,
-        totalContributed:contributed,
-        balance
-      });
+      rows.push({year:(m+1)/12,contributions:yearContrib,interest:yearInterest,totalContributed:contributed,balance});
       yearInterest=0; yearContrib=0;
     }
   }
-  if(nominal&&Math.abs(accrued)>0){balance+=accrued;interest+=accrued;if(rows.length) rows[rows.length-1].balance=balance;}
+
   const eff=effectiveAnnualRate();
   let realValue=null;
   if(read('inflation-mode')==='on'){
