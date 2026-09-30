@@ -18,7 +18,7 @@ function num(v,min=0,max=1e9){const n=Number(v);return Number.isFinite(n)&&n>=mi
 function durationMin(h,m){const a=num(h,0,1000000),b=num(m,0,59);return a===null||b===null?null:Math.round(a*60+b)}
 function dur(mins){const sign=mins<0?'-':'';let n=Math.abs(Math.round(mins)),d=Math.floor(n/MIN_DAY);n%=MIN_DAY;const h=Math.floor(n/60),m=n%60;const p=[];if(d)p.push(d+' '+(d===1?'day':'days'));if(h)p.push(h+' '+(h===1?'hour':'hours'));if(m||!p.length)p.push(m+' '+(m===1?'minute':'minutes'));return sign+p.join(', ')}
 function two(n){return n<10?'0'+n:String(n)}
-function clock(mins){let n=((Math.round(mins)%MIN_DAY)+MIN_DAY)%MIN_DAY;return two(Math.floor(n/60))+':'+two(n%60)}
+function clock(mins){let n=((Math.round(mins)%MIN_DAY)+MIN_DAY)%MIN_DAY,h=Math.floor(n/60),m=n%60;if(formatChoice.value==='12'){const suffix=h>=12?' PM':' AM';return String(h%12||12)+':'+two(m)+suffix}return two(h)+':'+two(m)}
 function decimal(mins){return (mins/60).toLocaleString(undefined,{maximumFractionDigits:4})}
 function result(items,note){results.replaceChildren(el('h2',{text:'Result'}));const g=el('div',{class:'result-grid'});items.forEach(x=>g.append(el('div',{class:'result-item'},[el('small',{text:x[0]}),el('strong',{text:x[1]})])));results.append(g);if(note)results.append(el('div',{class:'td-note',text:note}));status('Calculated.')}
 function fail(msg){results.replaceChildren();status(msg,true)}
