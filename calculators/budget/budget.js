@@ -9,7 +9,7 @@ const currencies=[
  ['AUD','AUD — Australian Dollar (A$)','en-AU'],['CAD','CAD — Canadian Dollar (C$)','en-CA'],['CHF','CHF — Swiss Franc (CHF)','de-CH'],
  ['SGD','SGD — Singapore Dollar (S$)','en-SG'],['AED','AED — UAE Dirham (AED)','en-AE']
 ];
-const storageKey='alltoolforest-budget-v2';
+const storageKey='alltoolforest-budget-v2';\nconst clone=v=>typeof structuredClone==='function'?structuredClone(v):JSON.parse(JSON.stringify(v));
 const defaults={
  currency:'USD',
  incomes:[{name:'Primary income',amount:5000}],
@@ -22,7 +22,7 @@ const defaults={
  ],
  goals:[{name:'Emergency fund / savings',amount:500}]
 };
-let state=structuredClone(defaults);
+let state=clone(defaults);
 
 
 const budgetStyle=el('style',{text:`
@@ -213,7 +213,7 @@ function exportCSV(){
 }
 function reset(){
  if(!confirm('Reset the planner to its example budget? Your locally saved copy will remain until you save again.'))return;
- state=structuredClone(defaults);render();status('Planner reset to example values.');
+ state=clone(defaults);render();status('Planner reset to example values.');
 }
 
 currency.addEventListener('change',()=>{state.currency=currency.value;renderSummary()});
