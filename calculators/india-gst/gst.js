@@ -171,7 +171,7 @@ function sync(){
     hint.textContent='Percentage reduction applied before GST calculation.';
   }else if(type==='fixed'){
     label.textContent='Discount amount (₹)';
-    input.max='100000000000000';
+    input.max='1000000000000';
     hint.textContent='Fixed reduction from the entered price before GST calculation.';
   }
 }
