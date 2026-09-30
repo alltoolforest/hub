@@ -23,7 +23,7 @@ root.prepend(style);
 
 const form=el('div',{class:'tax-grid'});
 root.append(form);
-const field=(label,control,full=false)=>{const w=el('div',{class:'field'+(full?' tax-full':'')});w.append(el('label',{text:label}),control);return w};
+const field=(label,control,full=false)=>{const w=el('div',{class:'field'+(full?' tax-full':'')});if(!control.getAttribute('aria-label'))control.setAttribute('aria-label',label);w.append(el('label',{text:label}),control);return w};
 const input=(attrs={})=>{const x=el('input',attrs);if(attrs.value!=null)x.value=attrs.value;return x};
 const select=(options,value)=>{const x=el('select');for(const [v,l] of options)x.append(el('option',{value:v,text:l}));x.value=value;return x};
 
@@ -34,7 +34,7 @@ const quantity=input({type:'number',value:'1',min:'0',max:'1000000',step:'0.001'
 const discountType=select([['none','No discount'],['percent','Percentage discount'],['fixed','Fixed amount discount']],'none');
 const discount=input({type:'number',value:'0',min:'0',max:'1000000000000',step:'0.01',inputmode:'decimal'});
 const discountOrder=select([['before','Discount before tax'],['after','Discount after tax']],'before');
-const rounding=select([['none','No calculation rounding'],['2','Round final values to 2 decimals'],['0','Round final values to whole currency units']],'none');
+const rounding=select([['none','Full-precision calculation'],['2','Round calculated amounts to 2 decimals'],['0','Round calculated amounts to whole currency units']],'none');
 
 for(const [label,control] of [
  ['Currency',currency],['Calculation',mode],['Unit price / entered price',unitPrice],['Quantity',quantity],
@@ -83,6 +83,7 @@ function calculate(){
  const rates=components.map(x=>Number(x.rate));
  if(price===null||qty===null||disc===null||rates.some(x=>!Number.isFinite(x)||x<0||x>1000)){results.replaceChildren();status('Enter valid non-negative values within the supported limits.',true);return}
  const entered=price*qty;
+ if(!Number.isFinite(entered)||entered>1e12){results.replaceChildren();status('Entered subtotal must not exceed 1,000,000,000,000 currency units.',true);return}
  let discountAmount=discountType.value==='none'?0:discountType.value==='percent'?entered*disc/100:disc;
  if(discountType.value==='percent'&&disc>100){results.replaceChildren();status('Percentage discount cannot exceed 100%.',true);return}
  if(discountAmount>entered){results.replaceChildren();status('Discount cannot exceed the entered subtotal.',true);return}
