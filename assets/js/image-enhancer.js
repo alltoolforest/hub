@@ -11,6 +11,11 @@ import {
   resolveSharpening,
   applyIntelligentSharpen
 } from './image-enhancer-restoration.js';
+import {
+  resolveContentRoute,
+  resolveRouteControls,
+  contentRouteOptions
+} from './image-enhancer-routing.js';
 
 const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
@@ -487,9 +492,12 @@ export async function mount(root, slug) {
     field('enhancer-scale', 'Enhancement mode', 'select', '2', {
       options: [['1', '1× Enhance / Restore'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
     }),
+    field('enhancer-content', 'Content mode', 'select', 'auto', {
+      options: contentRouteOptions()
+    }),
     field('enhancer-restoration', 'Restoration profile', 'select', 'auto', {
       options: [
-        ['auto', 'Auto — analyze source'],
+        ['auto', 'Auto — follow route/source'],
         ['fidelity', 'Fidelity — preserve source'],
         ['balanced', 'Balanced'],
         ['recovery', 'Recovery — stronger reconstruction']
@@ -497,7 +505,7 @@ export async function mount(root, slug) {
     }),
     field('enhancer-sharpen', 'Sharpening', 'select', 'auto', {
       options: [
-        ['auto', 'Auto — edge-aware'],
+        ['auto', 'Auto — follow route/source'],
         ['off', 'Off'],
         ['low', 'Low'],
         ['medium', 'Medium']
@@ -506,7 +514,7 @@ export async function mount(root, slug) {
   );
   root.append(form);
 
-  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Source analysis is heuristic and is used only to choose a conservative restoration profile. Edge-aware sharpening runs after restoration and is capped to reduce halos and sharpened noise. If AI cannot run safely, the tool clearly reports and uses standard high-quality enlargement instead.');
+  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Auto content routing currently uses verified source-quality signals, not unverified semantic classification. Portrait, Text/Logo, Illustration and Old Photo are manual overrides until dedicated detectors/models pass their gates. Text/Logo deliberately uses standard enlargement to reduce character hallucination risk. Edge-aware sharpening runs after AI restoration and is capped to reduce halos and sharpened noise.');
 
   function drawSource() {
     if (!image) return;
@@ -549,6 +557,7 @@ export async function mount(root, slug) {
     resetButton.disabled = active;
     input.disabled = active;
     $('#enhancer-scale').disabled = active;
+    $('#enhancer-content').disabled = active;
     $('#enhancer-restoration').disabled = active;
     $('#enhancer-sharpen').disabled = active;
     cancelButton.disabled = !active;
@@ -565,6 +574,7 @@ export async function mount(root, slug) {
     controller = null;
     clearOutputs();
     $('#enhancer-scale').value = '2';
+    $('#enhancer-content').value = 'auto';
     $('#enhancer-restoration').value = 'auto';
     $('#enhancer-sharpen').value = 'auto';
     outputScaleOptions(image, caps);
@@ -584,20 +594,32 @@ export async function mount(root, slug) {
     controller = new AbortController();
     const signal = controller.signal;
     const scale = Number(read('enhancer-scale'));
-    const restoration = resolveRestorationProfile(read('enhancer-restoration'), analysis, scale);
-    const sharpening = resolveSharpening(read('enhancer-sharpen'), analysis, restoration);
+    const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
+    const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
+    const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
+    const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
     let result = null;
     let temporaryInput = null;
     let sharpened = { applied: false, label: sharpening.label };
     setProcessing(true);
     try {
       const { width, height } = safeOutputFor(image, scale, caps);
+
+      if (contentRoute.engine === 'standard') {
+        status(`Preparing ${contentRoute.label} fidelity path…`);
+        result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
+        const blob = await canvasBlob(result.canvas, 'image/png', 1);
+        output(blob, safeName(file.name, scale === 1 ? '-fidelity' : `-fidelity-${scale}x`, 'png'));
+        status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI deliberately not used. ${contentRoute.disclosure}`);
+        return;
+      }
+
       if (!caps.wasm) throw new Error('WebAssembly is unavailable in this browser.');
       if (hasTransparency) {
         throw new Error('AI transparency-safe reconstruction is not verified yet.');
       }
 
-      status(`Preparing ${restoration.label.toLowerCase()} restoration…`);
+      status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
       const prepared = await prepareRestorationInput(image, restoration, signal);
       temporaryInput = prepared.temporary;
       result = await aiEngine.process({
@@ -618,7 +640,7 @@ export async function mount(root, slug) {
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
       const sharpenLabel = sharpened.applied ? sharpened.label : sharpened.label === 'Off' ? 'Off' : sharpened.label;
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · AI super-resolution · ${result.tileCount} tiles · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure}`);
+      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${result.tileCount} tiles · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
     } catch (error) {
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       temporaryInput = null;
@@ -633,7 +655,7 @@ export async function mount(root, slug) {
         result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, scale === 1 ? '-standard' : `-enlarged-${scale}x`, 'png'));
-        status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · Standard high-quality enlargement. AI enhancement was not used.`);
+        status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI enhancement was not used.`);
       } catch (fallbackError) {
         console.error(fallbackError);
         status(fallbackError?.message || 'Image processing failed.', true);
