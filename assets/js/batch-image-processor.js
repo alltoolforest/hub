@@ -245,8 +245,16 @@ export async function mount(root){
       status('Preparing ZIP download…');
       const seen=new Map();
       const zip=await makeStoreZip(results.map(r=>({name:uniqueZipName(r.name,seen),blob:r.blob})));
-      output(zip,'alltoolforest-batch-images.zip');
-      status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB.`);
+      const zipName='alltoolforest-batch-images.zip';
+      const zipURL=output(zip,zipName);
+      const trigger=el('a',{href:zipURL,download:zipName});
+      trigger.style.display='none';
+      document.body.append(trigger);
+      trigger.click();
+      trigger.remove();
+      const fallback=[...$('#downloads').querySelectorAll('a[download]')].find(a=>a.download===zipName);
+      fallback?.scrollIntoView?.({block:'nearest'});
+      status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB. The download should start automatically; if your browser blocks it, use the ZIP Download button below.`);
     }catch(e){status(errorMessage(e),true)}finally{zipButton.disabled=false}
   });
 
