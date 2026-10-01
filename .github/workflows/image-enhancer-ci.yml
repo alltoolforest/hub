@@ -127,6 +127,8 @@ jobs:
     timeout-minutes: 12
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
     steps:
       - name: Checkout
         uses: actions/checkout@v4
