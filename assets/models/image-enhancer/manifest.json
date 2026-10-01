@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "runtime": {
+    "name": "onnxruntime-web",
+    "version": "1.30.0",
+    "bundle": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.js",
+    "wasmBase": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/",
+    "license": "MIT"
+  },
+  "models": {
+    "general-x4": {
+      "name": "Real-ESRGAN general x4v3",
+      "url": "https://cdn.jsdelivr.net/gh/NovareOrbis/nova-ai-models@v3/realesr-general-x4v3.onnx",
+      "sha256": "09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4",
+      "bytes": 4871181,
+      "scale": 4,
+      "license": "BSD-3-Clause",
+      "upstream": "https://github.com/xinntao/Real-ESRGAN",
+      "redistribution": "https://github.com/NovareOrbis/nova-ai-models/tree/v3"
+    }
+  }
+}
