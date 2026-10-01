@@ -21,6 +21,7 @@ on:
       - 'tests/image-enhancer-export-browser.mjs'
       - 'tests/image-enhancer-compatibility-browser.mjs'
       - 'tests/image-enhancer-resilience-browser.mjs'
+      - 'tests/image-enhancer-cross-browser.mjs'
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
 
@@ -65,6 +66,7 @@ jobs:
           node --check assets/js/app.js
           node --check tests/image-enhancer-compatibility-browser.mjs
           node --check tests/image-enhancer-resilience-browser.mjs
+          node --check tests/image-enhancer-cross-browser.mjs
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
           grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
@@ -119,3 +121,24 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-resilience-browser.mjs
+
+  engine-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Install Firefox and WebKit
+        run: npx playwright install --with-deps firefox webkit
+
+      - name: Run Firefox + WebKit real-WASM audit
+        run: node tests/image-enhancer-cross-browser.mjs
