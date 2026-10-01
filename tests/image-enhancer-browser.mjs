@@ -70,7 +70,9 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4173, '127.0.0.1', resolveListen));
 
-const browser = await chromium.launch({ headless: true, args: ['--disable-gpu'] });
+const launchOptions = { headless: true, args: ['--disable-gpu'] };
+if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
+const browser = await chromium.launch(launchOptions);
 const page = await browser.newPage();
 const consoleErrors = [];
 const diagnostics = [];
