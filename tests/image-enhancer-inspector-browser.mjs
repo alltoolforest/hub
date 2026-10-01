@@ -31,7 +31,7 @@ function chunk(type, data) {
 function png(width, height) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) {
-    const row = y * (width * 4 + 1) * 1; raw[row] = 0;
+    const row = y * (width * 4 + 1); raw[row] = 0;
     for (let x = 0; x < width; x++) {
       const p = row + 1 + x * 4;
       raw[p] = (x * 19 + y * 5) & 255;
@@ -80,7 +80,7 @@ page.on('pageerror', err => consoleErrors.push(err.message));
 
 try {
   await page.goto('http://127.0.0.1:4175/images/enhance/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#enhancer-inspector');
+  await page.waitForSelector('#enhancer-inspector', { state: 'attached' });
   assert.equal(await page.locator('#enhancer-inspector').isHidden(), true, 'Inspector must stay hidden before a result exists.');
 
   await page.locator('input[type=file]').setInputFiles({ name: 'inspect-test.png', mimeType: 'image/png', buffer: png(60, 40) });
@@ -107,6 +107,7 @@ try {
   assert.equal(await page.locator('#enhancer-zoom-value').textContent(), '2×');
 
   const viewport = page.locator('#enhancer-compare-viewport');
+  await viewport.scrollIntoViewIfNeeded();
   const box = await viewport.boundingBox();
   assert.ok(box, 'Comparison viewport must be measurable.');
   await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.55);
@@ -122,6 +123,7 @@ try {
   assert.equal(resetTransform, 'translate(0px, 0px) scale(1)');
   assert.equal(await page.locator('#enhancer-compare-split').inputValue(), '50');
 
+  await viewport.scrollIntoViewIfNeeded();
   const clickBox = await viewport.boundingBox();
   await page.mouse.click(clickBox.x + clickBox.width * 0.7, clickBox.y + clickBox.height * 0.35);
   await page.waitForFunction(() => (document.querySelector('#enhancer-region-info')?.textContent || '').includes('Region centre:'));
