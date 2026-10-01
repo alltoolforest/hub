@@ -7,6 +7,7 @@ on:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
       - 'assets/js/image-enhancer-bootstrap.js'
+      - 'assets/js/image-enhancer-inspector.js'
       - 'assets/js/image-enhancer-output.js'
       - 'assets/js/image-enhancer-restoration.js'
       - 'assets/js/image-enhancer-routing.js'
@@ -15,6 +16,7 @@ on:
       - 'docs/image-enhancer-model-benchmark.md'
       - 'tests/image-enhancer-browser.mjs'
       - 'tests/image-enhancer-output-browser.mjs'
+      - 'tests/image-enhancer-inspector-browser.mjs'
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
 
@@ -50,6 +52,7 @@ jobs:
           set -euo pipefail
           node --check assets/js/image-enhancer.js
           node --check assets/js/image-enhancer-bootstrap.js
+          node --check assets/js/image-enhancer-inspector.js
           node --check assets/js/image-enhancer-output.js
           node --check assets/js/image-enhancer-restoration.js
           node --check assets/js/image-enhancer-routing.js
@@ -61,8 +64,10 @@ jobs:
           grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
           grep -q "Memory pressure detected" assets/js/image-enhancer.js
           grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
+          grep -q "mountInspector" assets/js/image-enhancer-bootstrap.js
           grep -q "resolveOutputTarget" assets/js/image-enhancer-output.js
-          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, output planning, runtime pin and model checksum pin verified.'
+          grep -q "enhancer-compare-viewport" assets/js/image-enhancer-inspector.js
+          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, output planning, inspection workspace, runtime pin and model checksum pin verified.'
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -84,3 +89,8 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-output-browser.mjs
+
+      - name: Run inspection workspace browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-inspector-browser.mjs
