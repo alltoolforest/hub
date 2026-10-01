@@ -105,7 +105,7 @@ function safeOutputFor(image, scale, caps) {
   if (width > caps.maxSide || height > caps.maxSide || pixels > caps.maxPixels) {
     const sideScale = Math.min(caps.maxSide / image.width, caps.maxSide / image.height);
     const pixelScale = Math.sqrt(caps.maxPixels / (image.width * image.height));
-    const maxScale = Math.max(1, Math.min(sideScale, pixelScale));
+    const maxScale = Math.max(0.01, Math.min(sideScale, pixelScale));
     const safeW = Math.max(1, Math.floor(image.width * maxScale));
     const safeH = Math.max(1, Math.floor(image.height * maxScale));
     throw new Error(`This output is too large for the current safety limit. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels.`);
