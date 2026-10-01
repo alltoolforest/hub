@@ -99,7 +99,7 @@ async function waitForTerminal(scale) {
       const output = document.querySelector('#downloads a[download]');
       const button = [...document.querySelectorAll('button')].find(b => b.textContent === 'Enhance image');
       const text = document.querySelector('#status')?.textContent || '';
-      return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable)/.test(text));
+      return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable|Sharpening)/.test(text));
     }, null, { timeout: 90000 });
   } catch (error) {
     const statusText = await page.locator('#status').textContent().catch(() => 'status unavailable');
@@ -120,19 +120,26 @@ async function latestOutputInfo() {
     canvas.width = bmp.width; canvas.height = bmp.height;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(bmp, 0, 0);
-    const alpha = ctx.getImageData(0, 0, 1, 1).data[3];
-    const result = [bmp.width, bmp.height, a.download, alpha];
+    const pixels = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+    const alpha = pixels[3];
+    let hash = 2166136261;
+    for (let i = 0; i < pixels.length; i++) {
+      hash ^= pixels[i];
+      hash = Math.imul(hash, 16777619);
+    }
+    const result = [bmp.width, bmp.height, a.download, alpha, hash >>> 0];
     bmp.close();
     return result;
   });
 }
 
-async function runAiScale(scale, expected, profile = 'auto', requiredStatus = /AI super-resolution/) {
+async function runAiScale(scale, expected, profile = 'auto', sharpen = 'auto', requiredStatus = /AI super-resolution/) {
   await page.locator('#enhancer-scale').selectOption(String(scale));
   await page.locator('#enhancer-restoration').selectOption(profile);
+  await page.locator('#enhancer-sharpen').selectOption(sharpen);
   await page.getByRole('button', { name: 'Enhance image' }).click();
   const statusText = await waitForTerminal(scale);
-  console.log(`DIAGNOSTIC scale=${scale} profile=${profile} terminal status=${statusText}`);
+  console.log(`DIAGNOSTIC scale=${scale} profile=${profile} sharpen=${sharpen} terminal status=${statusText}`);
   assert.match(statusText, requiredStatus, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
   const info = await latestOutputInfo();
   assert.deepEqual(info?.slice(0, 3), expected);
@@ -143,27 +150,34 @@ try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
   await page.waitForSelector('#enhancer-scale');
   await page.waitForSelector('#enhancer-restoration');
+  await page.waitForSelector('#enhancer-sharpen');
 
   await upload('core-test.png', 24, 16);
   const summary = await page.locator('#enhancer-source-info').textContent();
   assert.match(summary || '', /Analysis: .* profile recommended/);
 
-  await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'fidelity', /AI super-resolution.*Fidelity profile/);
-  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'balanced', /AI super-resolution.*Balanced profile/);
-  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'recovery', /AI super-resolution.*Recovery profile/);
+  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'fidelity', 'off', /AI super-resolution.*Fidelity profile.*Sharpen Off/);
+  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'fidelity', 'medium', /AI super-resolution.*Fidelity profile.*Sharpen Medium/);
+  assert.notEqual(sharpOff.info?.[4], sharpMedium.info?.[4], 'Medium sharpening must materially change the encoded pixels compared with Off.');
+
+  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'balanced', 'auto', /AI super-resolution.*Balanced profile.*Sharpen Auto/);
+  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'recovery', 'low', /AI super-resolution.*Recovery profile.*Sharpen Low/);
 
   await upload('tile-test.png', 110, 70);
-  const tiled = await runAiScale(2, [220, 140, 'tile-test-upscaled-2x.png'], 'auto', /AI super-resolution · 2 tiles/);
+  const tiled = await runAiScale(2, [220, 140, 'tile-test-upscaled-2x.png'], 'auto', 'auto', /AI super-resolution · 2 tiles/);
   assert.match(tiled.statusText, /wasm/);
   assert.match(tiled.statusText, /(Fidelity|Balanced|Recovery) profile/);
+  assert.match(tiled.statusText, /Sharpen Auto/);
 
   await page.getByRole('button', { name: 'Reset' }).click();
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
   assert.equal(await page.locator('#enhancer-restoration').inputValue(), 'auto');
+  assert.equal(await page.locator('#enhancer-sharpen').inputValue(), 'auto');
 
   await upload('alpha-test.png', 24, 16, true);
   await page.locator('#enhancer-scale').selectOption('2');
   await page.locator('#enhancer-restoration').selectOption('recovery');
+  await page.locator('#enhancer-sharpen').selectOption('medium');
   await page.getByRole('button', { name: 'Enhance image' }).click();
   const fallbackStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
@@ -173,7 +187,7 @@ try {
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, Auto/Fidelity/Balanced/Recovery profiles, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
+  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, restoration profiles, material edge-aware sharpening, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
