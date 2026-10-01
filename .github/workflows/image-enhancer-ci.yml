@@ -125,6 +125,8 @@ jobs:
   engine-compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,9 +138,6 @@ jobs:
 
       - name: Install pinned browser test dependency
         run: npm install --no-save --no-package-lock playwright@1.55.0
-
-      - name: Install Firefox and WebKit
-        run: npx playwright install firefox webkit
 
       - name: Run Firefox + WebKit real-WASM audit
         run: node tests/image-enhancer-cross-browser.mjs
