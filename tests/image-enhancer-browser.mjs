@@ -87,7 +87,10 @@ page.on('response', res => { if (res.status() >= 400) diagnostics.push(`http ${r
 
 async function upload(name, width, height, transparent = false) {
   await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'image/png', buffer: png(width, height, transparent) });
-  await page.waitForFunction(([w, h]) => document.querySelector('#enhancer-source-info')?.textContent?.includes(`${w} × ${h}`), [width, height]);
+  await page.waitForFunction(([w, h]) => {
+    const text = document.querySelector('#enhancer-source-info')?.textContent || '';
+    return text.includes(`${w} × ${h}`) && text.includes('Analysis:');
+  }, [width, height]);
 }
 
 async function waitForTerminal(scale) {
@@ -124,11 +127,12 @@ async function latestOutputInfo() {
   });
 }
 
-async function runAiScale(scale, expected, requiredStatus = /AI super-resolution/) {
+async function runAiScale(scale, expected, profile = 'auto', requiredStatus = /AI super-resolution/) {
   await page.locator('#enhancer-scale').selectOption(String(scale));
+  await page.locator('#enhancer-restoration').selectOption(profile);
   await page.getByRole('button', { name: 'Enhance image' }).click();
   const statusText = await waitForTerminal(scale);
-  console.log(`DIAGNOSTIC scale=${scale} terminal status=${statusText}`);
+  console.log(`DIAGNOSTIC scale=${scale} profile=${profile} terminal status=${statusText}`);
   assert.match(statusText, requiredStatus, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
   const info = await latestOutputInfo();
   assert.deepEqual(info?.slice(0, 3), expected);
@@ -138,18 +142,28 @@ async function runAiScale(scale, expected, requiredStatus = /AI super-resolution
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
   await page.waitForSelector('#enhancer-scale');
+  await page.waitForSelector('#enhancer-restoration');
 
   await upload('core-test.png', 24, 16);
-  await runAiScale(1, [24, 16, 'core-test-enhanced.png']);
-  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png']);
-  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png']);
+  const summary = await page.locator('#enhancer-source-info').textContent();
+  assert.match(summary || '', /Analysis: .* profile recommended/);
+
+  await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'fidelity', /AI super-resolution.*Fidelity profile/);
+  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'balanced', /AI super-resolution.*Balanced profile/);
+  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'recovery', /AI super-resolution.*Recovery profile/);
 
   await upload('tile-test.png', 110, 70);
-  const tiled = await runAiScale(2, [220, 140, 'tile-test-upscaled-2x.png'], /AI super-resolution · 2 tiles/);
+  const tiled = await runAiScale(2, [220, 140, 'tile-test-upscaled-2x.png'], 'auto', /AI super-resolution · 2 tiles/);
   assert.match(tiled.statusText, /wasm/);
+  assert.match(tiled.statusText, /(Fidelity|Balanced|Recovery) profile/);
+
+  await page.getByRole('button', { name: 'Reset' }).click();
+  assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
+  assert.equal(await page.locator('#enhancer-restoration').inputValue(), 'auto');
 
   await upload('alpha-test.png', 24, 16, true);
   await page.locator('#enhancer-scale').selectOption('2');
+  await page.locator('#enhancer-restoration').selectOption('recovery');
   await page.getByRole('button', { name: 'Enhance image' }).click();
   const fallbackStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
@@ -159,7 +173,7 @@ try {
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, multi-tile stitching, CSP isolation and transparent fallback all verified.');
+  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, Auto/Fidelity/Balanced/Recovery profiles, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
