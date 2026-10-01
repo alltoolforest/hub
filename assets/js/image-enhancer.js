@@ -17,6 +17,7 @@ import {
   contentRouteOptions
 } from './image-enhancer-routing.js';
 import { tileCorePlan, isMemoryPressureError } from './image-enhancer-tiles.js';
+import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 
 const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
@@ -560,7 +561,9 @@ export async function mount(root, slug) {
     file = files[0];
     checkFile(file, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'], caps.maxFileMB);
     image?.close?.();
-    image = await decodeImage(file);
+    image = isEnhancerHeicInput(file)
+      ? await decodeEnhancerHeic(file, message => status(message))
+      : await decodeImage(file);
     if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
       image.close?.();
       image = null;
