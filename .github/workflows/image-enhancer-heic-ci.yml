@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-heic.js'
       - 'tests/image-enhancer-heic-browser.mjs'
       - 'tests/image-enhancer-heic-candidate-browser.mjs'
       - '.github/workflows/image-enhancer-heic-ci.yml'
@@ -33,9 +35,14 @@ jobs:
           test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
           test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
           test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
+          node --check assets/js/image-enhancer-heic.js
+          node --check assets/js/image-enhancer.js
           node --check tests/image-enhancer-heic-browser.mjs
           node --check tests/image-enhancer-heic-candidate-browser.mjs
-          echo 'Frozen/shared SHAs and HEIC audit syntax verified.'
+          grep -q "c189220a7a1e87559758a48ab4700e55629fb23a4cb57489e1e8970be1b9d018" assets/js/image-enhancer-heic.js
+          grep -q "heic-to@1.5.2/dist/csp/heic-to.js" assets/js/image-enhancer-heic.js
+          grep -q "decodeEnhancerHeic" assets/js/image-enhancer.js
+          echo 'Frozen/shared SHAs, enhancer-local HEIC decoder pin and audit syntax verified.'
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -53,7 +60,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-heic-candidate-browser.mjs
 
-      - name: Run current real HEIC + HEIF input audit
+      - name: Run integrated real HEIC + HEIF input audit
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-heic-browser.mjs
