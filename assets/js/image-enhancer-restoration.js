@@ -1,4 +1,5 @@
 const SAMPLE_SIDE = 320;
+const SHARPEN_TILE = 256;
 
 function canvas(width, height) {
   const node = document.createElement('canvas');
@@ -9,6 +10,10 @@ function canvas(width, height) {
 
 function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
+}
+
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(Number.isFinite(value) ? value : 0)));
 }
 
 function extensionOf(file) {
@@ -225,4 +230,122 @@ export function blendForFidelity(aiCanvas, sourceImage, scale, profile) {
   ctx.globalAlpha = 1;
   aiCanvas.width = aiCanvas.height = 0;
   return blended;
+}
+
+export function resolveSharpening(requested, analysis, profile) {
+  if (requested === 'off') return Object.freeze({ id: 'off', label: 'Off', amount: 0, threshold: 255, maxDelta: 0 });
+  if (requested === 'low') return Object.freeze({ id: 'low', label: 'Low', amount: 0.22, threshold: 5, maxDelta: 8 });
+  if (requested === 'medium') return Object.freeze({ id: 'medium', label: 'Medium', amount: 0.38, threshold: 4, maxDelta: 12 });
+
+  const softness = analysis?.softness || 0;
+  const noise = analysis?.noise || 0;
+  const recoveryBias = profile?.id === 'recovery' ? 0.04 : profile?.id === 'fidelity' ? -0.04 : 0;
+  const amount = clamp(0.22 + softness * 0.18 + recoveryBias - noise * 0.10, 0.14, 0.40);
+  const threshold = clamp(4 + noise * 10, 4, 14);
+  const maxDelta = clamp(8 + softness * 5 - noise * 2, 7, 13);
+  return Object.freeze({ id: 'auto', label: 'Auto', amount, threshold, maxDelta });
+}
+
+function luma(data, offset) {
+  return data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722;
+}
+
+export async function applyIntelligentSharpen(inputCanvas, settings, signal, onProgress) {
+  if (!settings?.amount) return { canvas: inputCanvas, applied: false, label: settings?.label || 'Off' };
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+
+  let source = null;
+  let sourceCanvas = null;
+  if (typeof createImageBitmap === 'function') {
+    source = await createImageBitmap(inputCanvas);
+  } else if (inputCanvas.width * inputCanvas.height <= 8e6) {
+    sourceCanvas = canvas(inputCanvas.width, inputCanvas.height);
+    const copyCtx = sourceCanvas.getContext('2d', { alpha: false });
+    if (!copyCtx) throw new Error('Sharpening snapshot could not be created.');
+    copyCtx.drawImage(inputCanvas, 0, 0);
+    source = sourceCanvas;
+  } else {
+    return { canvas: inputCanvas, applied: false, label: 'Skipped for memory safety' };
+  }
+
+  const targetCtx = inputCanvas.getContext('2d', { alpha: false });
+  if (!targetCtx) {
+    source?.close?.();
+    if (sourceCanvas) sourceCanvas.width = sourceCanvas.height = 0;
+    throw new Error('Sharpening output canvas is unavailable.');
+  }
+
+  const scratch = canvas(SHARPEN_TILE + 2, SHARPEN_TILE + 2);
+  const scratchCtx = scratch.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!scratchCtx) {
+    source?.close?.();
+    if (sourceCanvas) sourceCanvas.width = sourceCanvas.height = 0;
+    throw new Error('Sharpening workspace is unavailable.');
+  }
+
+  const cols = Math.ceil(inputCanvas.width / SHARPEN_TILE);
+  const rows = Math.ceil(inputCanvas.height / SHARPEN_TILE);
+  const total = cols * rows;
+  let tileIndex = 0;
+
+  try {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+        const x = col * SHARPEN_TILE;
+        const y = row * SHARPEN_TILE;
+        const coreW = Math.min(SHARPEN_TILE, inputCanvas.width - x);
+        const coreH = Math.min(SHARPEN_TILE, inputCanvas.height - y);
+        const sx = Math.max(0, x - 1);
+        const sy = Math.max(0, y - 1);
+        const ex = Math.min(inputCanvas.width, x + coreW + 1);
+        const ey = Math.min(inputCanvas.height, y + coreH + 1);
+        const readW = ex - sx;
+        const readH = ey - sy;
+        const offsetX = x - sx;
+        const offsetY = y - sy;
+
+        scratch.width = readW;
+        scratch.height = readH;
+        scratchCtx.drawImage(source, sx, sy, readW, readH, 0, 0, readW, readH);
+        const sampled = scratchCtx.getImageData(0, 0, readW, readH);
+        const src = sampled.data;
+        const core = targetCtx.createImageData(coreW, coreH);
+        const dst = core.data;
+
+        for (let cy = 0; cy < coreH; cy++) {
+          const py = cy + offsetY;
+          for (let cx = 0; cx < coreW; cx++) {
+            const px = cx + offsetX;
+            const center = (py * readW + px) * 4;
+            const out = (cy * coreW + cx) * 4;
+            const left = (py * readW + Math.max(0, px - 1)) * 4;
+            const right = (py * readW + Math.min(readW - 1, px + 1)) * 4;
+            const up = (Math.max(0, py - 1) * readW + px) * 4;
+            const down = (Math.min(readH - 1, py + 1) * readW + px) * 4;
+            const centerY = luma(src, center);
+            const blurY = (luma(src, left) + luma(src, right) + luma(src, up) + luma(src, down)) * 0.25;
+            const edge = centerY - blurY;
+            const correction = Math.abs(edge) >= settings.threshold
+              ? clamp(edge * settings.amount, -settings.maxDelta, settings.maxDelta)
+              : 0;
+            dst[out] = clampByte(src[center] + correction);
+            dst[out + 1] = clampByte(src[center + 1] + correction);
+            dst[out + 2] = clampByte(src[center + 2] + correction);
+            dst[out + 3] = src[center + 3];
+          }
+        }
+        targetCtx.putImageData(core, x, y);
+        tileIndex++;
+        onProgress?.(`Sharpening tile ${tileIndex} of ${total}…`);
+        if ((tileIndex & 3) === 0) await new Promise(resolve => requestAnimationFrame(() => resolve()));
+      }
+    }
+  } finally {
+    source?.close?.();
+    if (sourceCanvas) sourceCanvas.width = sourceCanvas.height = 0;
+    scratch.width = scratch.height = 0;
+  }
+
+  return { canvas: inputCanvas, applied: true, label: settings.label };
 }
