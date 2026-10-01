@@ -60,8 +60,15 @@ async function openFixture(name, mimeType) {
   await page.waitForFunction(fileName => {
     const summary = document.querySelector('#enhancer-source-info')?.textContent || '';
     const selected = document.querySelector('.selected-files')?.textContent || '';
-    return selected.includes(fileName) && /[\d,]+ × [\d,]+/.test(summary);
-  }, name, { timeout: 60000 });
+    return (selected.includes(fileName) && /[\d,]+ × [\d,]+/.test(summary)) || selected.includes('Could not open the selected file.');
+  }, name, { timeout: 30000 });
+
+  const selected = (await page.locator('.selected-files').textContent()) || '';
+  const status = (await page.locator('#status').textContent()) || '';
+  if (selected.includes('Could not open the selected file.')) {
+    throw new Error(`HEIC/HEIF decode failed for ${name}. UI status: ${status}. Browser errors: ${consoleErrors.join(' | ') || 'none'}`);
+  }
+
   const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
   const [width, height] = dimensionsFromSummary(summary);
   assert.ok(width > 0 && height > 0, `${name} decoded to invalid dimensions.`);
