@@ -28,7 +28,7 @@ function chunk(type, data) {
   out.writeUInt32BE(crc32(Buffer.concat([name, data])), 8 + data.length);
   return out;
 }
-function opaquePng(width, height) {
+function png(width, height, transparent = false) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) {
     const row = y * (width * 4 + 1); raw[row] = 0;
@@ -37,7 +37,7 @@ function opaquePng(width, height) {
       raw[p] = (x * 11 + y * 3) & 255;
       raw[p + 1] = (x * 5 + y * 13) & 255;
       raw[p + 2] = (x * 17 + y * 7) & 255;
-      raw[p + 3] = 255;
+      raw[p + 3] = transparent && x < Math.ceil(width / 2) ? 0 : 255;
     }
   }
   const ihdr = Buffer.alloc(13);
@@ -50,7 +50,7 @@ function opaquePng(width, height) {
 
 const server = createServer(async (req, res) => {
   try {
-    let pathname = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname);
+    const pathname = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname);
     let filePath = resolve(ROOT, '.' + pathname);
     if (!(filePath === ROOT || filePath.startsWith(ROOT + sep))) throw new Error('bad path');
     let info;
@@ -85,9 +85,12 @@ page.on('pageerror', err => { consoleErrors.push(`pageerror: ${err.message}`); d
 page.on('requestfailed', req => diagnostics.push(`requestfailed: ${req.url()} :: ${req.failure()?.errorText || 'unknown'}`));
 page.on('response', res => { if (res.status() >= 400) diagnostics.push(`http ${res.status()}: ${res.url()}`); });
 
-async function runScale(scale, expected) {
-  await page.locator('#enhancer-scale').selectOption(String(scale));
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+async function upload(name, width, height, transparent = false) {
+  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'image/png', buffer: png(width, height, transparent) });
+  await page.waitForFunction(([w, h]) => document.querySelector('#enhancer-source-info')?.textContent?.includes(`${w} × ${h}`), [width, height]);
+}
+
+async function waitForTerminal(scale) {
   try {
     await page.waitForFunction(() => {
       const output = document.querySelector('#downloads a[download]');
@@ -101,33 +104,62 @@ async function runScale(scale, expected) {
     console.error(diagnostics.join('\n'));
     throw error;
   }
+  return (await page.locator('#status').textContent()) || '';
+}
 
-  const statusText = await page.locator('#status').textContent();
-  console.log(`DIAGNOSTIC scale=${scale} terminal status=${statusText}`);
-  if (diagnostics.length) console.log(diagnostics.join('\n'));
-  assert.match(statusText || '', /AI super-resolution/, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
-
-  const dims = await page.evaluate(async () => {
+async function latestOutputInfo() {
+  return page.evaluate(async () => {
     const a = [...document.querySelectorAll('#downloads a[download]')].at(-1);
     if (!a) return null;
-    const bmp = await createImageBitmap(await (await fetch(a.href)).blob());
-    const result = [bmp.width, bmp.height, a.download]; bmp.close(); return result;
+    const blob = await (await fetch(a.href)).blob();
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bmp, 0, 0);
+    const alpha = ctx.getImageData(0, 0, 1, 1).data[3];
+    const result = [bmp.width, bmp.height, a.download, alpha];
+    bmp.close();
+    return result;
   });
-  assert.deepEqual(dims, expected);
+}
+
+async function runAiScale(scale, expected, requiredStatus = /AI super-resolution/) {
+  await page.locator('#enhancer-scale').selectOption(String(scale));
+  await page.getByRole('button', { name: 'Enhance image' }).click();
+  const statusText = await waitForTerminal(scale);
+  console.log(`DIAGNOSTIC scale=${scale} terminal status=${statusText}`);
+  assert.match(statusText, requiredStatus, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
+  const info = await latestOutputInfo();
+  assert.deepEqual(info?.slice(0, 3), expected);
+  return { statusText, info };
 }
 
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
   await page.waitForSelector('#enhancer-scale');
-  const source = opaquePng(24, 16);
-  await page.locator('input[type=file]').setInputFiles({ name: 'core-test.png', mimeType: 'image/png', buffer: source });
-  await page.waitForFunction(() => document.querySelector('#enhancer-source-info')?.textContent?.includes('24 × 16'));
 
-  await runScale(1, [24, 16, 'core-test-enhanced.png']);
-  await runScale(2, [48, 32, 'core-test-upscaled-2x.png']);
+  await upload('core-test.png', 24, 16);
+  await runAiScale(1, [24, 16, 'core-test-enhanced.png']);
+  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png']);
+  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png']);
+
+  await upload('tile-test.png', 110, 70);
+  const tiled = await runAiScale(2, [220, 140, 'tile-test-upscaled-2x.png'], /AI super-resolution · 2 tiles/);
+  assert.match(tiled.statusText, /wasm/);
+
+  await upload('alpha-test.png', 24, 16, true);
+  await page.locator('#enhancer-scale').selectOption('2');
+  await page.getByRole('button', { name: 'Enhance image' }).click();
+  const fallbackStatus = await waitForTerminal(2);
+  console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
+  assert.match(fallbackStatus, /Standard high-quality enlargement\. AI enhancement was not used\./);
+  const alphaInfo = await latestOutputInfo();
+  assert.deepEqual(alphaInfo?.slice(0, 3), [48, 32, 'alpha-test-enlarged-2x.png']);
+  assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: isolated enhancer loaded; Real-ESRGAN/WASM produced valid 1x and 2x AI outputs under production CSP.');
+  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, multi-tile stitching, CSP isolation and transparent fallback all verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
