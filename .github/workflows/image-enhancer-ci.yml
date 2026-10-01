@@ -6,6 +6,7 @@ on:
     paths:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-bootstrap.js'
       - 'assets/models/image-enhancer/**'
       - 'tests/image-enhancer-browser.mjs'
       - '.github/workflows/image-enhancer-ci.yml'
@@ -38,9 +39,10 @@ jobs:
         run: |
           set -euo pipefail
           node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-bootstrap.js
           node --check assets/js/app.js
-          node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
-          grep -q "slug==='enhance'.*image-enhancer.js" assets/js/app.js
+          node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
+          grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
           echo 'Enhancer routing, syntax, runtime pin and model checksum pin verified.'
 
       - name: Set up Node
