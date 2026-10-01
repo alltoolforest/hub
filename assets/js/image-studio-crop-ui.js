@@ -80,15 +80,10 @@ function enhanceCropUI(root){
   function pointerNorm(e){const r=canvasRect();return {x:clamp((e.clientX-r.left)/Math.max(r.width,1),0,1),y:clamp((e.clientY-r.top)/Math.max(r.height,1),0,1)}}
   function beginGesture(e,mode){if(!active)return;e.preventDefault();e.stopPropagation();const p=pointerNorm(e);gesture={mode,start:p,origin:{...box},ratio:currentRatio(),id:e.pointerId};overlay.setPointerCapture?.(e.pointerId)}
   function resizeFree(origin,p,mode){let left=origin.x,top=origin.y,right=origin.x+origin.w,bottom=origin.y+origin.h;const m=minNorm();if(mode.includes('w'))left=clamp(p.x,0,right-m.x);if(mode.includes('e'))right=clamp(p.x,left+m.x,1);if(mode.includes('n'))top=clamp(p.y,0,bottom-m.y);if(mode.includes('s'))bottom=clamp(p.y,top+m.y,1);return {x:left,y:top,w:right-left,h:bottom-top}}
-  function resizeLocked(origin,p,mode,r){if(!r)return resizeFree(origin,p,mode);const hasX=/[we]/.test(mode),hasY=/[ns]/.test(mode);let anchorX=mode.includes('w')?origin.x+origin.w:mode.includes('e')?origin.x:origin.x+origin.w/2;let anchorY=mode.includes('n')?origin.y+origin.h:mode.includes('s')?origin.y:origin.y+origin.h/2;
-    let w=hasX?Math.abs(p.x-anchorX):origin.w,h=hasY?Math.abs(p.y-anchorY):origin.h;
-    if(hasX&&hasY){if(w/Math.max(h,.0001)>r)h=w/r;else w=h*r}else if(hasX)h=w/r;else if(hasY)w=h*r;
-    const m=minNorm();w=Math.max(w,m.x);h=Math.max(h,m.y);if(w/h>r)w=h*r;else h=w/r;
-    let x=mode.includes('w')?anchorX-w:mode.includes('e')?anchorX:anchorX-w/2;let y=mode.includes('n')?anchorY-h:mode.includes('s')?anchorY:anchorY-h/2;
-    if(x<0){const d=-x;x=0;if(mode.includes('w'))w-=d}if(y<0){const d=-y;y=0;if(mode.includes('n'))h-=d}if(x+w>1)w=1-x;if(y+h>1)h=1-y;
-    if(w/h>r)w=h*r;else h=w/r;
-    if(mode.includes('w'))x=anchorX-w;else if(!mode.includes('e'))x=anchorX-w/2;if(mode.includes('n'))y=anchorY-h;else if(!mode.includes('s'))y=anchorY-h/2;
-    return sanitize({x,y,w,h})}
+  function resizeLocked(origin,p,mode,r){if(!r)return resizeFree(origin,p,mode);const horizontal=/^[we]$/.test(mode),vertical=/^[ns]$/.test(mode),corner=!horizontal&&!vertical,m=minNorm();let anchorX,anchorY,maxW,maxH,desiredW,x,y;
+    if(corner){const east=mode.includes('e'),south=mode.includes('s');anchorX=east?origin.x:origin.x+origin.w;anchorY=south?origin.y:origin.y+origin.h;maxW=east?1-anchorX:anchorX;maxH=south?1-anchorY:anchorY;desiredW=Math.max(Math.abs(p.x-anchorX),Math.abs(p.y-anchorY)*r);const cap=Math.min(maxW,maxH*r),floor=Math.min(cap,Math.max(m.x,m.y*r)),w=clamp(desiredW,floor,cap),h=w/r;x=east?anchorX:anchorX-w;y=south?anchorY:anchorY-h;return {x,y,w,h}}
+    if(horizontal){const east=mode==='e',cy=origin.y+origin.h/2;anchorX=east?origin.x:origin.x+origin.w;maxW=east?1-anchorX:anchorX;maxH=2*Math.min(cy,1-cy);desiredW=Math.abs(p.x-anchorX);const cap=Math.min(maxW,maxH*r),floor=Math.min(cap,Math.max(m.x,m.y*r)),w=clamp(desiredW,floor,cap),h=w/r;x=east?anchorX:anchorX-w;y=cy-h/2;return {x,y,w,h}}
+    const south=mode==='s',cx=origin.x+origin.w/2;anchorY=south?origin.y:origin.y+origin.h;maxH=south?1-anchorY:anchorY;maxW=2*Math.min(cx,1-cx);const desiredH=Math.abs(p.y-anchorY),capH=Math.min(maxH,maxW/r),floorH=Math.min(capH,Math.max(m.y,m.x/r)),h=clamp(desiredH,floorH,capH),w=h*r;x=cx-w/2;y=south?anchorY:anchorY-h;return {x,y,w,h}}
   function moveGesture(e){if(!gesture||e.pointerId!==gesture.id)return;e.preventDefault();const p=pointerNorm(e),o=gesture.origin;if(gesture.mode==='move'){const dx=p.x-gesture.start.x,dy=p.y-gesture.start.y;box={x:clamp(o.x+dx,0,1-o.w),y:clamp(o.y+dy,0,1-o.h),w:o.w,h:o.h}}else box=resizeLocked(o,p,gesture.mode,gesture.ratio);render()}
   function endGesture(e){if(!gesture||e.pointerId!==gesture.id)return;gesture=null;try{overlay.releasePointerCapture?.(e.pointerId)}catch{}}
 
