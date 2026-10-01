@@ -26,7 +26,7 @@ function enhanceCropUI(root){
     .studio-crop-handle[data-handle="sw"]{left:-12px;bottom:-12px;cursor:nesw-resize}.studio-crop-handle[data-handle="w"]{left:-12px;top:50%;transform:translateY(-50%);cursor:ew-resize}
     .studio-crop-controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 4px}.studio-crop-controls[hidden]{display:none!important}
     .studio-crop-help{font-size:13px;color:var(--muted);margin:8px 0 0}.studio-crop-help[hidden]{display:none!important}
-    @media(max-width:700px){.studio-crop-handle{width:32px;height:32px}.studio-crop-handle::after{width:12px;height:12px;left:10px;top:10px}.studio-crop-handle[data-handle="nw"]{left:-16px;top:-16px}.studio-crop-handle[data-handle="n"]{top:-16px}.studio-crop-handle[data-handle="ne"]{right:-16px;top:-16px}.studio-crop-handle[data-handle="e"]{right:-16px}.studio-crop-handle[data-handle="se"]{right:-16px;bottom:-16px}.studio-crop-handle[data-handle="s"]{bottom:-16px}.studio-crop-handle[data-handle="sw"]{left:-16px;bottom:-16px}.studio-crop-handle[data-handle="w"]{left:-16px}}
+    @media(max-width:700px){.studio-crop-handle{width:32px;height:32px}.studio-crop-handle::after{width:12px;height:12px;left:10px;top:10px}.studio-crop-handle[data-handle="nw"]{left:-12px;top:-12px}.studio-crop-handle[data-handle="n"]{top:-12px}.studio-crop-handle[data-handle="ne"]{right:-12px;top:-12px}.studio-crop-handle[data-handle="e"]{right:-12px}.studio-crop-handle[data-handle="se"]{right:-12px;bottom:-12px}.studio-crop-handle[data-handle="s"]{bottom:-12px}.studio-crop-handle[data-handle="sw"]{left:-12px;bottom:-12px}.studio-crop-handle[data-handle="w"]{left:-12px}}
   `;
   document.head.append(style);
 
@@ -58,6 +58,7 @@ function enhanceCropUI(root){
   let active=false;
   let box={x:0,y:0,w:1,h:1};
   let initial={...box};
+  let initialRatio='free';
   let gesture=null;
   let resizeObserver=null;
   const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
@@ -70,11 +71,11 @@ function enhanceCropUI(root){
   function sanitize(b){const m=minNorm();let w=clamp(b.w,m.x,1),h=clamp(b.h,m.y,1),x=clamp(b.x,0,1-w),y=clamp(b.y,0,1-h);return {x,y,w,h}}
   function render(){if(!active)return;box=sanitize(box);const c=canvasRect(),f=frameRect();overlay.style.left=`${c.left-f.left+box.x*c.width}px`;overlay.style.top=`${c.top-f.top+box.y*c.height}px`;overlay.style.width=`${box.w*c.width}px`;overlay.style.height=`${box.h*c.height}px`}
   function centeredBox(r,base=currentFields()){const full=base.w>.999&&base.h>.999,area=full?{x:.07,y:.07,w:.86,h:.86}:sanitize(base);if(!r)return sanitize(area);let w=area.w,h=w/r;if(h>area.h){h=area.h;w=h*r}return sanitize({x:area.x+(area.w-w)/2,y:area.y+(area.h-h)/2,w,h})}
-  function startCrop(){if(frame.hidden){root.querySelector('#status')?.replaceChildren(document.createTextNode('Open an image first.'));return}const r=currentRatio();initial=currentFields();box=centeredBox(r);active=true;overlay.hidden=false;controls.hidden=false;help.hidden=false;cropButton.textContent='Cropping…';cropButton.disabled=true;preview.style.touchAction='none';render();statusText('Move or resize the crop box, then choose Apply crop.')}
+  function startCrop(){if(frame.hidden){root.querySelector('#status')?.replaceChildren(document.createTextNode('Open an image first.'));return}const r=currentRatio();initial=currentFields();initialRatio=ratio?.value||'free';box=centeredBox(r);active=true;overlay.hidden=false;controls.hidden=false;help.hidden=false;cropButton.textContent='Cropping…';cropButton.disabled=true;preview.style.touchAction='none';render();statusText('Move or resize the crop box, then choose Apply crop.')}
   function stopCrop(){active=false;gesture=null;overlay.hidden=true;controls.hidden=true;help.hidden=true;cropButton.textContent='Crop image';cropButton.disabled=false;preview.style.touchAction='auto'}
   function statusText(t,error=false){const s=root.querySelector('#status');if(s){s.textContent=t;s.classList.toggle('error',error)}}
   function commit(){box=sanitize(box);cropX.value=(box.x*100).toFixed(1);cropY.value=(box.y*100).toFixed(1);cropW.value=(box.w*100).toFixed(1);cropH.value=(box.h*100).toFixed(1);if(ratio)ratio.value='free';cropW.dispatchEvent(new Event('change',{bubbles:true}));stopCrop();statusText('Crop applied. The shaded preview shows the selected area. Create the image when ready.')}
-  function cancelCrop(){box={...initial};stopCrop();statusText('Crop editing cancelled. Previous crop kept.')}
+  function cancelCrop(){box={...initial};if(ratio)ratio.value=initialRatio;stopCrop();statusText('Crop editing cancelled. Previous crop kept.')}
   function resetBox(){box=centeredBox(currentRatio());render();statusText('Crop box reset. Drag it to the area you want to keep.')}
 
   function pointerNorm(e){const r=canvasRect();return {x:clamp((e.clientX-r.left)/Math.max(r.width,1),0,1),y:clamp((e.clientY-r.top)/Math.max(r.height,1),0,1)}}
