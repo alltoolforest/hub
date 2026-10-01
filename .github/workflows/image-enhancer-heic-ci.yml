@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'tests/image-enhancer-heic-browser.mjs'
+      - 'tests/image-enhancer-heic-candidate-browser.mjs'
       - '.github/workflows/image-enhancer-heic-ci.yml'
   workflow_dispatch:
 
@@ -18,7 +19,7 @@ permissions:
 jobs:
   heic-heif-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +34,7 @@ jobs:
           test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
           test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
           node --check tests/image-enhancer-heic-browser.mjs
+          node --check tests/image-enhancer-heic-candidate-browser.mjs
           echo 'Frozen/shared SHAs and HEIC audit syntax verified.'
 
       - name: Set up Node
@@ -46,7 +48,12 @@ jobs:
       - name: Verify hosted Chrome
         run: google-chrome --version
 
-      - name: Run real HEIC + HEIF input audit
+      - name: Benchmark maintained HEIC decoder candidate
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-heic-candidate-browser.mjs
+
+      - name: Run current real HEIC + HEIF input audit
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-heic-browser.mjs
