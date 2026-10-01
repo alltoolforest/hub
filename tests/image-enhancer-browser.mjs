@@ -215,7 +215,7 @@ try {
     await page.evaluate(() => window.__restoreEnhancerGetImageData?.());
   }
 
-  await page.getByRole('button', { name: 'Reset' }).click();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
   assert.equal(await page.locator('#enhancer-content').inputValue(), 'auto');
   assert.equal(await page.locator('#enhancer-restoration').inputValue(), 'auto');
