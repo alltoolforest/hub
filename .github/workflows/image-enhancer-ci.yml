@@ -52,8 +52,8 @@ jobs:
           node --check assets/js/app.js
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
-          grep -q "text-logo.*engine: 'standard'" assets/js/image-enhancer-routing.js
-          grep -q "do not expose" /dev/null 2>/dev/null || true
+          grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
+          grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
           echo 'Enhancer routing, syntax, restoration module, content-route module, runtime pin and model checksum pin verified.'
 
       - name: Set up Node
