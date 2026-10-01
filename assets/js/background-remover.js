@@ -55,6 +55,63 @@ function refineMask(mask){
   return canvas;
 }
 
+function decontaminateGreenEdges(canvas){
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  const width=canvas.width,height=canvas.height;
+  const radius=2,stripHeight=192;
+  let changed=0;
+
+  // Only alter semi-transparent boundary pixels. Fully opaque subject pixels and
+  // alpha values are never changed. Compare each edge pixel with nearby opaque
+  // foreground color so legitimate green clothing is retained while excess
+  // green spill from the removed background is reduced.
+  for(let y=0;y<height;y+=stripHeight){
+    const innerHeight=Math.min(stripHeight,height-y);
+    const readY=Math.max(0,y-radius);
+    const readEnd=Math.min(height,y+innerHeight+radius);
+    const image=ctx.getImageData(0,readY,width,readEnd-readY);
+    const data=image.data;
+    const localStart=y-readY;
+    const localEnd=localStart+innerHeight;
+
+    for(let ly=localStart;ly<localEnd;ly++){
+      for(let x=0;x<width;x++){
+        const i=(ly*width+x)*4;
+        const alpha=data[i+3];
+        if(alpha<=8||alpha>=248)continue;
+
+        let rs=0,gs=0,bs=0,count=0;
+        const y0=Math.max(0,ly-radius),y1=Math.min(image.height-1,ly+radius);
+        const x0=Math.max(0,x-radius),x1=Math.min(width-1,x+radius);
+        for(let ny=y0;ny<=y1;ny++){
+          for(let nx=x0;nx<=x1;nx++){
+            const n=(ny*width+nx)*4;
+            if(data[n+3]>=248){
+              rs+=data[n];gs+=data[n+1];bs+=data[n+2];count++;
+            }
+          }
+        }
+        if(count<2)continue;
+
+        const r=data[i],g=data[i+1],b=data[i+2];
+        const rr=rs/count,rg=gs/count,rb=bs/count;
+        const edgeGreen=g-Math.max(r,b);
+        const referenceGreen=rg-Math.max(rr,rb);
+        const spill=edgeGreen-referenceGreen;
+        if(spill<=10)continue;
+
+        const opacity=alpha/255;
+        const strength=Math.min(.72,.22+(1-opacity)*.75);
+        data[i+1]=Math.max(0,Math.min(255,Math.round(g-spill*strength)));
+        changed++;
+      }
+    }
+
+    ctx.putImageData(image,0,readY,0,localStart,width,innerHeight);
+  }
+  return changed;
+}
+
 async function createForegroundMask(engine,inputBlob,progress){
   const models=['isnet_fp16','isnet_quint8'];
   let lastError=null;
@@ -205,6 +262,10 @@ export async function mount(root){
       ctx.drawImage(sourceImage,0,0,out.width,out.height);
       ctx.globalCompositeOperation='destination-in';
       ctx.drawImage(refinedMask,0,0,out.width,out.height);
+      ctx.globalCompositeOperation='source-over';
+
+      status('Reducing background color spill on fine edges…');
+      decontaminateGreenEdges(canvas);
       ctx.globalCompositeOperation='destination-over';
 
       const mode=read('background');
