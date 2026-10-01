@@ -73,8 +73,46 @@ await new Promise(resolveListen => server.listen(4173, '127.0.0.1', resolveListe
 const browser = await chromium.launch({ headless: true, args: ['--disable-gpu'] });
 const page = await browser.newPage();
 const consoleErrors = [];
-page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
-page.on('pageerror', err => consoleErrors.push(err.message));
+const diagnostics = [];
+page.on('console', msg => {
+  const line = `console:${msg.type()}: ${msg.text()}`;
+  if (msg.type() === 'error') consoleErrors.push(line);
+  if (['error','warning'].includes(msg.type())) diagnostics.push(line);
+});
+page.on('pageerror', err => { consoleErrors.push(`pageerror: ${err.message}`); diagnostics.push(`pageerror: ${err.message}`); });
+page.on('requestfailed', req => diagnostics.push(`requestfailed: ${req.url()} :: ${req.failure()?.errorText || 'unknown'}`));
+page.on('response', res => { if (res.status() >= 400) diagnostics.push(`http ${res.status()}: ${res.url()}`); });
+
+async function runScale(scale, expected) {
+  await page.locator('#enhancer-scale').selectOption(String(scale));
+  await page.getByRole('button', { name: 'Enhance image' }).click();
+  try {
+    await page.waitForFunction(() => {
+      const output = document.querySelector('#downloads a[download]');
+      const button = [...document.querySelectorAll('button')].find(b => b.textContent === 'Enhance image');
+      const text = document.querySelector('#status')?.textContent || '';
+      return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable)/.test(text));
+    }, null, { timeout: 90000 });
+  } catch (error) {
+    const statusText = await page.locator('#status').textContent().catch(() => 'status unavailable');
+    console.error(`DIAGNOSTIC scale=${scale} timeout status=${statusText}`);
+    console.error(diagnostics.join('\n'));
+    throw error;
+  }
+
+  const statusText = await page.locator('#status').textContent();
+  console.log(`DIAGNOSTIC scale=${scale} terminal status=${statusText}`);
+  if (diagnostics.length) console.log(diagnostics.join('\n'));
+  assert.match(statusText || '', /AI super-resolution/, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
+
+  const dims = await page.evaluate(async () => {
+    const a = [...document.querySelectorAll('#downloads a[download]')].at(-1);
+    if (!a) return null;
+    const bmp = await createImageBitmap(await (await fetch(a.href)).blob());
+    const result = [bmp.width, bmp.height, a.download]; bmp.close(); return result;
+  });
+  assert.deepEqual(dims, expected);
+}
 
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
@@ -83,25 +121,8 @@ try {
   await page.locator('input[type=file]').setInputFiles({ name: 'core-test.png', mimeType: 'image/png', buffer: source });
   await page.waitForFunction(() => document.querySelector('#enhancer-source-info')?.textContent?.includes('24 × 16'));
 
-  await page.locator('#enhancer-scale').selectOption('1');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
-  await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('AI super-resolution'), null, { timeout: 180000 });
-  let dims = await page.evaluate(async () => {
-    const a = [...document.querySelectorAll('#downloads a[download]')].at(-1);
-    const bmp = await createImageBitmap(await (await fetch(a.href)).blob());
-    const result = [bmp.width, bmp.height, a.download]; bmp.close(); return result;
-  });
-  assert.deepEqual(dims, [24, 16, 'core-test-enhanced.png']);
-
-  await page.locator('#enhancer-scale').selectOption('2');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
-  await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('AI super-resolution'), null, { timeout: 180000 });
-  dims = await page.evaluate(async () => {
-    const a = [...document.querySelectorAll('#downloads a[download]')].at(-1);
-    const bmp = await createImageBitmap(await (await fetch(a.href)).blob());
-    const result = [bmp.width, bmp.height, a.download]; bmp.close(); return result;
-  });
-  assert.deepEqual(dims, [48, 32, 'core-test-upscaled-2x.png']);
+  await runScale(1, [24, 16, 'core-test-enhanced.png']);
+  await runScale(2, [48, 32, 'core-test-upscaled-2x.png']);
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
   console.log('PASS: isolated enhancer loaded; Real-ESRGAN/WASM produced valid 1x and 2x AI outputs under production CSP.');
