@@ -88,7 +88,10 @@ async function inspectSource(file){
     }
   }
   if(!type)throw Error('File contents do not match a supported JPG, PNG, or WebP image.');
-  if(width&&height)sourcePixelLimit(width,height);
+  if(width!==null&&height!==null){
+    if(width<1||height<1)throw Error('Image dimensions are invalid or corrupted.');
+    sourcePixelLimit(width,height);
+  }
   return {type,width,height};
 }
 
@@ -286,6 +289,7 @@ export async function mount(root){
           const name=safeName(file.name,met?'-processed':'-target-not-met',ext);
           if(!met)missed++;
           output(blob,name);
+          if(processing)for(const control of controls())if(control!==cancelButton)control.disabled=true;
           results.push({name,blob});created++;
           row.text.textContent=`${file.name} · ${ow} × ${oh} · ${format(blob.size/1024)} KB · ${met?'Ready':'Target KB not met'}${actualType!==requested?` · Browser returned ${actualType}`:''}`;
         }catch(e){
@@ -298,7 +302,8 @@ export async function mount(root){
         }
       }
       if(cancelRequested){
-        const remaining=files.length-created-failures;
+        const processed=created+failures,remaining=files.length-processed;
+        for(let j=processed;j<resultRows.length;j++)resultRows[j].text.textContent=`${files[j].name} · Not processed (cancelled)`;
         status(`Batch cancelled. ${created} created, ${failures} failed, ${Math.max(0,remaining)} not processed.`);
       }else{
         status(`Batch complete. ${created} created, ${failures} failed, ${missed} over the requested KB limit.`);
