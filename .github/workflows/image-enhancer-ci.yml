@@ -19,6 +19,7 @@ on:
       - 'tests/image-enhancer-output-browser.mjs'
       - 'tests/image-enhancer-inspector-browser.mjs'
       - 'tests/image-enhancer-export-browser.mjs'
+      - 'tests/image-enhancer-compatibility-browser.mjs'
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
 
@@ -61,6 +62,7 @@ jobs:
           node --check assets/js/image-enhancer-routing.js
           node --check assets/js/image-enhancer-tiles.js
           node --check assets/js/app.js
+          node --check tests/image-enhancer-compatibility-browser.mjs
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
           grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
@@ -73,7 +75,7 @@ jobs:
           grep -q "enhancer-compare-viewport" assets/js/image-enhancer-inspector.js
           grep -q "enhancer-export-format" assets/js/image-enhancer-export.js
           grep -q "JPG cannot store transparency" assets/js/image-enhancer-export.js
-          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, output planning, inspection workspace, export matrix, runtime pin and model checksum pin verified.'
+          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, output planning, inspection workspace, export matrix, compatibility audit, runtime pin and model checksum pin verified.'
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -105,3 +107,8 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-export-browser.mjs
+
+      - name: Run input and mobile compatibility audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-compatibility-browser.mjs
