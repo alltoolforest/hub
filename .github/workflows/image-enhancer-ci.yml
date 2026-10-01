@@ -12,13 +12,17 @@ on:
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
 
+concurrency:
+  group: image-enhancer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   enhancer-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,8 +57,10 @@ jobs:
       - name: Install pinned browser test dependency
         run: npm install --no-save --no-package-lock playwright@1.55.0
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Verify hosted Chrome
+        run: google-chrome --version
 
       - name: Run CSP + real AI browser smoke test
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-browser.mjs
