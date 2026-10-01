@@ -3,6 +3,12 @@ import {
   fileInput, bindFile, checkFile, decodeImage, canvasBlob, output,
   downloads, clearOutputs, safeName, mobile
 } from './core.js';
+import {
+  analyzeSourceImage,
+  resolveRestorationProfile,
+  prepareRestorationInput,
+  blendForFidelity
+} from './image-enhancer-restoration.js';
 
 const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
@@ -411,9 +417,10 @@ function safeOutputFor(image, scale, caps) {
   return { width, height, pixels };
 }
 
-function sourceSummary(file, image, caps) {
+function sourceSummary(file, image, caps, analysis) {
   const mp = image.width * image.height / 1e6;
-  return `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.webgpu ? 'WebGPU available' : caps.wasm ? 'WASM AI available' : 'standard fallback only'}`;
+  const base = `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.webgpu ? 'WebGPU available' : caps.wasm ? 'WASM AI available' : 'standard fallback only'}`;
+  return analysis?.note ? `${base} · Analysis: ${analysis.note}` : base;
 }
 
 function outputScaleOptions(image, caps) {
@@ -460,6 +467,7 @@ export async function mount(root, slug) {
   let image = null;
   let file = null;
   let hasTransparency = false;
+  let analysis = null;
   let controller = null;
   let processing = false;
 
@@ -473,12 +481,22 @@ export async function mount(root, slug) {
   root.append(frame);
 
   const form = el('div', { class: 'fields' });
-  form.append(field('enhancer-scale', 'Enhancement mode', 'select', '2', {
-    options: [['1', '1× Enhance / Restore'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
-  }));
+  form.append(
+    field('enhancer-scale', 'Enhancement mode', 'select', '2', {
+      options: [['1', '1× Enhance / Restore'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
+    }),
+    field('enhancer-restoration', 'Restoration profile', 'select', 'auto', {
+      options: [
+        ['auto', 'Auto — analyze source'],
+        ['fidelity', 'Fidelity — preserve source'],
+        ['balanced', 'Balanced'],
+        ['recovery', 'Recovery — stronger reconstruction']
+      ]
+    })
+  );
   root.append(form);
 
-  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. If AI cannot run safely, the tool clearly reports and uses standard high-quality enlargement instead.');
+  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Source analysis is heuristic and is used only to choose a conservative restoration profile. If AI cannot run safely, the tool clearly reports and uses standard high-quality enlargement instead.');
 
   function drawSource() {
     if (!image) return;
@@ -504,8 +522,9 @@ export async function mount(root, slug) {
     frame.hidden = false;
     drawSource();
     hasTransparency = await detectTransparency(image);
+    analysis = await analyzeSourceImage(image, file);
     outputScaleOptions(image, caps);
-    summary.textContent = sourceSummary(file, image, caps) + (hasTransparency ? ' · transparency detected' : '');
+    summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
   });
 
   const enhanceButton = el('button', { type: 'button', class: 'primary', text: 'Enhance image' });
@@ -520,6 +539,7 @@ export async function mount(root, slug) {
     resetButton.disabled = active;
     input.disabled = active;
     $('#enhancer-scale').disabled = active;
+    $('#enhancer-restoration').disabled = active;
     cancelButton.disabled = !active;
   }
 
@@ -534,8 +554,9 @@ export async function mount(root, slug) {
     controller = null;
     clearOutputs();
     $('#enhancer-scale').value = '2';
+    $('#enhancer-restoration').value = 'auto';
     outputScaleOptions(image, caps);
-    if (image && file) summary.textContent = sourceSummary(file, image, caps) + (hasTransparency ? ' · transparency detected' : '');
+    if (image && file) summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
     drawSource();
     status('Reset complete.');
   });
@@ -551,7 +572,9 @@ export async function mount(root, slug) {
     controller = new AbortController();
     const signal = controller.signal;
     const scale = Number(read('enhancer-scale'));
+    const restoration = resolveRestorationProfile(read('enhancer-restoration'), analysis, scale);
     let result = null;
+    let temporaryInput = null;
     setProcessing(true);
     try {
       const { width, height } = safeOutputFor(image, scale, caps);
@@ -559,19 +582,29 @@ export async function mount(root, slug) {
       if (hasTransparency) {
         throw new Error('AI transparency-safe reconstruction is not verified yet.');
       }
+
+      status(`Preparing ${restoration.label.toLowerCase()} restoration…`);
+      const prepared = await prepareRestorationInput(image, restoration, signal);
+      temporaryInput = prepared.temporary;
       result = await aiEngine.process({
-        image,
+        image: prepared.image,
         scale,
         width,
         height,
         signal,
         onProgress: message => status(message)
       });
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      temporaryInput = null;
+      result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
+
       status('Encoding AI result…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · AI super-resolution · ${result.tileCount} tiles · ${result.backend}. Some fine details may have been reconstructed by AI.`);
+      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · AI super-resolution · ${result.tileCount} tiles · ${result.backend} · ${restoration.label} profile. ${restoration.disclosure}`);
     } catch (error) {
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      temporaryInput = null;
       if (error?.name === 'AbortError' || signal.aborted) {
         status('Processing cancelled.');
         return;
@@ -589,6 +622,7 @@ export async function mount(root, slug) {
         status(fallbackError?.message || 'Image processing failed.', true);
       }
     } finally {
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       if (result?.canvas) result.canvas.width = result.canvas.height = 0;
       setProcessing(false);
     }
