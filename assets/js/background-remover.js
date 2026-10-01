@@ -34,6 +34,76 @@ function inferenceSize(width,height){
   };
 }
 
+function refineMask(mask){
+  const canvas=el('canvas',{width:mask.width,height:mask.height});
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(mask,0,0,canvas.width,canvas.height);
+  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const data=image.data;
+
+  // Light confidence shaping removes weak fringe pixels without hard-thresholding
+  // semi-transparent hair/fabric edges. Work at mask resolution to cap memory use.
+  for(let i=3;i<data.length;i+=4){
+    const a=data[i];
+    if(a<=5){data[i]=0;continue}
+    if(a>=250){data[i]=255;continue}
+    const x=a/255;
+    const smooth=x*x*(3-2*x);
+    data[i]=Math.round((x*.72+smooth*.28)*255);
+  }
+  ctx.putImageData(image,0,0);
+  return canvas;
+}
+
+async function createForegroundMask(engine,inputBlob,progress){
+  const models=['isnet_fp16','isnet_quint8'];
+  let lastError=null;
+  for(let i=0;i<models.length;i++){
+    const model=models[i];
+    try{
+      if(i)status('High-quality model could not start on this device. Retrying with the lighter model…');
+      const blob=await engine.segmentForeground(inputBlob,{
+        model,
+        device:'cpu',
+        proxyToWorker:false,
+        output:{format:'image/png',quality:1},
+        progress
+      });
+      return {blob,model};
+    }catch(e){
+      lastError=e;
+    }
+  }
+  throw lastError||Error('Background-removal mask engine failed.');
+}
+
+function verifyAlpha(canvas,mode){
+  const w=Math.min(96,canvas.width),h=Math.min(96,canvas.height);
+  const probe=el('canvas',{width:w,height:h});
+  const ctx=probe.getContext('2d',{willReadFrequently:true});
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(canvas,0,0,w,h);
+  const data=ctx.getImageData(0,0,w,h).data;
+  let min=255,max=0;
+  for(let i=3;i<data.length;i+=4){
+    const a=data[i];
+    if(a<min)min=a;
+    if(a>max)max=a;
+  }
+  probe.width=probe.height=0;
+  if(mode==='transparent'){
+    return min<250
+      ?' Transparent alpha is present in the output PNG.'
+      :' No transparent pixels were detected in the result; inspect the preview before downloading.';
+  }
+  if(mode==='white'||mode==='color'){
+    return min===255&&max===255
+      ?' Opaque background verified.'
+      :' Background opacity could not be fully verified; inspect the preview.';
+  }
+  return '';
+}
+
 function checkerboardFrame(image){
   const frame=el('div',{class:'canvas-frame',style:'background-color:#fff;background-image:linear-gradient(45deg,#dfe6e1 25%,transparent 25%),linear-gradient(-45deg,#dfe6e1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe6e1 75%),linear-gradient(-45deg,transparent 75%,#dfe6e1 75%);background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0;'});
   image.style.background='transparent';
@@ -116,29 +186,25 @@ export async function mount(root){
     const inputBlob=await canvasBlob(inferenceCanvas,'image/png',1);
     inferenceCanvas.width=inferenceCanvas.height=0;
 
-    const maskBlob=await engine.segmentForeground(inputBlob,{
-      model:'isnet_quint8',
-      device:'cpu',
-      proxyToWorker:false,
-      output:{format:'image/png',quality:1},
-      progress:(key,current,total)=>{
-        if(key.startsWith('fetch:'))status(`Loading background model… ${total?Math.round(current/total*100)+'%':''}`);
-        else status(`Removing background… ${total?Math.round(current/total*100)+'%':''}`);
-      }
-    });
+    const progress=(key,current,total)=>{
+      if(key.startsWith('fetch:'))status(`Loading background model… ${total?Math.round(current/total*100)+'%':''}`);
+      else status(`Removing background… ${total?Math.round(current/total*100)+'%':''}`);
+    };
+    const {blob:maskBlob,model}=await createForegroundMask(engine,inputBlob,progress);
 
     const mask=await decodeImage(new File([maskBlob],'foreground-mask.png',{type:'image/png'}));
+    const refinedMask=refineMask(mask);
     const canvas=el('canvas',{width:out.width,height:out.height});
     const ctx=canvas.getContext('2d');
     ctx.imageSmoothingEnabled=true;
     ctx.imageSmoothingQuality='high';
 
     try{
-      status('Compositing full-resolution result…');
+      status('Refining edges and compositing full-resolution result…');
       ctx.clearRect(0,0,out.width,out.height);
       ctx.drawImage(sourceImage,0,0,out.width,out.height);
       ctx.globalCompositeOperation='destination-in';
-      ctx.drawImage(mask,0,0,out.width,out.height);
+      ctx.drawImage(refinedMask,0,0,out.width,out.height);
       ctx.globalCompositeOperation='destination-over';
 
       const mode=read('background');
@@ -152,13 +218,16 @@ export async function mount(root){
       }
       ctx.globalCompositeOperation='source-over';
 
+      const verification=verifyAlpha(canvas,mode);
       const finalBlob=await canvasBlob(canvas,'image/png',1);
       const url=output(finalBlob,safeName(file.name,'-background','png'));
       const preview=el('img',{src:url,class:'preview-image',alt:'Background removal result'});
       $('#downloads').prepend(checkerboardFrame(preview));
-      status(`Ready · ${out.width} × ${out.height} pixels.${out.reduced?` Reduced from ${sourceImage.width} × ${sourceImage.height} only to stay within the safer ${Math.round(out.pixelCap/1e6)} MP device limit.`:' Original image dimensions preserved.'} Check fine edges before using the result.`);
+      const quality=model==='isnet_fp16'?'High-quality mask used.':'Lighter compatibility mask used.';
+      status(`Ready · ${out.width} × ${out.height} pixels.${out.reduced?` Reduced from ${sourceImage.width} × ${sourceImage.height} only to stay within the safer ${Math.round(out.pixelCap/1e6)} MP device limit.`:' Original image dimensions preserved.'} ${quality}${verification} Check fine edges before using the result.`);
     }finally{
       mask.close?.();
+      refinedMask.width=refinedMask.height=0;
       canvas.width=canvas.height=0;
     }
   },true)));
