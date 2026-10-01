@@ -16,6 +16,7 @@ import {
   resolveRouteControls,
   contentRouteOptions
 } from './image-enhancer-routing.js';
+import { tileCorePlan, isMemoryPressureError } from './image-enhancer-tiles.js';
 
 const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
@@ -217,75 +218,104 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     await this.initialize(signal, onProgress);
     if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
 
+    const plans = tileCorePlan(this.caps);
+    let lastError = null;
+    for (let attempt = 0; attempt < plans.length; attempt++) {
+      const tileCore = plans[attempt];
+      try {
+        if (attempt > 0) onProgress?.(`Retrying AI with smaller ${tileCore}px tiles…`);
+        return await this.processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount: attempt });
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw error;
+        lastError = error;
+        if (!isMemoryPressureError(error) || attempt === plans.length - 1) throw error;
+        const next = plans[attempt + 1];
+        onProgress?.(`Memory pressure detected. Retrying with smaller ${next}px tiles…`);
+        await sleepFrame();
+      }
+    }
+    throw lastError || new Error('AI tiling failed.');
+  }
+
+  async processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount }) {
     const outputCanvas = el('canvas', { width, height });
     const outputCtx = outputCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
-    if (!outputCtx) throw new Error('Output canvas could not be created.');
+    if (!outputCtx) throw new RangeError('Output canvas allocation failed.');
     outputCtx.imageSmoothingEnabled = true;
     outputCtx.imageSmoothingQuality = 'high';
 
-    const tileCore = this.caps.webgpu ? 160 : this.caps.isMobile ? 72 : 96;
     const padding = 16;
     const cols = Math.ceil(image.width / tileCore);
     const rows = Math.ceil(image.height / tileCore);
     const total = cols * rows;
     let index = 0;
 
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        if (signal?.aborted) {
-          outputCanvas.width = outputCanvas.height = 0;
-          throw new DOMException('Processing cancelled.', 'AbortError');
+    try {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+
+          const x = col * tileCore;
+          const y = row * tileCore;
+          const coreW = Math.min(tileCore, image.width - x);
+          const coreH = Math.min(tileCore, image.height - y);
+          const sx = Math.max(0, x - padding);
+          const sy = Math.max(0, y - padding);
+          const ex = Math.min(image.width, x + coreW + padding);
+          const ey = Math.min(image.height, y + coreH + padding);
+          const tileW = ex - sx;
+          const tileH = ey - sy;
+          const padLeft = x - sx;
+          const padTop = y - sy;
+
+          index++;
+          onProgress?.(`Enhancing tile ${index} of ${total}…`);
+          const tile = await this.inferTile(image, sx, sy, tileW, tileH, signal);
+          const srcX = padLeft * this.nativeScale;
+          const srcY = padTop * this.nativeScale;
+          const srcW = coreW * this.nativeScale;
+          const srcH = coreH * this.nativeScale;
+          const dstX = x * scale;
+          const dstY = y * scale;
+          const dstW = coreW * scale;
+          const dstH = coreH * scale;
+
+          outputCtx.drawImage(tile, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+          tile.width = tile.height = 0;
+          await sleepFrame();
         }
-
-        const x = col * tileCore;
-        const y = row * tileCore;
-        const coreW = Math.min(tileCore, image.width - x);
-        const coreH = Math.min(tileCore, image.height - y);
-        const sx = Math.max(0, x - padding);
-        const sy = Math.max(0, y - padding);
-        const ex = Math.min(image.width, x + coreW + padding);
-        const ey = Math.min(image.height, y + coreH + padding);
-        const tileW = ex - sx;
-        const tileH = ey - sy;
-        const padLeft = x - sx;
-        const padTop = y - sy;
-
-        index++;
-        onProgress?.(`Enhancing tile ${index} of ${total}…`);
-        const tile = await this.inferTile(image, sx, sy, tileW, tileH, signal);
-        const srcX = padLeft * this.nativeScale;
-        const srcY = padTop * this.nativeScale;
-        const srcW = coreW * this.nativeScale;
-        const srcH = coreH * this.nativeScale;
-        const dstX = x * scale;
-        const dstY = y * scale;
-        const dstW = coreW * scale;
-        const dstH = coreH * scale;
-
-        outputCtx.drawImage(tile, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-        tile.width = tile.height = 0;
-        await sleepFrame();
       }
-    }
 
-    return {
-      canvas: outputCanvas,
-      aiUsed: true,
-      engine: this,
-      backend: this.backend,
-      tileCount: total,
-      reconstructed: true
-    };
+      return {
+        canvas: outputCanvas,
+        aiUsed: true,
+        engine: this,
+        backend: this.backend,
+        tileCount: total,
+        tileCore,
+        retryCount,
+        reconstructed: true
+      };
+    } catch (error) {
+      outputCanvas.width = outputCanvas.height = 0;
+      throw error;
+    }
   }
 
   async inferTile(image, sx, sy, width, height, signal) {
     const inputCanvas = el('canvas', { width, height });
     const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-    if (!inputCtx) throw new Error('AI tile canvas could not be created.');
+    if (!inputCtx) throw new RangeError('AI tile canvas allocation failed.');
     inputCtx.drawImage(image, sx, sy, width, height, 0, 0, width, height);
     const pixels = inputCtx.getImageData(0, 0, width, height).data;
     const plane = width * height;
-    const data = new Float32Array(plane * 3);
+    let data;
+    try {
+      data = new Float32Array(plane * 3);
+    } catch (error) {
+      inputCanvas.width = inputCanvas.height = 0;
+      throw new RangeError(`AI tensor allocation failed: ${error?.message || 'out of memory'}`);
+    }
     for (let i = 0, p = 0; i < plane; i++, p += 4) {
       data[i] = pixels[p] / 255;
       data[plane + i] = pixels[p + 1] / 255;
@@ -308,7 +338,7 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
 
     const outputCanvas = el('canvas', { width: outW, height: outH });
     const outputCtx = outputCanvas.getContext('2d');
-    if (!outputCtx) throw new Error('AI output canvas could not be created.');
+    if (!outputCtx) throw new RangeError('AI output canvas allocation failed.');
     const imageData = outputCtx.createImageData(outW, outH);
     const outPlane = outW * outH;
     let maxProbe = 0;
@@ -514,7 +544,7 @@ export async function mount(root, slug) {
   );
   root.append(form);
 
-  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Auto content routing currently uses verified source-quality signals, not unverified semantic classification. Portrait, Text/Logo, Illustration and Old Photo are manual overrides until dedicated detectors/models pass their gates. Text/Logo deliberately uses standard enlargement to reduce character hallucination risk. Edge-aware sharpening runs after AI restoration and is capped to reduce halos and sharpened noise.');
+  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Auto content routing currently uses verified source-quality signals, not unverified semantic classification. Portrait, Text/Logo, Illustration and Old Photo are manual overrides until dedicated detectors/models pass their gates. Text/Logo deliberately uses standard enlargement to reduce character hallucination risk. Edge-aware sharpening runs after AI restoration and is capped to reduce halos and sharpened noise. Memory-pressure failures retry AI with smaller tiles before falling back.');
 
   function drawSource() {
     if (!image) return;
@@ -615,9 +645,7 @@ export async function mount(root, slug) {
       }
 
       if (!caps.wasm) throw new Error('WebAssembly is unavailable in this browser.');
-      if (hasTransparency) {
-        throw new Error('AI transparency-safe reconstruction is not verified yet.');
-      }
+      if (hasTransparency) throw new Error('AI transparency-safe reconstruction is not verified yet.');
 
       status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
       const prepared = await prepareRestorationInput(image, restoration, signal);
@@ -640,7 +668,8 @@ export async function mount(root, slug) {
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
       const sharpenLabel = sharpened.applied ? sharpened.label : sharpened.label === 'Off' ? 'Off' : sharpened.label;
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${result.tileCount} tiles · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
+      const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount} · ${result.tileCore}px tiles` : '';
+      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${result.tileCount} tiles${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
     } catch (error) {
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       temporaryInput = null;
