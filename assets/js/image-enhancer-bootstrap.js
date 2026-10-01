@@ -1,5 +1,6 @@
 import { $, el, field, status } from './core.js';
 import { resolveOutputTarget, outputSizingOptions } from './image-enhancer-output.js';
+import { mountInspector } from './image-enhancer-inspector.js';
 
 let runtimePromise = null;
 let runtimeModuleBlobURL = null;
@@ -288,6 +289,7 @@ export async function mount(root, slug) {
   const enhancer = await import('./image-enhancer.js');
   const result = await enhancer.mount(root, slug);
   mountOutputPlanner(root);
+  mountInspector(root);
   return result;
 }
 
