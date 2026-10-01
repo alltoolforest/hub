@@ -150,7 +150,7 @@ try {
   await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('smaller than the source'));
   assert.equal(await page.locator('#downloads a[download]').count(), beforeInvalid, 'Downscale target must be rejected by the enhancer planner.');
 
-  await page.getByRole('button', { name: 'Reset' }).click();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
   assert.equal(await page.locator('#enhancer-output-mode').inputValue(), 'scale');
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
   assert.equal(await page.locator('#enhancer-target-width').inputValue(), '');
