@@ -99,7 +99,7 @@ async function waitForTerminal(scale) {
       const output = document.querySelector('#downloads a[download]');
       const button = [...document.querySelectorAll('button')].find(b => b.textContent === 'Enhance image');
       const text = document.querySelector('#status')?.textContent || '';
-      return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable|Sharpening)/.test(text));
+      return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable|Sharpening|Retrying|Memory pressure)/.test(text));
     }, null, { timeout: 90000 });
   } catch (error) {
     const statusText = await page.locator('#status').textContent().catch(() => 'status unavailable');
@@ -191,6 +191,30 @@ try {
   assert.match(tiled.statusText, /wasm/);
   assert.match(tiled.statusText, /(Fidelity|Balanced|Recovery) profile/);
 
+  await upload('memory-test.png', 110, 70);
+  await page.evaluate(() => {
+    const proto = CanvasRenderingContext2D.prototype;
+    const original = proto.getImageData;
+    let failed = false;
+    proto.getImageData = function(...args) {
+      if (!failed && this.canvas.width > 100 && this.canvas.height > 50) {
+        failed = true;
+        throw new RangeError('out of memory injected test');
+      }
+      return original.apply(this, args);
+    };
+    window.__restoreEnhancerGetImageData = () => {
+      proto.getImageData = original;
+      delete window.__restoreEnhancerGetImageData;
+    };
+  });
+  try {
+    const retried = await runAiScale(2, [220, 140, 'memory-test-upscaled-2x.png'], 'general', 'balanced', 'off', /AI super-resolution.*memory retry ×1 · 72px tiles/);
+    assert.match(retried.statusText, /wasm/);
+  } finally {
+    await page.evaluate(() => window.__restoreEnhancerGetImageData?.());
+  }
+
   await page.getByRole('button', { name: 'Reset' }).click();
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
   assert.equal(await page.locator('#enhancer-content').inputValue(), 'auto');
@@ -211,7 +235,7 @@ try {
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, content-aware quality routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
+  console.log('PASS: Real-ESRGAN/WASM 1x/2x/4x, content-aware quality routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
