@@ -6,6 +6,10 @@ function protectExtras(root){
   const status=(text,error=false)=>{const n=root.querySelector('#status');if(n){n.textContent=text;n.classList.toggle('error',error)}};
   const buttonByText=text=>[...root.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
   const sourceDimensions=()=>{for(const item of root.querySelectorAll('.result-item')){const label=item.querySelector('small')?.textContent?.trim();if(label==='Dimensions'){const m=item.querySelector('strong')?.textContent?.match(/([\d,]+)\s*[×x]\s*([\d,]+)/);if(m)return [Number(m[1].replace(/,/g,'')),Number(m[2].replace(/,/g,''))]}}return null};
+  const blurSupported=()=>{try{const c=document.createElement('canvas'),ctx=c.getContext('2d');if(!ctx||!('filter' in ctx))return false;const old=ctx.filter;ctx.filter='blur(2px)';const ok=String(ctx.filter).includes('blur');ctx.filter=old;return ok}catch{return false}};
+
+  const mode=root.querySelector('#extra-redact-mode'),blurOption=mode?[...mode.options].find(o=>o.value==='blur'):null;
+  if(blurOption&&!blurSupported()){blurOption.disabled=true;blurOption.textContent='Blur · not supported in this browser';if(mode.value==='blur')mode.value='pixelate'}
 
   const redactionDownload=buttonByText('Download redacted image');
   redactionDownload?.addEventListener('click',e=>{const d=sourceDimensions();if(!d)return;const [w,h]=d,limit=mobileLike()?8e6:24e6;if(w*h>limit){e.preventDefault();e.stopImmediatePropagation();status(`For reliable redaction on this device, first create and reopen an image below ${limit/1e6} million pixels. The main editor can safely reduce large dimensions.`,true)}},true);
@@ -13,7 +17,7 @@ function protectExtras(root){
   const reset=buttonByText('Reset image');
   reset?.addEventListener('click',()=>{
     buttonByText('Clear selection')?.click();
-    const mode=root.querySelector('#extra-redact-mode');if(mode)mode.value='pixelate';
+    if(mode)mode.value='pixelate';
     const intensity=root.querySelector('#extra-redact-intensity');if(intensity)intensity.value='12';
     const circleSize=root.querySelector('#extra-circle-size');if(circleSize)circleSize.value='800';
     const circleFormat=root.querySelector('#extra-circle-format');if(circleFormat)circleFormat.value='image/png';
