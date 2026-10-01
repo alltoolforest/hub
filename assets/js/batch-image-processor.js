@@ -3,8 +3,8 @@ import {$,el,field,read,num,format,notice,setupStatus,status,fileInput,checkFile
 const MAX_FILES=40;
 const SOURCE_PIXEL_CAP_DESKTOP=60e6;
 const SOURCE_PIXEL_CAP_MOBILE=32e6;
-const ZIP_OUTPUT_CAP_DESKTOP=160*1024*1024;
-const ZIP_OUTPUT_CAP_MOBILE=64*1024*1024;
+const ZIP_OUTPUT_CAP_DESKTOP=96*1024*1024;
+const ZIP_OUTPUT_CAP_MOBILE=32*1024*1024;
 
 function pixelLimit(w,h){
   if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1)throw Error('Dimensions must be positive whole pixels.');
@@ -92,7 +92,9 @@ async function inspectSource(file){
   return {type,width,height};
 }
 
-function outputExt(type){return type==='image/png'?'png':type==='image/webp'?'webp':'jpg'}
+function outputExt(type){
+  return type==='image/png'?'png':type==='image/webp'?'webp':'jpg';
+}
 
 function crcTable(){
   const table=new Uint32Array(256);
@@ -104,19 +106,32 @@ function crcTable(){
   return table;
 }
 const CRC_TABLE=crcTable();
-function crc32(bytes){let c=0xffffffff;for(const b of bytes)c=CRC_TABLE[(c^b)&255]^(c>>>8);return (c^0xffffffff)>>>0}
+function crc32(bytes){
+  let c=0xffffffff;
+  for(const b of bytes)c=CRC_TABLE[(c^b)&255]^(c>>>8);
+  return (c^0xffffffff)>>>0;
+}
 function u16(n){return new Uint8Array([n&255,(n>>>8)&255])}
 function u32(n){return new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255])}
-function concat(parts){const size=parts.reduce((n,p)=>n+p.length,0),out=new Uint8Array(size);let offset=0;for(const p of parts){out.set(p,offset);offset+=p.length}return out}
+function concat(parts){
+  const size=parts.reduce((n,p)=>n+p.length,0),out=new Uint8Array(size);
+  let offset=0;
+  for(const p of parts){out.set(p,offset);offset+=p.length}
+  return out;
+}
 
 async function makeStoreZip(entries){
   const encoder=new TextEncoder(),locals=[],centrals=[];
   let offset=0;
   for(const entry of entries){
     const name=encoder.encode(entry.name),data=new Uint8Array(await entry.blob.arrayBuffer()),crc=crc32(data);
-    const local=concat([u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),name,data]);
+    const local=concat([
+      u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),name,data
+    ]);
     locals.push(local);
-    centrals.push(concat([u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),name]));
+    centrals.push(concat([
+      u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),name
+    ]));
     offset+=local.length;
   }
   const central=concat(centrals),body=concat(locals);
@@ -124,7 +139,20 @@ async function makeStoreZip(entries){
   return new Blob([body,central,end],{type:'application/zip'});
 }
 
-function resultRow(file){const row=el('div',{class:'download-row','data-batch-result':''});const text=el('span',{text:file.name+' · Waiting'});row.append(text);return {row,text}}
+function uniqueZipName(name,seen){
+  const count=seen.get(name)||0;
+  seen.set(name,count+1);
+  if(!count)return name;
+  const dot=name.lastIndexOf('.');
+  return dot>0?`${name.slice(0,dot)}-${count+1}${name.slice(dot)}`:`${name}-${count+1}`;
+}
+
+function resultRow(file){
+  const row=el('div',{class:'download-row','data-batch-result':''});
+  const text=el('span',{text:file.name+' · Waiting'});
+  row.append(text);
+  return {row,text};
+}
 
 export async function mount(root){
   let files=[],cancelRequested=false,processing=false,results=[];
@@ -142,16 +170,6 @@ export async function mount(root){
   ]);
   root.append(form,el('label',{class:'check-row'},[el('input',{type:'checkbox',id:'upscale'}),'Allow upscaling']));
   notice(root,'Images are processed one at a time in your browser, preserving aspect ratio. A target KB that cannot be reached at the chosen dimensions is reported honestly.');
-
-  const actions=el('div',{class:'actions'});
-  const processButton=el('button',{type:'button',class:'primary',text:'Process batch'});
-  const cancelButton=el('button',{type:'button',text:'Cancel batch',disabled:true});
-  const zipButton=el('button',{type:'button',text:'Download all (.zip)',disabled:true});
-  const resetButton=el('button',{type:'button',text:'Reset batch'});
-  actions.append(processButton,cancelButton,zipButton,resetButton);
-  root.append(actions);
-  setupStatus(root);
-  downloads(root);
 
   const controls=()=>[...root.querySelectorAll('input,select,button')];
   const setProcessing=on=>{
@@ -187,6 +205,16 @@ export async function mount(root){
     }
   });
 
+  const actions=el('div',{class:'actions'});
+  const processButton=el('button',{type:'button',class:'primary',text:'Process batch'});
+  const cancelButton=el('button',{type:'button',text:'Cancel batch',disabled:true});
+  const zipButton=el('button',{type:'button',text:'Download all (.zip)',disabled:true});
+  const resetButton=el('button',{type:'button',text:'Reset batch'});
+  actions.append(processButton,cancelButton,zipButton,resetButton);
+  root.append(actions);
+  setupStatus(root);
+  downloads(root);
+
   cancelButton.addEventListener('click',()=>{
     if(!processing)return;
     cancelRequested=true;
@@ -212,7 +240,8 @@ export async function mount(root){
     zipButton.disabled=true;
     try{
       status('Preparing ZIP download…');
-      const zip=await makeStoreZip(results.map(r=>({name:r.name,blob:r.blob})));
+      const seen=new Map();
+      const zip=await makeStoreZip(results.map(r=>({name:uniqueZipName(r.name,seen),blob:r.blob})));
       output(zip,'alltoolforest-batch-images.zip');
       status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB.`);
     }catch(e){status(errorMessage(e),true)}finally{zipButton.disabled=false}
