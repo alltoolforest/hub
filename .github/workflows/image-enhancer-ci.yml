@@ -9,6 +9,7 @@ on:
       - 'assets/js/image-enhancer-bootstrap.js'
       - 'assets/js/image-enhancer-restoration.js'
       - 'assets/js/image-enhancer-routing.js'
+      - 'assets/js/image-enhancer-tiles.js'
       - 'assets/models/image-enhancer/**'
       - 'docs/image-enhancer-model-benchmark.md'
       - 'tests/image-enhancer-browser.mjs'
@@ -49,12 +50,14 @@ jobs:
           node --check assets/js/image-enhancer-bootstrap.js
           node --check assets/js/image-enhancer-restoration.js
           node --check assets/js/image-enhancer-routing.js
+          node --check assets/js/image-enhancer-tiles.js
           node --check assets/js/app.js
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
           grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
           grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
-          echo 'Enhancer routing, syntax, restoration module, content-route module, runtime pin and model checksum pin verified.'
+          grep -q "Memory pressure detected" assets/js/image-enhancer.js
+          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, runtime pin and model checksum pin verified.'
 
       - name: Set up Node
         uses: actions/setup-node@v4
