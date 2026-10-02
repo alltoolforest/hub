@@ -86,6 +86,7 @@ jobs:
           grep -q "enhancerPlannerCaps" assets/js/image-enhancer-bootstrap.js
           grep -q "detectEnhancerCapabilities" assets/js/image-enhancer.js
           ! grep -q "maxPixels: 8e6" assets/js/image-enhancer-bootstrap.js
+          ! grep -q "8e6" assets/js/image-enhancer-output.js
           grep -q "mountInspector" assets/js/image-enhancer-bootstrap.js
           grep -q "mountExportControls" assets/js/image-enhancer-bootstrap.js
           grep -q "resolveOutputTarget" assets/js/image-enhancer-output.js
