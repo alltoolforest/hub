@@ -74,8 +74,9 @@ const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => reso
 
 class ProcessingWorkerBridge {
   constructor(caps) {
-    this.available = !!(caps?.workers && caps?.offscreenCanvas && caps?.createImageBitmap);
-    this.worker = this.available
+    this.workerBacked = !!(caps?.workers && caps?.offscreenCanvas && caps?.createImageBitmap);
+    this.available = true;
+    this.worker = this.workerBacked
       ? new Worker(new URL('./image-enhancer-processing-worker.js', import.meta.url), { type: 'module' })
       : null;
     this.sequence = 0;
@@ -130,34 +131,86 @@ class ProcessingWorkerBridge {
   }
 
   async packTile(image, sx, sy, width, height, signal) {
-    const bitmap = await createImageBitmap(image, sx, sy, width, height);
-    const result = await this.request('pack-tile', { bitmap, width, height }, [bitmap], signal);
-    return new Float32Array(result.buffer);
+    if (this.worker) {
+      const bitmap = await createImageBitmap(image, sx, sy, width, height);
+      const result = await this.request('pack-tile', { bitmap, width, height }, [bitmap], signal);
+      return new Float32Array(result.buffer);
+    }
+
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    const canvas = el('canvas', { width, height });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+    if (!ctx) throw new Error('Compatibility tile canvas is unavailable.');
+    ctx.drawImage(image, sx, sy, width, height, 0, 0, width, height);
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    const plane = width * height;
+    const tensor = new Float32Array(plane * 3);
+    const YIELD_EVERY = 65536;
+    for (let i = 0, p = 0; i < plane; i++, p += 4) {
+      tensor[i] = pixels[p] / 255;
+      tensor[plane + i] = pixels[p + 1] / 255;
+      tensor[plane * 2 + i] = pixels[p + 2] / 255;
+      if (i && i % YIELD_EVERY === 0) {
+        await sleepFrame();
+        if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+      }
+    }
+    canvas.width = canvas.height = 0;
+    return tensor;
   }
 
   async tensorToBitmap(data, width, height, signal) {
-    let buffer;
-    if (data?.buffer instanceof ArrayBuffer && data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
-      buffer = data.buffer;
-    } else {
-      buffer = new Float32Array(data).buffer;
-    }
-    let result;
-    try {
-      result = await this.request('tensor-to-bitmap', { buffer, width, height }, [buffer], signal);
-    } catch (error) {
-      if (error?.name === 'DataCloneError') {
-        const copy = new Float32Array(data).buffer;
-        result = await this.request('tensor-to-bitmap', { buffer: copy, width, height }, [copy], signal);
+    if (this.worker) {
+      let buffer;
+      if (data?.buffer instanceof ArrayBuffer && data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
+        buffer = data.buffer;
       } else {
-        throw error;
+        buffer = new Float32Array(data).buffer;
+      }
+      let result;
+      try {
+        result = await this.request('tensor-to-bitmap', { buffer, width, height }, [buffer], signal);
+      } catch (error) {
+        if (error?.name === 'DataCloneError') {
+          const copy = new Float32Array(data).buffer;
+          result = await this.request('tensor-to-bitmap', { buffer: copy, width, height }, [copy], signal);
+        } else {
+          throw error;
+        }
+      }
+      return result.bitmap;
+    }
+
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    const values = data instanceof Float32Array ? data : new Float32Array(data);
+    const plane = width * height;
+    const canvas = el('canvas', { width, height });
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Compatibility output canvas is unavailable.');
+    const imageData = ctx.createImageData(width, height);
+    let maxProbe = 0;
+    const probeStep = Math.max(1, Math.floor(plane / 1024));
+    for (let i = 0; i < plane; i += probeStep) {
+      maxProbe = Math.max(maxProbe, Math.abs(values[i]), Math.abs(values[plane + i]), Math.abs(values[plane * 2 + i]));
+    }
+    const multiplier = maxProbe > 2 ? 1 : 255;
+    const YIELD_EVERY = 65536;
+    for (let i = 0, p = 0; i < plane; i++, p += 4) {
+      imageData.data[p] = clampByte(values[i] * multiplier);
+      imageData.data[p + 1] = clampByte(values[plane + i] * multiplier);
+      imageData.data[p + 2] = clampByte(values[plane * 2 + i] * multiplier);
+      imageData.data[p + 3] = 255;
+      if (i && i % YIELD_EVERY === 0) {
+        await sleepFrame();
+        if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
       }
     }
-    return result.bitmap;
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
   }
 
   async postprocessCanvas(inputCanvas, { local, analysis, sharpening }, signal) {
-    if (!this.available) return { canvas: inputCanvas, applied: false, label: 'Background finishing unavailable' };
+    if (!this.worker) return { canvas: inputCanvas, applied: false, label: 'Compatibility finish skipped safely' };
     const bitmap = await createImageBitmap(inputCanvas);
     const result = await this.request('postprocess', {
       bitmap,
