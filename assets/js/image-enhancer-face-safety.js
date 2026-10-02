@@ -133,7 +133,11 @@ export class FaceIdentitySafetyEngine {
     this.session = await this.ort.InferenceSession.create(model.bytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
-      enableCpuMemArena: true
+      enableCpuMemArena: true,
+      // UltraFace is an older ONNX export whose initializers are also graph
+      // inputs. ORT reports that as optimization warnings; it is not an
+      // inference or fidelity failure. Keep production console noise at errors.
+      logSeverityLevel: 3
     });
   }
 
