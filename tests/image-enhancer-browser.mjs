@@ -176,6 +176,19 @@ async function testWebGpuFailureFallsBackToWorker() {
   const fallbackPage = await context.newPage();
   try {
     await fallbackPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await fallbackPage.evaluate(() => {
+      const inference = window.ort?.InferenceSession;
+      const originalCreate = inference?.create?.bind(inference);
+      if (!inference || !originalCreate) throw new Error('ONNX Runtime was not available for WebGPU fallback injection.');
+      let injected = false;
+      inference.create = async (model, options = {}) => {
+        if (!injected && options.executionProviders?.includes('webgpu')) {
+          injected = true;
+          throw new Error('Injected WebGPU initialization failure');
+        }
+        return originalCreate(model, options);
+      };
+    });
     await fallbackPage.locator('input[type=file]').setInputFiles({
       name: 'webgpu-fallback.png', mimeType: 'image/png', buffer: png(160, 120)
     });
