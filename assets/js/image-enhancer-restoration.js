@@ -56,6 +56,10 @@ function analyzeGray({ gray, width, height }) {
   let blockBoundaryCount = 0;
   let normalBoundary = 0;
   let normalBoundaryCount = 0;
+  let fineGradient = 0;
+  let fineGradientCount = 0;
+  let coarseGradient = 0;
+  let coarseGradientCount = 0;
 
   const at = (x, y) => gray[y * width + x];
   for (let y = 1; y < height - 1; y++) {
@@ -70,6 +74,15 @@ function analyzeGray({ gray, width, height }) {
       lapSq += lap * lap;
       lapCount++;
       gradientSum += (Math.abs(r - l) + Math.abs(d - u)) * 0.5;
+
+      if (x + 1 < width && y + 1 < height) {
+        fineGradient += Math.abs(at(x + 1, y) - c) + Math.abs(at(x, y + 1) - c);
+        fineGradientCount += 2;
+      }
+      if (x + 4 < width && y + 4 < height) {
+        coarseGradient += Math.abs(at(x + 4, y) - c) + Math.abs(at(x, y + 4) - c);
+        coarseGradientCount += 2;
+      }
 
       if ((x & 1) === 0 && (y & 1) === 0) {
         const localMean = (c + l + r + u + d) / 5;
@@ -107,8 +120,11 @@ function analyzeGray({ gray, width, height }) {
   const block = blockBoundaryCount ? blockBoundary / blockBoundaryCount : 0;
   const normal = normalBoundaryCount ? normalBoundary / normalBoundaryCount : 0;
   const blockingRatio = normal > 0.01 ? block / normal : 1;
+  const fine = fineGradientCount ? fineGradient / fineGradientCount : 0;
+  const coarse = coarseGradientCount ? coarseGradient / coarseGradientCount : 0;
+  const edgeSpreadRatio = coarse > 0.01 ? fine / coarse : 1;
 
-  return { lapVariance, gradient, noise, blockingRatio };
+  return { lapVariance, gradient, noise, blockingRatio, fineGradient: fine, coarseGradient: coarse, edgeSpreadRatio };
 }
 
 export async function analyzeSourceImage(image, file) {
@@ -126,6 +142,14 @@ export async function analyzeSourceImage(image, file) {
   const lowDetail = clamp((8.5 - metrics.gradient) / 7.5);
   const lowResolution = Math.max(image.width, image.height) <= 960 || megapixels < 0.8;
   const falseResolution = megapixels >= 4 && lowDetail > 0.64 && softness > 0.48;
+  const blurShape = clamp((0.47 - metrics.edgeSpreadRatio) / 0.16);
+  const blurStructure = clamp((metrics.coarseGradient - 6) / 12);
+  const blurScore = clamp(blurShape * 0.78 + blurStructure * 0.22 - noise * 0.12);
+  const likelyBlurred =
+    blurScore >= 0.40 &&
+    metrics.edgeSpreadRatio < 0.435 &&
+    metrics.coarseGradient >= 8 &&
+    noise < 0.72;
   const recoveryScore = clamp(
     softness * 0.34 + noise * 0.22 + jpegArtifacts * 0.24 + lowDetail * 0.20 +
     (lowResolution ? 0.12 : 0) + (falseResolution ? 0.12 : 0)
@@ -138,6 +162,7 @@ export async function analyzeSourceImage(image, file) {
   if (jpegArtifacts > 0.42) findings.push(`${labelLevel(jpegArtifacts, 0.42, 0.68)} compression artifacts`);
   if (lowResolution) findings.push('low source resolution');
   if (falseResolution) findings.push('large dimensions with limited real detail');
+  if (likelyBlurred) findings.push('likely motion / defocus blur');
   if (!findings.length) findings.push('generally clean source');
 
   return Object.freeze({
@@ -148,6 +173,8 @@ export async function analyzeSourceImage(image, file) {
     lowDetail,
     lowResolution,
     falseResolution,
+    blurScore,
+    likelyBlurred,
     recoveryScore,
     recommendedProfile,
     findings,
