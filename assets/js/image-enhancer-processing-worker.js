@@ -1,4 +1,9 @@
 import { faceSafetyAiLimitAt } from './image-enhancer-face-safety.js';
+import {
+  resolveRegionRestorationPlan,
+  resolveRegionProcessedWeight,
+  resolveRegionEdgeBoost
+} from './image-enhancer-region-restoration.js';
 
 const cancelled = new Set();
 
@@ -88,10 +93,6 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
   const deblurCtx = deblurScratch.getContext('2d', { willReadFrequently: true, alpha: false });
   if (!sourceCtx || !deblurCtx) throw new Error('Deblur fidelity workspace is unavailable.');
 
-  const blurStrength = clamp(Number(analysis?.blurScore) || 0, 0, 1);
-  const noise = clamp(Number(analysis?.noise) || 0, 0, 1);
-  const baseWeight = clamp(0.68 + blurStrength * 0.08 - noise * 0.04, 0.62, 0.76);
-
   for (let y = 0; y < height; y += TILE) {
     for (let x = 0; x < width; x += TILE) {
       if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
@@ -144,28 +145,32 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
             Math.abs(deblurY - luma(deblurred, down))
           ) * 0.25;
 
-          const sourceStructure = clamp((sourceEdge - 1.5) / 18, 0, 1);
           const recoveredDetail = clamp((deblurEdge - sourceEdge) / 18, 0, 1);
           const lostDetail = clamp((sourceEdge - deblurEdge) / 12, 0, 1);
           const deviation = clamp((Math.abs(deblurY - sourceY) - 5) / 30, 0, 1);
-          const smoothRegion = 1 - sourceStructure;
 
-          // Let NAFNet dominate recoverable edges while retaining more of the
-          // photographed source in smooth/skin-like regions. Strong AI changes
-          // in low-structure regions are the main source of plastic/oil-paint
-          // artifacts, so they are deliberately damped here.
-          let weight = baseWeight +
-            sourceStructure * 0.18 +
-            recoveredDetail * 0.07 -
-            lostDetail * 0.18 -
-            smoothRegion * deviation * 0.16;
-          weight = clamp(weight, 0.54, 0.94);
-
-          // Identity safety is a hard ceiling, not another enhancement pass.
-          // Within detected face geometry, never allow the deblur model to
-          // dominate strongly enough to invent facial structure or texture.
+          // Region-aware deblur: retain the photographed source in smooth
+          // areas, allow stronger reconstruction where source structure supports
+          // it, and keep the face-safety ceiling as the final authority.
           const faceLimit = faceSafetyAiLimitAt(x + cx, y + cy, faces);
-          weight = Math.min(weight, faceLimit);
+          const deblurPlan = resolveRegionRestorationPlan(analysis, 'deblur');
+          let weight = resolveRegionProcessedWeight({
+            sourceEdge,
+            sourceResidual: Math.abs(sourceY - (
+              luma(source, left) + luma(source, right) + luma(source, up) + luma(source, down)
+            ) * 0.25),
+            deviation: Math.abs(deblurY - sourceY),
+            faceLimit,
+            plan: deblurPlan
+          });
+
+          // When NAFNet recovers a real edge that was weaker in the source,
+          // allow a small additional contribution outside protected faces.
+          if (faceLimit >= 0.999) {
+            weight += recoveredDetail * 0.05 * deblurPlan.detailDemand;
+            weight -= lostDetail * 0.10;
+          }
+          weight = clamp(weight, 0.54, Math.min(0.98, faceLimit));
 
           for (let channel = 0; channel < 3; channel++) {
             dst[out + channel] = byte(
@@ -184,6 +189,184 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
 
   sourceBitmap.close?.();
   deblurBitmap.close?.();
+  return output.transferToImageBitmap();
+}
+
+async function regionAwareRestore(sourceBitmap, processedBitmap, analysis, faces, mode, id) {
+  if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+  const width = processedBitmap.width;
+  const height = processedBitmap.height;
+  if (!width || !height || !sourceBitmap.width || !sourceBitmap.height) {
+    sourceBitmap.close?.();
+    processedBitmap.close?.();
+    throw new Error('Region-aware restoration received invalid image dimensions.');
+  }
+
+  const plan = resolveRegionRestorationPlan(analysis, mode);
+  const output = new OffscreenCanvas(width, height);
+  const outputCtx = output.getContext('2d', { alpha: false });
+  if (!outputCtx) throw new Error('Region-aware restoration output canvas is unavailable.');
+
+  const TILE = 256;
+  const sourceScratch = new OffscreenCanvas(TILE + 2, TILE + 2);
+  const resultScratch = new OffscreenCanvas(TILE + 2, TILE + 2);
+  const sourceCtx = sourceScratch.getContext('2d', { willReadFrequently: true, alpha: false });
+  const resultCtx = resultScratch.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!sourceCtx || !resultCtx) throw new Error('Region-aware restoration workspace is unavailable.');
+
+  const scaleX = sourceBitmap.width / width;
+  const scaleY = sourceBitmap.height / height;
+
+  for (let y = 0; y < height; y += TILE) {
+    for (let x = 0; x < width; x += TILE) {
+      if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+
+      const coreW = Math.min(TILE, width - x);
+      const coreH = Math.min(TILE, height - y);
+      const sx = Math.max(0, x - 1);
+      const sy = Math.max(0, y - 1);
+      const ex = Math.min(width, x + coreW + 1);
+      const ey = Math.min(height, y + coreH + 1);
+      const readW = ex - sx;
+      const readH = ey - sy;
+      const offsetX = x - sx;
+      const offsetY = y - sy;
+
+      sourceScratch.width = readW;
+      sourceScratch.height = readH;
+      resultScratch.width = readW;
+      resultScratch.height = readH;
+
+      sourceCtx.drawImage(
+        sourceBitmap,
+        sx * scaleX,
+        sy * scaleY,
+        readW * scaleX,
+        readH * scaleY,
+        0,
+        0,
+        readW,
+        readH
+      );
+      resultCtx.drawImage(processedBitmap, sx, sy, readW, readH, 0, 0, readW, readH);
+
+      const source = sourceCtx.getImageData(0, 0, readW, readH).data;
+      const processed = resultCtx.getImageData(0, 0, readW, readH).data;
+      const core = outputCtx.createImageData(coreW, coreH);
+      const dst = core.data;
+
+      for (let cy = 0; cy < coreH; cy++) {
+        const py = cy + offsetY;
+        for (let cx = 0; cx < coreW; cx++) {
+          const px = cx + offsetX;
+          const center = (py * readW + px) * 4;
+          const left = (py * readW + Math.max(0, px - 1)) * 4;
+          const right = (py * readW + Math.min(readW - 1, px + 1)) * 4;
+          const up = (Math.max(0, py - 1) * readW + px) * 4;
+          const down = (Math.min(readH - 1, py + 1) * readW + px) * 4;
+          const out = (cy * coreW + cx) * 4;
+
+          const sourceY = luma(source, center);
+          const sourceNeighbour = (
+            luma(source, left) +
+            luma(source, right) +
+            luma(source, up) +
+            luma(source, down)
+          ) * 0.25;
+          const sourceEdge = (
+            Math.abs(sourceY - luma(source, left)) +
+            Math.abs(sourceY - luma(source, right)) +
+            Math.abs(sourceY - luma(source, up)) +
+            Math.abs(sourceY - luma(source, down))
+          ) * 0.25;
+          const sourceResidual = Math.abs(sourceY - sourceNeighbour);
+
+          const resultY = luma(processed, center);
+          const resultEdge = (
+            Math.abs(resultY - luma(processed, left)) +
+            Math.abs(resultY - luma(processed, right)) +
+            Math.abs(resultY - luma(processed, up)) +
+            Math.abs(resultY - luma(processed, down))
+          ) * 0.25;
+          const deviation = Math.abs(resultY - sourceY);
+
+          const sourceX = (x + cx) * scaleX;
+          const sourceYCoord = (y + cy) * scaleY;
+          const faceLimit = faceSafetyAiLimitAt(sourceX, sourceYCoord, faces);
+
+          const processedWeight = resolveRegionProcessedWeight({
+            sourceEdge,
+            sourceResidual,
+            deviation,
+            faceLimit,
+            plan
+          });
+
+          const edgeBoost = resolveRegionEdgeBoost({
+            sourceEdge,
+            resultEdge,
+            faceLimit,
+            plan
+          });
+
+          const resultNeighbour = (
+            luma(processed, left) +
+            luma(processed, right) +
+            luma(processed, up) +
+            luma(processed, down)
+          ) * 0.25;
+          const resultHighPass = resultY - resultNeighbour;
+          const boundedEdgeCorrection = clamp(
+            resultHighPass * edgeBoost * 0.28,
+            -plan.maxEdgeBoost,
+            plan.maxEdgeBoost
+          );
+
+          let toneDelta = 0;
+          if (plan.shadowLift > 0 && resultY < 112) {
+            toneDelta += plan.shadowLift * clamp((112 - resultY) / 112, 0, 1);
+          }
+          if (plan.highlightCompression > 0 && resultY > 180) {
+            toneDelta -= plan.highlightCompression * clamp((resultY - 180) / 75, 0, 1);
+          }
+          if (plan.contrastGain > 0) {
+            toneDelta += (resultY - 128) * plan.contrastGain;
+          }
+
+          const smoothNoiseBlend = clamp(
+            plan.cleanupDemand *
+            clamp((5 - sourceEdge) / 5, 0, 1) *
+            0.08,
+            0,
+            0.08
+          );
+
+          for (let channel = 0; channel < 3; channel++) {
+            const sourceValue = source[center + channel];
+            const processedValue = processed[center + channel];
+            const neighbourValue = (
+              processed[left + channel] +
+              processed[right + channel] +
+              processed[up + channel] +
+              processed[down + channel]
+            ) * 0.25;
+
+            let value = sourceValue + (processedValue - sourceValue) * processedWeight;
+            value = value * (1 - smoothNoiseBlend) + neighbourValue * smoothNoiseBlend;
+            value += boundedEdgeCorrection + toneDelta;
+            dst[out + channel] = byte(value);
+          }
+          dst[out + 3] = 255;
+        }
+      }
+
+      outputCtx.putImageData(core, x, y);
+      await Promise.resolve();
+    }
+  }
+
+  sourceBitmap.close?.();
+  processedBitmap.close?.();
   return output.transferToImageBitmap();
 }
 
@@ -284,6 +467,16 @@ self.onmessage = async event => {
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'adaptive-deblur-blend') {
       const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, message.faces || [], id);
+      self.postMessage({ id, ok: true, bitmap }, [bitmap]);
+    } else if (type === 'region-aware-restore') {
+      const bitmap = await regionAwareRestore(
+        message.sourceBitmap,
+        message.processedBitmap,
+        message.analysis,
+        message.faces || [],
+        message.mode || 'enhance',
+        id
+      );
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'postprocess') {
       const bitmap = await postprocess(message.bitmap, !!message.local, message.analysis, message.sharpening, id);

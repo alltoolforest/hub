@@ -142,6 +142,36 @@ class ProcessingWorkerBridge {
     return canvas;
   }
 
+  async regionAwareRestore(sourceImage, processedCanvas, analysis, faces, mode, signal) {
+    if (!this.available) return null;
+    const sourceBitmap = await createImageBitmap(sourceImage);
+    const processedBitmap = await createImageBitmap(processedCanvas);
+    let result;
+    try {
+      result = await this.request('region-aware-restore', {
+        sourceBitmap,
+        processedBitmap,
+        analysis: analysis || null,
+        faces: faces || [],
+        mode: mode || 'enhance'
+      }, [sourceBitmap, processedBitmap], signal);
+    } catch (error) {
+      sourceBitmap.close?.();
+      processedBitmap.close?.();
+      throw error;
+    }
+
+    const canvas = el('canvas', { width: result.bitmap.width, height: result.bitmap.height });
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) {
+      result.bitmap.close?.();
+      throw new Error('Region-aware restoration canvas is unavailable.');
+    }
+    ctx.drawImage(result.bitmap, 0, 0);
+    result.bitmap.close?.();
+    return canvas;
+  }
+
   async postprocessCanvas(inputCanvas, { local, analysis, sharpening }, signal) {
     if (!this.available) return { canvas: inputCanvas, applied: false, label: 'Background finishing unavailable' };
     const bitmap = await createImageBitmap(inputCanvas);
@@ -1416,6 +1446,24 @@ export async function mount(root, slug) {
     return faces;
   }
 
+  async function applyRegionAwarePass(canvas, faces, mode, signal) {
+    // Very small sources do not contain enough spatial evidence for reliable
+    // region classification. Preserve the previously verified path instead of
+    // letting regional heuristics flatten user-selected sharpening.
+    if (!processor.available || Math.min(image.width, image.height) < 96) return canvas;
+    status('Applying region-aware restoration…');
+    try {
+      const restored = await processor.regionAwareRestore(image, canvas, analysis, faces, mode, signal);
+      if (!restored) return canvas;
+      canvas.width = canvas.height = 0;
+      return restored;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      console.warn('Region-aware restoration unavailable; preserving verified result.', error);
+      return canvas;
+    }
+  }
+
   async function runEnhancePipeline(signal) {
     const scale = 1;
     const requestedContent = read('enhancer-content');
@@ -1521,6 +1569,7 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
+      result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
       const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
@@ -1602,9 +1651,10 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
+      const faceRegions = await resolveFaceSafety(signal, 'auto');
+      result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'upscale', signal);
       const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
       result.canvas = finished.canvas;
-      const faceRegions = await resolveFaceSafety(signal, 'auto');
       const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'upscale');
       result.canvas = faceGuard.canvas;
 
