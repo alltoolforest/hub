@@ -225,6 +225,7 @@ try{
     const blurBlob=await new Promise((resolve,reject)=>{
       blurCanvas.toBlob(value=>value?resolve(value):reject(new Error('Could not encode blur fixture.')),'image/png');
     });
+    window.__deblurDiagnosticBlob=blurBlob;
 
     return {
       width,
@@ -249,8 +250,8 @@ try{
   await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
   const summary=(await page.locator('#enhancer-source-info').textContent())||'';
   const detector=await page.evaluate(async()=>{
-    const input=document.querySelector('input[type=file]')?.files?.[0];
-    if(!input) throw new Error('Deblur detector diagnostic input is missing.');
+    const input=window.__deblurDiagnosticBlob;
+    if(!input) throw new Error('Deblur detector diagnostic blob is missing.');
     const bitmap=await createImageBitmap(input);
     try{
       const mod=await import('/assets/js/image-enhancer-restoration.js');
