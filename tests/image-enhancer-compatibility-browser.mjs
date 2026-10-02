@@ -228,7 +228,14 @@ try {
     falseResolution: false, lowResolution: false, recoveryScore: 0.24,
     softness: 0.50, lowDetail: 0.52, jpegArtifacts: 0.10, noise: 0.10
   }, 1, { isMobile: false, wasm: true, webgpu: false });
-  assert.equal(softOneX.id, 'low-resolution', 'Soft 1× photos must not be routed to the conservative high-fidelity path.');
+  assert.equal(softOneX.id, 'general', 'Moderately soft 1× photos should use balanced enhancement instead of aggressive reconstruction.');
+
+  const detailedSmallPhoto = resolveContentRoute('auto', {
+    falseResolution: false, lowResolution: true, recoveryScore: 0.27,
+    recommendedProfile: 'fidelity',
+    softness: 0.00, lowDetail: 0.00, jpegArtifacts: 0.12, noise: 0.56
+  }, 1, { isMobile: false, wasm: true, webgpu: false });
+  assert.equal(detailedSmallPhoto.id, 'high-fidelity', 'Small dimensions alone must not erase real source detail.');
 
   const cleanPhoto = resolveContentRoute('auto', {
     falseResolution: false, lowResolution: false, recoveryScore: 0.12,
@@ -237,7 +244,7 @@ try {
   assert.equal(cleanPhoto.id, 'high-fidelity', 'Genuinely clean sources should retain the conservative fidelity route.');
   await testDesktopFormats();
   await testMobileSafety();
-  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, 8 MP/20 MB safety caps and tile plans verified.');
+  console.log('PASS: JPG/PNG/WebP input decoding, detail-aware routing, real mobile worker-backed AI, 717×721 4× mobile responsiveness, 12 MP/20 MB safety caps and tile plans verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
