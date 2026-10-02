@@ -82,9 +82,9 @@ async function pngDimensionsFromDownload(page) {
   });
 }
 
-async function runEngine(name, launcher) {
+async function runEngine(name, launcher, pageOptions = { viewport: { width: 900, height: 700 } }) {
   const browser = await launcher.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  const page = await browser.newPage(pageOptions);
   const errors = [];
   const warnings = [];
   page.on('console', msg => {
@@ -120,8 +120,17 @@ async function runEngine(name, launcher) {
 
 try {
   await runEngine('firefox', firefox);
-  await runEngine('webkit', webkit);
-  console.log('PASS: Firefox and WebKit real-WASM enhancer compatibility verified.');
+  await runEngine('webkit-macos-like', webkit, {
+    viewport: { width: 1280, height: 800 },
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
+  });
+  await runEngine('webkit-ios-like', webkit, {
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+  });
+  console.log('PASS: Firefox, macOS-like WebKit and iOS-like WebKit real-WASM enhancer compatibility verified.');
 } finally {
   await new Promise(resolveClose => server.close(resolveClose));
 }
