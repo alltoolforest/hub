@@ -42,7 +42,7 @@ function sampleImage(image) {
   for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
     gray[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
   }
-  return { gray, width, height };
+  return { gray, rgba, width, height };
 }
 
 function perceptualBlurMetric(gray, width, height, radius = 4) {
@@ -118,6 +118,8 @@ function analyzeGray({ gray, width, height }) {
   let fineGradientCount = 0;
   let coarseGradient = 0;
   let coarseGradientCount = 0;
+  let flatResidualSum = 0;
+  let flatResidualCount = 0;
 
   const at = (x, y) => gray[y * width + x];
   for (let y = 1; y < height - 1; y++) {
@@ -144,8 +146,14 @@ function analyzeGray({ gray, width, height }) {
 
       if ((x & 1) === 0 && (y & 1) === 0) {
         const localMean = (c + l + r + u + d) / 5;
-        residualSum += Math.abs(c - localMean);
+        const residual = Math.abs(c - localMean);
+        residualSum += residual;
         residualCount++;
+        const localEdge = (Math.abs(c - l) + Math.abs(c - r) + Math.abs(c - u) + Math.abs(c - d)) * 0.25;
+        if (localEdge < 7) {
+          flatResidualSum += residual;
+          flatResidualCount++;
+        }
       }
 
       if (x < width - 2) {
@@ -181,13 +189,236 @@ function analyzeGray({ gray, width, height }) {
   const fine = fineGradientCount ? fineGradient / fineGradientCount : 0;
   const coarse = coarseGradientCount ? coarseGradient / coarseGradientCount : 0;
   const edgeSpreadRatio = coarse > 0.01 ? fine / coarse : 1;
+  const flatResidual = flatResidualCount ? flatResidualSum / flatResidualCount : noise;
 
-  return { lapVariance, gradient, noise, blockingRatio, fineGradient: fine, coarseGradient: coarse, edgeSpreadRatio };
+  return {
+    lapVariance,
+    gradient,
+    noise,
+    blockingRatio,
+    fineGradient: fine,
+    coarseGradient: coarse,
+    edgeSpreadRatio,
+    flatResidual
+  };
+}
+
+function histogramPercentile(histogram, total, ratio) {
+  if (!total) return 0;
+  const target = Math.max(0, Math.min(total - 1, Math.round((total - 1) * ratio)));
+  let seen = 0;
+  for (let value = 0; value < histogram.length; value++) {
+    seen += histogram[value];
+    if (seen > target) return value;
+  }
+  return histogram.length - 1;
+}
+
+function analyzeExposureAndLighting(sampled) {
+  const { gray, rgba, width, height } = sampled;
+  const histogram = new Uint32Array(256);
+  let sum = 0;
+  let sumSq = 0;
+  let deepShadowCount = 0;
+  let shadowCount = 0;
+  let brightCount = 0;
+  let clippedHighlightCount = 0;
+  let redSum = 0;
+  let greenSum = 0;
+  let blueSum = 0;
+
+  for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
+    const y = clampByte(gray[i]);
+    histogram[y]++;
+    sum += gray[i];
+    sumSq += gray[i] * gray[i];
+    if (gray[i] <= 12) deepShadowCount++;
+    if (gray[i] <= 48) shadowCount++;
+    if (gray[i] >= 207) brightCount++;
+    if (gray[i] >= 248) clippedHighlightCount++;
+    redSum += rgba[p];
+    greenSum += rgba[p + 1];
+    blueSum += rgba[p + 2];
+  }
+
+  const total = Math.max(1, gray.length);
+  const meanLuma = sum / total;
+  const variance = Math.max(0, sumSq / total - meanLuma * meanLuma);
+  const lumaStdDev = Math.sqrt(variance);
+  const p05 = histogramPercentile(histogram, total, 0.05);
+  const p10 = histogramPercentile(histogram, total, 0.10);
+  const p90 = histogramPercentile(histogram, total, 0.90);
+  const p95 = histogramPercentile(histogram, total, 0.95);
+  const robustDynamicRange = p90 - p10;
+  const broadDynamicRange = p95 - p05;
+  const deepShadowFraction = deepShadowCount / total;
+  const shadowFraction = shadowCount / total;
+  const brightFraction = brightCount / total;
+  const clippedHighlightFraction = clippedHighlightCount / total;
+
+  const gridCols = 4;
+  const gridRows = 4;
+  const gridMeans = [];
+  for (let gy = 0; gy < gridRows; gy++) {
+    const y0 = Math.floor(gy * height / gridRows);
+    const y1 = Math.max(y0 + 1, Math.floor((gy + 1) * height / gridRows));
+    for (let gx = 0; gx < gridCols; gx++) {
+      const x0 = Math.floor(gx * width / gridCols);
+      const x1 = Math.max(x0 + 1, Math.floor((gx + 1) * width / gridCols));
+      let tileSum = 0;
+      let tileCount = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          tileSum += gray[y * width + x];
+          tileCount++;
+        }
+      }
+      gridMeans.push(tileCount ? tileSum / tileCount : meanLuma);
+    }
+  }
+
+  const gridMean = gridMeans.reduce((acc, value) => acc + value, 0) / Math.max(1, gridMeans.length);
+  const gridVariance = gridMeans.reduce((acc, value) => acc + (value - gridMean) ** 2, 0) / Math.max(1, gridMeans.length);
+  const gridStdDev = Math.sqrt(gridVariance);
+  const gridMin = Math.min(...gridMeans);
+  const gridMax = Math.max(...gridMeans);
+  const lightingRange = gridMax - gridMin;
+
+  const underexposure = clamp(
+    clamp((92 - meanLuma) / 72) * 0.48 +
+    clamp((shadowFraction - 0.30) / 0.55) * 0.32 +
+    clamp(deepShadowFraction / 0.18) * 0.28
+  );
+  const overexposure = clamp(
+    clamp((meanLuma - 164) / 70) * 0.48 +
+    clamp((brightFraction - 0.30) / 0.55) * 0.32 +
+    clamp(clippedHighlightFraction / 0.16) * 0.30
+  );
+  const lowContrast = clamp((72 - robustDynamicRange) / 58);
+  const unevenLighting = clamp(
+    clamp((gridStdDev - 12) / 38) * 0.55 +
+    clamp((lightingRange - 45) / 115) * 0.45
+  );
+
+  const avgR = redSum / total;
+  const avgG = greenSum / total;
+  const avgB = blueSum / total;
+  const channelMean = (avgR + avgG + avgB) / 3;
+  const colorCast = channelMean > 1
+    ? clamp(Math.max(Math.abs(avgR - channelMean), Math.abs(avgG - channelMean), Math.abs(avgB - channelMean)) / 58)
+    : 0;
+
+  const badLighting = clamp(Math.max(
+    underexposure,
+    overexposure,
+    lowContrast * 0.82,
+    unevenLighting * 0.78
+  ));
+
+  return Object.freeze({
+    meanLuma,
+    lumaStdDev,
+    p05,
+    p10,
+    p90,
+    p95,
+    robustDynamicRange,
+    broadDynamicRange,
+    deepShadowFraction,
+    shadowFraction,
+    brightFraction,
+    clippedHighlightFraction,
+    lightingGridStdDev: gridStdDev,
+    lightingRange,
+    underexposure,
+    overexposure,
+    lowContrast,
+    unevenLighting,
+    badLighting,
+    colorCast
+  });
+}
+
+function buildDegradationDiagnosis({
+  metrics,
+  exposure,
+  blurScore,
+  likelyBlurred,
+  noise,
+  jpegArtifacts,
+  lowResolution,
+  falseResolution,
+  image
+}) {
+  const megapixels = image.width * image.height / 1e6;
+  const maxDimension = Math.max(image.width, image.height);
+  const flatNoise = clamp((metrics.flatResidual - 0.9) / 5.4);
+  const noiseConfidence = clamp(flatNoise * 0.64 + noise * 0.36);
+  const lowResolutionConfidence = clamp(Math.max(
+    (1280 - maxDimension) / 920,
+    (1.15 - megapixels) / 1.0
+  ));
+  const falseResolutionConfidence = falseResolution
+    ? clamp(0.52 + metrics.edgeSpreadRatio * 0.16 + Math.max(0, 4 - metrics.gradient) * 0.06)
+    : 0;
+  const blurConfidence = likelyBlurred ? clamp(0.45 + blurScore * 0.55) : clamp(blurScore * 0.32);
+  const compressionConfidence = clamp(jpegArtifacts);
+
+  const confidence = Object.freeze({
+    blur: blurConfidence,
+    noise: noiseConfidence,
+    compression: compressionConfidence,
+    lowResolution: lowResolutionConfidence,
+    falseResolution: falseResolutionConfidence,
+    underexposure: exposure.underexposure,
+    overexposure: exposure.overexposure,
+    lowContrast: exposure.lowContrast,
+    unevenLighting: exposure.unevenLighting,
+    badLighting: exposure.badLighting
+  });
+
+  const ranked = Object.entries(confidence)
+    .filter(([, value]) => Number.isFinite(value))
+    .sort((a, b) => b[1] - a[1]);
+  const active = ranked
+    .filter(([, value]) => value >= 0.45)
+    .map(([type, value]) => Object.freeze({ type, confidence: value }));
+  const primaryTypes = ['blur', 'noise', 'compression', 'lowResolution', 'falseResolution', 'badLighting'];
+  const primaryActive = active.filter(item => primaryTypes.includes(item.type));
+  const mixed = primaryActive.length >= 2;
+  const mixedConfidence = mixed
+    ? clamp((primaryActive[0].confidence + primaryActive[1].confidence) * 0.5)
+    : 0;
+
+  return Object.freeze({
+    version: 1,
+    confidence,
+    dominant: ranked.length ? Object.freeze({ type: ranked[0][0], confidence: ranked[0][1] }) : null,
+    active: Object.freeze(active),
+    mixed,
+    mixedConfidence,
+    exposure: Object.freeze({
+      meanLuma: exposure.meanLuma,
+      robustDynamicRange: exposure.robustDynamicRange,
+      shadowFraction: exposure.shadowFraction,
+      clippedHighlightFraction: exposure.clippedHighlightFraction
+    }),
+    evidence: Object.freeze({
+      lapVariance: metrics.lapVariance,
+      gradient: metrics.gradient,
+      flatResidual: metrics.flatResidual,
+      blockingRatio: metrics.blockingRatio,
+      perceptualBlur: null,
+      megapixels,
+      maxDimension
+    })
+  });
 }
 
 export async function analyzeSourceImage(image, file) {
   const sampled = sampleImage(image);
   const metrics = analyzeGray(sampled);
+  const exposure = analyzeExposureAndLighting(sampled);
   const megapixels = image.width * image.height / 1e6;
   const bytesPerPixel = file?.size ? file.size / Math.max(1, image.width * image.height) : 0;
   const ext = extensionOf(file);
@@ -215,6 +446,25 @@ export async function analyzeSourceImage(image, file) {
     perceptualBlur >= 0.285 &&
     recoverableBlurStructure &&
     noise < 0.80;
+  const diagnosis = buildDegradationDiagnosis({
+    metrics,
+    exposure,
+    blurScore,
+    likelyBlurred,
+    noise,
+    jpegArtifacts,
+    lowResolution,
+    falseResolution,
+    image
+  });
+  const diagnosisWithBlurEvidence = Object.freeze({
+    ...diagnosis,
+    evidence: Object.freeze({
+      ...diagnosis.evidence,
+      perceptualBlur
+    })
+  });
+
   const recoveryScore = clamp(
     softness * 0.34 + noise * 0.22 + jpegArtifacts * 0.24 + lowDetail * 0.20 +
     (lowResolution ? 0.12 : 0) + (falseResolution ? 0.12 : 0)
@@ -241,6 +491,8 @@ export async function analyzeSourceImage(image, file) {
     perceptualBlur,
     blurScore,
     likelyBlurred,
+    exposure,
+    diagnosis: diagnosisWithBlurEvidence,
     recoveryScore,
     recommendedProfile,
     findings,
