@@ -65,7 +65,7 @@ async function run(name,launcher){
   page.on('pageerror',e=>errors.push(e.message));
   try{
     await page.goto('http://127.0.0.1:4189/images/enhance/',{waitUntil:'networkidle',timeout:90000});
-    await page.locator('input[type=file]').setInputFiles({name:`${name}-blur.png`,mimeType:'image/png',buffer:png(64,64)});
+    await page.locator('input[type=file]').setInputFiles({name:`${name}-blur.png`,mimeType:'image/png',buffer:png(128,96)});
     await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
     const summary=(await page.locator('#enhancer-source-info').textContent())||'';
     assert.match(summary,/likely motion \/ defocus blur/, `${name} blur detector did not trigger: ${summary}`);
@@ -90,7 +90,7 @@ async function run(name,launcher){
       const result=[bmp.width,bmp.height,document.querySelector('#status')?.textContent||'',window.ort?.env?.wasm?.proxy];
       bmp.close();return result;
     });
-    assert.deepEqual(info.slice(0,2),[64,64]);
+    assert.deepEqual(info.slice(0,2),[128,96]);
     assert.match(info[2],/dedicated deblur AI/);
     assert.equal(info[3],true,`${name} must use worker-backed WASM for deblur.`);
     assert.equal(errors.length,0,`${name} deblur page errors: ${errors.join('\n')}`);
