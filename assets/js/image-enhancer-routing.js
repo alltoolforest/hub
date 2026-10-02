@@ -57,18 +57,40 @@ const ROUTES = Object.freeze({
   })
 });
 
-function autoRoute(analysis) {
-  if (analysis?.falseResolution || analysis?.lowResolution || (analysis?.recoveryScore || 0) >= 0.62) {
+function autoRoute(analysis, scale) {
+  const recoveryScore = analysis?.recoveryScore || 0;
+  const softness = analysis?.softness || 0;
+  const lowDetail = analysis?.lowDetail || 0;
+  const jpegArtifacts = analysis?.jpegArtifacts || 0;
+  const noise = analysis?.noise || 0;
+  const targetScale = Number(scale) || 1;
+
+  if (
+    analysis?.falseResolution ||
+    analysis?.lowResolution ||
+    recoveryScore >= 0.55 ||
+    softness >= 0.62 ||
+    jpegArtifacts >= 0.68 ||
+    (targetScale <= 1.05 && (softness >= 0.46 || lowDetail >= 0.58))
+  ) {
     return ROUTES['low-resolution'];
   }
-  if ((analysis?.recoveryScore || 0) <= 0.28) return ROUTES['high-fidelity'];
+
+  const genuinelyClean =
+    recoveryScore <= 0.20 &&
+    softness < 0.32 &&
+    lowDetail < 0.38 &&
+    jpegArtifacts < 0.30 &&
+    noise < 0.42;
+
+  if (genuinelyClean) return ROUTES['high-fidelity'];
   return ROUTES.general;
 }
 
 export function resolveContentRoute(requested, analysis, scale, caps) {
   const route = requested && requested !== 'auto' && ROUTES[requested]
     ? ROUTES[requested]
-    : autoRoute(analysis);
+    : autoRoute(analysis, scale);
   const auto = !requested || requested === 'auto';
   const device = caps?.isMobile ? 'mobile' : 'desktop';
   const acceleration = caps?.webgpu ? 'WebGPU available' : caps?.wasm ? 'WASM compatibility path' : 'standard fallback only';
