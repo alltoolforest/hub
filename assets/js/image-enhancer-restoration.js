@@ -165,7 +165,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
       id: 'fidelity',
       label: 'Fidelity',
       preclean: analysis?.noise > 0.72 ? 0.06 : 0,
-      aiBlend: scaleFactor === 1 ? 0.78 : 0.84,
+      aiBlend: scaleFactor === 1 ? 0.28 : 0.72,
       disclosure: 'Fidelity-focused AI restoration with source-detail blending.'
     });
   }
@@ -174,7 +174,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
       id: 'recovery',
       label: 'Recovery',
       preclean: analysis?.noise > 0.48 || analysis?.jpegArtifacts > 0.55 ? 0.12 : 0.04,
-      aiBlend: 1,
+      aiBlend: scaleFactor === 1 ? 0.60 : 0.90,
       disclosure: 'Recovery-focused AI reconstruction; some fine detail may be reconstructed.'
     });
   }
@@ -182,7 +182,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
     id: 'balanced',
     label: 'Balanced',
     preclean: analysis?.noise > 0.62 || analysis?.jpegArtifacts > 0.62 ? 0.08 : 0,
-    aiBlend: scaleFactor === 1 ? 0.90 : 0.94,
+    aiBlend: scaleFactor === 1 ? 0.42 : 0.82,
     disclosure: 'Balanced AI restoration with conservative source-detail blending.'
   });
 }
