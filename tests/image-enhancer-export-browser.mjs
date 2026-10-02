@@ -117,8 +117,10 @@ try {
   await page.waitForSelector('#enhancer-export-panel');
   await page.waitForSelector('#enhancer-export-format');
 
+  assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Export settings must stay hidden until a processed result exists.');
   assert.equal(await page.locator('#enhancer-export-format').inputValue(), 'png');
   assert.equal(await page.getByRole('button', { name: 'Create export copy' }).isDisabled(), true);
+  assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Reset must hide the export panel again.');
   assert.equal(await page.locator('#enhancer-export-quality').evaluate(node => node.closest('.field').hidden), true);
   assert.equal(await page.locator('#enhancer-jpeg-background').evaluate(node => node.closest('.field').hidden), true);
 
@@ -127,18 +129,13 @@ try {
   });
   await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('24 × 16'));
 
-  // bindFile temporarily re-enables all workspace controls; the export action must still guard against a missing result.
-  if (!(await page.getByRole('button', { name: 'Create export copy' }).isDisabled())) {
-    await page.getByRole('button', { name: 'Create export copy' }).click();
-    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('Enhance an image first'));
-    assert.equal(await page.locator('#enhancer-export-downloads a[download]').count(), 0);
-  }
+  assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true);
 
+  await page.locator('#enhancer-mode-upscale').click();
   await page.locator('#enhancer-scale').selectOption('2');
-  await page.locator('#enhancer-content').selectOption('text-logo');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   await page.waitForSelector('#downloads a[download]');
-  await page.waitForFunction(() => !document.querySelector('button.primary')?.disabled || !!document.querySelector('#enhancer-export-panel button.primary:not([disabled])'));
+  await page.waitForFunction(() => document.querySelector('#enhancer-export-panel')?.hidden === false);
   assert.equal(await page.getByRole('button', { name: 'Create export copy' }).isDisabled(), false);
 
   const pngResult = await createExport('png');
