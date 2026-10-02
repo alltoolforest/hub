@@ -346,28 +346,37 @@ try {
   assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'WASM proxy worker must stay enabled in production.');
   assert.match(tiled.statusText, /background AI/);
 
-  await upload('memory-test.png', 300, 220);
-  await page.evaluate(() => {
-    const proto = CanvasRenderingContext2D.prototype;
-    const original = proto.getImageData;
-    let failed = false;
-    proto.getImageData = function(...args) {
-      if (!failed && this.canvas.width > 100 && this.canvas.height > 50) {
-        failed = true;
-        throw new RangeError('out of memory injected test');
+  const memoryContext = await browser.newContext();
+  await memoryContext.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message, transfer) {
+        if (message?.type === 'pack-tile' && message.width > 135 && !this.__enhancerInjectedFailure) {
+          this.__enhancerInjectedFailure = true;
+          throw new RangeError('out of memory injected worker retry test');
+        }
+        return super.postMessage(message, transfer);
       }
-      return original.apply(this, args);
-    };
-    window.__restoreEnhancerGetImageData = () => {
-      proto.getImageData = original;
-      delete window.__restoreEnhancerGetImageData;
     };
   });
+  const memoryPage = await memoryContext.newPage();
   try {
-    const retried = await runAiScale(2, [600, 440, 'memory-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /AI super-resolution.*memory retry ×1 · 96px tiles/);
-    assert.match(retried.statusText, /wasm/);
+    await memoryPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await memoryPage.locator('input[type=file]').setInputFiles({
+      name: 'memory-test.png', mimeType: 'image/png', buffer: png(300, 220)
+    });
+    await memoryPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('300 × 220'));
+    await memoryPage.locator('#enhancer-mode-upscale').click();
+    await memoryPage.locator('#enhancer-scale').selectOption('2');
+    await memoryPage.locator('#enhancer-run').click();
+    await memoryPage.waitForFunction(() => {
+      const text = document.querySelector('#status')?.textContent || '';
+      return !!document.querySelector('#downloads a[download]') && /Upscaled 2×/.test(text);
+    }, null, { timeout: 120000 });
+    const memoryStatus = (await memoryPage.locator('#status').textContent()) || '';
+    assert.match(memoryStatus, /memory retry ×1/, `Expected worker tile retry: ${memoryStatus}`);
   } finally {
-    await page.evaluate(() => window.__restoreEnhancerGetImageData?.());
+    await memoryContext.close();
   }
 
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
