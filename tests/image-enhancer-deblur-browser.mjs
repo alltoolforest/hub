@@ -154,10 +154,6 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(r=>server.listen(4188,'127.0.0.1',r));
 
-const width=128, height=96;
-const sharp=makeSharp(width,height);
-const blurred=motionBlur(sharp,width,height,5);
-const blurredMse=mse(blurred,sharp);
 const launchOptions={headless:true};
 if(process.env.CHROME_PATH) launchOptions.executablePath=process.env.CHROME_PATH;
 const browser=await chromium.launch(launchOptions);
@@ -169,10 +165,86 @@ page.on('requestfailed',r=>diagnostics.push(`requestfailed: ${r.url()} :: ${r.fa
 
 try{
   await page.goto('http://127.0.0.1:4188/images/enhance/',{waitUntil:'networkidle',timeout:90000});
+
+  const fixture=await page.evaluate(async()=>{
+    const response=await fetch('/tests/fixtures/nafnet-natural-sharp.png',{cache:'no-store'});
+    if(!response.ok) throw new Error(`Natural deblur fixture failed to load (${response.status}).`);
+    const blob=await response.blob();
+    const bitmap=await createImageBitmap(blob);
+    const width=192;
+    const height=128;
+
+    const sharpCanvas=document.createElement('canvas');
+    sharpCanvas.width=width;
+    sharpCanvas.height=height;
+    const sharpCtx=sharpCanvas.getContext('2d',{willReadFrequently:true,alpha:false});
+    const sourceRatio=bitmap.width/bitmap.height;
+    const targetRatio=width/height;
+    let sx=0,sy=0,sw=bitmap.width,sh=bitmap.height;
+    if(sourceRatio>targetRatio){
+      sw=Math.round(bitmap.height*targetRatio);
+      sx=Math.round((bitmap.width-sw)/2);
+    }else{
+      sh=Math.round(bitmap.width/targetRatio);
+      sy=Math.round((bitmap.height-sh)/2);
+    }
+    sharpCtx.imageSmoothingEnabled=true;
+    sharpCtx.imageSmoothingQuality='high';
+    sharpCtx.drawImage(bitmap,sx,sy,sw,sh,0,0,width,height);
+    bitmap.close();
+    const sharp=sharpCtx.getImageData(0,0,width,height);
+    const src=sharp.data;
+
+    const blurred=new Uint8ClampedArray(src.length);
+    const radius=5;
+    for(let y=0;y<height;y++){
+      for(let x=0;x<width;x++){
+        const p=(y*width+x)*4;
+        for(let channel=0;channel<3;channel++){
+          let sum=0,weight=0;
+          for(let k=-radius;k<=radius;k++){
+            const xx=Math.max(0,Math.min(width-1,x+k));
+            const yy=Math.max(0,Math.min(height-1,y+Math.round(k*0.35)));
+            const w=radius+1-Math.abs(k)*0.35;
+            sum+=src[(yy*width+xx)*4+channel]*w;
+            weight+=w;
+          }
+          blurred[p+channel]=Math.round(sum/weight);
+        }
+        blurred[p+3]=255;
+      }
+    }
+
+    const blurCanvas=document.createElement('canvas');
+    blurCanvas.width=width;
+    blurCanvas.height=height;
+    const blurCtx=blurCanvas.getContext('2d',{alpha:false});
+    const blurImage=blurCtx.createImageData(width,height);
+    blurImage.data.set(blurred);
+    blurCtx.putImageData(blurImage,0,0);
+    const blurBlob=await new Promise((resolve,reject)=>{
+      blurCanvas.toBlob(value=>value?resolve(value):reject(new Error('Could not encode blur fixture.')),'image/png');
+    });
+
+    return {
+      width,
+      height,
+      sharp:Array.from(src),
+      blurred:Array.from(blurred),
+      png:Array.from(new Uint8Array(await blurBlob.arrayBuffer()))
+    };
+  });
+
+  const width=fixture.width;
+  const height=fixture.height;
+  const sharp=Uint8Array.from(fixture.sharp);
+  const blurred=Uint8Array.from(fixture.blurred);
+  const blurredMse=mse(blurred,sharp);
+
   await page.locator('input[type=file]').setInputFiles({
-    name:'known-motion-blur.png',
+    name:'known-natural-motion-blur.png',
     mimeType:'image/png',
-    buffer:encodeRgbaPng(width,height,blurred)
+    buffer:Buffer.from(fixture.png)
   });
   await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
   const summary=(await page.locator('#enhancer-source-info').textContent())||'';
