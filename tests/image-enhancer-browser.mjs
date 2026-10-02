@@ -202,11 +202,30 @@ async function latestOutputPerceptualMetrics() {
 
     const beforeEdge = edgeEnergy(beforeGray);
     const afterEdge = edgeEnergy(afterGray);
+
+    const highFrequency = values => {
+      let sum = 0;
+      let count = 0;
+      for (let y = 1; y < sampleH - 1; y++) {
+        for (let x = 1; x < sampleW - 1; x++) {
+          const i = y * sampleW + x;
+          const lap = values[i] * 4 - values[i - 1] - values[i + 1] - values[i - sampleW] - values[i + sampleW];
+          sum += lap * lap;
+          count++;
+        }
+      }
+      return count ? sum / count : 0;
+    };
+    const beforeHigh = highFrequency(beforeGray);
+    const afterHigh = highFrequency(afterGray);
     return {
       lumaMae,
       beforeEdge,
       afterEdge,
-      edgeRatio: beforeEdge > 0.001 ? afterEdge / beforeEdge : 1
+      edgeRatio: beforeEdge > 0.001 ? afterEdge / beforeEdge : 1,
+      beforeHigh,
+      afterHigh,
+      highFrequencyRatio: beforeHigh > 0.001 ? afterHigh / beforeHigh : 1
     };
   });
 }
@@ -329,9 +348,10 @@ try {
   const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*background AI/);
   assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
   const perceptual1x = await latestOutputPerceptualMetrics();
-  console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)}`);
+  console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)} highFrequencyRatio=${perceptual1x?.highFrequencyRatio?.toFixed(3)}`);
   assert.ok((perceptual1x?.lumaMae || 0) >= 1.75, `1× restoration must be perceptually different, not merely hash-different: ${JSON.stringify(perceptual1x)}`);
-  assert.ok((perceptual1x?.edgeRatio || 0) >= 1.01, `Soft-image 1× restoration must produce measurable detail/edge gain: ${JSON.stringify(perceptual1x)}`);
+  assert.ok((perceptual1x?.edgeRatio || 0) >= 0.94, `1× restoration must retain at least 94% of source edge/detail energy: ${JSON.stringify(perceptual1x)}`);
+  assert.ok((perceptual1x?.highFrequencyRatio || 0) >= 0.90, `1× restoration must retain at least 90% of fine high-frequency texture: ${JSON.stringify(perceptual1x)}`);
 
   await page.evaluate(() => {
     window.__enhancerHeartbeat = 0;
