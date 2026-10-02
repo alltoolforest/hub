@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-capabilities.js'
       - 'assets/js/image-enhancer-processing-worker.js'
       - 'assets/js/image-enhancer-heic.js'
       - 'tests/image-enhancer-heic-browser.mjs'
@@ -39,6 +40,7 @@ jobs:
           test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
           node --check assets/js/image-enhancer-heic.js
           node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-capabilities.js
           node --check assets/js/image-enhancer-processing-worker.js
           node --check tests/image-enhancer-heic-browser.mjs
           node --check tests/image-enhancer-heic-candidate-browser.mjs
