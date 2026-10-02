@@ -556,7 +556,7 @@ function sampleRegionalDetailGrid(input, columns = 6, rows = 6) {
   const sourceHeight = Number(input?.height) || 0;
   if (!sourceWidth || !sourceHeight) return { columns, rows, regions: [] };
 
-  const sampleW = Math.max(120, Math.min(360, sourceWidth));
+  const sampleW = Math.max(180, Math.min(720, sourceWidth));
   const sampleH = Math.max(120, Math.round(sampleW * sourceHeight / sourceWidth));
   const canvas = el('canvas', { width: sampleW, height: sampleH });
   const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
@@ -642,7 +642,7 @@ async function enforceRegionalDetailFloor(resultCanvas, sourceImage, profile, si
 
     let restoreAlpha = 0;
     if (meaningfulSourceDetail && deficit > 0.015) {
-      restoreAlpha = clamp(0.08 + (deficit / Math.max(target, 0.01)) * 3.2, 0.10, 0.72);
+      restoreAlpha = clamp(0.12 + (deficit / Math.max(target, 0.01)) * 4.2, 0.12, 0.92);
       protectedRegions++;
     }
 
@@ -657,15 +657,29 @@ async function enforceRegionalDetailFloor(resultCanvas, sourceImage, profile, si
     return { canvas: resultCanvas, protected: false, worstRatio, protectedRegions: 0 };
   }
 
-  const maskSmall = el('canvas', { width: sourceGrid.columns, height: sourceGrid.rows });
+  const maskScale = 8;
+  const maskSmall = el('canvas', {
+    width: sourceGrid.columns * maskScale,
+    height: sourceGrid.rows * maskScale
+  });
   const maskSmallCtx = maskSmall.getContext('2d', { alpha: true });
   if (!maskSmallCtx) {
     maskSmall.width = maskSmall.height = 0;
     return { canvas: resultCanvas, protected: false, worstRatio, protectedRegions: 0 };
   }
-  const maskImage = maskSmallCtx.createImageData(sourceGrid.columns, sourceGrid.rows);
-  maskImage.data.set(maskValues);
-  maskSmallCtx.putImageData(maskImage, 0, 0);
+  maskSmallCtx.clearRect(0, 0, maskSmall.width, maskSmall.height);
+  for (let i = 0; i < sourceGrid.regions.length; i++) {
+    const region = sourceGrid.regions[i];
+    const alpha = maskValues[i * 4 + 3] / 255;
+    if (alpha <= 0) continue;
+    maskSmallCtx.fillStyle = `rgba(255,255,255,${alpha})`;
+    maskSmallCtx.fillRect(
+      region.col * maskScale,
+      region.row * maskScale,
+      maskScale,
+      maskScale
+    );
+  }
 
   const overlay = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
   const overlayCtx = overlay.getContext('2d', { alpha: true });
