@@ -45,6 +45,64 @@ function sampleImage(image) {
   return { gray, width, height };
 }
 
+function perceptualBlurMetric(gray, width, height, radius = 4) {
+  const horizontal = new Float32Array(gray.length);
+  const vertical = new Float32Array(gray.length);
+  const kernel = radius * 2 + 1;
+
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const x = Math.max(0, Math.min(width - 1, k));
+      sum += gray[y * width + x];
+    }
+    for (let x = 0; x < width; x++) {
+      horizontal[y * width + x] = sum / kernel;
+      const removeX = Math.max(0, Math.min(width - 1, x - radius));
+      const addX = Math.max(0, Math.min(width - 1, x + radius + 1));
+      sum += gray[y * width + addX] - gray[y * width + removeX];
+    }
+  }
+
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const y = Math.max(0, Math.min(height - 1, k));
+      sum += gray[y * width + x];
+    }
+    for (let y = 0; y < height; y++) {
+      vertical[y * width + x] = sum / kernel;
+      const removeY = Math.max(0, Math.min(height - 1, y - radius));
+      const addY = Math.max(0, Math.min(height - 1, y + radius + 1));
+      sum += gray[addY * width + x] - gray[removeY * width + x];
+    }
+  }
+
+  let originalH = 0, removedH = 0;
+  let originalV = 0, removedV = 0;
+  for (let y = 1; y < height; y++) {
+    for (let x = 1; x < width; x++) {
+      const i = y * width + x;
+      const left = i - 1;
+      const up = i - width;
+
+      const dH = Math.abs(gray[i] - gray[left]);
+      const bH = Math.abs(horizontal[i] - horizontal[left]);
+      originalH += dH;
+      removedH += Math.max(0, dH - bH);
+
+      const dV = Math.abs(gray[i] - gray[up]);
+      const bV = Math.abs(vertical[i] - vertical[up]);
+      originalV += dV;
+      removedV += Math.max(0, dV - bV);
+    }
+  }
+
+  const blurH = originalH > 0.001 ? 1 - removedH / originalH : 0;
+  const blurV = originalV > 0.001 ? 1 - removedV / originalV : 0;
+  return Math.max(blurH, blurV);
+}
+
 function analyzeGray({ gray, width, height }) {
   let lapSum = 0;
   let lapSq = 0;
@@ -142,14 +200,13 @@ export async function analyzeSourceImage(image, file) {
   const lowDetail = clamp((8.5 - metrics.gradient) / 7.5);
   const lowResolution = Math.max(image.width, image.height) <= 960 || megapixels < 0.8;
   const falseResolution = megapixels >= 4 && lowDetail > 0.64 && softness > 0.48;
-  const blurShape = clamp((0.47 - metrics.edgeSpreadRatio) / 0.16);
-  const blurStructure = clamp((metrics.coarseGradient - 6) / 12);
-  const blurScore = clamp(blurShape * 0.78 + blurStructure * 0.22 - noise * 0.12);
+  const perceptualBlur = perceptualBlurMetric(sampleImage(image).gray, sampleImage(image).width, sampleImage(image).height);
+  const blurScore = clamp((perceptualBlur - 0.24) / 0.16 - noise * 0.08);
   const likelyBlurred =
-    blurScore >= 0.40 &&
-    metrics.edgeSpreadRatio < 0.435 &&
-    metrics.coarseGradient >= 8 &&
-    noise < 0.72;
+    blurScore >= 0.30 &&
+    perceptualBlur >= 0.285 &&
+    metrics.gradient >= 3.5 &&
+    noise < 0.80;
   const recoveryScore = clamp(
     softness * 0.34 + noise * 0.22 + jpegArtifacts * 0.24 + lowDetail * 0.20 +
     (lowResolution ? 0.12 : 0) + (falseResolution ? 0.12 : 0)
@@ -173,6 +230,7 @@ export async function analyzeSourceImage(image, file) {
     lowDetail,
     lowResolution,
     falseResolution,
+    perceptualBlur,
     blurScore,
     likelyBlurred,
     recoveryScore,
