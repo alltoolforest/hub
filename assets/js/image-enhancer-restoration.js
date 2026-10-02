@@ -186,7 +186,8 @@ function analyzeGray({ gray, width, height }) {
 }
 
 export async function analyzeSourceImage(image, file) {
-  const metrics = analyzeGray(sampleImage(image));
+  const sampled = sampleImage(image);
+  const metrics = analyzeGray(sampled);
   const megapixels = image.width * image.height / 1e6;
   const bytesPerPixel = file?.size ? file.size / Math.max(1, image.width * image.height) : 0;
   const ext = extensionOf(file);
@@ -200,7 +201,7 @@ export async function analyzeSourceImage(image, file) {
   const lowDetail = clamp((8.5 - metrics.gradient) / 7.5);
   const lowResolution = Math.max(image.width, image.height) <= 960 || megapixels < 0.8;
   const falseResolution = megapixels >= 4 && lowDetail > 0.64 && softness > 0.48;
-  const perceptualBlur = perceptualBlurMetric(sampleImage(image).gray, sampleImage(image).width, sampleImage(image).height);
+  const perceptualBlur = perceptualBlurMetric(sampled.gray, sampled.width, sampled.height);
   const blurScore = clamp((perceptualBlur - 0.24) / 0.16 - noise * 0.08);
   const likelyBlurred =
     blurScore >= 0.30 &&
