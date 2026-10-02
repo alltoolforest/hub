@@ -1355,7 +1355,12 @@ export async function mount(root, slug) {
           onProgress: message => status(message)
         });
 
-        const deblurBlend = Math.max(0.76, Math.min(0.92, 0.76 + (analysis.blurScore || 0) * 0.18));
+        // A true deblur result must not pass through the normal 1× source-detail
+        // safeguard because the reference source itself is blurred. Re-introducing
+        // that source can undo spatial reconstruction. Keep only a small source
+        // contribution for color/identity stability and judge deblur quality with
+        // a separate sharp-ground-truth gate.
+        const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
         const blended = el('canvas', { width, height });
         const blendCtx = blended.getContext('2d', { alpha: false });
         if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
@@ -1366,15 +1371,10 @@ export async function mount(root, slug) {
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
 
-        const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
-        result.canvas = finished.canvas;
-        const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
-        result.canvas = detail.canvas;
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
         const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
-        const detailLabel = detail.protected ? ' · source detail protected' : '';
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${detailLabel}.`);
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}.`);
         return result;
       }
 
