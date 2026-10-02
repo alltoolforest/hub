@@ -975,6 +975,20 @@ export async function mount(root, slug) {
     }
   }
 
+  function minimumDetailRatio(restoration) {
+    if (restoration?.id === 'fidelity') return 0.95;
+    if (restoration?.id === 'recovery') return 0.88;
+    return 0.92;
+  }
+
+  async function preserveEnhanceDetail(canvas, restoration, signal) {
+    if (!processor.available) {
+      return { canvas, beforeRatio: 1, afterRatio: 1, sourceBlend: 0 };
+    }
+    status('Preserving original detail…');
+    return processor.preserveDetailCanvas(canvas, image, minimumDetailRatio(restoration), signal);
+  }
+
   async function runEnhancePipeline(signal) {
     const scale = 1;
     const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
@@ -995,9 +1009,12 @@ export async function mount(root, slug) {
         });
         const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
         result.canvas = finished.canvas;
+        const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+        result.canvas = preserved.canvas;
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing.`);
+        const detail = Math.round(preserved.afterRatio * 100);
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}% · background-safe local processing.`);
         return result;
       }
 
@@ -1028,12 +1045,16 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+      result.canvas = preserved.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      const detail = Math.round(preserved.afterRatio * 100);
+      const sourceBlendLabel = preserved.sourceBlend > 0 ? ` · source detail blended ${Math.round(preserved.sourceBlend * 100)}%` : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}%${sourceBlendLabel} · background AI${retryLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -1048,9 +1069,12 @@ export async function mount(root, slug) {
       });
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+      result.canvas = preserved.canvas;
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely.`);
+      const detail = Math.round(preserved.afterRatio * 100);
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}% · local fallback used safely.`);
       return result;
     }
   }
