@@ -97,11 +97,11 @@ async function runEngine(name, launcher) {
     await page.waitForSelector('#enhancer-scale');
     await page.locator('input[type=file]').setInputFiles({ name: `${name}-ai.png`, mimeType: 'image/png', buffer: png(12, 8) });
     await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('12 × 8'));
-    await page.locator('#enhancer-scale').selectOption('1');
+    await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption('high-fidelity');
     await page.locator('#enhancer-restoration').selectOption('fidelity');
     await page.locator('#enhancer-sharpen').selectOption('off');
-    await page.getByRole('button', { name: 'Enhance image' }).click();
+    await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') && (status.includes('AI super-resolution') || status.includes('AI enhancement was not used'));
