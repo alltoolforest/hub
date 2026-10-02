@@ -165,8 +165,11 @@ async function testMobileSafety() {
         state.count++;
       }, 50);
     });
+    const mobile4xStarted = Date.now();
     await page.locator('#enhancer-run').click();
     const mobile4x = await waitCanonical(page, 2868, 2884, 300000);
+    const mobile4xElapsed = Date.now() - mobile4xStarted;
+    console.log(`DIAGNOSTIC mobile-4x elapsed=${mobile4xElapsed}ms`);
     assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884]);
     const mobile4xStatus = (await page.locator('#status').textContent()) || '';
     assert.match(mobile4xStatus, /Upscaled 4× .*background AI/, `Mobile 4× must complete through background AI: ${mobile4xStatus}`);
@@ -221,7 +224,7 @@ try {
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 720, height: 960 }, 'Desktop 2× must retain a 75% linear source working image.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4, { isMobile: true }), { width: 384, height: 512 }, 'Mobile 1× keeps a bounded quality floor without reverting to full-source inference.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4, { isMobile: true }), { width: 576, height: 768 }, 'Mobile 2× keeps a bounded 60% linear quality floor.');
-  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true }), { width: 624, height: 832 }, 'Mobile 4× caps AI work at 65% linear source size for practical browser runtime.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true }), { width: 480, height: 640 }, 'Mobile 4× uses a 50% linear hybrid AI working image for practical browser runtime.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
 
