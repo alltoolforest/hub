@@ -41,7 +41,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4180, '127.0.0.1', resolveListen));
 
-const launchOptions = { headless: true, args: ['--disable-gpu'] };
+const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
@@ -97,8 +97,8 @@ async function processAtOneX(name, width, height) {
   assert.deepEqual(result.slice(0, 3), [width, height, 'image/png']);
   assert.match(result[3], /-enhanced\.png$/);
   const status = (await page.locator('#status').textContent()) || '';
-  assert.match(status, /Local quality enhancement · original dimensions preserved\./);
-  assert.doesNotMatch(status, /Standard high-quality enlargement\. AI deliberately not used\./);
+  assert.match(status, /Enhanced · original size .*background-safe local processing/);
+  assert.doesNotMatch(status, /background AI/);
 }
 
 try {
