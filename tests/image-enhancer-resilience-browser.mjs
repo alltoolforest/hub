@@ -70,7 +70,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4178, '127.0.0.1', resolveListen));
 
-const launchOptions = { headless: true, args: ['--disable-gpu'] };
+const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 
@@ -99,61 +99,64 @@ async function outputDimensions(page) {
 }
 
 async function testDeepMemoryRetries() {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-  page.on('pageerror', err => errors.push(err.message));
+  const retryContext = await browser.newContext();
+  await retryContext.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message, transfer) {
+        if (message?.type === 'pack-tile' && message.width > 105) {
+          throw new RangeError('out of memory two-stage worker retry test');
+        }
+        return super.postMessage(message, transfer);
+      }
+    };
+  });
+  const retryPage = await retryContext.newPage();
+  const retryErrors = [];
+  retryPage.on('console', msg => { if (msg.type() === 'error') retryErrors.push(msg.text()); });
+  retryPage.on('pageerror', err => retryErrors.push(err.message));
   try {
-    await page.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
-    await upload(page, 'retry-twice.png', 300, 220);
-    await page.locator('#enhancer-mode-upscale').click();
-    await page.locator('#enhancer-scale').selectOption('2');
-
-    await page.evaluate(() => {
-      const proto = CanvasRenderingContext2D.prototype;
-      const original = proto.getImageData;
-      proto.getImageData = function(...args) {
-        if (this.canvas.width > 115) throw new RangeError('out of memory two-stage retry test');
-        return original.apply(this, args);
-      };
-      window.__restoreResilienceGetImageData = () => {
-        proto.getImageData = original;
-        delete window.__restoreResilienceGetImageData;
-      };
-    });
-    try {
-      await page.locator('#enhancer-run').click();
-      const status = await waitResult(page, /AI super-resolution.*memory retry ×2 · 72px tiles/);
-      assert.match(status, /wasm/);
-      assert.deepEqual(await outputDimensions(page), [600, 440, 'retry-twice-upscaled-2x.png']);
-    } finally {
-      await page.evaluate(() => window.__restoreResilienceGetImageData?.());
-    }
-
-    await upload(page, 'retry-exhausted.png');
-    await page.locator('#enhancer-mode-upscale').click();
-    await page.locator('#enhancer-scale').selectOption('2');
-    await page.evaluate(() => {
-      const proto = CanvasRenderingContext2D.prototype;
-      const original = proto.getImageData;
-      proto.getImageData = function() { throw new RangeError('out of memory exhausted retry test'); };
-      window.__restoreResilienceGetImageData = () => {
-        proto.getImageData = original;
-        delete window.__restoreResilienceGetImageData;
-      };
-    });
-    try {
-      await page.locator('#enhancer-run').click();
-      const status = await waitResult(page, /Standard high-quality enlargement\. AI enhancement was not used\./);
-      assert.doesNotMatch(status, /AI super-resolution/);
-      assert.deepEqual(await outputDimensions(page), [220, 140, 'retry-exhausted-enlarged-2x.png']);
-    } finally {
-      await page.evaluate(() => window.__restoreResilienceGetImageData?.());
-    }
-
-    assert.equal(errors.length, 0, `Resilience console errors:\n${errors.join('\n')}`);
+    await retryPage.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
+    await upload(retryPage, 'retry-twice.png', 300, 220);
+    await retryPage.locator('#enhancer-mode-upscale').click();
+    await retryPage.locator('#enhancer-scale').selectOption('2');
+    await retryPage.locator('#enhancer-run').click();
+    const status = await waitResult(retryPage, /Upscaled 2× .*memory retry ×2/, 120000);
+    assert.match(status, /background AI/);
+    assert.deepEqual(await outputDimensions(retryPage), [600, 440, 'retry-twice-upscaled-2x.png']);
+    assert.equal(retryErrors.length, 0, `Retry console errors:\n${retryErrors.join('\n')}`);
   } finally {
-    await page.close();
+    await retryContext.close();
+  }
+
+  const fallbackContext = await browser.newContext();
+  await fallbackContext.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message, transfer) {
+        if (message?.type === 'pack-tile') {
+          throw new RangeError('out of memory exhausted worker retry test');
+        }
+        return super.postMessage(message, transfer);
+      }
+    };
+  });
+  const fallbackPage = await fallbackContext.newPage();
+  const fallbackErrors = [];
+  fallbackPage.on('console', msg => { if (msg.type() === 'error') fallbackErrors.push(msg.text()); });
+  fallbackPage.on('pageerror', err => fallbackErrors.push(err.message));
+  try {
+    await fallbackPage.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
+    await upload(fallbackPage, 'retry-exhausted.png');
+    await fallbackPage.locator('#enhancer-mode-upscale').click();
+    await fallbackPage.locator('#enhancer-scale').selectOption('2');
+    await fallbackPage.locator('#enhancer-run').click();
+    const status = await waitResult(fallbackPage, /Enlarged 2× .*standard fallback used/, 120000);
+    assert.doesNotMatch(status, /background AI/);
+    assert.deepEqual(await outputDimensions(fallbackPage), [220, 140, 'retry-exhausted-enlarged-2x.png']);
+    assert.equal(fallbackErrors.length, 0, `Fallback console errors:\n${fallbackErrors.join('\n')}`);
+  } finally {
+    await fallbackContext.close();
   }
 }
 
@@ -233,9 +236,9 @@ async function testEnhanceFallbackIsNotNoop() {
 
     try {
       await page.locator('#enhancer-run').click();
-      const status = await waitResult(page, /Local enhancement fallback.*original dimensions preserved/);
-      assert.match(status, /AI model was unavailable/);
-      assert.deepEqual(await outputDimensions(page), [140, 100, 'local-fallback-enhanced-local.png']);
+      const status = await waitResult(page, /Enhanced · original size .*local fallback used safely/);
+      assert.doesNotMatch(status, /background AI/);
+      assert.deepEqual(await outputDimensions(page), [140, 100, 'local-fallback-enhanced.png']);
 
       const metrics = await page.evaluate(async () => {
         const source = document.querySelector('canvas[aria-label="Source image preview"]');
