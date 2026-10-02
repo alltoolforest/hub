@@ -15,18 +15,25 @@ export function aiInferenceDimensions(
 
   const [srcWidth, srcHeight, outWidth, outHeight, scale] = values;
   const requestedScale = Math.max(outWidth / srcWidth, outHeight / srcHeight);
-  const exactFactor = Math.min(1, requestedScale / scale);
-
-  // The previous responsiveness hotfix used only exactFactor. That kept the UI
-  // responsive, but 1×/2× paths could discard too much real source detail before
-  // Real-ESRGAN saw the image. Keep a bounded quality floor while still avoiding
-  // full-resolution x4 inference for the smaller output modes.
+  const rawExactFactor = Math.min(1, requestedScale / scale);
   const mobile = !!options?.isMobile;
+  const outputPixels = outWidth * outHeight;
+
+  // Large 4× mobile jobs must not force the same native-x4 inference workload
+  // as a desktop. The requested output dimensions remain unchanged; only the AI
+  // working image is reduced, then tiled reconstruction is scaled to target and
+  // source-detail preservation blends real texture back in.
+  let exactFactor = rawExactFactor;
+  if (mobile && requestedScale > 2.05) {
+    const mobileCap = outputPixels > 6e6 ? 0.65 : outputPixels > 3e6 ? 0.75 : 0.82;
+    exactFactor = Math.min(exactFactor, mobileCap);
+  }
+
   const qualityFloor = requestedScale <= 1.05
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : 1;
+      : (mobile ? 0.65 : 1);
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
   const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
