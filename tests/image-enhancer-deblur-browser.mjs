@@ -158,10 +158,17 @@ try{
     window.__deblurTimer=setInterval(()=>{window.__deblurHeartbeat++;},50);
   });
   await page.locator('#enhancer-run').click();
-  await page.waitForFunction(()=>{
-    const status=document.querySelector('#status')?.textContent||'';
-    return !!document.querySelector('#downloads a[download]') && /dedicated deblur AI/.test(status);
-  },null,{timeout:300000});
+  try {
+    await page.waitForFunction(()=>{
+      const status=document.querySelector('#status')?.textContent||'';
+      return !!document.querySelector('#downloads a[download]') && /dedicated deblur AI/.test(status);
+    },null,{timeout:120000});
+  } catch (error) {
+    const status=(await page.locator('#status').textContent().catch(()=>''))||'';
+    console.error(`DIAGNOSTIC dedicated-deblur timeout status=${status}`);
+    console.error(diagnostics.join('\n'));
+    throw error;
+  }
 
   const result=await page.evaluate(async()=>{
     const link=[...document.querySelectorAll('#downloads a[download]')].at(-1);
