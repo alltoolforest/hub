@@ -1,6 +1,13 @@
 const MIN_AI_SIDE = 16;
 
-export function aiInferenceDimensions(sourceWidth, sourceHeight, targetWidth, targetHeight, nativeScale = 4) {
+export function aiInferenceDimensions(
+  sourceWidth,
+  sourceHeight,
+  targetWidth,
+  targetHeight,
+  nativeScale = 4,
+  options = {}
+) {
   const values = [sourceWidth, sourceHeight, targetWidth, targetHeight, nativeScale].map(Number);
   if (values.some(value => !Number.isFinite(value) || value <= 0)) {
     throw new Error('AI inference dimensions require positive finite sizes.');
@@ -8,9 +15,21 @@ export function aiInferenceDimensions(sourceWidth, sourceHeight, targetWidth, ta
 
   const [srcWidth, srcHeight, outWidth, outHeight, scale] = values;
   const requestedScale = Math.max(outWidth / srcWidth, outHeight / srcHeight);
-  const targetFactor = Math.min(1, requestedScale / scale);
+  const exactFactor = Math.min(1, requestedScale / scale);
+
+  // The previous responsiveness hotfix used only exactFactor. That kept the UI
+  // responsive, but 1×/2× paths could discard too much real source detail before
+  // Real-ESRGAN saw the image. Keep a bounded quality floor while still avoiding
+  // full-resolution x4 inference for the smaller output modes.
+  const mobile = !!options?.isMobile;
+  const qualityFloor = requestedScale <= 1.05
+    ? (mobile ? 0.40 : 0.50)
+    : requestedScale <= 2.05
+      ? (mobile ? 0.60 : 0.75)
+      : 1;
+
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
-  const factor = Math.max(targetFactor, minimumStableFactor);
+  const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
 
   return Object.freeze({
     width: Math.max(1, Math.min(Math.round(srcWidth), Math.round(srcWidth * factor))),
