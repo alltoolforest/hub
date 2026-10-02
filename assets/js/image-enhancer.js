@@ -209,6 +209,7 @@ class EnhancerModelLoader {
     this.manifest = null;
     this.runtimePromise = null;
     this.modelPromise = null;
+    this.deblurModelPromise = null;
   }
 
   async loadManifest(signal) {
@@ -315,6 +316,59 @@ class EnhancerModelLoader {
       return await this.modelPromise;
     } catch (error) {
       this.modelPromise = null;
+      throw error;
+    }
+  }
+
+  async loadDeblurModel(signal, onProgress) {
+    if (this.deblurModelPromise) return this.deblurModelPromise;
+    this.deblurModelPromise = (async () => {
+      const manifest = await this.loadManifest(signal);
+      const model = manifest.models['deblur-nafnet'];
+      let bytes = null;
+
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open(MODEL_CACHE);
+          const cached = await cache.match(model.url);
+          if (cached) {
+            onProgress?.('Checking cached deblur model…');
+            bytes = await cached.arrayBuffer();
+            if (!(await verifySha256(bytes, model.sha256))) {
+              bytes = null;
+              await cache.delete(model.url);
+            }
+          }
+        } catch {}
+      }
+
+      if (!bytes) {
+        onProgress?.('Downloading deblur model…');
+        const response = await fetch(model.url, { signal, cache: 'force-cache' });
+        if (!response.ok) throw new Error(`Deblur model download failed (${response.status}).`);
+        bytes = await readResponseWithProgress(response, signal, (loaded, total) => {
+          if (total) onProgress?.(`Downloading deblur model… ${Math.min(100, Math.round(loaded / total * 100))}%`);
+          else onProgress?.(`Downloading deblur model… ${format(loaded / MB, 1)} MB`);
+        });
+        onProgress?.('Verifying deblur model…');
+        if (!(await verifySha256(bytes, model.sha256))) {
+          throw new Error('Deblur model integrity check failed. The downloaded model was not used.');
+        }
+        if ('caches' in window) {
+          try {
+            const cache = await caches.open(MODEL_CACHE);
+            await cache.put(model.url, new Response(bytes.slice(0), {
+              headers: { 'content-type': 'application/octet-stream' }
+            }));
+          } catch {}
+        }
+      }
+      return { config: model, bytes };
+    })();
+    try {
+      return await this.deblurModelPromise;
+    } catch (error) {
+      this.deblurModelPromise = null;
       throw error;
     }
   }
@@ -463,6 +517,126 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     const outW = Number(output.dims[3]);
     if (outW !== width * this.nativeScale || outH !== height * this.nativeScale) {
       throw new Error(`AI model returned ${outW} × ${outH}; expected ${width * this.nativeScale} × ${height * this.nativeScale}.`);
+    }
+    return this.processor.tensorToBitmap(output.data, outW, outH, signal);
+  }
+
+  async dispose() {
+    try { await this.session?.release?.(); } catch {}
+    this.session = null;
+  }
+}
+
+
+class OnnxDeblurEngine extends EnhancementEngine {
+  constructor(loader, caps, processor) {
+    super('nafnet-deblur', 'NAFNet deblurring', 'ai');
+    this.loader = loader;
+    this.caps = caps;
+    this.processor = processor;
+    this.session = null;
+    this.ort = null;
+    this.backend = null;
+  }
+
+  async initialize(signal, onProgress) {
+    if (this.session) return;
+    if (!this.caps.workers || !this.processor?.available) {
+      throw new Error('Background deblurring is unavailable in this browser.');
+    }
+    this.ort = await this.loader.loadRuntime(signal, onProgress);
+    const model = await this.loader.loadDeblurModel(signal, onProgress);
+    onProgress?.('Preparing dedicated deblur engine…');
+    this.ort.env.wasm.proxy = true;
+    this.session = await this.ort.InferenceSession.create(model.bytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+      enableCpuMemArena: true
+    });
+    this.backend = 'wasm-worker';
+  }
+
+  async process({ image, signal, onProgress }) {
+    await this.initialize(signal, onProgress);
+    const plans = this.caps.isMobile ? [128, 96, 64] : [192, 144, 96, 64];
+    let lastError = null;
+    for (let attempt = 0; attempt < plans.length; attempt++) {
+      try {
+        return await this.processTiled(image, plans[attempt], signal, onProgress, attempt);
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw error;
+        lastError = error;
+        if (!isMemoryPressureError(error) || attempt === plans.length - 1) throw error;
+        onProgress?.(`Deblur memory pressure detected. Retrying with smaller ${plans[attempt + 1]}px tiles…`);
+        await sleepFrame();
+      }
+    }
+    throw lastError || new Error('Deblur processing failed.');
+  }
+
+  async processTiled(image, tileCore, signal, onProgress, retryCount) {
+    const outputCanvas = el('canvas', { width: image.width, height: image.height });
+    const ctx = outputCanvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new RangeError('Deblur output canvas allocation failed.');
+    const padding = 24;
+    const cols = Math.ceil(image.width / tileCore);
+    const rows = Math.ceil(image.height / tileCore);
+    const total = cols * rows;
+    let index = 0;
+
+    try {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+          const x = col * tileCore;
+          const y = row * tileCore;
+          const coreW = Math.min(tileCore, image.width - x);
+          const coreH = Math.min(tileCore, image.height - y);
+          const sx = Math.max(0, x - padding);
+          const sy = Math.max(0, y - padding);
+          const ex = Math.min(image.width, x + coreW + padding);
+          const ey = Math.min(image.height, y + coreH + padding);
+          const tileW = ex - sx;
+          const tileH = ey - sy;
+          const padLeft = x - sx;
+          const padTop = y - sy;
+
+          index++;
+          onProgress?.(`Deblurring tile ${index} of ${total}…`);
+          const tile = await this.inferTile(image, sx, sy, tileW, tileH, signal);
+          ctx.drawImage(tile, padLeft, padTop, coreW, coreH, x, y, coreW, coreH);
+          tile.close?.();
+          await sleepFrame();
+        }
+      }
+      return {
+        canvas: outputCanvas,
+        aiUsed: true,
+        engine: this,
+        backend: this.backend,
+        tileCount: total,
+        tileCore,
+        retryCount,
+        deblurred: true
+      };
+    } catch (error) {
+      outputCanvas.width = outputCanvas.height = 0;
+      throw error;
+    }
+  }
+
+  async inferTile(image, sx, sy, width, height, signal) {
+    const data = await this.processor.packTile(image, sx, sy, width, height, signal);
+    const tensor = new this.ort.Tensor('float32', data, [1, 3, height, width]);
+    const inputName = this.session.inputNames[0];
+    const outputName = this.session.outputNames[0];
+    const results = await this.session.run({ [inputName]: tensor });
+    const output = results[outputName];
+    if (!output?.data || output.dims?.length !== 4) throw new Error('Deblur model returned an unexpected output.');
+    const outH = Number(output.dims[2]);
+    const outW = Number(output.dims[3]);
+    if (outW !== width || outH !== height) {
+      throw new Error(`Deblur model returned ${outW} × ${outH}; expected ${width} × ${height}.`);
     }
     return this.processor.tensorToBitmap(output.data, outW, outH, signal);
   }
@@ -870,6 +1044,7 @@ export async function mount(root, slug) {
   const loader = new EnhancerModelLoader();
   const processor = new ProcessingWorkerBridge(caps);
   const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
+  const deblurEngine = new OnnxDeblurEngine(loader, caps, processor);
   const fallbackEngine = new BrowserResampleEngine();
   const browserEnhanceEngine = new BrowserEnhanceEngine();
   let image = null;
@@ -1165,6 +1340,42 @@ export async function mount(root, slug) {
         return result;
       }
 
+      const blurEligible =
+        analysis?.likelyBlurred &&
+        contentRoute.engine !== 'standard' &&
+        !['text-logo', 'illustration'].includes(contentRoute.id);
+
+      if (blurEligible) {
+        status('Blur detected. Running dedicated deblur reconstruction…');
+        result = await deblurEngine.process({
+          image,
+          signal,
+          onProgress: message => status(message)
+        });
+
+        const deblurBlend = Math.max(0.76, Math.min(0.92, 0.76 + (analysis.blurScore || 0) * 0.18));
+        const blended = el('canvas', { width, height });
+        const blendCtx = blended.getContext('2d', { alpha: false });
+        if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
+        blendCtx.drawImage(image, 0, 0, width, height);
+        blendCtx.globalAlpha = deblurBlend;
+        blendCtx.drawImage(result.canvas, 0, 0, width, height);
+        blendCtx.globalAlpha = 1;
+        result.canvas.width = result.canvas.height = 0;
+        result.canvas = blended;
+
+        const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+        result.canvas = finished.canvas;
+        const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+        result.canvas = detail.canvas;
+        const blob = await canvasBlob(result.canvas, 'image/png', 1);
+        output(blob, safeName(file.name, '-enhanced', 'png'));
+        const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
+        const detailLabel = detail.protected ? ' · source detail protected' : '';
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${detailLabel}.`);
+        return result;
+      }
+
       status('Preparing quality enhancement…');
       const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
       temporaryAiInput = aiPrepared.temporary;
@@ -1340,6 +1551,7 @@ export async function mount(root, slug) {
     controller?.abort();
     image?.close?.();
     aiEngine.dispose();
+    deblurEngine.dispose();
     processor.dispose();
     fallbackEngine.dispose();
     browserEnhanceEngine.dispose();
