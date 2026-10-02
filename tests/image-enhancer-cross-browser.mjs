@@ -82,9 +82,11 @@ async function pngDimensionsFromDownload(page) {
   });
 }
 
-async function runEngine(name, launcher) {
+async function runEngine(name, launcher, contextOptions = {}, initScript = null) {
   const browser = await launcher.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  const context = await browser.newContext({ viewport: { width: 900, height: 700 }, ...contextOptions });
+  if (initScript) await context.addInitScript(initScript);
+  const page = await context.newPage();
   const errors = [];
   const warnings = [];
   page.on('console', msg => {
@@ -111,9 +113,20 @@ async function runEngine(name, launcher) {
     assert.match(status, /background AI/, `${name} must execute the real background AI path, not standard fallback. Status: ${status}\nWarnings: ${warnings.join('\n')}\nErrors: ${errors.join('\n')}`);
     assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, `${name} must keep worker-backed WASM enabled.`);
     assert.deepEqual((await pngDimensionsFromDownload(page))?.slice(0, 3), [12, 8, 'image/png']);
+
+    await page.locator('#enhancer-mode-upscale').click();
+    await page.locator('#enhancer-scale').selectOption('2');
+    await page.locator('#enhancer-run').click();
+    await page.waitForFunction(() => {
+      const status = document.querySelector('#status')?.textContent || '';
+      return !!document.querySelector('#downloads a[download]') && status.includes('Upscaled 2×');
+    }, null, { timeout: 180000 });
+    assert.deepEqual((await pngDimensionsFromDownload(page))?.slice(0, 3), [24, 16, 'image/png']);
+
     assert.equal(errors.length, 0, `${name} console errors:\n${errors.join('\n')}`);
-    console.log(`PASS ${name}: real Real-ESRGAN/WASM 1x enhancement under production CSP.`);
+    console.log(`PASS ${name}: Enhance + 2× Upscale completed with worker-backed WASM.`);
   } finally {
+    await context.close();
     await browser.close();
   }
 }
@@ -121,7 +134,20 @@ async function runEngine(name, launcher) {
 try {
   await runEngine('firefox', firefox);
   await runEngine('webkit', webkit);
-  console.log('PASS: Firefox and WebKit real-WASM enhancer compatibility verified.');
+  await runEngine('macos-webkit', webkit, {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15',
+    viewport: { width: 1440, height: 900 }
+  });
+  await runEngine('ios-webkit', webkit, {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1',
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true
+  }, () => {
+    try { Object.defineProperty(window, 'OffscreenCanvas', { configurable: true, value: undefined }); } catch {}
+    try { Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 6 }); } catch {}
+  });
+  console.log('PASS: Firefox, WebKit, macOS-Safari profile and iOS-Safari profile Enhance/Upscale compatibility verified.');
 } finally {
   await new Promise(resolveClose => server.close(resolveClose));
 }
