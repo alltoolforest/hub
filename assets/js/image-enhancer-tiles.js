@@ -17,19 +17,22 @@ export function aiInferenceDimensions(
   const requestedScale = Math.max(outWidth / srcWidth, outHeight / srcHeight);
   const exactFactor = Math.min(1, requestedScale / scale);
 
-  // The previous responsiveness hotfix used only exactFactor. That kept the UI
-  // responsive, but 1×/2× paths could discard too much real source detail before
-  // Real-ESRGAN saw the image. Keep a bounded quality floor while still avoiding
-  // full-resolution x4 inference for the smaller output modes.
+  // Browser-mobile 4× must not perform full-source x4 inference on every pixel:
+  // that can become multi-minute work even though the UI stays responsive.
+  // A 65% linear AI working image still gives the model substantially more
+  // information than the requested 2× path, while the final composition keeps
+  // original-source structure and avoids pathological mobile runtimes.
   const mobile = !!options?.isMobile;
+  const mobileLargeScaleCeiling = mobile && requestedScale > 2.05 ? 0.65 : 1;
+  const boundedExactFactor = Math.min(exactFactor, mobileLargeScaleCeiling);
   const qualityFloor = requestedScale <= 1.05
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : 1;
+      : (mobile ? 0.65 : 1);
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
-  const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
+  const factor = Math.max(boundedExactFactor, qualityFloor, minimumStableFactor);
 
   return Object.freeze({
     width: Math.max(1, Math.min(Math.round(srcWidth), Math.round(srcWidth * factor))),
@@ -41,7 +44,7 @@ export function tileCorePlan(caps) {
   const candidates = caps?.webgpu
     ? [160, 112, 80, 56]
     : caps?.isMobile
-      ? [96, 72, 56, 48]
+      ? [128, 96, 72, 48]
       : [128, 96, 72, 48];
   return Object.freeze([...new Set(candidates.filter(value => Number.isFinite(value) && value >= 48))]);
 }
