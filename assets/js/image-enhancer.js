@@ -1,7 +1,7 @@
 import {
   $, el, field, read, format, notice, setupStatus, status,
   fileInput, bindFile, checkFile, decodeImage, canvasBlob, output,
-  downloads, clearOutputs, safeName, mobile
+  downloads, clearOutputs, safeName
 } from './core.js';
 import {
   analyzeSourceImage,
@@ -17,13 +17,10 @@ import {
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
+import { detectEnhancerCapabilities } from './image-enhancer-capabilities.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
-const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 16e6, maxSide: 8192, maxFileMB: 120, maxSourcePixels: 48e6 },
-  desktop: { maxPixels: 64e6, maxSide: 16384, maxFileMB: 500, maxSourcePixels: 120e6 }
-});
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
@@ -605,76 +602,6 @@ async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, sig
   return { canvas: best, detailRatio: bestRatio, protected: best !== resultCanvas };
 }
 
-async function detectDeviceCapabilities() {
-  const isMobile = mobile();
-  const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
-  const ua = String(navigator.userAgent || '');
-  const iosLike = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const safariLike = /Safari/i.test(ua) && !/(Chrome|Chromium|Edg|OPR|CriOS|FxiOS)/i.test(ua);
-  const deviceMemory = Number(navigator.deviceMemory) || 0;
-  const cores = Math.max(1, Number(navigator.hardwareConcurrency) || 2);
-
-  let maxPixels = baseline.maxPixels;
-  let maxFileMB = baseline.maxFileMB;
-  let maxSourcePixels = baseline.maxSourcePixels;
-
-  if (isMobile) {
-    if (iosLike) {
-      maxPixels = cores >= 8 ? 24e6 : cores >= 6 ? 20e6 : 16e6;
-      maxSourcePixels = cores >= 8 ? 64e6 : 48e6;
-      maxFileMB = 160;
-    } else if (deviceMemory >= 8) {
-      maxPixels = 28e6;
-      maxSourcePixels = 72e6;
-      maxFileMB = 220;
-    } else if (deviceMemory >= 4) {
-      maxPixels = 20e6;
-      maxSourcePixels = 56e6;
-      maxFileMB = 160;
-    }
-  } else {
-    if (deviceMemory >= 16) {
-      maxPixels = 100e6;
-      maxSourcePixels = 180e6;
-      maxFileMB = 750;
-    } else if (deviceMemory >= 8) {
-      maxPixels = 80e6;
-      maxSourcePixels = 150e6;
-      maxFileMB = 600;
-    } else if (deviceMemory > 0 && deviceMemory <= 4) {
-      maxPixels = 48e6;
-      maxSourcePixels = 96e6;
-      maxFileMB = 350;
-    } else if (safariLike) {
-      maxPixels = 64e6;
-      maxSourcePixels = 120e6;
-      maxFileMB = 500;
-    }
-  }
-
-  const caps = {
-    isMobile,
-    iosLike,
-    safariLike,
-    deviceMemory,
-    cores,
-    webgpu: false,
-    wasm: typeof WebAssembly !== 'undefined',
-    workers: typeof Worker !== 'undefined',
-    offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
-    createImageBitmap: typeof createImageBitmap === 'function',
-    maxTextureDimension2D: null,
-    maxPixels,
-    maxSide: iosLike ? Math.min(8192, baseline.maxSide) : baseline.maxSide,
-    maxFileMB,
-    maxSourcePixels
-  };
-
-  // WebGPU detection is intentionally skipped. Production stays on worker-backed
-  // WASM until the same responsiveness gates pass across Chromium and WebKit.
-  return Object.freeze(caps);
-}
-
 function safeOutputFor(image, scale, caps) {
   const width = Math.round(image.width * scale);
   const height = Math.round(image.height * scale);
@@ -762,7 +689,7 @@ async function detectTransparency(image) {
 export async function mount(root, slug) {
   if (slug !== 'enhance') throw new Error('Image Enhancer mounted for an unsupported tool.');
 
-  const caps = await detectDeviceCapabilities();
+  const caps = detectEnhancerCapabilities();
   const loader = new EnhancerModelLoader();
   const processor = new ProcessingWorkerBridge(caps);
   const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
