@@ -204,6 +204,10 @@ try {
   assert.match(autoStatus, /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
 
   await upload('tile-test.png', 500, 350);
+  const realisticOriginalHash = await sourcePreviewHash();
+  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'off', /General Photo.*AI super-resolution.*AI input 125 × 88.*wasm-worker.*Recovery profile/);
+  assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
+
   await page.evaluate(() => {
     window.__enhancerHeartbeat = 0;
     window.__enhancerHeartbeatTimer = setInterval(() => { window.__enhancerHeartbeat += 1; }, 25);
