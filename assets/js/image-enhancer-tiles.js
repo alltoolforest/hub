@@ -25,7 +25,7 @@ export function aiInferenceDimensions(
   // source-detail preservation blends real texture back in.
   let exactFactor = rawExactFactor;
   if (mobile && requestedScale > 2.05) {
-    const mobileCap = outputPixels > 6e6 ? 0.65 : outputPixels > 3e6 ? 0.75 : 0.82;
+    const mobileCap = outputPixels > 6e6 ? 0.50 : outputPixels > 3e6 ? 0.68 : 0.80;
     exactFactor = Math.min(exactFactor, mobileCap);
   }
 
@@ -33,7 +33,7 @@ export function aiInferenceDimensions(
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : (mobile ? 0.65 : 1);
+      : (mobile ? (outputPixels > 6e6 ? 0.50 : 0.68) : 1);
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
   const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
