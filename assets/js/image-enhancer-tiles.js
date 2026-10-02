@@ -28,9 +28,13 @@ export function aiInferenceDimensions(
   if (mobile && requestedScale >= 3.5) {
     const capable = memory >= 6 || cores >= 8;
     const mid = memory >= 4 || cores >= 6;
+    // Keep final output dimensions unchanged, but bound the expensive x4 AI
+    // working image on phones. Low-capability browsers use half-resolution
+    // source inference and let the final compositor reach the requested size.
+    // This keeps 4× practical instead of spending minutes on full-source WASM.
     exactFactor = iosLike
-      ? (capable ? 0.80 : mid ? 0.72 : 0.66)
-      : (capable ? 0.86 : mid ? 0.76 : 0.68);
+      ? (capable ? 0.72 : mid ? 0.60 : 0.50)
+      : (capable ? 0.76 : mid ? 0.64 : 0.50);
   }
 
   // Keep enough source information for restoration without forcing every device
@@ -67,8 +71,8 @@ export function tileCorePlan(caps) {
     candidates = capableMobile
       ? (iosLike ? [144, 112, 88, 64, 48] : [160, 128, 96, 72, 48])
       : midMobile
-        ? [128, 104, 80, 60, 48]
-        : [104, 80, 60, 48];
+        ? [144, 112, 88, 64, 48]
+        : [128, 96, 72, 56, 48];
   } else {
     candidates = memory >= 8 || cores >= 8
       ? [176, 144, 112, 88, 64, 48]
