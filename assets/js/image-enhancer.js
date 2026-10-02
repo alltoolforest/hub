@@ -1012,8 +1012,19 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
-      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
-      result.canvas = finished.canvas;
+
+      // Real-ESRGAN already reconstructs edges. Running an additional JavaScript
+      // sharpening scan across very large mobile outputs can take minutes and
+      // adds little value. Keep full sharpening for smaller outputs, but preserve
+      // the completed AI pixels directly above 6 MP on mobile.
+      const largeMobileOutput = caps.isMobile && width * height > 6e6;
+      if (!largeMobileOutput) {
+        const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+        result.canvas = finished.canvas;
+      } else {
+        status('Finalizing large mobile upscale…');
+        await sleepFrame();
+      }
 
       status('Creating upscaled image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
