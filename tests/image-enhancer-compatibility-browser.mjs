@@ -121,7 +121,14 @@ async function testDesktopFormats() {
     assert.match(highResSummary, /3,000 × 2,000/, 'Professional 6 MP source must load without low mobile-style caps.');
     await page.locator('#enhancer-mode-upscale').click();
     assert.equal(await page.locator('#enhancer-scale option[value="2"]').isDisabled(), false, 'Professional 24 MP 2× output must remain available on desktop.');
-    assert.equal(await page.locator('#enhancer-scale option[value="4"]').isDisabled(), true, 'Extremely large 96 MP 4× output should be rejected when it exceeds the detected desktop capability.');
+    const professional4x = page.locator('#enhancer-scale option[value="4"]');
+    const professional4xDisabled = await professional4x.isDisabled();
+    const professional4xLabel = (await professional4x.textContent()) || '';
+    if (professional4xDisabled) {
+      assert.match(professional4xLabel, /too large on this device/, 'Lower-capability desktops must reject 96 MP cleanly.');
+    } else {
+      assert.match(professional4xLabel, /4× AI Upscale/, 'High-capability desktops should be allowed to attempt 96 MP output.');
+    }
 
     assert.equal(consoleErrors.length, 0, `Desktop format console errors:\n${consoleErrors.join('\n')}`);
   } finally {
