@@ -78,9 +78,9 @@ async function openFixture(name, mimeType) {
 async function processAtOneX(name, width, height) {
   const oneX = page.locator('#enhancer-scale option[value="1"]');
   assert.equal(await oneX.isDisabled(), false, `${name} fixture must fit the desktop 1× safety limit.`);
-  await page.locator('#enhancer-scale').selectOption('1');
+  await page.locator('#enhancer-mode-enhance').click();
   await page.locator('#enhancer-content').selectOption('text-logo');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   await page.waitForFunction(([w, h]) => {
     const status = document.querySelector('#status')?.textContent || '';
     return !!document.querySelector('#downloads a[download]') && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
@@ -95,9 +95,10 @@ async function processAtOneX(name, width, height) {
     return value;
   });
   assert.deepEqual(result.slice(0, 3), [width, height, 'image/png']);
-  assert.match(result[3], /-fidelity\.png$/);
+  assert.match(result[3], /-enhanced\.png$/);
   const status = (await page.locator('#status').textContent()) || '';
-  assert.match(status, /Standard high-quality enlargement\. AI deliberately not used\./);
+  assert.match(status, /Local quality enhancement · original dimensions preserved\./);
+  assert.doesNotMatch(status, /Standard high-quality enlargement\. AI deliberately not used\./);
 }
 
 try {

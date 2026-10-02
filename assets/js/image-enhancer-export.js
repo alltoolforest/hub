@@ -41,9 +41,8 @@ async function decodeDownload(link) {
 }
 
 export function mountExportControls(root) {
-  const form = root.querySelector('.fields');
   const downloadsRoot = $('#downloads', root);
-  if (!form || !downloadsRoot || $('#enhancer-export-format', root)) return;
+  if (!downloadsRoot || $('#enhancer-export-format', root)) return;
 
   const formatWrap = field('enhancer-export-format', 'Export format', 'select', 'png', {
     options: [['png', 'PNG — lossless / transparency'], ['jpeg', 'JPG — smaller photos'], ['webp', 'WebP — compact / transparency']]
@@ -55,13 +54,14 @@ export function mountExportControls(root) {
   const backgroundWrap = field('enhancer-jpeg-background', 'JPG transparency background', 'color', '#ffffff', {
     hint: 'JPG cannot store transparency. Transparent pixels are flattened onto this colour.'
   });
-  form.append(formatWrap, qualityWrap, backgroundWrap);
-
-  const section = el('section', { id: 'enhancer-export-panel', 'aria-label': 'Export enhanced image' });
+  const section = el('section', { id: 'enhancer-export-panel', 'aria-label': 'Export processed image', hidden: true });
   section.append(el('h2', { text: 'Export result' }));
+  const exportFields = el('div', { class: 'fields' });
+  exportFields.append(formatWrap, qualityWrap, backgroundWrap);
+  section.append(exportFields);
   const info = el('p', {
     id: 'enhancer-export-info', class: 'status',
-    text: 'Enhance an image first. Export conversion happens locally in your browser.'
+    text: 'Process an image first. Export conversion happens locally in your browser.'
   });
   const actions = el('div', { class: 'actions' });
   const exportButton = el('button', { type: 'button', class: 'primary', text: 'Create export copy', disabled: true });
@@ -92,10 +92,11 @@ export function mountExportControls(root) {
     qualityWrap.hidden = !lossy;
     backgroundWrap.hidden = type !== 'jpeg';
     const canonical = latestCanonicalLink();
+    section.hidden = !canonical;
     exportButton.disabled = busy || !canonical;
     if (!canonical) {
       info.classList.remove('error');
-      info.textContent = 'Enhance an image first. Export conversion happens locally in your browser.';
+      info.textContent = 'Process an image first. Export conversion happens locally in your browser.';
       return;
     }
     info.classList.remove('error');
@@ -108,7 +109,7 @@ export function mountExportControls(root) {
     if (busy) return;
     const canonical = latestCanonicalLink();
     if (!canonical) {
-      status('Enhance an image first.', true);
+      status('Process an image first.', true);
       return;
     }
 

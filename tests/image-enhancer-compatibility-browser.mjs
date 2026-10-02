@@ -107,9 +107,9 @@ async function testDesktopFormats() {
       if (item.transparent) assert.match(summary, /transparency detected/);
       else assert.doesNotMatch(summary, /transparency detected/);
 
+      await page.locator('#enhancer-mode-upscale').click();
       await page.locator('#enhancer-scale').selectOption('2');
-      await page.locator('#enhancer-content').selectOption('text-logo');
-      await page.getByRole('button', { name: 'Enhance image' }).click();
+      await page.locator('#enhancer-run').click();
       const output = await waitCanonical(page, 80, 60);
       assert.deepEqual(output.slice(0, 2), [80, 60]);
       assert.equal(output[3], 'image/png', 'Canonical enhancer result remains PNG before optional export conversion.');
@@ -132,15 +132,13 @@ async function testMobileSafety() {
     await page.goto('http://127.0.0.1:4177/images/enhance/', { waitUntil: 'networkidle' });
 
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-ai.png', width: 480, height: 360, transparent: false });
+    await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-scale').selectOption('2');
-    await page.locator('#enhancer-content').selectOption('general');
-    await page.locator('#enhancer-restoration').selectOption('balanced');
-    await page.locator('#enhancer-sharpen').selectOption('off');
     await page.evaluate(() => {
       window.__mobileHeartbeat = 0;
       window.__mobileHeartbeatTimer = setInterval(() => { window.__mobileHeartbeat += 1; }, 25);
     });
-    await page.getByRole('button', { name: 'Enhance image' }).click();
+    await page.locator('#enhancer-run').click();
     const mobileOutput = await waitCanonical(page, 960, 720);
     assert.deepEqual(mobileOutput.slice(0, 2), [960, 720]);
     const mobileStatus = (await page.locator('#status').textContent()) || '';
@@ -162,11 +160,12 @@ async function testMobileSafety() {
     assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 8 MP cap.');
     assert.match((await option4.textContent()) || '', /too large on this device/);
 
+    await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-output-mode').selectOption('dimensions');
     await page.locator('#enhancer-target-width').fill('3000');
     await page.locator('#enhancer-target-height').fill('');
     await page.waitForFunction(() => (document.querySelector('#enhancer-output-info')?.textContent || '').includes('too large for the current safety limit'));
-    await page.getByRole('button', { name: 'Enhance image' }).click();
+    await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('too large for the current safety limit'));
     assert.equal(await page.locator('#downloads a[download]').count(), 0, 'Oversized mobile custom target must not start processing.');
 

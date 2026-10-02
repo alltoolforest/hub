@@ -90,13 +90,13 @@ async function outputDimensions() {
 }
 
 async function runStandardTarget(expectedWidth, expectedHeight) {
-  await page.locator('#enhancer-content').selectOption('text-logo');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-mode-upscale').click();
+  await page.locator('#enhancer-run').click();
   await page.waitForFunction(([w, h]) => {
     const status = document.querySelector('#status')?.textContent || '';
     const link = document.querySelector('#downloads a[download]');
-    return !!link && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`) && status.includes('Standard high-quality enlargement');
-  }, [expectedWidth, expectedHeight], { timeout: 30000 });
+    return !!link && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
+  }, [expectedWidth, expectedHeight], { timeout: 90000 });
   const dims = await outputDimensions();
   assert.deepEqual(dims?.slice(0, 2), [expectedWidth, expectedHeight]);
   return dims;
@@ -104,8 +104,9 @@ async function runStandardTarget(expectedWidth, expectedHeight) {
 
 try {
   await page.goto('http://127.0.0.1:4174/images/enhance/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#enhancer-output-mode');
-  await page.waitForSelector('#enhancer-scale');
+  await page.waitForSelector('#enhancer-output-mode', { state: 'attached' });
+  await page.waitForSelector('#enhancer-scale', { state: 'attached' });
+  await page.locator('#enhancer-mode-upscale').click();
 
   assert.equal(await page.locator('#enhancer-output-mode').inputValue(), 'scale');
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
@@ -141,12 +142,12 @@ try {
   await page.locator('#enhancer-output-mode').selectOption('dimensions');
   await page.locator('#enhancer-target-width').fill('99999');
   await page.locator('#enhancer-target-height').fill('');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('too large for the current safety limit'));
   assert.equal(await page.locator('#downloads a[download]').count(), beforeInvalid, 'Invalid oversized target must not start processing or replace the existing result.');
 
   await page.locator('#enhancer-target-width').fill('10');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('smaller than the source'));
   assert.equal(await page.locator('#downloads a[download]').count(), beforeInvalid, 'Downscale target must be rejected by the enhancer planner.');
 
@@ -155,10 +156,11 @@ try {
   assert.equal(await page.locator('#enhancer-scale').inputValue(), '2');
   assert.equal(await page.locator('#enhancer-target-width').inputValue(), '');
   assert.equal(await page.locator('#enhancer-ppi').inputValue(), '300');
-  assert.equal(await page.locator('#enhancer-scale').evaluate(node => node.closest('.field').hidden), false);
+  assert.equal(await page.locator('#enhancer-scale').evaluate(node => node.closest('.field').hidden), true, 'Reset must return to the task chooser and hide upscale controls.');
+  assert.equal(await page.locator('#enhancer-run').isDisabled(), true);
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: custom dimensions, longest-edge, print/PPI planning, safety rejection, reset and existing standard route integration verified.');
+  console.log('PASS: Upscale-only custom dimensions, longest-edge, print/PPI planning, safety rejection and reset-to-task-chooser behavior verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

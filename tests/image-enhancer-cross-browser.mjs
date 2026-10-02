@@ -94,14 +94,15 @@ async function runEngine(name, launcher) {
   page.on('pageerror', err => errors.push(err.message));
   try {
     await page.goto('http://127.0.0.1:4179/images/enhance/', { waitUntil: 'networkidle', timeout: 90000 });
-    await page.waitForSelector('#enhancer-scale');
+    await page.waitForSelector('#enhancer-mode-enhance');
+    await page.waitForSelector('#enhancer-scale', { state: 'attached' });
     await page.locator('input[type=file]').setInputFiles({ name: `${name}-ai.png`, mimeType: 'image/png', buffer: png(12, 8) });
     await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('12 × 8'));
-    await page.locator('#enhancer-scale').selectOption('1');
+    await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption('high-fidelity');
     await page.locator('#enhancer-restoration').selectOption('fidelity');
     await page.locator('#enhancer-sharpen').selectOption('off');
-    await page.getByRole('button', { name: 'Enhance image' }).click();
+    await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') && (status.includes('AI super-resolution') || status.includes('AI enhancement was not used'));

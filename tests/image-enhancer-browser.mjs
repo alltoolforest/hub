@@ -97,7 +97,7 @@ async function waitForTerminal(scale) {
   try {
     await page.waitForFunction(() => {
       const output = document.querySelector('#downloads a[download]');
-      const button = [...document.querySelectorAll('button')].find(b => b.textContent === 'Enhance image');
+      const button = document.querySelector('#enhancer-run');
       const text = document.querySelector('#status')?.textContent || '';
       return !!output || (!!button && !button.disabled && !/^(Downloading|Preparing|Enhancing|Encoding|Processing|AI unavailable|Sharpening|Retrying|Memory pressure)/.test(text));
     }, null, { timeout: 90000 });
@@ -212,11 +212,16 @@ async function latestOutputPerceptualMetrics() {
 }
 
 async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /AI super-resolution/) {
-  await page.locator('#enhancer-scale').selectOption(String(scale));
-  await page.locator('#enhancer-content').selectOption(content);
-  await page.locator('#enhancer-restoration').selectOption(profile);
-  await page.locator('#enhancer-sharpen').selectOption(sharpen);
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  if (Number(scale) === 1) {
+    await page.locator('#enhancer-mode-enhance').click();
+    await page.locator('#enhancer-content').selectOption(content);
+    await page.locator('#enhancer-restoration').selectOption(profile);
+    await page.locator('#enhancer-sharpen').selectOption(sharpen);
+  } else {
+    await page.locator('#enhancer-mode-upscale').click();
+    await page.locator('#enhancer-scale').selectOption(String(scale));
+  }
+  await page.locator('#enhancer-run').click();
   const statusText = await waitForTerminal(scale);
   console.log(`DIAGNOSTIC scale=${scale} content=${content} profile=${profile} sharpen=${sharpen} terminal status=${statusText}`);
   assert.match(statusText, requiredStatus, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
@@ -256,11 +261,11 @@ async function testWebGpuFailureFallsBackToWorker() {
       name: 'webgpu-fallback.png', mimeType: 'image/png', buffer: png(160, 120)
     });
     await fallbackPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
-    await fallbackPage.locator('#enhancer-scale').selectOption('1');
+    await fallbackPage.locator('#enhancer-mode-enhance').click();
     await fallbackPage.locator('#enhancer-content').selectOption('general');
     await fallbackPage.locator('#enhancer-restoration').selectOption('balanced');
     await fallbackPage.locator('#enhancer-sharpen').selectOption('off');
-    await fallbackPage.getByRole('button', { name: 'Enhance image' }).click();
+    await fallbackPage.locator('#enhancer-run').click();
     await fallbackPage.waitForFunction(() => {
       const text = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') && /AI super-resolution/.test(text);
@@ -274,10 +279,17 @@ async function testWebGpuFailureFallsBackToWorker() {
 
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#enhancer-scale');
-  await page.waitForSelector('#enhancer-content');
-  await page.waitForSelector('#enhancer-restoration');
-  await page.waitForSelector('#enhancer-sharpen');
+  await page.waitForSelector('#enhancer-mode-enhance');
+  await page.waitForSelector('#enhancer-mode-upscale');
+  await page.waitForSelector('#enhancer-scale', { state: 'attached' });
+  await page.waitForSelector('#enhancer-content', { state: 'attached' });
+  assert.equal(await page.locator('.fields').first().isHidden(), true, 'Task controls must stay hidden until Enhance or Upscale is chosen.');
+  await page.locator('#enhancer-mode-enhance').click();
+  assert.equal(await page.locator('#enhancer-content').isVisible(), true, 'Enhance mode must show enhancement controls.');
+  assert.equal(await page.locator('#enhancer-scale').isVisible(), false, 'Enhance mode must hide upscale controls.');
+  await page.locator('#enhancer-mode-upscale').click();
+  assert.equal(await page.locator('#enhancer-scale').isVisible(), true, 'Upscale mode must show resolution controls.');
+  assert.equal(await page.locator('#enhancer-content').isVisible(), false, 'Upscale mode must hide enhancement-only controls.');
 
   await upload('core-test.png', 24, 16);
   const summary = await page.locator('#enhancer-source-info').textContent();
@@ -289,26 +301,24 @@ try {
   assert.notEqual(sharpOff.info?.[4], originalHash, '1× AI restoration must materially change the encoded pixels from the source.');
   assert.notEqual(sharpOff.info?.[4], sharpMedium.info?.[4], 'Medium sharpening must materially change the encoded pixels compared with Off.');
 
-  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'general', 'balanced', 'auto', /General Photo.*AI super-resolution.*Balanced profile.*Sharpen Auto/);
-  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'low-resolution', 'recovery', 'low', /Low-Resolution Recovery.*AI super-resolution.*Recovery profile.*Sharpen Low/);
+  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
+  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
 
-  await page.locator('#enhancer-scale').selectOption('2');
+  await page.locator('#enhancer-mode-enhance').click();
   await page.locator('#enhancer-content').selectOption('text-logo');
   await page.locator('#enhancer-restoration').selectOption('auto');
   await page.locator('#enhancer-sharpen').selectOption('auto');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
-  const textStatus = await waitForTerminal(2);
+  await page.locator('#enhancer-run').click();
+  const textStatus = await waitForTerminal(1);
   console.log(`DIAGNOSTIC text/logo terminal status=${textStatus}`);
-  assert.match(textStatus, /Text \/ Logo.*Standard high-quality enlargement\. AI deliberately not used\./);
+  assert.match(textStatus, /Text \/ Logo.*Local quality enhancement.*original dimensions preserved/);
   assert.doesNotMatch(textStatus, /AI super-resolution/);
   const textInfo = await latestOutputInfo();
-  assert.deepEqual(textInfo?.slice(0, 3), [48, 32, 'core-test-fidelity-2x.png']);
+  assert.deepEqual(textInfo?.slice(0, 3), [24, 16, 'core-test-enhanced.png']);
 
+  await page.locator('#enhancer-mode-upscale').click();
   await page.locator('#enhancer-scale').selectOption('2');
-  await page.locator('#enhancer-content').selectOption('auto');
-  await page.locator('#enhancer-restoration').selectOption('auto');
-  await page.locator('#enhancer-sharpen').selectOption('auto');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   const autoStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC auto-route terminal status=${autoStatus}`);
   assert.match(autoStatus, /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
@@ -326,7 +336,7 @@ try {
     window.__enhancerHeartbeat = 0;
     window.__enhancerHeartbeatTimer = setInterval(() => { window.__enhancerHeartbeat += 1; }, 25);
   });
-  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'general', 'auto', 'auto', /General Photo.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
+  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
   const heartbeat = await page.evaluate(() => {
     clearInterval(window.__enhancerHeartbeatTimer);
     return window.__enhancerHeartbeat;
@@ -353,7 +363,7 @@ try {
     };
   });
   try {
-    const retried = await runAiScale(2, [600, 440, 'memory-test-upscaled-2x.png'], 'general', 'balanced', 'off', /AI super-resolution.*memory retry ×1 · 96px tiles/);
+    const retried = await runAiScale(2, [600, 440, 'memory-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /AI super-resolution.*memory retry ×1 · 96px tiles/);
     assert.match(retried.statusText, /wasm/);
   } finally {
     await page.evaluate(() => window.__restoreEnhancerGetImageData?.());
@@ -364,16 +374,16 @@ try {
   assert.equal(await page.locator('#enhancer-content').inputValue(), 'auto');
   assert.equal(await page.locator('#enhancer-restoration').inputValue(), 'auto');
   assert.equal(await page.locator('#enhancer-sharpen').inputValue(), 'auto');
+  assert.equal(await page.locator('.fields').first().isHidden(), true, 'Reset must return to the task chooser.');
+  assert.equal(await page.locator('#enhancer-run').isDisabled(), true, 'Reset must require a fresh Enhance/Upscale choice.');
 
   await upload('alpha-test.png', 24, 16, true);
+  await page.locator('#enhancer-mode-upscale').click();
   await page.locator('#enhancer-scale').selectOption('2');
-  await page.locator('#enhancer-content').selectOption('general');
-  await page.locator('#enhancer-restoration').selectOption('recovery');
-  await page.locator('#enhancer-sharpen').selectOption('medium');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   const fallbackStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
-  assert.match(fallbackStatus, /General Photo.*Standard high-quality enlargement\. AI enhancement was not used\./);
+  assert.match(fallbackStatus, /Auto → Low-Resolution Recovery.*Standard high-quality enlargement\. AI enhancement was not used\./);
   const alphaInfo = await latestOutputInfo();
   assert.deepEqual(alphaInfo?.slice(0, 3), [48, 32, 'alpha-test-enlarged-2x.png']);
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
@@ -381,7 +391,7 @@ try {
   await testWebGpuFailureFallsBackToWorker();
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN 1x/2x/4x, perceptual 1× quality gate, quality-preserving AI working resolution, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
+  console.log('PASS: separated Enhance/Upscale UX, Real-ESRGAN 1x/2x/4x, perceptual 1× quality gate, local non-no-op enhancement finish, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

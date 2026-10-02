@@ -85,9 +85,9 @@ try {
 
   await page.locator('input[type=file]').setInputFiles({ name: 'inspect-test.png', mimeType: 'image/png', buffer: png(60, 40) });
   await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('60 × 40'));
+  await page.locator('#enhancer-mode-upscale').click();
   await page.locator('#enhancer-scale').selectOption('2');
-  await page.locator('#enhancer-content').selectOption('text-logo');
-  await page.getByRole('button', { name: 'Enhance image' }).click();
+  await page.locator('#enhancer-run').click();
   await page.waitForSelector('#downloads a[download]');
   await page.waitForFunction(() => !document.querySelector('#enhancer-inspector')?.hidden);
 

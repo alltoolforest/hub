@@ -232,6 +232,59 @@ export function blendForFidelity(aiCanvas, sourceImage, scale, profile) {
   return blended;
 }
 
+export async function applyLocalEnhancement(inputCanvas, analysis, signal, onProgress) {
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+  const ctx = inputCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Local enhancement canvas is unavailable.');
+
+  const softness = analysis?.softness || 0;
+  const lowDetail = analysis?.lowDetail || 0;
+  const noise = analysis?.noise || 0;
+  const contrast = clamp(1.045 + softness * 0.025 + lowDetail * 0.02 - noise * 0.01, 1.04, 1.09);
+  const saturation = clamp(1.025 + lowDetail * 0.02, 1.02, 1.05);
+  const tile = 256;
+  const cols = Math.ceil(inputCanvas.width / tile);
+  const rows = Math.ceil(inputCanvas.height / tile);
+  const total = cols * rows;
+  let index = 0;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+      const x = col * tile;
+      const y = row * tile;
+      const width = Math.min(tile, inputCanvas.width - x);
+      const height = Math.min(tile, inputCanvas.height - y);
+      const pixels = ctx.getImageData(x, y, width, height);
+      const data = pixels.data;
+
+      for (let p = 0; p < data.length; p += 4) {
+        const red = data[p];
+        const green = data[p + 1];
+        const blue = data[p + 2];
+        const y0 = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+        const y1 = clamp((y0 - 128) * contrast + 128, 0, 255);
+        data[p] = clampByte(y1 + (red - y0) * saturation);
+        data[p + 1] = clampByte(y1 + (green - y0) * saturation);
+        data[p + 2] = clampByte(y1 + (blue - y0) * saturation);
+      }
+
+      ctx.putImageData(pixels, x, y);
+      index++;
+      onProgress?.(`Finishing enhancement ${index} of ${total}…`);
+      if ((index & 3) === 0) await new Promise(resolve => requestAnimationFrame(() => resolve()));
+    }
+  }
+
+  return {
+    canvas: inputCanvas,
+    applied: true,
+    label: 'Local contrast / colour finish',
+    contrast,
+    saturation
+  };
+}
+
 export function resolveSharpening(requested, analysis, profile) {
   if (requested === 'off') return Object.freeze({ id: 'off', label: 'Off', amount: 0, threshold: 255, maxDelta: 0 });
   if (requested === 'low') return Object.freeze({ id: 'low', label: 'Low', amount: 0.26, threshold: 4.5, maxDelta: 10 });
