@@ -72,10 +72,17 @@ async function run(name,launcher){
     await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption('low-resolution');
     await page.locator('#enhancer-run').click();
-    await page.waitForFunction(()=>{
-      const status=document.querySelector('#status')?.textContent||'';
-      return !!document.querySelector('#downloads a[download]')&&/dedicated deblur AI/.test(status);
-    },null,{timeout:300000});
+    try {
+      await page.waitForFunction(()=>{
+        const status=document.querySelector('#status')?.textContent||'';
+        return !!document.querySelector('#downloads a[download]')&&/dedicated deblur AI/.test(status);
+      },null,{timeout:120000});
+    } catch (error) {
+      const status=(await page.locator('#status').textContent().catch(()=>''))||'';
+      console.error(`DIAGNOSTIC ${name} dedicated-deblur timeout status=${status}`);
+      console.error(errors.join('\n'));
+      throw error;
+    }
     const info=await page.evaluate(async()=>{
       const a=[...document.querySelectorAll('#downloads a[download]')].at(-1);
       const blob=await(await fetch(a.href)).blob();
