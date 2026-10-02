@@ -4,6 +4,7 @@ import { mountInspector } from './image-enhancer-inspector.js';
 import { mountExportControls } from './image-enhancer-export.js';
 
 let runtimePromise = null;
+let runtimeScriptBlobURL = null;
 let runtimeModuleBlobURL = null;
 
 const OUTPUT_LIMITS = Object.freeze({
@@ -25,8 +26,13 @@ async function loadScriptFromFetchedSource(url) {
       script.onerror = () => { script.remove(); reject(new Error('AI runtime could not start.')); };
       document.head.append(script);
     });
-  } finally {
+    // Keep the runtime script URL alive: ONNX Runtime's WASM proxy worker
+    // reuses the loaded script URL when it starts the background worker.
+    if (runtimeScriptBlobURL && runtimeScriptBlobURL !== blobURL) URL.revokeObjectURL(runtimeScriptBlobURL);
+    runtimeScriptBlobURL = blobURL;
+  } catch (error) {
     URL.revokeObjectURL(blobURL);
+    throw error;
   }
 }
 
@@ -296,6 +302,8 @@ export async function mount(root, slug) {
 }
 
 window.addEventListener('pagehide', () => {
+  if (runtimeScriptBlobURL) URL.revokeObjectURL(runtimeScriptBlobURL);
   if (runtimeModuleBlobURL) URL.revokeObjectURL(runtimeModuleBlobURL);
+  runtimeScriptBlobURL = null;
   runtimeModuleBlobURL = null;
 }, { once: true });

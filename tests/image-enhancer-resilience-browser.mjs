@@ -105,7 +105,7 @@ async function testDeepMemoryRetries() {
   page.on('pageerror', err => errors.push(err.message));
   try {
     await page.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
-    await upload(page, 'retry-twice.png');
+    await upload(page, 'retry-twice.png', 300, 220);
     await page.locator('#enhancer-scale').selectOption('2');
     await page.locator('#enhancer-content').selectOption('general');
     await page.locator('#enhancer-restoration').selectOption('balanced');
@@ -115,7 +115,7 @@ async function testDeepMemoryRetries() {
       const proto = CanvasRenderingContext2D.prototype;
       const original = proto.getImageData;
       proto.getImageData = function(...args) {
-        if (this.canvas.width > 80) throw new RangeError('out of memory two-stage retry test');
+        if (this.canvas.width > 100) throw new RangeError('out of memory two-stage retry test');
         return original.apply(this, args);
       };
       window.__restoreResilienceGetImageData = () => {
@@ -125,9 +125,9 @@ async function testDeepMemoryRetries() {
     });
     try {
       await page.getByRole('button', { name: 'Enhance image' }).click();
-      const status = await waitResult(page, /AI super-resolution.*memory retry ×2 · 48px tiles/);
+      const status = await waitResult(page, /AI super-resolution.*memory retry ×2 · 72px tiles/);
       assert.match(status, /wasm/);
-      assert.deepEqual(await outputDimensions(page), [220, 140, 'retry-twice-upscaled-2x.png']);
+      assert.deepEqual(await outputDimensions(page), [600, 440, 'retry-twice-upscaled-2x.png']);
     } finally {
       await page.evaluate(() => window.__restoreResilienceGetImageData?.());
     }

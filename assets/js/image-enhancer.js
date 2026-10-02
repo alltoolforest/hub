@@ -16,7 +16,7 @@ import {
   resolveRouteControls,
   contentRouteOptions
 } from './image-enhancer-routing.js';
-import { tileCorePlan, isMemoryPressureError } from './image-enhancer-tiles.js';
+import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 
 const MB = 1024 * 1024;
@@ -194,25 +194,35 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     if (this.session) return;
     this.ort = await this.loader.loadRuntime(signal, onProgress);
     const model = await this.loader.loadModel(signal, onProgress);
-    const preferred = this.caps.webgpu ? ['webgpu', 'wasm'] : ['wasm'];
-    onProgress?.(`Preparing AI engine (${this.caps.webgpu ? 'WebGPU preferred' : 'WASM'})…`);
-    try {
-      this.session = await this.ort.InferenceSession.create(model.bytes, {
-        executionProviders: preferred,
-        graphOptimizationLevel: 'all',
-        enableCpuMemArena: true
-      });
-      this.backend = this.caps.webgpu ? 'webgpu-or-wasm' : 'wasm';
-    } catch (firstError) {
-      if (!this.caps.webgpu) throw firstError;
-      onProgress?.('WebGPU initialization failed. Retrying with WASM…');
-      this.session = await this.ort.InferenceSession.create(model.bytes, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
-        enableCpuMemArena: true
-      });
-      this.backend = 'wasm';
+    const preferWebGPU = this.caps.webgpu && !this.caps.isMobile;
+    const useWasmProxy = this.caps.workers;
+    onProgress?.(`Preparing AI engine (${preferWebGPU ? 'WebGPU preferred' : useWasmProxy ? 'WASM worker' : 'WASM'})…`);
+
+    if (preferWebGPU) {
+      try {
+        this.session = await this.ort.InferenceSession.create(model.bytes, {
+          executionProviders: ['webgpu'],
+          graphOptimizationLevel: 'all',
+          enableCpuMemArena: true
+        });
+        this.backend = 'webgpu';
+        return;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        onProgress?.(`WebGPU initialization failed (${error?.message || 'unavailable'}). Retrying with ${useWasmProxy ? 'WASM worker' : 'WASM'}…`);
+      }
     }
+
+    // ONNX Runtime's proxy worker keeps WASM inference off the browser UI thread.
+    // The site CSP permits blob workers; if workers are unavailable, large workloads
+    // are rejected later rather than allowed to freeze the UI thread.
+    this.ort.env.wasm.proxy = useWasmProxy;
+    this.session = await this.ort.InferenceSession.create(model.bytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+      enableCpuMemArena: true
+    });
+    this.backend = useWasmProxy ? 'wasm-worker' : 'wasm';
   }
 
   async process({ image, scale, width, height, signal, onProgress }) {
@@ -220,6 +230,10 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
 
     const plans = tileCorePlan(this.caps);
+    const firstTileCount = estimateTileCount(image.width, image.height, plans[0]);
+    if (this.backend === 'wasm' && !this.caps.workers && firstTileCount > 24) {
+      throw new Error('This browser cannot run this AI workload responsively without a Web Worker.');
+    }
     let lastError = null;
     for (let attempt = 0; attempt < plans.length; attempt++) {
       const tileCore = plans[attempt];
@@ -276,10 +290,12 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
           const srcY = padTop * this.nativeScale;
           const srcW = coreW * this.nativeScale;
           const srcH = coreH * this.nativeScale;
-          const dstX = x * scale;
-          const dstY = y * scale;
-          const dstW = coreW * scale;
-          const dstH = coreH * scale;
+          const dstX = Math.round(x * width / image.width);
+          const dstY = Math.round(y * height / image.height);
+          const dstRight = Math.round((x + coreW) * width / image.width);
+          const dstBottom = Math.round((y + coreH) * height / image.height);
+          const dstW = Math.max(1, dstRight - dstX);
+          const dstH = Math.max(1, dstBottom - dstY);
 
           outputCtx.drawImage(tile, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
           tile.width = tile.height = 0;
@@ -295,6 +311,8 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
         tileCount: total,
         tileCore,
         retryCount,
+        inferenceWidth: image.width,
+        inferenceHeight: image.height,
         reconstructed: true
       };
     } catch (error) {
@@ -481,6 +499,27 @@ function outputScaleOptions(image, caps) {
   }
 }
 
+async function prepareAiInferenceInput(image, targetWidth, targetHeight, nativeScale, signal) {
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale);
+  if (plan.width === image.width && plan.height === image.height) {
+    return { image, temporary: null, plan };
+  }
+
+  const resized = el('canvas', { width: plan.width, height: plan.height });
+  const ctx = resized.getContext('2d', { alpha: false });
+  if (!ctx) throw new Error('AI working canvas is unavailable in this browser.');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, 0, 0, plan.width, plan.height);
+  await sleepFrame();
+  if (signal?.aborted) {
+    resized.width = resized.height = 0;
+    throw new DOMException('Processing cancelled.', 'AbortError');
+  }
+  return { image: resized, temporary: resized, plan };
+}
+
 async function detectTransparency(image) {
   const sampleW = Math.min(512, image.width);
   const sampleH = Math.min(512, image.height);
@@ -633,6 +672,7 @@ export async function mount(root, slug) {
     const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
     let result = null;
     let temporaryInput = null;
+    let temporaryAiInput = null;
     let sharpened = { applied: false, label: sharpening.label };
     setProcessing(true);
     try {
@@ -651,8 +691,15 @@ export async function mount(root, slug) {
       if (hasTransparency) throw new Error('AI transparency-safe reconstruction is not verified yet.');
 
       status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
-      const prepared = await prepareRestorationInput(image, restoration, signal);
+      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal);
+      temporaryAiInput = aiPrepared.temporary;
+      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
       temporaryInput = prepared.temporary;
+      if (temporaryAiInput && temporaryInput) {
+        temporaryAiInput.width = temporaryAiInput.height = 0;
+        temporaryAiInput = null;
+      }
+      status(`AI working size ${prepared.image.width.toLocaleString()} × ${prepared.image.height.toLocaleString()}…`);
       result = await aiEngine.process({
         image: prepared.image,
         scale,
@@ -663,6 +710,8 @@ export async function mount(root, slug) {
       });
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       temporaryInput = null;
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryAiInput = null;
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
       sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
       result.canvas = sharpened.canvas;
@@ -672,8 +721,11 @@ export async function mount(root, slug) {
       output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
       const sharpenLabel = sharpened.applied ? sharpened.label : sharpened.label === 'Off' ? 'Off' : sharpened.label;
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount} · ${result.tileCore}px tiles` : '';
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${result.tileCount} tiles${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
+      const tileLabel = `${result.tileCount} ${result.tileCount === 1 ? 'tile' : 'tiles'}`;
+      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${tileLabel} · AI input ${result.inferenceWidth.toLocaleString()} × ${result.inferenceHeight.toLocaleString()}${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
     } catch (error) {
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryAiInput = null;
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       temporaryInput = null;
       if (error?.name === 'AbortError' || signal.aborted) {
@@ -693,6 +745,7 @@ export async function mount(root, slug) {
         status(fallbackError?.message || 'Image processing failed.', true);
       }
     } finally {
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       if (result?.canvas) result.canvas.width = result.canvas.height = 0;
       setProcessing(false);
