@@ -223,13 +223,13 @@ async function testMobileSafety() {
     await page.evaluate(() => {
       const input = document.querySelector('input[type=file]');
       const file = new File([new Uint8Array(1)], 'too-large-mobile.png', { type: 'image/png' });
-      Object.defineProperty(file, 'size', { configurable: true, value: 121 * 1024 * 1024 });
+      Object.defineProperty(file, 'size', { configurable: true, value: 250 * 1024 * 1024 });
       const transfer = new DataTransfer();
       transfer.items.add(file);
       input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('below 120 MB'));
+    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('For stability on this device, choose a file below'));
     assert.match((await page.locator('.selected-files').textContent()) || '', /Could not open/);
 
     assert.equal(consoleErrors.length, 0, `Mobile safety console errors:\n${consoleErrors.join('\n')}`);
