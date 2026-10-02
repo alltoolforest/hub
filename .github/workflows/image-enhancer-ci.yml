@@ -11,6 +11,8 @@ on:
       - 'assets/js/image-enhancer-inspector.js'
       - 'assets/js/image-enhancer-output.js'
       - 'assets/js/image-enhancer-processing-worker.js'
+      - 'assets/js/image-enhancer-raw.js'
+      - 'assets/js/image-enhancer-raw-worker.js'
       - 'assets/js/image-enhancer-restoration.js'
       - 'assets/js/image-enhancer-routing.js'
       - 'assets/js/image-enhancer-tiles.js'
@@ -23,6 +25,7 @@ on:
       - 'tests/image-enhancer-compatibility-browser.mjs'
       - 'tests/image-enhancer-resilience-browser.mjs'
       - 'tests/image-enhancer-responsiveness-browser.mjs'
+      - 'tests/image-enhancer-raw-browser.mjs'
       - 'tests/image-enhancer-cross-browser.mjs'
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
@@ -63,6 +66,8 @@ jobs:
           node --check assets/js/image-enhancer-inspector.js
           node --check assets/js/image-enhancer-output.js
           node --check assets/js/image-enhancer-processing-worker.js
+          node --check assets/js/image-enhancer-raw.js
+          node --check assets/js/image-enhancer-raw-worker.js
           node --check assets/js/image-enhancer-restoration.js
           node --check assets/js/image-enhancer-routing.js
           node --check assets/js/image-enhancer-tiles.js
@@ -70,6 +75,7 @@ jobs:
           node --check tests/image-enhancer-compatibility-browser.mjs
           node --check tests/image-enhancer-resilience-browser.mjs
           node --check tests/image-enhancer-responsiveness-browser.mjs
+          node --check tests/image-enhancer-raw-browser.mjs
           node --check tests/image-enhancer-cross-browser.mjs
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
@@ -78,6 +84,8 @@ jobs:
           grep -q "Memory pressure detected" assets/js/image-enhancer.js
           grep -q "env.wasm.proxy" assets/js/image-enhancer.js
           grep -q "image-enhancer-processing-worker.js" assets/js/image-enhancer.js
+          grep -q "image-enhancer-raw.js" assets/js/image-enhancer.js
+          grep -q "rawconvert-wasm@0.1.1" assets/js/image-enhancer-raw-worker.js
           ! grep -q "executionProviders: \['webgpu'\]" assets/js/image-enhancer.js
           grep -q "aiInferenceDimensions" assets/js/image-enhancer.js
           grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
@@ -137,7 +145,7 @@ jobs:
 
   engine-compatibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-noble
     env:
@@ -156,3 +164,36 @@ jobs:
 
       - name: Run Firefox + WebKit real-WASM audit
         run: node tests/image-enhancer-cross-browser.mjs
+
+  raw-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Protect frozen files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object assets/js/images.js)" = "07caaa63a6c3fa208b5f476e1748d8dfab681f7b"
+          test "$(git hash-object assets/js/batch-image-processor.js)" = "4e3af54dd751fedbd5c15effaebc129c94d8c8a1"
+          test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
+          test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
+          test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Run Chrome + Firefox + WebKit camera RAW audit
+        run: node tests/image-enhancer-raw-browser.mjs
+
