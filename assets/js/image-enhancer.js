@@ -23,6 +23,7 @@ import {
   applyFaceIdentityGuard,
   fallbackPortraitSafetyRegion
 } from './image-enhancer-face-safety.js';
+import { applyArtifactFidelityGuard } from './image-enhancer-artifact-guard.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -1464,6 +1465,25 @@ export async function mount(root, slug) {
     }
   }
 
+  async function applyFinalArtifactGuard(canvas, faces, mode, signal) {
+    status('Checking restoration fidelity…');
+    try {
+      const guarded = await applyArtifactFidelityGuard({
+        canvas,
+        sourceImage: image,
+        faces,
+        mode,
+        signal,
+        onStage: stage => status(`Reducing restoration artifacts · safety pass ${stage}…`)
+      });
+      return guarded;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      console.warn('Artifact/fidelity guard unavailable; preserving completed image.', error);
+      return { canvas, applied: false, stages: 0, analysis: null };
+    }
+  }
+
   async function runEnhancePipeline(signal) {
     const scale = 1;
     const requestedContent = read('enhancer-content');
@@ -1536,11 +1556,14 @@ export async function mount(root, slug) {
         result.canvas = blended;
         const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
         result.canvas = faceGuard.canvas;
+        const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
+        result.canvas = fidelityGuard.canvas;
 
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
         const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}.`);
+        const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${fidelityLabel}.`);
         return result;
       }
 
@@ -1576,13 +1599,16 @@ export async function mount(root, slug) {
       result.canvas = detail.canvas;
       const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'enhance');
       result.canvas = faceGuard.canvas;
+      const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'enhance', signal);
+      result.canvas = fidelityGuard.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
       const detailLabel = detail.protected ? ' · source detail protected' : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${detailLabel}.`);
+      const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${detailLabel}${fidelityLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -1657,12 +1683,15 @@ export async function mount(root, slug) {
       result.canvas = finished.canvas;
       const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'upscale');
       result.canvas = faceGuard.canvas;
+      const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'upscale', signal);
+      result.canvas = fidelityGuard.canvas;
 
       status('Creating upscaled image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, `-upscaled-${scale}x`, 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Upscaled ${scale}× · ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
+      status(`Upscaled ${scale}× · ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${fidelityLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
