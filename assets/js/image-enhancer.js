@@ -22,8 +22,8 @@ const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
-  desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
+  mobile: { maxPixels: 16e6, maxSide: 8192, maxFileMB: 120, maxSourcePixels: 48e6 },
+  desktop: { maxPixels: 64e6, maxSide: 16384, maxFileMB: 500, maxSourcePixels: 120e6 }
 });
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -513,6 +513,97 @@ async function readResponseWithProgress(response, signal, onProgress) {
     offset += chunk.byteLength;
   }
   return joined.buffer;
+}
+
+function sampleDetailMetrics(input) {
+  const sourceWidth = Number(input?.width) || 0;
+  const sourceHeight = Number(input?.height) || 0;
+  if (!sourceWidth || !sourceHeight) return { edge: 0, texture: 0 };
+  const sampleW = Math.max(48, Math.min(320, sourceWidth));
+  const sampleH = Math.max(48, Math.round(sampleW * sourceHeight / sourceWidth));
+  const canvas = el('canvas', { width: sampleW, height: sampleH });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!ctx) return { edge: 0, texture: 0 };
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(input, 0, 0, sampleW, sampleH);
+  const rgba = ctx.getImageData(0, 0, sampleW, sampleH).data;
+  canvas.width = canvas.height = 0;
+
+  const gray = new Float32Array(sampleW * sampleH);
+  for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
+    gray[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
+  }
+
+  let edge = 0;
+  let texture = 0;
+  let edgeCount = 0;
+  let textureCount = 0;
+  for (let y = 1; y < sampleH - 1; y++) {
+    for (let x = 1; x < sampleW - 1; x++) {
+      const i = y * sampleW + x;
+      edge += Math.abs(gray[i + 1] - gray[i]) + Math.abs(gray[i + sampleW] - gray[i]);
+      edgeCount += 2;
+      const neighbours = (gray[i - 1] + gray[i + 1] + gray[i - sampleW] + gray[i + sampleW]) * 0.25;
+      texture += Math.abs(gray[i] - neighbours);
+      textureCount++;
+    }
+  }
+  return {
+    edge: edgeCount ? edge / edgeCount : 0,
+    texture: textureCount ? texture / textureCount : 0
+  };
+}
+
+async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, signal) {
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+  const source = sampleDetailMetrics(sourceImage);
+  const current = sampleDetailMetrics(resultCanvas);
+  const edgeRatio = source.edge > 0.001 ? current.edge / source.edge : 1;
+  const textureRatio = source.texture > 0.001 ? current.texture / source.texture : 1;
+  const initialRatio = Math.min(edgeRatio, textureRatio);
+  const target = Number(profile?.minDetailRatio) || 0.90;
+
+  if (initialRatio >= target) {
+    return { canvas: resultCanvas, detailRatio: initialRatio, protected: false };
+  }
+
+  let best = resultCanvas;
+  let bestRatio = initialRatio;
+  for (const processedAlpha of [0.48, 0.36, 0.26]) {
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    const candidate = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
+    const ctx = candidate.getContext('2d', { alpha: false });
+    if (!ctx) {
+      candidate.width = candidate.height = 0;
+      break;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sourceImage, 0, 0, candidate.width, candidate.height);
+    ctx.globalAlpha = processedAlpha;
+    ctx.drawImage(resultCanvas, 0, 0);
+    ctx.globalAlpha = 1;
+
+    const metrics = sampleDetailMetrics(candidate);
+    const ratio = Math.min(
+      source.edge > 0.001 ? metrics.edge / source.edge : 1,
+      source.texture > 0.001 ? metrics.texture / source.texture : 1
+    );
+
+    if (ratio > bestRatio) {
+      if (best !== resultCanvas) best.width = best.height = 0;
+      best = candidate;
+      bestRatio = ratio;
+    } else {
+      candidate.width = candidate.height = 0;
+    }
+    if (bestRatio >= target) break;
+    await sleepFrame();
+  }
+
+  if (best !== resultCanvas) resultCanvas.width = resultCanvas.height = 0;
+  return { canvas: best, detailRatio: bestRatio, protected: best !== resultCanvas };
 }
 
 async function detectDeviceCapabilities() {
