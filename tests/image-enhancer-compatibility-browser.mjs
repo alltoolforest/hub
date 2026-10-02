@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import assert from 'node:assert/strict';
-import { aiInferenceDimensions, tileCorePlan } from '../assets/js/image-enhancer-tiles.js';
+import { aiInferenceDimensions, tileCorePlan, estimateTileCount } from '../assets/js/image-enhancer-tiles.js';
 import { resolveContentRoute } from '../assets/js/image-enhancer-routing.js';
 
 const ROOT = process.cwd();
@@ -221,19 +221,27 @@ async function testMobileSafety() {
 
 try {
   assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [144, 112, 88, 64, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [192, 144, 112, 80, 56, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true, deviceMemory: 8, cores: 8 }), [192, 160, 128, 96, 72, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true, iosLike: true, cores: 8 }), [176, 144, 112, 88, 64, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [192, 160, 128, 96, 72, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true, deviceMemory: 8, cores: 8 }), [224, 192, 160, 128, 96, 72, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true, iosLike: true, cores: 8 }), [208, 176, 144, 112, 88, 64, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: true, isMobile: false }), [192, 160, 128, 96, 72, 56]);
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 480, height: 640 }, 'Desktop 1× must retain at least half-resolution source detail for AI restoration.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 720, height: 960 }, 'Desktop 2× must retain a 75% linear source working image.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4, { isMobile: true }), { width: 384, height: 512 }, 'Mobile 1× keeps a bounded quality floor without reverting to full-source inference.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4, { isMobile: true }), { width: 576, height: 768 }, 'Mobile 2× keeps a bounded 60% linear quality floor.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true }), { width: 432, height: 576 }, 'Lower-capability mobile 4× must use a bounded AI working image.');
-  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true, deviceMemory: 8, cores: 8 }), { width: 691, height: 922 }, 'Capable Android-class mobile keeps more source detail for 4×.');
-  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true, iosLike: true, cores: 8 }), { width: 653, height: 870 }, 'iOS-class 4× uses a conservative high-detail working image.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true, deviceMemory: 8, cores: 8 }), { width: 499, height: 666 }, 'Capable Android-class mobile uses bounded half-source-class AI work for 4×.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true, iosLike: true, cores: 8 }), { width: 480, height: 640 }, 'iOS-class 4× uses bounded half-source AI work.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
+
+  const androidClass4xPlan = aiInferenceDimensions(717, 721, 2868, 2884, 4, { isMobile: true, deviceMemory: 8, cores: 8 });
+  assert.deepEqual(androidClass4xPlan, { width: 373, height: 375 }, '717×721 Android-class 4× must use bounded AI work.');
+  assert.equal(estimateTileCount(androidClass4xPlan.width, androidClass4xPlan.height, tileCorePlan({ webgpu: false, isMobile: true, deviceMemory: 8, cores: 8 })[0]), 4, 'Android-class 4× should start with only four AI tiles.');
+
+  const iosClass4xPlan = aiInferenceDimensions(717, 721, 2868, 2884, 4, { isMobile: true, iosLike: true, cores: 8 });
+  assert.deepEqual(iosClass4xPlan, { width: 359, height: 361 }, '717×721 iOS-class 4× must use bounded AI work.');
+  assert.equal(estimateTileCount(iosClass4xPlan.width, iosClass4xPlan.height, tileCorePlan({ webgpu: false, isMobile: true, iosLike: true, cores: 8 })[0]), 4, 'iOS-class 4× should start with only four AI tiles.');
 
   const softOneX = resolveContentRoute('auto', {
     falseResolution: false, lowResolution: false, recoveryScore: 0.24,
