@@ -25,6 +25,7 @@ on:
       - 'tests/image-enhancer-resilience-browser.mjs'
       - 'tests/image-enhancer-responsiveness-browser.mjs'
       - 'tests/image-enhancer-deblur-browser.mjs'
+      - 'tests/image-enhancer-diagnosis-browser.mjs'
       - 'tests/fixtures/nafnet-natural-sharp.png'
       - 'tests/image-enhancer-deblur-cross-browser.mjs'
       - 'tests/image-enhancer-cross-browser.mjs'
@@ -77,6 +78,7 @@ jobs:
           node --check tests/image-enhancer-resilience-browser.mjs
           node --check tests/image-enhancer-responsiveness-browser.mjs
           node --check tests/image-enhancer-deblur-browser.mjs
+          node --check tests/image-enhancer-diagnosis-browser.mjs
           node --check tests/image-enhancer-deblur-cross-browser.mjs
           node --check tests/image-enhancer-cross-browser.mjs
           node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4'||m.models['deblur-nafnet'].sha256!=='05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204') process.exit(1);"
@@ -85,6 +87,9 @@ jobs:
           grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
           grep -q "Memory pressure detected" assets/js/image-enhancer.js
           grep -q "likelyBlurred" assets/js/image-enhancer-restoration.js
+          grep -q "buildDegradationDiagnosis" assets/js/image-enhancer-restoration.js
+          grep -q "underexposure" assets/js/image-enhancer-restoration.js
+          grep -q "overexposure" assets/js/image-enhancer-restoration.js
           grep -q "OnnxDeblurEngine" assets/js/image-enhancer.js
           grep -q "dedicated deblur AI" assets/js/image-enhancer.js
           grep -q "env.wasm.proxy" assets/js/image-enhancer.js
@@ -124,6 +129,11 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-deblur-browser.mjs
+
+      - name: Run degradation diagnosis audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-diagnosis-browser.mjs
 
       - name: Run realistic desktop responsiveness audit
         env:
