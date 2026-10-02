@@ -167,7 +167,7 @@ export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mo
   const clippingRisk = clamp(clippingIncrease / 0.07);
   const detailLossRisk = clamp((limit.detailFloor - Math.min(edgeRatio, textureRatio)) / 0.28);
 
-  const risk = clamp(Math.max(
+  const riskComponents = [
     globalDeviationRisk * 0.82,
     faceDeviationRisk,
     edgeInflationRisk * 0.92,
@@ -175,7 +175,12 @@ export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mo
     faceInflationRisk,
     clippingRisk * 0.90,
     detailLossRisk
-  ));
+  ];
+  const risk = clamp(Math.max(...riskComponents));
+  const meanRisk = riskComponents.reduce((sum, value) => sum + value, 0) / riskComponents.length;
+  // Severity intentionally remains unsaturated so progressive safety stages can
+  // still be ranked when more than one artifact class has already reached risk 1.
+  const severity = risk + meanRisk * 0.35;
 
   const reasons = [];
   if (faceDeviationRisk >= 0.58) reasons.push('face deviation');
@@ -189,6 +194,7 @@ export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mo
   return Object.freeze({
     mode,
     risk,
+    severity,
     safe: risk < 0.58,
     reasons: Object.freeze(reasons),
     globalMae,
@@ -234,10 +240,10 @@ export async function applyArtifactFidelityGuard({
   }
 
   const alphas = mode === 'deblur'
-    ? [0.90, 0.82, 0.74, 0.66]
+    ? [0.90, 0.80, 0.70, 0.60]
     : mode === 'upscale'
-      ? [0.92, 0.84, 0.76, 0.68]
-      : [0.88, 0.80, 0.72, 0.64];
+      ? [0.92, 0.82, 0.72, 0.62]
+      : [0.86, 0.74, 0.62, 0.50];
 
   let bestCanvas = canvas;
   let bestAnalysis = initial;
@@ -251,7 +257,14 @@ export async function applyArtifactFidelityGuard({
     const candidate = blendCandidate(sourceImage, canvas, alpha);
     const analysis = analyzeArtifactFidelity(sourceImage, candidate, faces, mode);
 
-    if (analysis.risk + 0.015 < bestAnalysis.risk) {
+    if (
+      analysis.safe ||
+      analysis.severity + 0.012 < bestAnalysis.severity ||
+      (
+        Math.abs(analysis.severity - bestAnalysis.severity) <= 0.012 &&
+        analysis.faceMae + 0.5 < bestAnalysis.faceMae
+      )
+    ) {
       if (bestCanvas !== canvas) bestCanvas.width = bestCanvas.height = 0;
       bestCanvas = candidate;
       bestAnalysis = analysis;
