@@ -8,9 +8,7 @@ import {
   resolveRestorationProfile,
   prepareRestorationInput,
   blendForFidelity,
-  resolveSharpening,
-  applyIntelligentSharpen,
-  applyLocalEnhancement
+  resolveSharpening
 } from './image-enhancer-restoration.js';
 import {
   resolveContentRoute,
@@ -30,13 +28,124 @@ const DEFAULT_LIMITS = Object.freeze({
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
-async function applySharpenWithoutDiscardingResult(inputCanvas, settings, signal, onProgress) {
-  try {
-    return await applyIntelligentSharpen(inputCanvas, settings, signal, onProgress);
-  } catch (error) {
-    if (!isMemoryPressureError(error)) throw error;
-    onProgress?.('Sharpening skipped to preserve the completed result under memory pressure.');
-    return { canvas: inputCanvas, applied: false, label: 'Skipped for memory safety' };
+class ProcessingWorkerBridge {
+  constructor(caps) {
+    this.available = !!(caps?.workers && caps?.offscreenCanvas && caps?.createImageBitmap);
+    this.worker = this.available
+      ? new Worker(new URL('./image-enhancer-processing-worker.js', import.meta.url), { type: 'module' })
+      : null;
+    this.sequence = 0;
+    this.pending = new Map();
+
+    this.worker?.addEventListener('message', event => {
+      const message = event.data || {};
+      const pending = this.pending.get(message.id);
+      if (!pending) return;
+      this.pending.delete(message.id);
+      pending.cleanup?.();
+      if (!message.ok) {
+        const error = new Error(message.error || 'Background image processing failed.');
+        error.name = message.name || 'Error';
+        pending.reject(error);
+        return;
+      }
+      pending.resolve(message);
+    });
+
+    this.worker?.addEventListener('error', event => {
+      const error = new Error(event?.message || 'Background image worker stopped unexpectedly.');
+      for (const pending of this.pending.values()) {
+        pending.cleanup?.();
+        pending.reject(error);
+      }
+      this.pending.clear();
+    });
+  }
+
+  request(type, payload, transfer = [], signal) {
+    if (!this.worker) return Promise.reject(new Error('Background image processing is unavailable in this browser.'));
+    if (signal?.aborted) return Promise.reject(new DOMException('Processing cancelled.', 'AbortError'));
+    const id = ++this.sequence;
+    return new Promise((resolve, reject) => {
+      const abort = () => {
+        this.worker?.postMessage({ type: 'cancel', id });
+        this.pending.delete(id);
+        reject(new DOMException('Processing cancelled.', 'AbortError'));
+      };
+      if (signal) signal.addEventListener('abort', abort, { once: true });
+      const cleanup = () => signal?.removeEventListener('abort', abort);
+      this.pending.set(id, { resolve, reject, cleanup });
+      try {
+        this.worker.postMessage({ id, type, ...payload }, transfer);
+      } catch (error) {
+        this.pending.delete(id);
+        cleanup();
+        reject(error);
+      }
+    });
+  }
+
+  async packTile(image, sx, sy, width, height, signal) {
+    const bitmap = await createImageBitmap(image, sx, sy, width, height);
+    const result = await this.request('pack-tile', { bitmap, width, height }, [bitmap], signal);
+    return new Float32Array(result.buffer);
+  }
+
+  async tensorToBitmap(data, width, height, signal) {
+    let buffer;
+    if (data?.buffer instanceof ArrayBuffer && data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
+      buffer = data.buffer;
+    } else {
+      buffer = new Float32Array(data).buffer;
+    }
+    let result;
+    try {
+      result = await this.request('tensor-to-bitmap', { buffer, width, height }, [buffer], signal);
+    } catch (error) {
+      if (error?.name === 'DataCloneError') {
+        const copy = new Float32Array(data).buffer;
+        result = await this.request('tensor-to-bitmap', { buffer: copy, width, height }, [copy], signal);
+      } else {
+        throw error;
+      }
+    }
+    return result.bitmap;
+  }
+
+  async postprocessCanvas(inputCanvas, { local, analysis, sharpening }, signal) {
+    if (!this.available) return { canvas: inputCanvas, applied: false, label: 'Background finishing unavailable' };
+    const bitmap = await createImageBitmap(inputCanvas);
+    const result = await this.request('postprocess', {
+      bitmap,
+      local: !!local,
+      analysis: analysis || null,
+      sharpening: sharpening || null
+    }, [bitmap], signal);
+
+    const canvas = el('canvas', { width: result.bitmap.width, height: result.bitmap.height });
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) {
+      result.bitmap.close?.();
+      throw new Error('Finished image canvas is unavailable.');
+    }
+    ctx.drawImage(result.bitmap, 0, 0);
+    result.bitmap.close?.();
+    inputCanvas.width = inputCanvas.height = 0;
+    return {
+      canvas,
+      applied: !!(local || sharpening?.amount),
+      label: sharpening?.label || 'Auto'
+    };
+  }
+
+  dispose() {
+    this.worker?.terminate();
+    this.worker = null;
+    for (const pending of this.pending.values()) {
+      pending.cleanup?.();
+      pending.reject(new Error('Background image worker closed.'));
+    }
+    this.pending.clear();
   }
 }
 
@@ -71,6 +180,31 @@ class BrowserResampleEngine extends EnhancementEngine {
     }
     onProgress?.('Encoding output…');
     return { canvas, aiUsed: false, engine: this, backend: 'browser-resample' };
+  }
+}
+
+class BrowserEnhanceEngine extends EnhancementEngine {
+  constructor() {
+    super('browser-enhance', 'Fast local enhancement', 'fallback');
+  }
+
+  async process({ image, width, height, signal, onProgress }) {
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    onProgress?.('Improving the image locally…');
+    const canvas = el('canvas', { width, height });
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) throw new Error('Canvas processing is unavailable in this browser.');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.filter = 'contrast(1.06) saturate(1.03)';
+    ctx.drawImage(image, 0, 0, width, height);
+    ctx.filter = 'none';
+    await sleepFrame();
+    if (signal?.aborted) {
+      canvas.width = canvas.height = 0;
+      throw new DOMException('Processing cancelled.', 'AbortError');
+    }
+    return { canvas, aiUsed: false, engine: this, backend: 'browser-enhance' };
   }
 }
 
@@ -191,10 +325,11 @@ class EnhancerModelLoader {
 }
 
 class OnnxSuperResolutionEngine extends EnhancementEngine {
-  constructor(loader, caps) {
+  constructor(loader, caps, processor) {
     super('realesrgan-x4v3', 'Real-ESRGAN general x4v3', 'ai');
     this.loader = loader;
     this.caps = caps;
+    this.processor = processor;
     this.session = null;
     this.ort = null;
     this.backend = null;
@@ -203,48 +338,32 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
 
   async initialize(signal, onProgress) {
     if (this.session) return;
+    if (!this.caps.workers) throw new Error('Background AI processing is unavailable in this browser.');
     this.ort = await this.loader.loadRuntime(signal, onProgress);
     const model = await this.loader.loadModel(signal, onProgress);
-    const preferWebGPU = this.caps.webgpu && !this.caps.isMobile;
-    const useWasmProxy = this.caps.workers;
-    onProgress?.(`Preparing AI engine (${preferWebGPU ? 'WebGPU preferred' : useWasmProxy ? 'WASM worker' : 'WASM'})…`);
+    onProgress?.('Preparing background AI engine…');
 
-    if (preferWebGPU) {
-      try {
-        this.session = await this.ort.InferenceSession.create(model.bytes, {
-          executionProviders: ['webgpu'],
-          graphOptimizationLevel: 'all',
-          enableCpuMemArena: true
-        });
-        this.backend = 'webgpu';
-        return;
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        onProgress?.(`WebGPU initialization failed (${error?.message || 'unavailable'}). Retrying with ${useWasmProxy ? 'WASM worker' : 'WASM'}…`);
-      }
-    }
-
-    // ONNX Runtime's proxy worker keeps WASM inference off the browser UI thread.
-    // The site CSP permits blob workers; if workers are unavailable, large workloads
-    // are rejected later rather than allowed to freeze the UI thread.
-    this.ort.env.wasm.proxy = useWasmProxy;
+    // Production intentionally uses worker-backed WASM. WebGPU is not selected
+    // until a real-browser responsiveness gate proves it safe for this tool.
+    this.ort.env.wasm.proxy = true;
     this.session = await this.ort.InferenceSession.create(model.bytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
       enableCpuMemArena: true
     });
-    this.backend = useWasmProxy ? 'wasm-worker' : 'wasm';
+    this.backend = 'wasm-worker';
   }
 
   async process({ image, scale, width, height, signal, onProgress }) {
     await this.initialize(signal, onProgress);
     if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
 
-    const plans = tileCorePlan(this.caps);
+    const plans = tileCorePlan({ ...this.caps, webgpu: false });
     const firstTileCount = estimateTileCount(image.width, image.height, plans[0]);
-    if (this.backend === 'wasm' && !this.caps.workers && firstTileCount > 24) {
-      throw new Error('This browser cannot run this AI workload responsively without a Web Worker.');
+    if (!this.caps.workers || !this.processor?.available) {
+      throw new Error('This browser cannot run this AI workload responsively without background workers.');
     }
+    if (!Number.isFinite(firstTileCount)) throw new Error('AI tile plan could not be created.');
     let lastError = null;
     for (let attempt = 0; attempt < plans.length; attempt++) {
       const tileCore = plans[attempt];
@@ -309,7 +428,10 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
           const dstH = Math.max(1, dstBottom - dstY);
 
           outputCtx.drawImage(tile, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-          tile.width = tile.height = 0;
+          tile.close?.();
+          if ('width' in tile) {
+            try { tile.width = tile.height = 0; } catch {}
+          }
           await sleepFrame();
         }
       }
@@ -333,27 +455,8 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
   }
 
   async inferTile(image, sx, sy, width, height, signal) {
-    const inputCanvas = el('canvas', { width, height });
-    const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-    if (!inputCtx) throw new RangeError('AI tile canvas allocation failed.');
-    inputCtx.drawImage(image, sx, sy, width, height, 0, 0, width, height);
-    const pixels = inputCtx.getImageData(0, 0, width, height).data;
-    const plane = width * height;
-    let data;
-    try {
-      data = new Float32Array(plane * 3);
-    } catch (error) {
-      inputCanvas.width = inputCanvas.height = 0;
-      throw new RangeError(`AI tensor allocation failed: ${error?.message || 'out of memory'}`);
-    }
-    for (let i = 0, p = 0; i < plane; i++, p += 4) {
-      data[i] = pixels[p] / 255;
-      data[plane + i] = pixels[p + 1] / 255;
-      data[plane * 2 + i] = pixels[p + 2] / 255;
-    }
-    inputCanvas.width = inputCanvas.height = 0;
     if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-
+    const data = await this.processor.packTile(image, sx, sy, width, height, signal);
     const tensor = new this.ort.Tensor('float32', data, [1, 3, height, width]);
     const inputName = this.session.inputNames[0];
     const outputName = this.session.outputNames[0];
@@ -365,26 +468,7 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     if (outW !== width * this.nativeScale || outH !== height * this.nativeScale) {
       throw new Error(`AI model returned ${outW} × ${outH}; expected ${width * this.nativeScale} × ${height * this.nativeScale}.`);
     }
-
-    const outputCanvas = el('canvas', { width: outW, height: outH });
-    const outputCtx = outputCanvas.getContext('2d');
-    if (!outputCtx) throw new RangeError('AI output canvas allocation failed.');
-    const imageData = outputCtx.createImageData(outW, outH);
-    const outPlane = outW * outH;
-    let maxProbe = 0;
-    const probeStep = Math.max(1, Math.floor(outPlane / 1024));
-    for (let i = 0; i < outPlane; i += probeStep) {
-      maxProbe = Math.max(maxProbe, Math.abs(output.data[i]), Math.abs(output.data[outPlane + i]), Math.abs(output.data[outPlane * 2 + i]));
-    }
-    const multiplier = maxProbe > 2 ? 1 : 255;
-    for (let i = 0, p = 0; i < outPlane; i++, p += 4) {
-      imageData.data[p] = clampByte(output.data[i] * multiplier);
-      imageData.data[p + 1] = clampByte(output.data[outPlane + i] * multiplier);
-      imageData.data[p + 2] = clampByte(output.data[outPlane * 2 + i] * multiplier);
-      imageData.data[p + 3] = 255;
-    }
-    outputCtx.putImageData(imageData, 0, 0);
-    return outputCanvas;
+    return this.processor.tensorToBitmap(output.data, outW, outH, signal);
   }
 
   async dispose() {
@@ -447,21 +531,8 @@ async function detectDeviceCapabilities() {
     maxFileMB: baseline.maxFileMB
   };
 
-  if (navigator.gpu?.requestAdapter) {
-    try {
-      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-      if (adapter) {
-        caps.webgpu = true;
-        const textureLimit = Number(adapter.limits?.maxTextureDimension2D);
-        if (Number.isFinite(textureLimit) && textureLimit > 0) {
-          caps.maxTextureDimension2D = textureLimit;
-          caps.maxSide = Math.min(caps.maxSide, textureLimit);
-        }
-      }
-    } catch {
-      caps.webgpu = false;
-    }
-  }
+  // WebGPU detection is intentionally skipped. The production enhancer uses
+  // worker-backed WASM until WebGPU passes the same real-browser responsiveness gate.
 
   return Object.freeze(caps);
 }
@@ -486,7 +557,7 @@ function safeOutputFor(image, scale, caps) {
 
 function sourceSummary(file, image, caps, analysis) {
   const mp = image.width * image.height / 1e6;
-  const base = `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.webgpu ? 'WebGPU available' : caps.wasm ? 'WASM AI available' : 'standard fallback only'}`;
+  const base = `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.wasm && caps.workers ? 'background AI ready' : 'standard fallback only'}`;
   return analysis?.note ? `${base} · Analysis: ${analysis.note}` : base;
 }
 
@@ -550,8 +621,10 @@ export async function mount(root, slug) {
 
   const caps = await detectDeviceCapabilities();
   const loader = new EnhancerModelLoader();
-  const aiEngine = new OnnxSuperResolutionEngine(loader, caps);
+  const processor = new ProcessingWorkerBridge(caps);
+  const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
   const fallbackEngine = new BrowserResampleEngine();
+  const browserEnhanceEngine = new BrowserEnhanceEngine();
   let image = null;
   let file = null;
   let hasTransparency = false;
@@ -600,23 +673,32 @@ export async function mount(root, slug) {
     field('enhancer-scale', 'Upscale amount', 'select', '2', {
       options: [['1', '1× internal enhance'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
     }),
-    field('enhancer-content', 'Content mode', 'select', 'auto', {
-      options: contentRouteOptions()
-    }),
-    field('enhancer-restoration', 'Restoration profile', 'select', 'auto', {
+    field('enhancer-content', 'Photo type', 'select', 'auto', {
       options: [
-        ['auto', 'Auto — follow route/source'],
-        ['fidelity', 'Fidelity — preserve source'],
-        ['balanced', 'Balanced'],
-        ['recovery', 'Recovery — stronger reconstruction']
+        ['auto', 'Auto'],
+        ['general', 'Photo'],
+        ['high-fidelity', 'Clear photo'],
+        ['low-resolution', 'Low-quality photo'],
+        ['portrait', 'Portrait / face'],
+        ['text-logo', 'Text / logo'],
+        ['illustration', 'Illustration / artwork'],
+        ['old-photo', 'Old photo']
       ]
     }),
-    field('enhancer-sharpen', 'Sharpening', 'select', 'auto', {
+    field('enhancer-restoration', 'Enhancement strength', 'select', 'auto', {
       options: [
-        ['auto', 'Auto — follow route/source'],
+        ['auto', 'Auto'],
+        ['fidelity', 'Light'],
+        ['balanced', 'Normal'],
+        ['recovery', 'Strong']
+      ]
+    }),
+    field('enhancer-sharpen', 'Sharpness', 'select', 'auto', {
+      options: [
+        ['auto', 'Auto'],
         ['off', 'Off'],
-        ['low', 'Low'],
-        ['medium', 'Medium']
+        ['low', 'Light'],
+        ['medium', 'Strong']
       ]
     })
   );
@@ -631,7 +713,7 @@ export async function mount(root, slug) {
   restorationWrap.hidden = true;
   sharpenWrap.hidden = true;
 
-  notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Auto content routing currently uses verified source-quality signals, not unverified semantic classification. Portrait, Text/Logo, Illustration and Old Photo are manual overrides until dedicated detectors/models pass their gates. Text/Logo deliberately uses standard enlargement to reduce character hallucination risk. Edge-aware sharpening runs after AI restoration and is capped to reduce halos and sharpened noise. Memory-pressure failures retry AI with smaller tiles before falling back.');
+  notice(root, 'Processing happens in your browser. Enhance quality improves the image without changing its size. Upscale resolution increases the pixel dimensions. Large images can take longer, and the tool uses background processing to keep the page responsive.');
 
   function drawSource() {
     if (!image) return;
@@ -723,7 +805,7 @@ export async function mount(root, slug) {
       $('#enhancer-content', root).disabled = processing;
       $('#enhancer-restoration', root).disabled = processing;
       $('#enhancer-sharpen', root).disabled = processing;
-      $('#enhancer-mode-help', root).textContent = 'Enhance improves quality at the original pixel dimensions. Choose restoration and sharpening options below.';
+      $('#enhancer-mode-help', root).textContent = 'Enhance improves quality without changing the image size. Choose the photo type, strength and sharpness below.';
     } else {
       form.hidden = false;
       if ($('#enhancer-scale', root).value === '1') $('#enhancer-scale', root).value = '2';
@@ -794,6 +876,171 @@ export async function mount(root, slug) {
     status('Reset complete. Choose Enhance or Upscale.');
   });
 
+  async function finishInBackground(canvas, { local, sharpening }, signal) {
+    if (!processor.available) return { canvas, applied: false, label: 'Fast browser finish' };
+    status(local ? 'Finishing enhancement in the background…' : 'Finishing upscale in the background…');
+    try {
+      return await processor.postprocessCanvas(canvas, { local, analysis, sharpening }, signal);
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      console.warn('Background finishing unavailable; preserving completed image.', error);
+      return { canvas, applied: false, label: 'Skipped safely' };
+    }
+  }
+
+  async function runEnhancePipeline(signal) {
+    const scale = 1;
+    const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
+    const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
+    const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
+    const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
+    const { width, height } = safeOutputFor(image, 1, caps);
+    let result = null;
+    let temporaryInput = null;
+    let temporaryAiInput = null;
+
+    try {
+      const shouldUseAi = contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
+      if (!shouldUseAi) {
+        result = await browserEnhanceEngine.process({
+          image, width, height, signal,
+          onProgress: message => status(message)
+        });
+        const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
+        result.canvas = finished.canvas;
+        const blob = await canvasBlob(result.canvas, 'image/png', 1);
+        output(blob, safeName(file.name, '-enhanced', 'png'));
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing.`);
+        return result;
+      }
+
+      status('Preparing quality enhancement…');
+      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
+      temporaryAiInput = aiPrepared.temporary;
+      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
+      temporaryInput = prepared.temporary;
+      if (temporaryAiInput && temporaryInput) {
+        temporaryAiInput.width = temporaryAiInput.height = 0;
+        temporaryAiInput = null;
+      }
+
+      result = await aiEngine.process({
+        image: prepared.image,
+        scale: 1,
+        width,
+        height,
+        signal,
+        onProgress: message => status(message)
+      });
+
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      temporaryInput = null;
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryAiInput = null;
+
+      result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
+      const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
+      result.canvas = finished.canvas;
+
+      status('Creating enhanced image…');
+      const blob = await canvasBlob(result.canvas, 'image/png', 1);
+      output(blob, safeName(file.name, '-enhanced', 'png'));
+      const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      return result;
+    } catch (error) {
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      if (error?.name === 'AbortError' || signal.aborted) throw error;
+
+      console.warn('AI enhance path unavailable; using fast local enhancement.', error);
+      status('AI enhancement unavailable. Using fast local enhancement…');
+      result = await browserEnhanceEngine.process({
+        image, width, height, signal,
+        onProgress: message => status(message)
+      });
+      const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
+      result.canvas = finished.canvas;
+      const blob = await canvasBlob(result.canvas, 'image/png', 1);
+      output(blob, safeName(file.name, '-enhanced', 'png'));
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely.`);
+      return result;
+    }
+  }
+
+  async function runUpscalePipeline(signal) {
+    const scale = Number(read('enhancer-scale'));
+    if (!Number.isFinite(scale) || scale <= 1) throw new Error('Choose an upscale target larger than the source.');
+    const contentRoute = resolveContentRoute('auto', analysis, scale, caps);
+    const routeControls = resolveRouteControls(contentRoute, 'auto', 'auto');
+    const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
+    const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
+    const { width, height } = safeOutputFor(image, scale, caps);
+    let result = null;
+    let temporaryInput = null;
+    let temporaryAiInput = null;
+
+    try {
+      if (!caps.wasm || !caps.workers || !processor.available || hasTransparency) {
+        throw new Error(hasTransparency
+          ? 'AI upscale for transparent images is not verified yet.'
+          : 'Background AI processing is unavailable in this browser.');
+      }
+
+      status(`Preparing ${scale}× upscale…`);
+      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
+      temporaryAiInput = aiPrepared.temporary;
+      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
+      temporaryInput = prepared.temporary;
+      if (temporaryAiInput && temporaryInput) {
+        temporaryAiInput.width = temporaryAiInput.height = 0;
+        temporaryAiInput = null;
+      }
+
+      result = await aiEngine.process({
+        image: prepared.image,
+        scale,
+        width,
+        height,
+        signal,
+        onProgress: message => status(message)
+      });
+
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      temporaryInput = null;
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryAiInput = null;
+
+      result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
+      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+      result.canvas = finished.canvas;
+
+      status('Creating upscaled image…');
+      const blob = await canvasBlob(result.canvas, 'image/png', 1);
+      output(blob, safeName(file.name, `-upscaled-${scale}x`, 'png'));
+      const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
+      status(`Upscaled ${scale}× · ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      return result;
+    } catch (error) {
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
+      if (error?.name === 'AbortError' || signal.aborted) throw error;
+
+      console.warn('AI upscale unavailable; using standard enlargement.', error);
+      status(`AI upscale unavailable (${error.message}). Using standard enlargement…`);
+      result = await fallbackEngine.process({
+        image, width, height, signal,
+        onProgress: message => status(message)
+      });
+      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+      result.canvas = finished.canvas;
+      const blob = await canvasBlob(result.canvas, 'image/png', 1);
+      output(blob, safeName(file.name, `-enlarged-${scale}x`, 'png'));
+      status(`Enlarged ${scale}× · ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · standard fallback used.`);
+      return result;
+    }
+  }
+
   enhanceButton.addEventListener('click', async () => {
     if (processing) return;
     if (!taskMode) {
@@ -804,116 +1051,26 @@ export async function mount(root, slug) {
       status('Open an image first.', true);
       return;
     }
+
     clearOutputs();
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal;
-    const scale = taskMode === 'enhance' ? 1 : Number(read('enhancer-scale'));
-    const requestedContent = taskMode === 'enhance' ? read('enhancer-content') : 'auto';
-    const requestedRestoration = taskMode === 'enhance' ? read('enhancer-restoration') : 'auto';
-    const requestedSharpen = taskMode === 'enhance' ? read('enhancer-sharpen') : 'auto';
-    const contentRoute = resolveContentRoute(requestedContent, analysis, scale, caps);
-    const routeControls = resolveRouteControls(contentRoute, requestedRestoration, requestedSharpen);
-    const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
-    const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
     let result = null;
-    let temporaryInput = null;
-    let temporaryAiInput = null;
-    let sharpened = { applied: false, label: sharpening.label };
     setProcessing(true);
+
     try {
-      const { width, height } = safeOutputFor(image, scale, caps);
-
-      if (contentRoute.engine === 'standard') {
-        status(`Preparing ${contentRoute.label} fidelity path…`);
-        result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
-        if (taskMode === 'enhance') {
-          await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
-          sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
-          result.canvas = sharpened.canvas;
-        }
-        const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, taskMode === 'enhance' ? '-enhanced' : `-fidelity-${scale}x`, 'png'));
-        status(taskMode === 'enhance'
-          ? `${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Local quality enhancement · original dimensions preserved. ${contentRoute.disclosure}`
-          : `${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI deliberately not used. ${contentRoute.disclosure}`);
-        return;
-      }
-
-      if (!caps.wasm) throw new Error('WebAssembly is unavailable in this browser.');
-      if (hasTransparency) throw new Error('AI transparency-safe reconstruction is not verified yet.');
-
-      status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
-      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
-      temporaryAiInput = aiPrepared.temporary;
-      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
-      temporaryInput = prepared.temporary;
-      if (temporaryAiInput && temporaryInput) {
-        temporaryAiInput.width = temporaryAiInput.height = 0;
-        temporaryAiInput = null;
-      }
-      status(`AI working size ${prepared.image.width.toLocaleString()} × ${prepared.image.height.toLocaleString()}…`);
-      result = await aiEngine.process({
-        image: prepared.image,
-        scale,
-        width,
-        height,
-        signal,
-        onProgress: message => status(message)
-      });
-      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
-      temporaryInput = null;
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryAiInput = null;
-      result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
-      if (taskMode === 'enhance') {
-        await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
-      }
-      sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
-      result.canvas = sharpened.canvas;
-
-      status('Encoding AI result…');
-      const blob = await canvasBlob(result.canvas, 'image/png', 1);
-      output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
-      const sharpenLabel = sharpened.applied ? sharpened.label : sharpened.label === 'Off' ? 'Off' : sharpened.label;
-      const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount} · ${result.tileCore}px tiles` : '';
-      const tileLabel = `${result.tileCount} ${result.tileCount === 1 ? 'tile' : 'tiles'}`;
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${tileLabel} · AI input ${result.inferenceWidth.toLocaleString()} × ${result.inferenceHeight.toLocaleString()}${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
+      result = taskMode === 'enhance'
+        ? await runEnhancePipeline(signal)
+        : await runUpscalePipeline(signal);
     } catch (error) {
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryAiInput = null;
-      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
-      temporaryInput = null;
       if (error?.name === 'AbortError' || signal.aborted) {
         status('Processing cancelled.');
-        return;
-      }
-      console.warn('AI enhancement unavailable; using truthful browser fallback.', error);
-      try {
-        const { width, height } = safeOutputFor(image, scale, caps);
-        result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
-
-        if (taskMode === 'enhance') {
-          status(`AI unavailable (${error.message}). Applying local quality enhancement instead…`);
-          await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
-          sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
-          result.canvas = sharpened.canvas;
-          const blob = await canvasBlob(result.canvas, 'image/png', 1);
-          output(blob, safeName(file.name, '-enhanced-local', 'png'));
-          status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · Local enhancement fallback · original dimensions preserved · AI model was unavailable, but the result is not a same-pixel redraw.`);
-        } else {
-          status(`AI unavailable (${error.message}). Using standard high-quality enlargement…`);
-          const blob = await canvasBlob(result.canvas, 'image/png', 1);
-          output(blob, safeName(file.name, `-enlarged-${scale}x`, 'png'));
-          status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI enhancement was not used.`);
-        }
-      } catch (fallbackError) {
-        console.error(fallbackError);
-        status(fallbackError?.message || 'Image processing failed.', true);
+      } else {
+        console.error(error);
+        status(error?.message || 'Image processing failed.', true);
       }
     } finally {
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       if (result?.canvas) result.canvas.width = result.canvas.height = 0;
       setProcessing(false);
     }
@@ -926,6 +1083,8 @@ export async function mount(root, slug) {
     controller?.abort();
     image?.close?.();
     aiEngine.dispose();
+    processor.dispose();
     fallbackEngine.dispose();
+    browserEnhanceEngine.dispose();
   }, { once: true });
 }

@@ -70,7 +70,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4173, '127.0.0.1', resolveListen));
 
-const launchOptions = { headless: true, args: ['--disable-gpu'] };
+const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 const page = await browser.newPage();
@@ -211,7 +211,7 @@ async function latestOutputPerceptualMetrics() {
   });
 }
 
-async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /AI super-resolution/) {
+async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /background AI/) {
   if (Number(scale) === 1) {
     await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption(content);
@@ -230,10 +230,10 @@ async function runAiScale(scale, expected, content = 'general', profile = 'auto'
   return { statusText, info };
 }
 
-async function testWebGpuFailureFallsBackToWorker() {
+async function testUnsafeWebGpuIsNotSelected() {
   const context = await browser.newContext();
   await context.addInitScript(() => {
-    const fakeAdapter = { limits: { maxTextureDimension2D: 8192 } };
+    const fakeAdapter = { limits: { maxTextureDimension2D: 16384 } };
     const fakeGpu = { requestAdapter: async () => fakeAdapter };
     try {
       Object.defineProperty(navigator, 'gpu', { configurable: true, value: fakeGpu });
@@ -241,37 +241,38 @@ async function testWebGpuFailureFallsBackToWorker() {
       Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => fakeGpu });
     }
   });
-  const fallbackPage = await context.newPage();
+  const testPage = await context.newPage();
   try {
-    await fallbackPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
-    await fallbackPage.evaluate(() => {
+    await testPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await testPage.evaluate(() => {
       const inference = window.ort?.InferenceSession;
       const originalCreate = inference?.create?.bind(inference);
-      if (!inference || !originalCreate) throw new Error('ONNX Runtime was not available for WebGPU fallback injection.');
-      let injected = false;
+      if (!inference || !originalCreate) throw new Error('ONNX Runtime was not available for provider audit.');
+      window.__enhancerProviders = [];
       inference.create = async (model, options = {}) => {
-        if (!injected && options.executionProviders?.includes('webgpu')) {
-          injected = true;
-          throw new Error('Injected WebGPU initialization failure');
-        }
+        window.__enhancerProviders.push([...(options.executionProviders || [])]);
+        if (options.executionProviders?.includes('webgpu')) throw new Error('Unsafe WebGPU provider was selected.');
         return originalCreate(model, options);
       };
     });
-    await fallbackPage.locator('input[type=file]').setInputFiles({
-      name: 'webgpu-fallback.png', mimeType: 'image/png', buffer: png(160, 120)
+    await testPage.locator('input[type=file]').setInputFiles({
+      name: 'provider-audit.png', mimeType: 'image/png', buffer: png(160, 120)
     });
-    await fallbackPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
-    await fallbackPage.locator('#enhancer-mode-enhance').click();
-    await fallbackPage.locator('#enhancer-content').selectOption('general');
-    await fallbackPage.locator('#enhancer-restoration').selectOption('balanced');
-    await fallbackPage.locator('#enhancer-sharpen').selectOption('off');
-    await fallbackPage.locator('#enhancer-run').click();
-    await fallbackPage.waitForFunction(() => {
+    await testPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
+    await testPage.locator('#enhancer-mode-enhance').click();
+    await testPage.locator('#enhancer-content').selectOption('general');
+    await testPage.locator('#enhancer-restoration').selectOption('balanced');
+    await testPage.locator('#enhancer-sharpen').selectOption('off');
+    await testPage.locator('#enhancer-run').click();
+    await testPage.waitForFunction(() => {
       const text = document.querySelector('#status')?.textContent || '';
-      return !!document.querySelector('#downloads a[download]') && /AI super-resolution/.test(text);
+      return !!document.querySelector('#downloads a[download]') && /background AI/.test(text);
     }, null, { timeout: 90000 });
-    const statusText = (await fallbackPage.locator('#status').textContent()) || '';
-    assert.match(statusText, /AI super-resolution.*wasm-worker/, `WebGPU init failure must retry with worker-backed WASM: ${statusText}`);
+    const providers = await testPage.evaluate(() => window.__enhancerProviders);
+    assert.ok(providers.length >= 1, 'AI provider audit must observe session creation.');
+    assert.equal(providers.some(list => list.includes('webgpu')), false, 'Production must not auto-select WebGPU.');
+    assert.equal(providers.some(list => list.includes('wasm')), true, 'Production must use worker-backed WASM.');
+    assert.equal(await testPage.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'WASM proxy worker must be enabled.');
   } finally {
     await context.close();
   }
@@ -296,13 +297,13 @@ try {
   assert.match(summary || '', /Analysis: .* profile recommended/);
 
   const originalHash = await sourcePreviewHash();
-  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /High-Fidelity Photo.*AI super-resolution.*AI input 24 × 16.*Fidelity profile.*Sharpen Off/);
-  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /High-Fidelity Photo.*AI super-resolution.*AI input 24 × 16.*Fidelity profile.*Sharpen Medium/);
+  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /Enhanced · original size .*background AI/);
+  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /Enhanced · original size .*background AI/);
   assert.notEqual(sharpOff.info?.[4], originalHash, '1× AI restoration must materially change the encoded pixels from the source.');
   assert.notEqual(sharpOff.info?.[4], sharpMedium.info?.[4], 'Medium sharpening must materially change the encoded pixels compared with Off.');
 
-  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
-  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
+  await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Upscaled 2× .*background AI/);
+  await runAiScale(4, [96, 64, 'core-test-upscaled-4x.png'], 'auto', 'auto', 'auto', /Upscaled 4× .*background AI/);
 
   await page.locator('#enhancer-mode-enhance').click();
   await page.locator('#enhancer-content').selectOption('text-logo');
@@ -311,8 +312,8 @@ try {
   await page.locator('#enhancer-run').click();
   const textStatus = await waitForTerminal(1);
   console.log(`DIAGNOSTIC text/logo terminal status=${textStatus}`);
-  assert.match(textStatus, /Text \/ Logo.*Local quality enhancement.*original dimensions preserved/);
-  assert.doesNotMatch(textStatus, /AI super-resolution/);
+  assert.match(textStatus, /Enhanced · original size .*background-safe local processing/);
+  assert.doesNotMatch(textStatus, /background AI/);
   const textInfo = await latestOutputInfo();
   assert.deepEqual(textInfo?.slice(0, 3), [24, 16, 'core-test-enhanced.png']);
 
@@ -321,11 +322,11 @@ try {
   await page.locator('#enhancer-run').click();
   const autoStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC auto-route terminal status=${autoStatus}`);
-  assert.match(autoStatus, /Auto → Low-Resolution Recovery.*AI super-resolution.*Recovery profile/);
+  assert.match(autoStatus, /Upscaled 2× .*background AI/);
 
   await upload('tile-test.png', 500, 350);
   const realisticOriginalHash = await sourcePreviewHash();
-  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /General Photo.*AI super-resolution.*AI input 250 × 175.*wasm-worker.*Recovery profile.*Sharpen Auto/);
+  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*background AI/);
   assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
   const perceptual1x = await latestOutputPerceptualMetrics();
   console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)}`);
@@ -336,37 +337,46 @@ try {
     window.__enhancerHeartbeat = 0;
     window.__enhancerHeartbeatTimer = setInterval(() => { window.__enhancerHeartbeat += 1; }, 25);
   });
-  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
+  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Upscaled 2× .*background AI/);
   const heartbeat = await page.evaluate(() => {
     clearInterval(window.__enhancerHeartbeatTimer);
     return window.__enhancerHeartbeat;
   });
   assert.ok(heartbeat >= 4, `WASM worker path must keep the UI event loop responsive; heartbeat=${heartbeat}`);
-  assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'WASM proxy worker must be enabled when WebGPU is unavailable.');
-  assert.match(tiled.statusText, /(Fidelity|Balanced|Recovery) profile/);
+  assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'WASM proxy worker must stay enabled in production.');
+  assert.match(tiled.statusText, /background AI/);
 
-  await upload('memory-test.png', 300, 220);
-  await page.evaluate(() => {
-    const proto = CanvasRenderingContext2D.prototype;
-    const original = proto.getImageData;
-    let failed = false;
-    proto.getImageData = function(...args) {
-      if (!failed && this.canvas.width > 100 && this.canvas.height > 50) {
-        failed = true;
-        throw new RangeError('out of memory injected test');
+  const memoryContext = await browser.newContext();
+  await memoryContext.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message, transfer) {
+        if (message?.type === 'pack-tile' && message.width > 135 && !this.__enhancerInjectedFailure) {
+          this.__enhancerInjectedFailure = true;
+          throw new RangeError('out of memory injected worker retry test');
+        }
+        return super.postMessage(message, transfer);
       }
-      return original.apply(this, args);
-    };
-    window.__restoreEnhancerGetImageData = () => {
-      proto.getImageData = original;
-      delete window.__restoreEnhancerGetImageData;
     };
   });
+  const memoryPage = await memoryContext.newPage();
   try {
-    const retried = await runAiScale(2, [600, 440, 'memory-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /AI super-resolution.*memory retry ×1 · 96px tiles/);
-    assert.match(retried.statusText, /wasm/);
+    await memoryPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await memoryPage.locator('input[type=file]').setInputFiles({
+      name: 'memory-test.png', mimeType: 'image/png', buffer: png(300, 220)
+    });
+    await memoryPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('300 × 220'));
+    await memoryPage.locator('#enhancer-mode-upscale').click();
+    await memoryPage.locator('#enhancer-scale').selectOption('2');
+    await memoryPage.locator('#enhancer-run').click();
+    await memoryPage.waitForFunction(() => {
+      const text = document.querySelector('#status')?.textContent || '';
+      return !!document.querySelector('#downloads a[download]') && /Upscaled 2×/.test(text);
+    }, null, { timeout: 120000 });
+    const memoryStatus = (await memoryPage.locator('#status').textContent()) || '';
+    assert.match(memoryStatus, /memory retry ×1/, `Expected worker tile retry: ${memoryStatus}`);
   } finally {
-    await page.evaluate(() => window.__restoreEnhancerGetImageData?.());
+    await memoryContext.close();
   }
 
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
@@ -383,15 +393,15 @@ try {
   await page.locator('#enhancer-run').click();
   const fallbackStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
-  assert.match(fallbackStatus, /Auto → Low-Resolution Recovery.*Standard high-quality enlargement\. AI enhancement was not used\./);
+  assert.match(fallbackStatus, /Enlarged 2× .*standard fallback used/);
   const alphaInfo = await latestOutputInfo();
   assert.deepEqual(alphaInfo?.slice(0, 3), [48, 32, 'alpha-test-enlarged-2x.png']);
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
-  await testWebGpuFailureFallsBackToWorker();
+  await testUnsafeWebGpuIsNotSelected();
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: separated Enhance/Upscale UX, Real-ESRGAN 1x/2x/4x, perceptual 1× quality gate, local non-no-op enhancement finish, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
+  console.log('PASS: separated Enhance/Upscale pipelines, simple controls, real AI 1x/2x/4x, perceptual 1× quality gate, worker-backed pixel conversion/finishing, forced WASM proxy provider, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

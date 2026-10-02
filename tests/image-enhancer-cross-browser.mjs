@@ -105,11 +105,11 @@ async function runEngine(name, launcher) {
     await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
-      return !!document.querySelector('#downloads a[download]') && (status.includes('AI super-resolution') || status.includes('AI enhancement was not used'));
+      return !!document.querySelector('#downloads a[download]') && (status.includes('background AI') || status.includes('background-safe local processing'));
     }, null, { timeout: 180000 });
     const status = (await page.locator('#status').textContent()) || '';
-    assert.match(status, /AI super-resolution/, `${name} must execute the real WASM AI path, not standard fallback. Status: ${status}\nWarnings: ${warnings.join('\n')}\nErrors: ${errors.join('\n')}`);
-    assert.match(status, /wasm/, `${name} must report the WASM compatibility backend.`);
+    assert.match(status, /background AI/, `${name} must execute the real background AI path, not standard fallback. Status: ${status}\nWarnings: ${warnings.join('\n')}\nErrors: ${errors.join('\n')}`);
+    assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, `${name} must keep worker-backed WASM enabled.`);
     assert.deepEqual((await pngDimensionsFromDownload(page))?.slice(0, 3), [12, 8, 'image/png']);
     assert.equal(errors.length, 0, `${name} console errors:\n${errors.join('\n')}`);
     console.log(`PASS ${name}: real Real-ESRGAN/WASM 1x enhancement under production CSP.`);

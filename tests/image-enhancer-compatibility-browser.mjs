@@ -36,7 +36,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4177, '127.0.0.1', resolveListen));
 
-const launchOptions = { headless: true, args: ['--disable-gpu'] };
+const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 
@@ -73,7 +73,7 @@ async function installGeneratedFile(page, { type, name, width, height, transpare
 async function waitCanonical(page, width, height) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
-    return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
+    return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
   }, [width, height], { timeout: 30000 });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
@@ -142,7 +142,7 @@ async function testMobileSafety() {
     const mobileOutput = await waitCanonical(page, 960, 720);
     assert.deepEqual(mobileOutput.slice(0, 2), [960, 720]);
     const mobileStatus = (await page.locator('#status').textContent()) || '';
-    assert.match(mobileStatus, /AI super-resolution.*AI input 288 × 216.*wasm-worker/, `Mobile AI must use the responsive worker path: ${mobileStatus}`);
+    assert.match(mobileStatus, /Upscaled 2× .*background AI/, `Mobile AI must use the background worker path: ${mobileStatus}`);
     const mobileHeartbeat = await page.evaluate(() => {
       clearInterval(window.__mobileHeartbeatTimer);
       return window.__mobileHeartbeat;
