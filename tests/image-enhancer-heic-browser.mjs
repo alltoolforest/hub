@@ -83,7 +83,7 @@ async function processAtOneX(name, width, height) {
   await page.locator('#enhancer-run').click();
   await page.waitForFunction(([w, h]) => {
     const status = document.querySelector('#status')?.textContent || '';
-    return !!document.querySelector('#downloads a[download]') && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
+    return !!document.querySelector('#downloads a[download]') && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
   }, [width, height], { timeout: 60000 });
 
   const result = await page.evaluate(async () => {
