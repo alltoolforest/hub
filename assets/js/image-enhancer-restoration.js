@@ -203,10 +203,17 @@ export async function analyzeSourceImage(image, file) {
   const falseResolution = megapixels >= 4 && lowDetail > 0.64 && softness > 0.48;
   const perceptualBlur = perceptualBlurMetric(sampled.gray, sampled.width, sampled.height);
   const blurScore = clamp((perceptualBlur - 0.24) / 0.16 - noise * 0.08);
+  const recoverableBlurStructure =
+    metrics.gradient >= 3.5 ||
+    (
+      perceptualBlur >= 0.45 &&
+      metrics.gradient >= 1.5 &&
+      softness >= 0.82
+    );
   const likelyBlurred =
     blurScore >= 0.30 &&
     perceptualBlur >= 0.285 &&
-    metrics.gradient >= 3.5 &&
+    recoverableBlurStructure &&
     noise < 0.80;
   const recoveryScore = clamp(
     softness * 0.34 + noise * 0.22 + jpegArtifacts * 0.24 + lowDetail * 0.20 +
