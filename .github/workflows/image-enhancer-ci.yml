@@ -24,7 +24,11 @@ on:
       - 'tests/image-enhancer-compatibility-browser.mjs'
       - 'tests/image-enhancer-resilience-browser.mjs'
       - 'tests/image-enhancer-responsiveness-browser.mjs'
+      - 'tests/image-enhancer-deblur-browser.mjs'
+      - 'tests/fixtures/nafnet-natural-sharp.png'
+      - 'tests/image-enhancer-deblur-cross-browser.mjs'
       - 'tests/image-enhancer-cross-browser.mjs'
+      - '_headers'
       - '.github/workflows/image-enhancer-ci.yml'
   workflow_dispatch:
 
@@ -38,7 +42,7 @@ permissions:
 jobs:
   enhancer-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,12 +76,17 @@ jobs:
           node --check tests/image-enhancer-compatibility-browser.mjs
           node --check tests/image-enhancer-resilience-browser.mjs
           node --check tests/image-enhancer-responsiveness-browser.mjs
+          node --check tests/image-enhancer-deblur-browser.mjs
+          node --check tests/image-enhancer-deblur-cross-browser.mjs
           node --check tests/image-enhancer-cross-browser.mjs
-          node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
+          node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4'||m.models['deblur-nafnet'].sha256!=='05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204') process.exit(1);"
           grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
           grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
           grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
           grep -q "Memory pressure detected" assets/js/image-enhancer.js
+          grep -q "likelyBlurred" assets/js/image-enhancer-restoration.js
+          grep -q "OnnxDeblurEngine" assets/js/image-enhancer.js
+          grep -q "dedicated deblur AI" assets/js/image-enhancer.js
           grep -q "env.wasm.proxy" assets/js/image-enhancer.js
           grep -q "image-enhancer-processing-worker.js" assets/js/image-enhancer.js
           ! grep -q "executionProviders: \['webgpu'\]" assets/js/image-enhancer.js
@@ -111,6 +120,11 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-browser.mjs
 
+      - name: Run dedicated deblur ground-truth audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-deblur-browser.mjs
+
       - name: Run realistic desktop responsiveness audit
         env:
           CHROME_PATH: /usr/bin/google-chrome
@@ -143,7 +157,7 @@ jobs:
 
   engine-compatibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 30
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-noble
     env:
@@ -162,3 +176,6 @@ jobs:
 
       - name: Run Firefox + WebKit real-WASM audit
         run: node tests/image-enhancer-cross-browser.mjs
+
+      - name: Run Firefox + WebKit dedicated deblur audit
+        run: node tests/image-enhancer-deblur-cross-browser.mjs

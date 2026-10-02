@@ -18,6 +18,15 @@
       "license": "BSD-3-Clause",
       "upstream": "https://github.com/xinntao/Real-ESRGAN",
       "redistribution": "https://github.com/NovareOrbis/nova-ai-models/tree/v3"
+    },
+    "deblur-nafnet": {
+      "name": "NAFNet GoPro width32 FP16",
+      "url": "https://huggingface.co/bihanikeshav/selects-onnx/resolve/main/nafnet.onnx",
+      "sha256": "05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204",
+      "scale": 1,
+      "license": "Apache-2.0",
+      "upstream": "https://github.com/megvii-research/NAFNet",
+      "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx"
     }
   }
 }

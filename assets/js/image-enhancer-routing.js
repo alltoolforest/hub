@@ -21,7 +21,7 @@ const ROUTES = Object.freeze({
     engine: 'ai',
     restoration: 'recovery',
     sharpen: 'auto',
-    disclosure: 'Low-resolution route permits stronger reconstruction and reports it as reconstruction.'
+    disclosure: 'Low-resolution route uses dedicated deblurring when blur is detected, otherwise the verified restoration path.'
   }),
   portrait: Object.freeze({
     id: 'portrait',
@@ -53,7 +53,7 @@ const ROUTES = Object.freeze({
     engine: 'ai',
     restoration: 'recovery',
     sharpen: 'auto',
-    disclosure: 'Old-photo route strengthens recovery, but dedicated scratch, deblur and face-restoration models are not active.'
+    disclosure: 'Old-photo route strengthens recovery and can use dedicated deblurring when blur is detected. Scratch repair and dedicated face restoration are not active.'
   })
 });
 
