@@ -499,9 +499,9 @@ function outputScaleOptions(image, caps) {
   }
 }
 
-async function prepareAiInferenceInput(image, targetWidth, targetHeight, nativeScale, signal) {
+async function prepareAiInferenceInput(image, targetWidth, targetHeight, nativeScale, signal, caps) {
   if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale);
+  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale, { isMobile: !!caps?.isMobile });
   if (plan.width === image.width && plan.height === image.height) {
     return { image, temporary: null, plan };
   }
@@ -691,7 +691,7 @@ export async function mount(root, slug) {
       if (hasTransparency) throw new Error('AI transparency-safe reconstruction is not verified yet.');
 
       status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
-      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal);
+      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
       temporaryAiInput = aiPrepared.temporary;
       const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
       temporaryInput = prepared.temporary;
