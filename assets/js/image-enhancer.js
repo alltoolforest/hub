@@ -652,6 +652,12 @@ export async function mount(root, slug) {
     analysis = await analyzeSourceImage(image, file);
     outputScaleOptions(image, caps);
     summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
+    // core.bindFile restores every workspace control after file loading. Re-apply
+    // this tool's task-mode state on the next task so hidden/irrelevant controls
+    // do not become interactable by accident.
+    setTimeout(() => {
+      if (!processing) setProcessing(false);
+    }, 0);
   });
 
   const enhanceButton = el('button', { id: 'enhancer-run', type: 'button', class: 'primary', text: 'Choose Enhance or Upscale', disabled: true });
