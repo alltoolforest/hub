@@ -144,6 +144,22 @@ function mountOutputPlanner(root) {
   }
 
   function syncVisibility() {
+    const taskIsUpscale = root.dataset.enhancerMode === 'upscale';
+    modeWrap.hidden = !taskIsUpscale;
+    plannerInfo.hidden = !taskIsUpscale;
+
+    if (!taskIsUpscale) {
+      if (scaleWrap) scaleWrap.hidden = true;
+      widthWrap.hidden = true;
+      heightWrap.hidden = true;
+      longestWrap.hidden = true;
+      printWidthWrap.hidden = true;
+      printHeightWrap.hidden = true;
+      printUnitWrap.hidden = true;
+      ppiWrap.hidden = true;
+      return;
+    }
+
     const mode = modeSelect.value;
     if (scaleWrap) scaleWrap.hidden = mode !== 'scale';
     widthWrap.hidden = heightWrap.hidden = mode !== 'dimensions';
@@ -204,6 +220,11 @@ function mountOutputPlanner(root) {
   }
 
   function updatePlanner(strict = false) {
+    if (root.dataset.enhancerMode !== 'upscale') {
+      plannerInfo.classList.remove('error');
+      plannerInfo.textContent = 'Choose Upscale resolution to set an output size.';
+      return null;
+    }
     refreshSource();
     if (!source) {
       plannerInfo.classList.remove('error');
@@ -244,9 +265,10 @@ function mountOutputPlanner(root) {
   const summaryObserver = new MutationObserver(() => updatePlanner(false));
   summaryObserver.observe(sourceInfo, { childList: true, subtree: true, characterData: true });
 
-  const enhanceButton = [...root.querySelectorAll('button')].find(button => button.textContent === 'Enhance image');
+  const enhanceButton = $('#enhancer-run', root);
   if (enhanceButton) {
     enhanceButton.addEventListener('click', event => {
+      if (root.dataset.enhancerMode !== 'upscale') return;
       try {
         updatePlanner(true);
       } catch (error) {
@@ -257,7 +279,8 @@ function mountOutputPlanner(root) {
     }, true);
 
     const disabledObserver = new MutationObserver(() => {
-      for (const control of plannerControls) control.disabled = enhanceButton.disabled;
+      const disabled = enhanceButton.disabled || root.dataset.enhancerMode !== 'upscale';
+      for (const control of plannerControls) control.disabled = disabled;
     });
     disabledObserver.observe(enhanceButton, { attributes: true, attributeFilter: ['disabled'] });
     window.addEventListener('pagehide', () => disabledObserver.disconnect(), { once: true });
@@ -279,6 +302,13 @@ function mountOutputPlanner(root) {
     $('#enhancer-ppi', root).value = '300';
     syncVisibility();
     updatePlanner(false);
+  });
+
+  root.addEventListener('enhancer-modechange', () => {
+    syncVisibility();
+    updatePlanner(false);
+    const disabled = enhanceButton?.disabled || root.dataset.enhancerMode !== 'upscale';
+    for (const control of plannerControls) control.disabled = disabled;
   });
 
   syncVisibility();
