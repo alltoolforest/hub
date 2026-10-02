@@ -1,0 +1,200 @@
+import { chromium } from 'playwright';
+import { createServer } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { resolve, extname, sep } from 'node:path';
+import { deflateSync } from 'node:zlib';
+import assert from 'node:assert/strict';
+
+const ROOT = process.cwd();
+const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://staticimgly.com https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.xethub.hf.co blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'";
+const TYPES = new Map([
+  ['.html','text/html; charset=utf-8'], ['.js','text/javascript; charset=utf-8'], ['.mjs','text/javascript; charset=utf-8'],
+  ['.json','application/json; charset=utf-8'], ['.css','text/css; charset=utf-8'], ['.svg','image/svg+xml'],
+  ['.png','image/png'], ['.jpg','image/jpeg'], ['.jpeg','image/jpeg'], ['.webp','image/webp'], ['.wasm','application/wasm']
+]);
+
+function crc32(buf) {
+  let crc = 0xffffffff;
+  for (const byte of buf) {
+    crc ^= byte;
+    for (let k = 0; k < 8; k++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+function chunk(type, data) {
+  const name = Buffer.from(type);
+  const out = Buffer.alloc(12 + data.length);
+  out.writeUInt32BE(data.length, 0);
+  name.copy(out, 4);
+  data.copy(out, 8);
+  out.writeUInt32BE(crc32(Buffer.concat([name, data])), 8 + data.length);
+  return out;
+}
+function encodeRgbaPng(width, height, rgba) {
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 4 + 1);
+    raw[row] = 0;
+    Buffer.from(rgba.buffer, rgba.byteOffset + y * width * 4, width * 4).copy(raw, row + 1);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([137,80,78,71,13,10,26,10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+function makeSharp(width, height) {
+  const out = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4;
+      const vignette = Math.max(0, 1 - Math.hypot(x-width*0.5,y-height*0.48)/(width*0.72));
+      const fabric = ((Math.floor(x/5) + Math.floor(y/7)) & 1) ? 22 : -12;
+      const stripe = (x > 14 && x < width-12 && y > height*0.56 && y < height*0.83 && (x % 11 < 2 || y % 13 < 2)) ? 45 : 0;
+      const face = Math.exp(-(((x-width*.48)/(width*.18))**2 + ((y-height*.34)/(height*.22))**2));
+      const eye1 = Math.exp(-(((x-width*.42)/3.2)**2 + ((y-height*.31)/2.0)**2));
+      const eye2 = Math.exp(-(((x-width*.54)/3.2)**2 + ((y-height*.31)/2.0)**2));
+      const mouth = Math.exp(-(((x-width*.48)/10)**2 + ((y-height*.43)/2.3)**2));
+      let r = 52 + x*0.95 + y*0.22 + vignette*24 + fabric + stripe + face*62 - (eye1+eye2)*70 - mouth*28;
+      let g = 46 + x*0.56 + y*0.45 + vignette*18 + fabric*.55 + stripe*.45 + face*45 - (eye1+eye2)*62 - mouth*18;
+      let b = 58 + x*0.32 + y*0.62 + vignette*16 + fabric*.35 + stripe*.22 + face*34 - (eye1+eye2)*50 - mouth*12;
+      out[p] = Math.max(0,Math.min(255,Math.round(r)));
+      out[p+1] = Math.max(0,Math.min(255,Math.round(g)));
+      out[p+2] = Math.max(0,Math.min(255,Math.round(b)));
+      out[p+3] = 255;
+    }
+  }
+  return out;
+}
+function motionBlur(src, width, height, radius=5) {
+  const out = new Uint8Array(src.length);
+  for (let y=0;y<height;y++) {
+    for (let x=0;x<width;x++) {
+      const p=(y*width+x)*4;
+      for (let c=0;c<3;c++) {
+        let sum=0, weight=0;
+        for (let k=-radius;k<=radius;k++) {
+          const xx=Math.max(0,Math.min(width-1,x+k));
+          const yy=Math.max(0,Math.min(height-1,y+Math.round(k*.35)));
+          const w=radius+1-Math.abs(k)*.35;
+          sum += src[(yy*width+xx)*4+c]*w;
+          weight += w;
+        }
+        out[p+c]=Math.round(sum/weight);
+      }
+      out[p+3]=255;
+    }
+  }
+  return out;
+}
+function mse(a,b) {
+  let sum=0, n=0;
+  for(let i=0;i<a.length;i+=4) {
+    for(let c=0;c<3;c++) {
+      const d=a[i+c]-b[i+c];
+      sum += d*d; n++;
+    }
+  }
+  return sum/n;
+}
+
+const server=createServer(async(req,res)=>{
+  try{
+    const pathname=decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname);
+    let filePath=resolve(ROOT,'.'+pathname);
+    if(!(filePath===ROOT||filePath.startsWith(ROOT+sep))) throw new Error('bad path');
+    let info; try{info=await stat(filePath);}catch{info=null;}
+    if(info?.isDirectory()) filePath=resolve(filePath,'index.html');
+    const body=await readFile(filePath);
+    res.writeHead(200,{
+      'content-type':TYPES.get(extname(filePath).toLowerCase())||'application/octet-stream',
+      'content-security-policy':CSP,
+      'x-content-type-options':'nosniff',
+      'cache-control':'no-store'
+    });
+    res.end(body);
+  }catch{
+    res.writeHead(404,{'content-type':'text/plain'});res.end('Not found');
+  }
+});
+await new Promise(r=>server.listen(4188,'127.0.0.1',r));
+
+const width=128, height=96;
+const sharp=makeSharp(width,height);
+const blurred=motionBlur(sharp,width,height,6);
+const blurredMse=mse(blurred,sharp);
+const launchOptions={headless:true};
+if(process.env.CHROME_PATH) launchOptions.executablePath=process.env.CHROME_PATH;
+const browser=await chromium.launch(launchOptions);
+const page=await browser.newPage();
+const diagnostics=[];
+page.on('console',m=>{if(['error','warning'].includes(m.type())) diagnostics.push(`${m.type()}: ${m.text()}`);});
+page.on('pageerror',e=>diagnostics.push(`pageerror: ${e.message}`));
+page.on('requestfailed',r=>diagnostics.push(`requestfailed: ${r.url()} :: ${r.failure()?.errorText||'unknown'}`));
+
+try{
+  await page.goto('http://127.0.0.1:4188/images/enhance/',{waitUntil:'networkidle',timeout:90000});
+  await page.locator('input[type=file]').setInputFiles({
+    name:'known-motion-blur.png',
+    mimeType:'image/png',
+    buffer:encodeRgbaPng(width,height,blurred)
+  });
+  await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
+  const summary=(await page.locator('#enhancer-source-info').textContent())||'';
+  assert.match(summary,/likely motion \/ defocus blur/, `Blur detector did not route the known blurred fixture: ${summary}`);
+
+  await page.locator('#enhancer-mode-enhance').click();
+  await page.locator('#enhancer-content').selectOption('low-resolution');
+  await page.locator('#enhancer-restoration').selectOption('auto');
+  await page.locator('#enhancer-sharpen').selectOption('auto');
+
+  await page.evaluate(()=>{
+    window.__deblurHeartbeat=0;
+    window.__deblurTimer=setInterval(()=>{window.__deblurHeartbeat++;},50);
+  });
+  await page.locator('#enhancer-run').click();
+  await page.waitForFunction(()=>{
+    const status=document.querySelector('#status')?.textContent||'';
+    return !!document.querySelector('#downloads a[download]') && /dedicated deblur AI/.test(status);
+  },null,{timeout:300000});
+
+  const result=await page.evaluate(async()=>{
+    const link=[...document.querySelectorAll('#downloads a[download]')].at(-1);
+    const blob=await(await fetch(link.href)).blob();
+    const bmp=await createImageBitmap(blob);
+    const canvas=document.createElement('canvas');
+    canvas.width=bmp.width; canvas.height=bmp.height;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(bmp,0,0);
+    const pixels=Array.from(ctx.getImageData(0,0,bmp.width,bmp.height).data);
+    bmp.close();
+    clearInterval(window.__deblurTimer);
+    return {
+      width:canvas.width,
+      height:canvas.height,
+      pixels,
+      heartbeat:window.__deblurHeartbeat,
+      status:document.querySelector('#status')?.textContent||''
+    };
+  });
+  const output=Uint8Array.from(result.pixels);
+  const outputMse=mse(output,sharp);
+  const improvement=(blurredMse-outputMse)/blurredMse;
+
+  console.log(`DIAGNOSTIC dedicated-deblur blurredMSE=${blurredMse.toFixed(3)} outputMSE=${outputMse.toFixed(3)} improvement=${(improvement*100).toFixed(2)}% heartbeat=${result.heartbeat}`);
+  assert.deepEqual([result.width,result.height],[width,height]);
+  assert.match(result.status,/dedicated deblur AI/);
+  assert.ok(result.heartbeat>=8,`Dedicated deblur must keep the page responsive; heartbeat=${result.heartbeat}`);
+  assert.ok(outputMse < blurredMse,`Dedicated deblur output must be closer to known sharp ground truth: blurred=${blurredMse}, output=${outputMse}`);
+  assert.ok(improvement >= 0.02,`Dedicated deblur must improve ground-truth reconstruction by at least 2%: ${(improvement*100).toFixed(2)}%`);
+  assert.equal(diagnostics.filter(x=>x.startsWith('pageerror')).length,0,`Deblur page errors:\n${diagnostics.join('\n')}`);
+  console.log('PASS: blur detection triggered dedicated NAFNet and improved known sharp-ground-truth reconstruction without blocking the page.');
+}finally{
+  await browser.close();
+  await new Promise(r=>server.close(r));
+}
