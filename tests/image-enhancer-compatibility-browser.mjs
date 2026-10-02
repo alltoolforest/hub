@@ -74,7 +74,7 @@ async function waitCanonical(page, width, height) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
     return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
-  }, [width, height], { timeout: 30000 });
+  }, [width, height], { timeout: 180000 });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
     const blob = await (await fetch(link.href)).blob();
@@ -116,6 +116,13 @@ async function testDesktopFormats() {
       await page.getByRole('button', { name: 'Reset', exact: true }).click();
     }
 
+    await installGeneratedFile(page, { type: 'image/jpeg', name: 'professional-high-res.jpg', width: 3000, height: 2000, transparent: false });
+    const highResSummary = (await page.locator('#enhancer-source-info').textContent()) || '';
+    assert.match(highResSummary, /3,000 × 2,000/, 'Professional 6 MP source must load without low mobile-style caps.');
+    await page.locator('#enhancer-mode-upscale').click();
+    assert.equal(await page.locator('#enhancer-scale option[value="2"]').isDisabled(), false, 'Professional 24 MP 2× output must remain available on desktop.');
+    assert.equal(await page.locator('#enhancer-scale option[value="4"]').isDisabled(), true, 'Extremely large 96 MP 4× output should be rejected when it exceeds the detected desktop capability.');
+
     assert.equal(consoleErrors.length, 0, `Desktop format console errors:\n${consoleErrors.join('\n')}`);
   } finally {
     await page.close();
@@ -149,6 +156,24 @@ async function testMobileSafety() {
     });
     assert.ok(mobileHeartbeat >= 4, `Mobile AI must keep the event loop responsive; heartbeat=${mobileHeartbeat}`);
     assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Mobile AI must keep ONNX WASM proxy enabled.');
+
+    await installGeneratedFile(page, { type: 'image/jpeg', name: 'mobile-8mp-target.jpg', width: 717, height: 721, transparent: false });
+    await page.locator('#enhancer-mode-upscale').click();
+    await page.locator('#enhancer-scale').selectOption('4');
+    await page.evaluate(() => {
+      window.__mobile4xHeartbeat = 0;
+      window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
+    });
+    await page.locator('#enhancer-run').click();
+    const mobile4x = await waitCanonical(page, 2868, 2884);
+    assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884], 'Android-class 4× output near 8.3 MP must complete.');
+    const mobile4xStatus = (await page.locator('#status').textContent()) || '';
+    assert.match(mobile4xStatus, /Upscaled 4× .*background AI/);
+    const mobile4xHeartbeat = await page.evaluate(() => {
+      clearInterval(window.__mobile4xTimer);
+      return window.__mobile4xHeartbeat;
+    });
+    assert.ok(mobile4xHeartbeat >= 8, `Mobile 4× must remain responsive; heartbeat=${mobile4xHeartbeat}`);
 
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-1mp.png', width: 1000, height: 1000, transparent: false });
     const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
