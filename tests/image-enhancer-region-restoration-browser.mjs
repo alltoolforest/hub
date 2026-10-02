@@ -143,9 +143,9 @@ try {
     const faceSource=get(sctx,52,60);
     const faceProcessed=get(pctx,52,60);
     const faceOutput=get(octx,52,60);
-    const detailSource=get(sctx,108,60);
-    const detailProcessed=get(pctx,108,60);
-    const detailOutput=get(octx,108,60);
+    const detailSource=get(sctx,110,60);
+    const detailProcessed=get(pctx,110,60);
+    const detailOutput=get(octx,110,60);
     const shadowSource=get(sctx,10,110);
     const shadowOutput=get(octx,10,110);
 
