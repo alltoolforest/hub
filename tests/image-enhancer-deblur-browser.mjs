@@ -248,7 +248,29 @@ try{
   });
   await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
   const summary=(await page.locator('#enhancer-source-info').textContent())||'';
-  assert.match(summary,/likely motion \/ defocus blur/, `Blur detector did not route the known blurred fixture: ${summary}`);
+  const detector=await page.evaluate(async()=>{
+    const input=document.querySelector('input[type=file]')?.files?.[0];
+    if(!input) throw new Error('Deblur detector diagnostic input is missing.');
+    const bitmap=await createImageBitmap(input);
+    try{
+      const mod=await import('/assets/js/image-enhancer-restoration.js');
+      const analysis=await mod.analyzeSourceImage(bitmap,input);
+      return {
+        lapVariance:analysis.lapVariance,
+        gradient:analysis.gradient,
+        noise:analysis.noise,
+        perceptualBlur:analysis.perceptualBlur,
+        blurScore:analysis.blurScore,
+        softness:analysis.softness,
+        lowDetail:analysis.lowDetail,
+        likelyBlurred:analysis.likelyBlurred
+      };
+    }finally{
+      bitmap.close();
+    }
+  });
+  console.log(`DIAGNOSTIC blur-detector ${JSON.stringify(detector)}`);
+  assert.match(summary,/likely motion \/ defocus blur/, `Blur detector did not route the known blurred fixture: ${summary}; metrics=${JSON.stringify(detector)}`);
 
   await page.locator('#enhancer-mode-enhance').click();
   await page.locator('#enhancer-content').selectOption('low-resolution');
