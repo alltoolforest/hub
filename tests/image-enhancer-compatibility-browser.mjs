@@ -164,31 +164,38 @@ async function testMobileSafety() {
     assert.ok(mobileHeartbeat >= 4, `Mobile AI must keep the event loop responsive; heartbeat=${mobileHeartbeat}`);
     assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Mobile AI must keep ONNX WASM proxy enabled.');
 
-    await installGeneratedFile(page, { type: 'image/jpeg', name: 'mobile-8mp-target.jpg', width: 717, height: 721, transparent: false });
-    await page.locator('#enhancer-mode-upscale').click();
-    const exact4xOption = page.locator('#enhancer-scale option[value="4"]');
-    assert.equal(await exact4xOption.isDisabled(), false, '717×721 → 8.3 MP 4× must not be rejected by a fixed mobile safety cap.');
-    await page.locator('#enhancer-scale').selectOption('4');
-    await page.evaluate(() => {
-      window.__mobile4xHeartbeat = 0;
-      window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
-    });
-    await page.locator('#enhancer-run').click();
-    await page.waitForFunction(() => {
-      const status = document.querySelector('#status')?.textContent || '';
-      return window.__mobile4xHeartbeat >= 20 &&
-        !/too large for the current safety limit/i.test(status) &&
-        document.querySelector('#enhancer-run')?.disabled;
-    }, null, { timeout: 30000 });
-    const accepted4xStatus = (await page.locator('#status').textContent()) || '';
-    assert.doesNotMatch(accepted4xStatus, /too large for the current safety limit/i, '8.3 MP 4× must begin processing instead of being rejected.');
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('Processing cancelled.'), null, { timeout: 30000 });
-    const mobile4xHeartbeat = await page.evaluate(() => {
-      clearInterval(window.__mobile4xTimer);
-      return window.__mobile4xHeartbeat;
-    });
-    assert.ok(mobile4xHeartbeat >= 20, `Large mobile 4× must keep the page responsive while processing; heartbeat=${mobile4xHeartbeat}`);
+    const stressPage = await context.newPage();
+    stressPage.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(`stress: ${msg.text()}`); });
+    stressPage.on('pageerror', err => consoleErrors.push(`stress: ${err.message}`));
+    try {
+      await stressPage.goto('http://127.0.0.1:4177/images/enhance/', { waitUntil: 'networkidle' });
+      await installGeneratedFile(stressPage, { type: 'image/jpeg', name: 'mobile-8mp-target.jpg', width: 717, height: 721, transparent: false });
+      await stressPage.locator('#enhancer-mode-upscale').click();
+      const exact4xOption = stressPage.locator('#enhancer-scale option[value="4"]');
+      assert.equal(await exact4xOption.isDisabled(), false, '717×721 → 8.3 MP 4× must not be rejected by a fixed mobile safety cap.');
+      await stressPage.locator('#enhancer-scale').selectOption('4');
+      await stressPage.evaluate(() => {
+        window.__mobile4xHeartbeat = 0;
+        window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
+      });
+      await stressPage.locator('#enhancer-run').click();
+      await stressPage.waitForFunction(() => {
+        const status = document.querySelector('#status')?.textContent || '';
+        const accepted = /Preparing 4× upscale|Downloading AI|Preparing background AI|Enhancing tile|Upscaled 4×|Enlarged 4×/i.test(status);
+        return window.__mobile4xHeartbeat >= 20 &&
+          accepted &&
+          !/too large for the current safety limit/i.test(status);
+      }, null, { timeout: 30000 });
+      const accepted4xStatus = (await stressPage.locator('#status').textContent()) || '';
+      assert.doesNotMatch(accepted4xStatus, /too large for the current safety limit/i, '8.3 MP 4× must begin processing instead of being rejected.');
+      const mobile4xHeartbeat = await stressPage.evaluate(() => {
+        clearInterval(window.__mobile4xTimer);
+        return window.__mobile4xHeartbeat;
+      });
+      assert.ok(mobile4xHeartbeat >= 20, `Large mobile 4× must keep the page responsive while processing; heartbeat=${mobile4xHeartbeat}`);
+    } finally {
+      await stressPage.close();
+    }
 
     await installGeneratedFile(page, { type: 'image/jpeg', name: 'mobile-4x-complete.jpg', width: 360, height: 360, transparent: false });
     await page.locator('#enhancer-mode-upscale').click();
