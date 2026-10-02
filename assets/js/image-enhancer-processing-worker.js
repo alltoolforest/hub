@@ -65,6 +65,120 @@ async function tensorToBitmap(buffer, width, height, id) {
   return canvas.transferToImageBitmap();
 }
 
+async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, id) {
+  if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+  const width = sourceBitmap.width;
+  const height = sourceBitmap.height;
+  if (deblurBitmap.width !== width || deblurBitmap.height !== height) {
+    sourceBitmap.close?.();
+    deblurBitmap.close?.();
+    throw new Error('Deblur fidelity blend requires matching image dimensions.');
+  }
+
+  const output = new OffscreenCanvas(width, height);
+  const outputCtx = output.getContext('2d', { alpha: false });
+  if (!outputCtx) throw new Error('Deblur fidelity output canvas is unavailable.');
+
+  const TILE = 256;
+  const sourceScratch = new OffscreenCanvas(TILE + 2, TILE + 2);
+  const deblurScratch = new OffscreenCanvas(TILE + 2, TILE + 2);
+  const sourceCtx = sourceScratch.getContext('2d', { willReadFrequently: true, alpha: false });
+  const deblurCtx = deblurScratch.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!sourceCtx || !deblurCtx) throw new Error('Deblur fidelity workspace is unavailable.');
+
+  const blurStrength = clamp(Number(analysis?.blurScore) || 0, 0, 1);
+  const noise = clamp(Number(analysis?.noise) || 0, 0, 1);
+  const baseWeight = clamp(0.68 + blurStrength * 0.08 - noise * 0.04, 0.62, 0.76);
+
+  for (let y = 0; y < height; y += TILE) {
+    for (let x = 0; x < width; x += TILE) {
+      if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+      const coreW = Math.min(TILE, width - x);
+      const coreH = Math.min(TILE, height - y);
+      const sx = Math.max(0, x - 1);
+      const sy = Math.max(0, y - 1);
+      const ex = Math.min(width, x + coreW + 1);
+      const ey = Math.min(height, y + coreH + 1);
+      const readW = ex - sx;
+      const readH = ey - sy;
+      const offsetX = x - sx;
+      const offsetY = y - sy;
+
+      sourceScratch.width = readW;
+      sourceScratch.height = readH;
+      deblurScratch.width = readW;
+      deblurScratch.height = readH;
+      sourceCtx.drawImage(sourceBitmap, sx, sy, readW, readH, 0, 0, readW, readH);
+      deblurCtx.drawImage(deblurBitmap, sx, sy, readW, readH, 0, 0, readW, readH);
+
+      const source = sourceCtx.getImageData(0, 0, readW, readH).data;
+      const deblurred = deblurCtx.getImageData(0, 0, readW, readH).data;
+      const core = outputCtx.createImageData(coreW, coreH);
+      const dst = core.data;
+
+      for (let cy = 0; cy < coreH; cy++) {
+        const py = cy + offsetY;
+        for (let cx = 0; cx < coreW; cx++) {
+          const px = cx + offsetX;
+          const center = (py * readW + px) * 4;
+          const left = (py * readW + Math.max(0, px - 1)) * 4;
+          const right = (py * readW + Math.min(readW - 1, px + 1)) * 4;
+          const up = (Math.max(0, py - 1) * readW + px) * 4;
+          const down = (Math.min(readH - 1, py + 1) * readW + px) * 4;
+          const out = (cy * coreW + cx) * 4;
+
+          const sourceY = luma(source, center);
+          const deblurY = luma(deblurred, center);
+          const sourceEdge = (
+            Math.abs(sourceY - luma(source, left)) +
+            Math.abs(sourceY - luma(source, right)) +
+            Math.abs(sourceY - luma(source, up)) +
+            Math.abs(sourceY - luma(source, down))
+          ) * 0.25;
+          const deblurEdge = (
+            Math.abs(deblurY - luma(deblurred, left)) +
+            Math.abs(deblurY - luma(deblurred, right)) +
+            Math.abs(deblurY - luma(deblurred, up)) +
+            Math.abs(deblurY - luma(deblurred, down))
+          ) * 0.25;
+
+          const sourceStructure = clamp((sourceEdge - 1.5) / 18, 0, 1);
+          const recoveredDetail = clamp((deblurEdge - sourceEdge) / 18, 0, 1);
+          const lostDetail = clamp((sourceEdge - deblurEdge) / 12, 0, 1);
+          const deviation = clamp((Math.abs(deblurY - sourceY) - 5) / 30, 0, 1);
+          const smoothRegion = 1 - sourceStructure;
+
+          // Let NAFNet dominate recoverable edges while retaining more of the
+          // photographed source in smooth/skin-like regions. Strong AI changes
+          // in low-structure regions are the main source of plastic/oil-paint
+          // artifacts, so they are deliberately damped here.
+          let weight = baseWeight +
+            sourceStructure * 0.18 +
+            recoveredDetail * 0.07 -
+            lostDetail * 0.18 -
+            smoothRegion * deviation * 0.16;
+          weight = clamp(weight, 0.54, 0.94);
+
+          for (let channel = 0; channel < 3; channel++) {
+            dst[out + channel] = byte(
+              source[center + channel] +
+              (deblurred[center + channel] - source[center + channel]) * weight
+            );
+          }
+          dst[out + 3] = 255;
+        }
+      }
+
+      outputCtx.putImageData(core, x, y);
+      await Promise.resolve();
+    }
+  }
+
+  sourceBitmap.close?.();
+  deblurBitmap.close?.();
+  return output.transferToImageBitmap();
+}
+
 async function postprocess(bitmap, local, analysis, sharpening, id) {
   if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
   const width = bitmap.width;
@@ -159,6 +273,9 @@ self.onmessage = async event => {
       self.postMessage({ id, ok: true, ...result }, [result.buffer]);
     } else if (type === 'tensor-to-bitmap') {
       const bitmap = await tensorToBitmap(message.buffer, message.width, message.height, id);
+      self.postMessage({ id, ok: true, bitmap }, [bitmap]);
+    } else if (type === 'adaptive-deblur-blend') {
+      const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, id);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'postprocess') {
       const bitmap = await postprocess(message.bitmap, !!message.local, message.analysis, message.sharpening, id);

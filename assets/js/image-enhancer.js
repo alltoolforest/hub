@@ -108,6 +108,34 @@ class ProcessingWorkerBridge {
     return result.bitmap;
   }
 
+  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, signal) {
+    if (!this.available) return null;
+    const sourceBitmap = await createImageBitmap(sourceImage);
+    const deblurBitmap = await createImageBitmap(deblurCanvas);
+    let result;
+    try {
+      result = await this.request('adaptive-deblur-blend', {
+        sourceBitmap,
+        deblurBitmap,
+        analysis: analysis || null
+      }, [sourceBitmap, deblurBitmap], signal);
+    } catch (error) {
+      sourceBitmap.close?.();
+      deblurBitmap.close?.();
+      throw error;
+    }
+
+    const canvas = el('canvas', { width: result.bitmap.width, height: result.bitmap.height });
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) {
+      result.bitmap.close?.();
+      throw new Error('Deblur fidelity canvas is unavailable.');
+    }
+    ctx.drawImage(result.bitmap, 0, 0);
+    result.bitmap.close?.();
+    return canvas;
+  }
+
   async postprocessCanvas(inputCanvas, { local, analysis, sharpening }, signal) {
     if (!this.available) return { canvas: inputCanvas, applied: false, label: 'Background finishing unavailable' };
     const bitmap = await createImageBitmap(inputCanvas);
@@ -1355,19 +1383,28 @@ export async function mount(root, slug) {
           onProgress: message => status(message)
         });
 
-        // A true deblur result must not pass through the normal 1× source-detail
-        // safeguard because the reference source itself is blurred. Re-introducing
-        // that source can undo spatial reconstruction. Keep only a small source
-        // contribution for color/identity stability and judge deblur quality with
-        // a separate sharp-ground-truth gate.
-        const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
-        const blended = el('canvas', { width, height });
-        const blendCtx = blended.getContext('2d', { alpha: false });
-        if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
-        blendCtx.drawImage(image, 0, 0, width, height);
-        blendCtx.globalAlpha = deblurBlend;
-        blendCtx.drawImage(result.canvas, 0, 0, width, height);
-        blendCtx.globalAlpha = 1;
+        // Preserve photographed texture/identity instead of applying one global
+        // AI blend strength. Smooth regions retain more source pixels while
+        // recoverable edges can use more of the NAFNet reconstruction.
+        let blended = null;
+        try {
+          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, signal);
+        } catch (error) {
+          if (error?.name === 'AbortError') throw error;
+          console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
+        }
+
+        if (!blended) {
+          const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
+          blended = el('canvas', { width, height });
+          const blendCtx = blended.getContext('2d', { alpha: false });
+          if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
+          blendCtx.drawImage(image, 0, 0, width, height);
+          blendCtx.globalAlpha = deblurBlend;
+          blendCtx.drawImage(result.canvas, 0, 0, width, height);
+          blendCtx.globalAlpha = 1;
+        }
+
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
 
