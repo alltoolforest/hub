@@ -168,7 +168,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
       preclean: oneX ? 0 : (analysis?.noise > 0.78 ? 0.04 : 0),
       aiBlend: oneX ? 0.32 : 0.80,
       minDetailRatio: oneX ? 0.94 : 0.86,
-      minRegionalDetailRatio: oneX ? 0.94 : 0.86,
+      minRegionalDetailRatio: oneX ? 0.96 : 0.86,
       disclosure: 'Source-detail-first restoration with conservative AI blending.'
     });
   }
@@ -180,7 +180,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
       preclean: oneX ? (severeNoise ? 0.02 : 0) : (severeNoise ? 0.08 : 0.03),
       aiBlend: oneX ? 0.48 : 0.94,
       minDetailRatio: oneX ? 0.92 : 0.82,
-      minRegionalDetailRatio: oneX ? 0.90 : 0.82,
+      minRegionalDetailRatio: oneX ? 0.93 : 0.82,
       disclosure: 'Stronger restoration while retaining measurable source texture.'
     });
   }
@@ -190,7 +190,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
     preclean: oneX ? 0 : ((analysis?.noise || 0) > 0.72 || (analysis?.jpegArtifacts || 0) > 0.72 ? 0.05 : 0),
     aiBlend: oneX ? 0.40 : 0.88,
     minDetailRatio: oneX ? 0.93 : 0.84,
-    minRegionalDetailRatio: oneX ? 0.92 : 0.84,
+    minRegionalDetailRatio: oneX ? 0.94 : 0.84,
     disclosure: 'Balanced restoration with source-detail protection.'
   });
 }
