@@ -720,7 +720,8 @@ export async function mount(root, slug) {
       output(blob, safeName(file.name, scale === 1 ? '-enhanced' : `-upscaled-${scale}x`, 'png'));
       const sharpenLabel = sharpened.applied ? sharpened.label : sharpened.label === 'Off' ? 'Off' : sharpened.label;
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount} · ${result.tileCore}px tiles` : '';
-      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${result.tileCount} tiles · AI input ${result.inferenceWidth.toLocaleString()} × ${result.inferenceHeight.toLocaleString()}${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
+      const tileLabel = `${result.tileCount} ${result.tileCount === 1 ? 'tile' : 'tiles'}`;
+      status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · AI super-resolution · ${tileLabel} · AI input ${result.inferenceWidth.toLocaleString()} × ${result.inferenceHeight.toLocaleString()}${retryLabel} · ${result.backend} · ${restoration.label} profile · Sharpen ${sharpenLabel}. ${restoration.disclosure} ${contentRoute.disclosure}`);
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
       temporaryAiInput = null;
