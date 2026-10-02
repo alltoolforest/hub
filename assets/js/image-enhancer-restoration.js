@@ -160,30 +160,35 @@ export function resolveRestorationProfile(requested, analysis, scale) {
   const profile = ['fidelity', 'balanced', 'recovery'].includes(requestedProfile) ? requestedProfile : 'balanced';
   const scaleFactor = Number(scale) || 1;
 
+  const oneX = scaleFactor <= 1.05;
   if (profile === 'fidelity') {
     return Object.freeze({
       id: 'fidelity',
       label: 'Fidelity',
-      preclean: analysis?.noise > 0.72 ? 0.06 : 0,
-      aiBlend: scaleFactor === 1 ? 0.78 : 0.84,
-      disclosure: 'Fidelity-focused AI restoration with source-detail blending.'
+      preclean: oneX ? 0 : (analysis?.noise > 0.78 ? 0.04 : 0),
+      aiBlend: oneX ? 0.34 : 0.80,
+      minDetailRatio: oneX ? 0.94 : 0.86,
+      disclosure: 'Source-detail-first restoration with conservative AI blending.'
     });
   }
   if (profile === 'recovery') {
+    const severeNoise = (analysis?.noise || 0) > 0.78 || (analysis?.jpegArtifacts || 0) > 0.78;
     return Object.freeze({
       id: 'recovery',
       label: 'Recovery',
-      preclean: analysis?.noise > 0.48 || analysis?.jpegArtifacts > 0.55 ? 0.12 : 0.04,
-      aiBlend: 1,
-      disclosure: 'Recovery-focused AI reconstruction; some fine detail may be reconstructed.'
+      preclean: oneX ? (severeNoise ? 0.02 : 0) : (severeNoise ? 0.08 : 0.03),
+      aiBlend: oneX ? 0.56 : 0.94,
+      minDetailRatio: oneX ? 0.90 : 0.82,
+      disclosure: 'Stronger restoration while retaining measurable source texture.'
     });
   }
   return Object.freeze({
     id: 'balanced',
     label: 'Balanced',
-    preclean: analysis?.noise > 0.62 || analysis?.jpegArtifacts > 0.62 ? 0.08 : 0,
-    aiBlend: scaleFactor === 1 ? 0.90 : 0.94,
-    disclosure: 'Balanced AI restoration with conservative source-detail blending.'
+    preclean: oneX ? 0 : ((analysis?.noise || 0) > 0.72 || (analysis?.jpegArtifacts || 0) > 0.72 ? 0.05 : 0),
+    aiBlend: oneX ? 0.44 : 0.88,
+    minDetailRatio: oneX ? 0.92 : 0.84,
+    disclosure: 'Balanced restoration with source-detail protection.'
   });
 }
 
