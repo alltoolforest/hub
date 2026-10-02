@@ -548,17 +548,73 @@ async function readResponseWithProgress(response, signal, onProgress) {
 async function detectDeviceCapabilities() {
   const isMobile = mobile();
   const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
+  const memoryGB = Number(navigator.deviceMemory) || 0;
+  const cores = Math.max(1, Number(navigator.hardwareConcurrency) || 1);
+  const ua = String(navigator.userAgent || '');
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isWebKit = /AppleWebKit/i.test(ua) && !/Chrom(e|ium)|Edg|OPR/i.test(ua);
+  const workers = typeof Worker !== 'undefined';
+  const offscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+  const createBitmap = typeof createImageBitmap === 'function';
+
+  let maxPixels = baseline.maxPixels;
+  let maxSourcePixels = baseline.maxSourcePixels;
+  let maxFileMB = baseline.maxFileMB;
+
+  if (isMobile) {
+    if (memoryGB > 0 && memoryGB <= 2) {
+      maxPixels = 12e6;
+      maxSourcePixels = 28e6;
+      maxFileMB = 120;
+    } else if (memoryGB >= 8 && workers && offscreenCanvas && createBitmap) {
+      maxPixels = 24e6;
+      maxSourcePixels = 64e6;
+      maxFileMB = 300;
+    } else if (memoryGB >= 4 && workers && offscreenCanvas && createBitmap) {
+      maxPixels = 20e6;
+      maxSourcePixels = 52e6;
+      maxFileMB = 240;
+    }
+    if (isIOS) {
+      maxPixels = Math.min(maxPixels, 16e6);
+      maxSourcePixels = Math.min(maxSourcePixels, 48e6);
+    }
+  } else {
+    if (memoryGB > 0 && memoryGB <= 4) {
+      maxPixels = 32e6;
+      maxSourcePixels = 80e6;
+      maxFileMB = 300;
+    } else if (memoryGB >= 16 && cores >= 8) {
+      maxPixels = 80e6;
+      maxSourcePixels = 180e6;
+      maxFileMB = 750;
+    } else if (memoryGB >= 8) {
+      maxPixels = 64e6;
+      maxSourcePixels = 150e6;
+      maxFileMB = 600;
+    }
+    if (isWebKit) {
+      maxPixels = Math.min(maxPixels, 48e6);
+      maxSourcePixels = Math.min(maxSourcePixels, 120e6);
+    }
+  }
+
   const caps = {
     isMobile,
+    isIOS,
+    isWebKit,
     webgpu: false,
     wasm: typeof WebAssembly !== 'undefined',
-    workers: typeof Worker !== 'undefined',
-    offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
-    createImageBitmap: typeof createImageBitmap === 'function',
+    workers,
+    offscreenCanvas,
+    createImageBitmap: createBitmap,
+    hardwareConcurrency: cores,
+    deviceMemoryGB: memoryGB || null,
     maxTextureDimension2D: null,
-    maxPixels: baseline.maxPixels,
+    maxPixels,
+    maxSourcePixels,
     maxSide: baseline.maxSide,
-    maxFileMB: baseline.maxFileMB
+    maxFileMB
   };
 
   // WebGPU detection is intentionally skipped. The production enhancer uses
@@ -580,7 +636,7 @@ function safeOutputFor(image, scale, caps) {
     const maxScale = Math.max(0.01, Math.min(sideScale, pixelScale));
     const safeW = Math.max(1, Math.floor(image.width * maxScale));
     const safeH = Math.max(1, Math.floor(image.height * maxScale));
-    throw new Error(`This output is too large for the current safety limit. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels.`);
+    throw new Error(`This output exceeds what this browser or device can safely hold in one image. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels on this device.`);
   }
   return { width, height, pixels };
 }
@@ -762,10 +818,11 @@ export async function mount(root, slug) {
     image = isEnhancerHeicInput(file)
       ? await decodeEnhancerHeic(file, message => status(message))
       : await decodeImage(file);
-    if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
+    if (image.width * image.height > caps.maxSourcePixels) {
+      const maxMP = Math.floor(caps.maxSourcePixels / 1e6);
       image.close?.();
       image = null;
-      throw new Error('Use an image below 60 million pixels.');
+      throw new Error(`This source is too large for safe in-browser processing on this device. Try a source below about ${maxMP} megapixels, or use a device with more available memory.`);
     }
     clearOutputs();
     frame.hidden = false;
