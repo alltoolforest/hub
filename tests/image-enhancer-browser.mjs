@@ -336,7 +336,7 @@ try {
     window.__enhancerHeartbeat = 0;
     window.__enhancerHeartbeatTimer = setInterval(() => { window.__enhancerHeartbeat += 1; }, 25);
   });
-  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'general', 'auto', 'auto', /General Photo.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
+  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Auto → Low-Resolution Recovery.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
   const heartbeat = await page.evaluate(() => {
     clearInterval(window.__enhancerHeartbeatTimer);
     return window.__enhancerHeartbeat;
@@ -383,7 +383,7 @@ try {
   await page.locator('#enhancer-run').click();
   const fallbackStatus = await waitForTerminal(2);
   console.log(`DIAGNOSTIC transparent terminal status=${fallbackStatus}`);
-  assert.match(fallbackStatus, /General Photo.*Standard high-quality enlargement\. AI enhancement was not used\./);
+  assert.match(fallbackStatus, /Auto → Low-Resolution Recovery.*Standard high-quality enlargement\. AI enhancement was not used\./);
   const alphaInfo = await latestOutputInfo();
   assert.deepEqual(alphaInfo?.slice(0, 3), [48, 32, 'alpha-test-enlarged-2x.png']);
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
