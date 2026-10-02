@@ -65,25 +65,35 @@ function autoRoute(analysis, scale) {
   const noise = analysis?.noise || 0;
   const targetScale = Number(scale) || 1;
 
-  if (
+  // Pixel dimensions alone do not prove that a photo needs aggressive
+  // reconstruction. A small but detailed image must keep its real texture.
+  const highDetailOneX =
+    targetScale <= 1.05 &&
+    analysis?.recommendedProfile === 'fidelity' &&
+    softness < 0.45 &&
+    lowDetail < 0.45 &&
+    jpegArtifacts < 0.55;
+
+  if (highDetailOneX) return ROUTES['high-fidelity'];
+
+  const needsRecovery =
     analysis?.falseResolution ||
-    analysis?.lowResolution ||
     recoveryScore >= 0.55 ||
     softness >= 0.62 ||
     jpegArtifacts >= 0.68 ||
-    (targetScale <= 1.05 && (softness >= 0.46 || lowDetail >= 0.58))
-  ) {
-    return ROUTES['low-resolution'];
-  }
+    lowDetail >= 0.70 ||
+    (targetScale <= 1.05 && (softness >= 0.52 || lowDetail >= 0.62)) ||
+    (targetScale > 1.05 && analysis?.lowResolution && recoveryScore >= 0.38);
+
+  if (needsRecovery) return ROUTES['low-resolution'];
 
   const genuinelyClean =
-    recoveryScore <= 0.20 &&
-    softness < 0.32 &&
-    lowDetail < 0.38 &&
-    jpegArtifacts < 0.30 &&
-    noise < 0.42;
+    recoveryScore <= 0.30 &&
+    softness < 0.35 &&
+    lowDetail < 0.42 &&
+    jpegArtifacts < 0.35;
 
-  if (genuinelyClean) return ROUTES['high-fidelity'];
+  if (genuinelyClean || analysis?.recommendedProfile === 'fidelity') return ROUTES['high-fidelity'];
   return ROUTES.general;
 }
 
