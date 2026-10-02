@@ -18,6 +18,11 @@ import {
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 import { detectEnhancerCapabilities } from './image-enhancer-capabilities.js';
+import {
+  FaceIdentitySafetyEngine,
+  applyFaceIdentityGuard,
+  fallbackPortraitSafetyRegion
+} from './image-enhancer-face-safety.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -108,7 +113,7 @@ class ProcessingWorkerBridge {
     return result.bitmap;
   }
 
-  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, signal) {
+  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, faces, signal) {
     if (!this.available) return null;
     const sourceBitmap = await createImageBitmap(sourceImage);
     const deblurBitmap = await createImageBitmap(deblurCanvas);
@@ -117,7 +122,8 @@ class ProcessingWorkerBridge {
       result = await this.request('adaptive-deblur-blend', {
         sourceBitmap,
         deblurBitmap,
-        analysis: analysis || null
+        analysis: analysis || null,
+        faces: faces || []
       }, [sourceBitmap, deblurBitmap], signal);
     } catch (error) {
       sourceBitmap.close?.();
@@ -238,6 +244,7 @@ class EnhancerModelLoader {
     this.runtimePromise = null;
     this.modelPromise = null;
     this.deblurModelPromise = null;
+    this.faceSafetyModelPromise = null;
   }
 
   async loadManifest(signal) {
@@ -344,6 +351,60 @@ class EnhancerModelLoader {
       return await this.modelPromise;
     } catch (error) {
       this.modelPromise = null;
+      throw error;
+    }
+  }
+
+  async loadFaceSafetyModel(signal, onProgress) {
+    if (this.faceSafetyModelPromise) return this.faceSafetyModelPromise;
+    this.faceSafetyModelPromise = (async () => {
+      const manifest = await this.loadManifest(signal);
+      const model = manifest.models['face-safety-ultraface'];
+      let bytes = null;
+
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open(MODEL_CACHE);
+          const cached = await cache.match(model.url);
+          if (cached) {
+            onProgress?.('Checking cached face safety model…');
+            bytes = await cached.arrayBuffer();
+            if (!(await verifySha256(bytes, model.sha256))) {
+              bytes = null;
+              await cache.delete(model.url);
+            }
+          }
+        } catch {}
+      }
+
+      if (!bytes) {
+        onProgress?.('Downloading face safety model…');
+        const response = await fetch(model.url, { signal, cache: 'force-cache' });
+        if (!response.ok) throw new Error(`Face safety model download failed (${response.status}).`);
+        bytes = await readResponseWithProgress(response, signal, (loaded, total) => {
+          if (total) onProgress?.(`Downloading face safety model… ${Math.min(100, Math.round(loaded / total * 100))}%`);
+          else onProgress?.(`Downloading face safety model… ${format(loaded / MB, 1)} MB`);
+        });
+        onProgress?.('Verifying face safety model…');
+        if (!(await verifySha256(bytes, model.sha256))) {
+          throw new Error('Face safety model integrity check failed. The downloaded model was not used.');
+        }
+        if ('caches' in window) {
+          try {
+            const cache = await caches.open(MODEL_CACHE);
+            await cache.put(model.url, new Response(bytes.slice(0), {
+              headers: { 'content-type': 'application/octet-stream' }
+            }));
+          } catch {}
+        }
+      }
+
+      return { config: model, bytes };
+    })();
+    try {
+      return await this.faceSafetyModelPromise;
+    } catch (error) {
+      this.faceSafetyModelPromise = null;
       throw error;
     }
   }
