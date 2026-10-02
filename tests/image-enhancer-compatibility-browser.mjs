@@ -171,6 +171,7 @@ try {
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 240, height: 320 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 480, height: 640 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
   await testDesktopFormats();
   await testMobileSafety();
   console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, canonical processing, mobile 8 MP/20 MB safety caps and tile plans verified.');
