@@ -55,18 +55,18 @@ async function auditEngine(name, engine) {
       return summary.includes('1,440 × 960') || summary.includes('1440 × 960');
     }, null, { timeout: 60000 });
 
-    await page.locator('#enhancer-scale').selectOption('1');
+    await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption('text-logo');
-    await page.getByRole('button', { name: 'Enhance image' }).click();
+    await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') &&
         (status.includes('1,440 × 960 pixels') || status.includes('1440 × 960 pixels')) &&
-        status.includes('Standard high-quality enlargement. AI deliberately not used.');
+        status.includes('Local quality enhancement');
     }, null, { timeout: 60000 });
 
     const filename = await page.locator('#downloads a[download]').getAttribute('download');
-    assert.match(filename || '', /-fidelity\.png$/);
+    assert.match(filename || '', /-enhanced\.png$/);
     assert.equal(errors.length, 0, `${name} HEIC console errors:\n${errors.join('\n')}`);
     console.log(`PASS: ${name} real HEIC decode + canonical 1× processing under production CSP.`);
   } finally {
