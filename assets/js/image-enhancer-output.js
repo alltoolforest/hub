@@ -44,7 +44,7 @@ export function safeOutputDimensions(image, width, height, caps) {
     const maxScale = Math.max(0.01, Math.min(sideScale, pixelScale));
     const safeWidth = Math.max(1, Math.floor(sourceWidth * maxScale));
     const safeHeight = Math.max(1, Math.floor(sourceHeight * maxScale));
-    throw new Error(`This output is too large for the current safety limit. Maximum safe output is about ${safeWidth.toLocaleString()} × ${safeHeight.toLocaleString()} pixels.`);
+    throw new Error(`This output exceeds what this browser or device can safely hold in one image. Maximum safe output is about ${safeWidth.toLocaleString()} × ${safeHeight.toLocaleString()} pixels on this device.`);
   }
 
   return { width: targetWidth, height: targetHeight, pixels };

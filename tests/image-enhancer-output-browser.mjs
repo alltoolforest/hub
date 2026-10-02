@@ -143,7 +143,7 @@ try {
   await page.locator('#enhancer-target-width').fill('99999');
   await page.locator('#enhancer-target-height').fill('');
   await page.locator('#enhancer-run').click();
-  await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('too large for the current safety limit'));
+  await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('exceeds what this browser or device can safely hold'));
   assert.equal(await page.locator('#downloads a[download]').count(), beforeInvalid, 'Invalid oversized target must not start processing or replace the existing result.');
 
   await page.locator('#enhancer-target-width').fill('10');

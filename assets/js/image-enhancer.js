@@ -17,13 +17,13 @@ import {
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
+import { decodeEnhancerRaw, disposeEnhancerRawDecoder, isEnhancerRawInput } from './image-enhancer-raw.js';
 
 const MB = 1024 * 1024;
-const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
-  desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
+  mobile: { maxPixels: 16e6, maxSide: 8192, maxFileMB: 200, maxSourcePixels: 48e6 },
+  desktop: { maxPixels: 48e6, maxSide: 16384, maxFileMB: 500, maxSourcePixels: 120e6 }
 });
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -135,6 +135,37 @@ class ProcessingWorkerBridge {
       canvas,
       applied: !!(local || sharpening?.amount),
       label: sharpening?.label || 'Auto'
+    };
+  }
+
+  async preserveDetailCanvas(inputCanvas, sourceImage, minimumRatio, signal) {
+    if (!this.available) {
+      return { canvas: inputCanvas, beforeRatio: 1, afterRatio: 1, sourceBlend: 0 };
+    }
+    const [candidateBitmap, sourceBitmap] = await Promise.all([
+      createImageBitmap(inputCanvas),
+      createImageBitmap(sourceImage)
+    ]);
+    const result = await this.request('preserve-detail', {
+      candidateBitmap,
+      sourceBitmap,
+      minimumRatio
+    }, [candidateBitmap, sourceBitmap], signal);
+
+    const canvas = el('canvas', { width: result.bitmap.width, height: result.bitmap.height });
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) {
+      result.bitmap.close?.();
+      throw new Error('Detail-preserved image canvas is unavailable.');
+    }
+    ctx.drawImage(result.bitmap, 0, 0);
+    result.bitmap.close?.();
+    inputCanvas.width = inputCanvas.height = 0;
+    return {
+      canvas,
+      beforeRatio: Number(result.beforeRatio) || 0,
+      afterRatio: Number(result.afterRatio) || 0,
+      sourceBlend: Number(result.sourceBlend) || 0
     };
   }
 
@@ -518,17 +549,73 @@ async function readResponseWithProgress(response, signal, onProgress) {
 async function detectDeviceCapabilities() {
   const isMobile = mobile();
   const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
+  const memoryGB = Number(navigator.deviceMemory) || 0;
+  const cores = Math.max(1, Number(navigator.hardwareConcurrency) || 1);
+  const ua = String(navigator.userAgent || '');
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isWebKit = /AppleWebKit/i.test(ua) && !/Chrom(e|ium)|Edg|OPR/i.test(ua);
+  const workers = typeof Worker !== 'undefined';
+  const offscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+  const createBitmap = typeof createImageBitmap === 'function';
+
+  let maxPixels = baseline.maxPixels;
+  let maxSourcePixels = baseline.maxSourcePixels;
+  let maxFileMB = baseline.maxFileMB;
+
+  if (isMobile) {
+    if (memoryGB > 0 && memoryGB <= 2) {
+      maxPixels = 12e6;
+      maxSourcePixels = 28e6;
+      maxFileMB = 120;
+    } else if (memoryGB >= 8 && workers && offscreenCanvas && createBitmap) {
+      maxPixels = 24e6;
+      maxSourcePixels = 64e6;
+      maxFileMB = 300;
+    } else if (memoryGB >= 4 && workers && offscreenCanvas && createBitmap) {
+      maxPixels = 20e6;
+      maxSourcePixels = 52e6;
+      maxFileMB = 240;
+    }
+    if (isIOS) {
+      maxPixels = Math.min(maxPixels, 16e6);
+      maxSourcePixels = Math.min(maxSourcePixels, 48e6);
+    }
+  } else {
+    if (memoryGB > 0 && memoryGB <= 4) {
+      maxPixels = 32e6;
+      maxSourcePixels = 80e6;
+      maxFileMB = 300;
+    } else if (memoryGB >= 16 && cores >= 8) {
+      maxPixels = 80e6;
+      maxSourcePixels = 180e6;
+      maxFileMB = 750;
+    } else if (memoryGB >= 8) {
+      maxPixels = 64e6;
+      maxSourcePixels = 150e6;
+      maxFileMB = 600;
+    }
+    if (isWebKit) {
+      maxPixels = Math.min(maxPixels, 48e6);
+      maxSourcePixels = Math.min(maxSourcePixels, 120e6);
+    }
+  }
+
   const caps = {
     isMobile,
+    isIOS,
+    isWebKit,
     webgpu: false,
     wasm: typeof WebAssembly !== 'undefined',
-    workers: typeof Worker !== 'undefined',
-    offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
-    createImageBitmap: typeof createImageBitmap === 'function',
+    workers,
+    offscreenCanvas,
+    createImageBitmap: createBitmap,
+    hardwareConcurrency: cores,
+    deviceMemoryGB: memoryGB || null,
     maxTextureDimension2D: null,
-    maxPixels: baseline.maxPixels,
+    maxPixels,
+    maxSourcePixels,
     maxSide: baseline.maxSide,
-    maxFileMB: baseline.maxFileMB
+    maxFileMB
   };
 
   // WebGPU detection is intentionally skipped. The production enhancer uses
@@ -550,7 +637,7 @@ function safeOutputFor(image, scale, caps) {
     const maxScale = Math.max(0.01, Math.min(sideScale, pixelScale));
     const safeW = Math.max(1, Math.floor(image.width * maxScale));
     const safeH = Math.max(1, Math.floor(image.height * maxScale));
-    throw new Error(`This output is too large for the current safety limit. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels.`);
+    throw new Error(`This output exceeds what this browser or device can safely hold in one image. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels on this device.`);
   }
   return { width, height, pixels };
 }
@@ -633,7 +720,7 @@ export async function mount(root, slug) {
   let processing = false;
   let taskMode = null;
 
-  const input = fileInput(root, '.jpg,.jpeg,.png,.webp,.heic,.heif', false, 'Open an image');
+  const input = fileInput(root, '.jpg,.jpeg,.png,.webp,.heic,.heif,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.dng,.raf,.orf,.rw2,.pef,.srw,.erf,.kdc,.dcr,.mos,.3fr,.iiq,.rwl,.mef,.mrw,.x3f', false, 'Open an image');
   const summary = el('p', { class: 'status', id: 'enhancer-source-info', text: 'Choose an image to inspect its safe processing limits.' });
   root.append(summary);
 
@@ -727,15 +814,18 @@ export async function mount(root, slug) {
 
   bindFile(input, async files => {
     file = files[0];
-    checkFile(file, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'], caps.maxFileMB);
+    checkFile(file, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'dng', 'raf', 'orf', 'rw2', 'pef', 'srw', 'erf', 'kdc', 'dcr', 'mos', '3fr', 'iiq', 'rwl', 'mef', 'mrw', 'x3f'], caps.maxFileMB);
     image?.close?.();
-    image = isEnhancerHeicInput(file)
-      ? await decodeEnhancerHeic(file, message => status(message))
-      : await decodeImage(file);
-    if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
+    image = isEnhancerRawInput(file)
+      ? await decodeEnhancerRaw(file, { maxSourcePixels: caps.maxSourcePixels, onProgress: message => status(message) })
+      : isEnhancerHeicInput(file)
+        ? await decodeEnhancerHeic(file, message => status(message))
+        : await decodeImage(file);
+    if (image.width * image.height > caps.maxSourcePixels) {
+      const maxMP = Math.floor(caps.maxSourcePixels / 1e6);
       image.close?.();
       image = null;
-      throw new Error('Use an image below 60 million pixels.');
+      throw new Error(`This source is too large for safe in-browser processing on this device. Try a source below about ${maxMP} megapixels, or use a device with more available memory.`);
     }
     clearOutputs();
     frame.hidden = false;
@@ -888,6 +978,20 @@ export async function mount(root, slug) {
     }
   }
 
+  function minimumDetailRatio(restoration) {
+    if (restoration?.id === 'fidelity') return 0.95;
+    if (restoration?.id === 'recovery') return 0.88;
+    return 0.92;
+  }
+
+  async function preserveEnhanceDetail(canvas, restoration, signal) {
+    if (!processor.available) {
+      return { canvas, beforeRatio: 1, afterRatio: 1, sourceBlend: 0 };
+    }
+    status('Preserving original detail…');
+    return processor.preserveDetailCanvas(canvas, image, minimumDetailRatio(restoration), signal);
+  }
+
   async function runEnhancePipeline(signal) {
     const scale = 1;
     const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
@@ -908,9 +1012,12 @@ export async function mount(root, slug) {
         });
         const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
         result.canvas = finished.canvas;
+        const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+        result.canvas = preserved.canvas;
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing.`);
+        const detail = Math.round(preserved.afterRatio * 100);
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}% · background-safe local processing.`);
         return result;
       }
 
@@ -941,12 +1048,16 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+      result.canvas = preserved.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      const detail = Math.round(preserved.afterRatio * 100);
+      const sourceBlendLabel = preserved.sourceBlend > 0 ? ` · source detail blended ${Math.round(preserved.sourceBlend * 100)}%` : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}%${sourceBlendLabel} · background AI${retryLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -961,9 +1072,12 @@ export async function mount(root, slug) {
       });
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const preserved = await preserveEnhanceDetail(result.canvas, restoration, signal);
+      result.canvas = preserved.canvas;
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely.`);
+      const detail = Math.round(preserved.afterRatio * 100);
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · original detail preserved about ${detail}% · local fallback used safely.`);
       return result;
     }
   }
@@ -1084,6 +1198,7 @@ export async function mount(root, slug) {
     image?.close?.();
     aiEngine.dispose();
     processor.dispose();
+    disposeEnhancerRawDecoder();
     fallbackEngine.dispose();
     browserEnhanceEngine.dispose();
   }, { once: true });
