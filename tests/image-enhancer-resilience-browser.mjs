@@ -115,7 +115,7 @@ async function testDeepMemoryRetries() {
       const proto = CanvasRenderingContext2D.prototype;
       const original = proto.getImageData;
       proto.getImageData = function(...args) {
-        if (this.canvas.width > 100) throw new RangeError('out of memory two-stage retry test');
+        if (this.canvas.width > 115) throw new RangeError('out of memory two-stage retry test');
         return original.apply(this, args);
       };
       window.__restoreResilienceGetImageData = () => {
