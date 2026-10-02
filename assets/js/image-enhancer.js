@@ -30,6 +30,16 @@ const DEFAULT_LIMITS = Object.freeze({
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
+async function applySharpenWithoutDiscardingResult(inputCanvas, settings, signal, onProgress) {
+  try {
+    return await applyIntelligentSharpen(inputCanvas, settings, signal, onProgress);
+  } catch (error) {
+    if (!isMemoryPressureError(error)) throw error;
+    onProgress?.('Sharpening skipped to preserve the completed result under memory pressure.');
+    return { canvas: inputCanvas, applied: false, label: 'Skipped for memory safety' };
+  }
+}
+
 class EnhancementEngine {
   constructor(id, label, kind) {
     this.id = id;
@@ -819,7 +829,7 @@ export async function mount(root, slug) {
         result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
         if (taskMode === 'enhance') {
           await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
-          sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
+          sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
           result.canvas = sharpened.canvas;
         }
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
@@ -859,7 +869,7 @@ export async function mount(root, slug) {
       if (taskMode === 'enhance') {
         await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
       }
-      sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
+      sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
       result.canvas = sharpened.canvas;
 
       status('Encoding AI result…');
@@ -886,7 +896,7 @@ export async function mount(root, slug) {
         if (taskMode === 'enhance') {
           status(`AI unavailable (${error.message}). Applying local quality enhancement instead…`);
           await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
-          sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
+          sharpened = await applySharpenWithoutDiscardingResult(result.canvas, sharpening, signal, message => status(message));
           result.canvas = sharpened.canvas;
           const blob = await canvasBlob(result.canvas, 'image/png', 1);
           output(blob, safeName(file.name, '-enhanced-local', 'png'));
