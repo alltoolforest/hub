@@ -15,18 +15,33 @@ export function aiInferenceDimensions(
 
   const [srcWidth, srcHeight, outWidth, outHeight, scale] = values;
   const requestedScale = Math.max(outWidth / srcWidth, outHeight / srcHeight);
-  const exactFactor = Math.min(1, requestedScale / scale);
-
-  // The previous responsiveness hotfix used only exactFactor. That kept the UI
-  // responsive, but 1×/2× paths could discard too much real source detail before
-  // Real-ESRGAN saw the image. Keep a bounded quality floor while still avoiding
-  // full-resolution x4 inference for the smaller output modes.
   const mobile = !!options?.isMobile;
+  const memory = Number(options?.deviceMemory) || 0;
+  const cores = Math.max(1, Number(options?.cores) || 2);
+  const iosLike = !!options?.iosLike;
+
+  let exactFactor = Math.min(1, requestedScale / scale);
+
+  // Mobile 4× uses AI on a bounded high-detail working image, then composes the
+  // model output into the exact requested canvas. This avoids hundreds of seconds
+  // of full-source x4 inference on phones while retaining worker responsiveness.
+  if (mobile && requestedScale >= 3.5) {
+    const capable = memory >= 6 || cores >= 8;
+    const mid = memory >= 4 || cores >= 6;
+    exactFactor = iosLike
+      ? (capable ? 0.80 : mid ? 0.72 : 0.66)
+      : (capable ? 0.86 : mid ? 0.76 : 0.68);
+  }
+
+  // Keep enough source information for restoration without forcing every device
+  // to run the x4 model on the full original image.
   const qualityFloor = requestedScale <= 1.05
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : 1;
+      : mobile
+        ? Math.min(exactFactor, 0.86)
+        : 1;
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
   const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
