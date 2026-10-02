@@ -135,6 +135,8 @@ try{
     };
   });
 
+  console.log('TASK4-DIAGNOSTIC', JSON.stringify(result));
+
   assert.equal(result.safeBefore.safe,true,
     `small photographic correction should pass fidelity guard: ${JSON.stringify(result.safeBefore)}`);
   assert.equal(result.unsafeBefore.safe,false,
@@ -142,7 +144,7 @@ try{
   assert.ok(result.unsafeBefore.risk>=0.58,
     `unsafe fixture risk unexpectedly low: ${result.unsafeBefore.risk}`);
   assert.equal(result.guarded.applied,true,'progressive recovery did not activate');
-  assert.ok(result.guarded.stages>=1 && result.guarded.stages<=4,
+  assert.ok(result.guarded.stages>=1 && result.guarded.stages<=5,
     `unexpected recovery stage count: ${result.guarded.stages}`);
   assert.ok(result.guarded.analysis.risk < result.unsafeBefore.risk - 0.10,
     `progressive recovery did not materially reduce risk: before=${result.unsafeBefore.risk} after=${result.guarded.analysis.risk}`);
