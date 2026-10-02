@@ -104,8 +104,8 @@ async function runStandardTarget(expectedWidth, expectedHeight) {
 
 try {
   await page.goto('http://127.0.0.1:4174/images/enhance/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#enhancer-output-mode');
-  await page.waitForSelector('#enhancer-scale');
+  await page.waitForSelector('#enhancer-output-mode', { state: 'attached' });
+  await page.waitForSelector('#enhancer-scale', { state: 'attached' });
   await page.locator('#enhancer-mode-upscale').click();
 
   assert.equal(await page.locator('#enhancer-output-mode').inputValue(), 'scale');
