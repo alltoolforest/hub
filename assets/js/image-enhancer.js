@@ -19,7 +19,6 @@ import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressur
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 
 const MB = 1024 * 1024;
-const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
   mobile: { maxPixels: 16e6, maxSide: 8192, maxFileMB: 120, maxSourcePixels: 48e6 },
@@ -1048,9 +1047,12 @@ export async function mount(root, slug) {
         });
         const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
         result.canvas = finished.canvas;
+        const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+        result.canvas = detail.canvas;
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing.`);
+        const detailLabel = detail.protected ? ' · source detail protected' : '';
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing${detailLabel}.`);
         return result;
       }
 
@@ -1081,12 +1083,15 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+      result.canvas = detail.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      const detailLabel = detail.protected ? ' · source detail protected' : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${detailLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -1101,9 +1106,12 @@ export async function mount(root, slug) {
       });
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+      result.canvas = detail.canvas;
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely.`);
+      const detailLabel = detail.protected ? ' · source detail protected' : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely${detailLabel}.`);
       return result;
     }
   }
