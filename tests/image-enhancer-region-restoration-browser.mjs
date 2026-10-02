@@ -198,6 +198,8 @@ try {
     };
   });
 
+  console.log('TASK3-DIAGNOSTIC', JSON.stringify(result));
+
   assert.equal(result.plan.version,1);
   assert.ok(result.faceWeight <= 0.62 + 1e-9, `face safety ceiling exceeded: ${result.faceWeight}`);
   assert.ok(result.detailWeight > result.faceWeight + 0.18,
