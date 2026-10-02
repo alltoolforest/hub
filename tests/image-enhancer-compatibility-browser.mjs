@@ -156,28 +156,29 @@ async function testMobileSafety() {
 
     const option2 = page.locator('#enhancer-scale option[value="2"]');
     const option4 = page.locator('#enhancer-scale option[value="4"]');
-    assert.equal(await option2.isDisabled(), false, '2× mobile output should fit the 8 MP safety cap for a 1 MP source.');
-    assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 8 MP cap.');
-    assert.match((await option4.textContent()) || '', /too large on this device/);
+    assert.equal(await option2.isDisabled(), false, '2× mobile output must remain available.');
+    assert.equal(await option4.isDisabled(), false, '4× 16 MP mobile output should be allowed by adaptive safety.');
+    assert.match((await option4.textContent()) || '', /4× AI Upscale/);
 
     await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-output-mode').selectOption('dimensions');
-    await page.locator('#enhancer-target-width').fill('3000');
+    await page.locator('#enhancer-target-width').fill('5000');
     await page.locator('#enhancer-target-height').fill('');
     await page.waitForFunction(() => (document.querySelector('#enhancer-output-info')?.textContent || '').includes('too large for the current safety limit'));
     await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('too large for the current safety limit'));
-    assert.equal(await page.locator('#downloads a[download]').count(), 0, 'Oversized mobile custom target must not start processing.');
+    assert.equal(await page.locator('#downloads a[download]').count(), 0, 'Truly oversized mobile custom target must still be rejected safely.');
 
     await page.evaluate(() => {
       const input = document.querySelector('input[type=file]');
-      const file = new File([new Uint8Array(21 * 1024 * 1024)], 'too-large-mobile.png', { type: 'image/png' });
+      const file = new File([new Uint8Array(1)], 'too-large-mobile.png', { type: 'image/png' });
+      Object.defineProperty(file, 'size', { configurable: true, value: 121 * 1024 * 1024 });
       const transfer = new DataTransfer();
       transfer.items.add(file);
       input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('below 20 MB'));
+    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('below 120 MB'));
     assert.match((await page.locator('.selected-files').textContent()) || '', /Could not open/);
 
     assert.equal(consoleErrors.length, 0, `Mobile safety console errors:\n${consoleErrors.join('\n')}`);
@@ -210,7 +211,7 @@ try {
   assert.equal(cleanPhoto.id, 'high-fidelity', 'Genuinely clean sources should retain the conservative fidelity route.');
   await testDesktopFormats();
   await testMobileSafety();
-  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, 8 MP/20 MB safety caps and tile plans verified.');
+  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, adaptive 16 MP-class output safety, professional file-size allowance and tile plans verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
