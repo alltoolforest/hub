@@ -25,6 +25,7 @@ on:
       - 'tests/image-enhancer-resilience-browser.mjs'
       - 'tests/image-enhancer-responsiveness-browser.mjs'
       - 'tests/image-enhancer-deblur-browser.mjs'
+      - 'tests/fixtures/nafnet-natural-sharp.png'
       - 'tests/image-enhancer-deblur-cross-browser.mjs'
       - 'tests/image-enhancer-cross-browser.mjs'
       - '_headers'
