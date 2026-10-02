@@ -93,10 +93,6 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
   const deblurCtx = deblurScratch.getContext('2d', { willReadFrequently: true, alpha: false });
   if (!sourceCtx || !deblurCtx) throw new Error('Deblur fidelity workspace is unavailable.');
 
-  const blurStrength = clamp(Number(analysis?.blurScore) || 0, 0, 1);
-  const noise = clamp(Number(analysis?.noise) || 0, 0, 1);
-  const baseWeight = clamp(0.68 + blurStrength * 0.08 - noise * 0.04, 0.62, 0.76);
-
   for (let y = 0; y < height; y += TILE) {
     for (let x = 0; x < width; x += TILE) {
       if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
@@ -149,28 +145,32 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
             Math.abs(deblurY - luma(deblurred, down))
           ) * 0.25;
 
-          const sourceStructure = clamp((sourceEdge - 1.5) / 18, 0, 1);
           const recoveredDetail = clamp((deblurEdge - sourceEdge) / 18, 0, 1);
           const lostDetail = clamp((sourceEdge - deblurEdge) / 12, 0, 1);
           const deviation = clamp((Math.abs(deblurY - sourceY) - 5) / 30, 0, 1);
-          const smoothRegion = 1 - sourceStructure;
 
-          // Let NAFNet dominate recoverable edges while retaining more of the
-          // photographed source in smooth/skin-like regions. Strong AI changes
-          // in low-structure regions are the main source of plastic/oil-paint
-          // artifacts, so they are deliberately damped here.
-          let weight = baseWeight +
-            sourceStructure * 0.18 +
-            recoveredDetail * 0.07 -
-            lostDetail * 0.18 -
-            smoothRegion * deviation * 0.16;
-          weight = clamp(weight, 0.54, 0.94);
-
-          // Identity safety is a hard ceiling, not another enhancement pass.
-          // Within detected face geometry, never allow the deblur model to
-          // dominate strongly enough to invent facial structure or texture.
+          // Region-aware deblur: retain the photographed source in smooth
+          // areas, allow stronger reconstruction where source structure supports
+          // it, and keep the face-safety ceiling as the final authority.
           const faceLimit = faceSafetyAiLimitAt(x + cx, y + cy, faces);
-          weight = Math.min(weight, faceLimit);
+          const deblurPlan = resolveRegionRestorationPlan(analysis, 'deblur');
+          let weight = resolveRegionProcessedWeight({
+            sourceEdge,
+            sourceResidual: Math.abs(sourceY - (
+              luma(source, left) + luma(source, right) + luma(source, up) + luma(source, down)
+            ) * 0.25),
+            deviation: Math.abs(deblurY - sourceY),
+            faceLimit,
+            plan: deblurPlan
+          });
+
+          // When NAFNet recovers a real edge that was weaker in the source,
+          // allow a small additional contribution outside protected faces.
+          if (faceLimit >= 0.999) {
+            weight += recoveredDetail * 0.05 * deblurPlan.detailDemand;
+            weight -= lostDetail * 0.10;
+          }
+          weight = clamp(weight, 0.54, Math.min(0.98, faceLimit));
 
           for (let channel = 0; channel < 3; channel++) {
             dst[out + channel] = byte(
