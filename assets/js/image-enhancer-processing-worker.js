@@ -324,10 +324,10 @@ async function regionAwareRestore(sourceBitmap, processedBitmap, analysis, faces
 
           let toneDelta = 0;
           if (plan.shadowLift > 0 && resultY < 112) {
-            toneDelta += plan.shadowLift * clamp((112 - resultY) / 112);
+            toneDelta += plan.shadowLift * clamp((112 - resultY) / 112, 0, 1);
           }
           if (plan.highlightCompression > 0 && resultY > 180) {
-            toneDelta -= plan.highlightCompression * clamp((resultY - 180) / 75);
+            toneDelta -= plan.highlightCompression * clamp((resultY - 180) / 75, 0, 1);
           }
           if (plan.contrastGain > 0) {
             toneDelta += (resultY - 128) * plan.contrastGain;
@@ -335,7 +335,7 @@ async function regionAwareRestore(sourceBitmap, processedBitmap, analysis, faces
 
           const smoothNoiseBlend = clamp(
             plan.cleanupDemand *
-            clamp((5 - sourceEdge) / 5) *
+            clamp((5 - sourceEdge) / 5, 0, 1) *
             0.08,
             0,
             0.08
