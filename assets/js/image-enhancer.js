@@ -551,6 +551,164 @@ function sampleDetailMetrics(input) {
   };
 }
 
+function sampleRegionalDetailGrid(input, columns = 6, rows = 6) {
+  const sourceWidth = Number(input?.width) || 0;
+  const sourceHeight = Number(input?.height) || 0;
+  if (!sourceWidth || !sourceHeight) return { columns, rows, regions: [] };
+
+  const sampleW = Math.max(180, Math.min(720, sourceWidth));
+  const sampleH = Math.max(120, Math.round(sampleW * sourceHeight / sourceWidth));
+  const canvas = el('canvas', { width: sampleW, height: sampleH });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!ctx) return { columns, rows, regions: [] };
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(input, 0, 0, sampleW, sampleH);
+  const rgba = ctx.getImageData(0, 0, sampleW, sampleH).data;
+  canvas.width = canvas.height = 0;
+
+  const gray = new Float32Array(sampleW * sampleH);
+  for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
+    gray[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
+  }
+
+  const regions = [];
+  for (let row = 0; row < rows; row++) {
+    const y0 = Math.max(1, Math.floor(row * sampleH / rows));
+    const y1 = Math.min(sampleH - 1, Math.floor((row + 1) * sampleH / rows));
+    for (let col = 0; col < columns; col++) {
+      const x0 = Math.max(1, Math.floor(col * sampleW / columns));
+      const x1 = Math.min(sampleW - 1, Math.floor((col + 1) * sampleW / columns));
+      let edge = 0;
+      let texture = 0;
+      let edgeCount = 0;
+      let textureCount = 0;
+
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = y * sampleW + x;
+          if (x + 1 < x1) {
+            edge += Math.abs(gray[i + 1] - gray[i]);
+            edgeCount++;
+          }
+          if (y + 1 < y1) {
+            edge += Math.abs(gray[i + sampleW] - gray[i]);
+            edgeCount++;
+          }
+          const neighbours = (gray[i - 1] + gray[i + 1] + gray[i - sampleW] + gray[i + sampleW]) * 0.25;
+          texture += Math.abs(gray[i] - neighbours);
+          textureCount++;
+        }
+      }
+
+      regions.push({
+        row,
+        col,
+        edge: edgeCount ? edge / edgeCount : 0,
+        texture: textureCount ? texture / textureCount : 0
+      });
+    }
+  }
+
+  return { columns, rows, regions };
+}
+
+async function enforceRegionalDetailFloor(resultCanvas, sourceImage, profile, signal) {
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+  const target = Number(profile?.minRegionalDetailRatio) || Number(profile?.minDetailRatio) || 0.90;
+  const sourceGrid = sampleRegionalDetailGrid(sourceImage);
+  const resultGrid = sampleRegionalDetailGrid(resultCanvas);
+  if (!sourceGrid.regions.length || sourceGrid.regions.length !== resultGrid.regions.length) {
+    return { canvas: resultCanvas, protected: false, worstRatio: 1, protectedRegions: 0 };
+  }
+
+  const sourceGlobal = sampleDetailMetrics(sourceImage);
+  const maskValues = new Uint8ClampedArray(sourceGrid.columns * sourceGrid.rows * 4);
+  let worstRatio = 1;
+  let protectedRegions = 0;
+
+  for (let i = 0; i < sourceGrid.regions.length; i++) {
+    const sourceRegion = sourceGrid.regions[i];
+    const resultRegion = resultGrid.regions[i];
+    const edgeRatio = sourceRegion.edge > 0.001 ? resultRegion.edge / sourceRegion.edge : 1;
+    const textureRatio = sourceRegion.texture > 0.001 ? resultRegion.texture / sourceRegion.texture : 1;
+    const ratio = Math.min(edgeRatio, textureRatio);
+    worstRatio = Math.min(worstRatio, ratio);
+
+    const meaningfulSourceDetail =
+      sourceRegion.edge >= Math.max(1.5, sourceGlobal.edge * 0.35) ||
+      sourceRegion.texture >= Math.max(0.8, sourceGlobal.texture * 0.35);
+    const deficit = target - ratio;
+
+    let restoreAlpha = 0;
+    if (meaningfulSourceDetail && deficit > 0.015) {
+      restoreAlpha = Math.max(0.12, Math.min(0.92, 0.12 + (deficit / Math.max(target, 0.01)) * 4.2));
+      protectedRegions++;
+    }
+
+    const p = i * 4;
+    maskValues[p] = 255;
+    maskValues[p + 1] = 255;
+    maskValues[p + 2] = 255;
+    maskValues[p + 3] = Math.round(restoreAlpha * 255);
+  }
+
+  if (!protectedRegions) {
+    return { canvas: resultCanvas, protected: false, worstRatio, protectedRegions: 0 };
+  }
+
+  const maskScale = 8;
+  const maskSmall = el('canvas', {
+    width: sourceGrid.columns * maskScale,
+    height: sourceGrid.rows * maskScale
+  });
+  const maskSmallCtx = maskSmall.getContext('2d', { alpha: true });
+  if (!maskSmallCtx) {
+    maskSmall.width = maskSmall.height = 0;
+    return { canvas: resultCanvas, protected: false, worstRatio, protectedRegions: 0 };
+  }
+  maskSmallCtx.clearRect(0, 0, maskSmall.width, maskSmall.height);
+  for (let i = 0; i < sourceGrid.regions.length; i++) {
+    const region = sourceGrid.regions[i];
+    const alpha = maskValues[i * 4 + 3] / 255;
+    if (alpha <= 0) continue;
+    maskSmallCtx.fillStyle = `rgba(255,255,255,${alpha})`;
+    maskSmallCtx.fillRect(
+      region.col * maskScale,
+      region.row * maskScale,
+      maskScale,
+      maskScale
+    );
+  }
+
+  const overlay = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
+  const overlayCtx = overlay.getContext('2d', { alpha: true });
+  const candidate = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
+  const candidateCtx = candidate.getContext('2d', { alpha: false });
+  if (!overlayCtx || !candidateCtx) {
+    maskSmall.width = maskSmall.height = 0;
+    overlay.width = overlay.height = 0;
+    candidate.width = candidate.height = 0;
+    return { canvas: resultCanvas, protected: false, worstRatio, protectedRegions: 0 };
+  }
+
+  overlayCtx.imageSmoothingEnabled = true;
+  overlayCtx.imageSmoothingQuality = 'high';
+  overlayCtx.drawImage(sourceImage, 0, 0, overlay.width, overlay.height);
+  overlayCtx.globalCompositeOperation = 'destination-in';
+  overlayCtx.drawImage(maskSmall, 0, 0, overlay.width, overlay.height);
+  overlayCtx.globalCompositeOperation = 'source-over';
+
+  candidateCtx.drawImage(resultCanvas, 0, 0);
+  candidateCtx.drawImage(overlay, 0, 0);
+
+  maskSmall.width = maskSmall.height = 0;
+  overlay.width = overlay.height = 0;
+  await sleepFrame();
+
+  return { canvas: candidate, protected: true, worstRatio, protectedRegions };
+}
+
 async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, signal) {
   if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
   const source = sampleDetailMetrics(sourceImage);
@@ -560,46 +718,65 @@ async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, sig
   const initialRatio = Math.min(edgeRatio, textureRatio);
   const target = Number(profile?.minDetailRatio) || 0.90;
 
-  if (initialRatio >= target) {
-    return { canvas: resultCanvas, detailRatio: initialRatio, protected: false };
-  }
-
   let best = resultCanvas;
   let bestRatio = initialRatio;
-  for (const processedAlpha of [0.48, 0.36, 0.26]) {
-    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-    const candidate = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
-    const ctx = candidate.getContext('2d', { alpha: false });
-    if (!ctx) {
-      candidate.width = candidate.height = 0;
-      break;
-    }
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(sourceImage, 0, 0, candidate.width, candidate.height);
-    ctx.globalAlpha = processedAlpha;
-    ctx.drawImage(resultCanvas, 0, 0);
-    ctx.globalAlpha = 1;
+  let globallyProtected = false;
 
-    const metrics = sampleDetailMetrics(candidate);
-    const ratio = Math.min(
-      source.edge > 0.001 ? metrics.edge / source.edge : 1,
-      source.texture > 0.001 ? metrics.texture / source.texture : 1
-    );
+  if (initialRatio < target) {
+    for (const processedAlpha of [0.48, 0.40, 0.32, 0.24]) {
+      if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+      const candidate = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
+      const ctx = candidate.getContext('2d', { alpha: false });
+      if (!ctx) {
+        candidate.width = candidate.height = 0;
+        break;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(sourceImage, 0, 0, candidate.width, candidate.height);
+      ctx.globalAlpha = processedAlpha;
+      ctx.drawImage(resultCanvas, 0, 0);
+      ctx.globalAlpha = 1;
 
-    if (ratio > bestRatio) {
-      if (best !== resultCanvas) best.width = best.height = 0;
-      best = candidate;
-      bestRatio = ratio;
-    } else {
-      candidate.width = candidate.height = 0;
+      const metrics = sampleDetailMetrics(candidate);
+      const ratio = Math.min(
+        source.edge > 0.001 ? metrics.edge / source.edge : 1,
+        source.texture > 0.001 ? metrics.texture / source.texture : 1
+      );
+
+      if (ratio > bestRatio) {
+        if (best !== resultCanvas) best.width = best.height = 0;
+        best = candidate;
+        bestRatio = ratio;
+        globallyProtected = true;
+      } else {
+        candidate.width = candidate.height = 0;
+      }
+      if (bestRatio >= target) break;
+      await sleepFrame();
     }
-    if (bestRatio >= target) break;
-    await sleepFrame();
   }
 
+  const regional = await enforceRegionalDetailFloor(best, sourceImage, profile, signal);
+  if (regional.canvas !== best) {
+    if (best !== resultCanvas) best.width = best.height = 0;
+    best = regional.canvas;
+  }
+
+  const finalMetrics = sampleDetailMetrics(best);
+  const finalRatio = Math.min(
+    source.edge > 0.001 ? finalMetrics.edge / source.edge : 1,
+    source.texture > 0.001 ? finalMetrics.texture / source.texture : 1
+  );
+
   if (best !== resultCanvas) resultCanvas.width = resultCanvas.height = 0;
-  return { canvas: best, detailRatio: bestRatio, protected: best !== resultCanvas };
+  return {
+    canvas: best,
+    detailRatio: finalRatio,
+    regionalDetailRatio: regional.worstRatio,
+    protectedRegions: regional.protectedRegions,
+    protected: globallyProtected || regional.protected
+  };
 }
 
 function safeOutputFor(image, scale, caps) {

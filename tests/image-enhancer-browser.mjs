@@ -218,6 +218,49 @@ async function latestOutputPerceptualMetrics() {
     const afterEdge = edgeEnergy(afterGray);
     const beforeTexture = textureEnergy(beforeGray);
     const afterTexture = textureEnergy(afterGray);
+
+    const regionMetrics = (values, col, row, columns = 6, rows = 6) => {
+      const x0 = Math.max(1, Math.floor(col * sampleW / columns));
+      const x1 = Math.min(sampleW - 1, Math.floor((col + 1) * sampleW / columns));
+      const y0 = Math.max(1, Math.floor(row * sampleH / rows));
+      const y1 = Math.min(sampleH - 1, Math.floor((row + 1) * sampleH / rows));
+      let edge = 0;
+      let texture = 0;
+      let edgeCount = 0;
+      let textureCount = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = y * sampleW + x;
+          if (x + 1 < x1) { edge += Math.abs(values[i + 1] - values[i]); edgeCount++; }
+          if (y + 1 < y1) { edge += Math.abs(values[i + sampleW] - values[i]); edgeCount++; }
+          const neighbours = (values[i - 1] + values[i + 1] + values[i - sampleW] + values[i + sampleW]) * 0.25;
+          texture += Math.abs(values[i] - neighbours);
+          textureCount++;
+        }
+      }
+      return {
+        edge: edgeCount ? edge / edgeCount : 0,
+        texture: textureCount ? texture / textureCount : 0
+      };
+    };
+
+    let regionalMinRatio = 1;
+    let regionalCount = 0;
+    for (let row = 0; row < 6; row++) {
+      for (let col = 0; col < 6; col++) {
+        const sourceRegion = regionMetrics(beforeGray, col, row);
+        const resultRegion = regionMetrics(afterGray, col, row);
+        const meaningful =
+          sourceRegion.edge >= Math.max(1.5, beforeEdge * 0.35) ||
+          sourceRegion.texture >= Math.max(0.8, beforeTexture * 0.35);
+        if (!meaningful) continue;
+        const edgeRatio = sourceRegion.edge > 0.001 ? resultRegion.edge / sourceRegion.edge : 1;
+        const textureRatio = sourceRegion.texture > 0.001 ? resultRegion.texture / sourceRegion.texture : 1;
+        regionalMinRatio = Math.min(regionalMinRatio, edgeRatio, textureRatio);
+        regionalCount++;
+      }
+    }
+
     return {
       lumaMae,
       beforeEdge,
@@ -225,7 +268,9 @@ async function latestOutputPerceptualMetrics() {
       edgeRatio: beforeEdge > 0.001 ? afterEdge / beforeEdge : 1,
       beforeTexture,
       afterTexture,
-      textureRatio: beforeTexture > 0.001 ? afterTexture / beforeTexture : 1
+      textureRatio: beforeTexture > 0.001 ? afterTexture / beforeTexture : 1,
+      regionalMinRatio,
+      regionalCount
     };
   });
 }
@@ -348,10 +393,12 @@ try {
   const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*background AI/);
   assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
   const perceptual1x = await latestOutputPerceptualMetrics();
-  console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)} textureRatio=${perceptual1x?.textureRatio?.toFixed(3)}`);
+  console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)} textureRatio=${perceptual1x?.textureRatio?.toFixed(3)} regionalMin=${perceptual1x?.regionalMinRatio?.toFixed(3)}`);
   assert.ok((perceptual1x?.lumaMae || 0) >= 1.25, `1× restoration must be perceptually different, not merely hash-different: ${JSON.stringify(perceptual1x)}`);
   assert.ok((perceptual1x?.edgeRatio || 0) >= 0.92, `1× Enhance must retain at least 92% of source edge energy: ${JSON.stringify(perceptual1x)}`);
   assert.ok((perceptual1x?.textureRatio || 0) >= 0.90, `1× Enhance must retain at least 90% of source fine texture: ${JSON.stringify(perceptual1x)}`);
+  assert.ok((perceptual1x?.regionalCount || 0) >= 8, `Regional detail gate must evaluate enough textured regions: ${JSON.stringify(perceptual1x)}`);
+  assert.ok((perceptual1x?.regionalMinRatio || 0) >= 0.90, `No meaningful textured region may fall below 90% source detail retention: ${JSON.stringify(perceptual1x)}`);
 
   await page.evaluate(() => {
     window.__enhancerHeartbeat = 0;
@@ -421,7 +468,7 @@ try {
   await testUnsafeWebGpuIsNotSelected();
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: separated Enhance/Upscale pipelines, source edge/texture preservation gate, real AI 1x/2x/4x, worker-backed pixel conversion/finishing, forced WASM proxy provider, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
+  console.log('PASS: separated Enhance/Upscale pipelines, global and regional source-detail preservation gates, real AI 1x/2x/4x, worker-backed pixel conversion/finishing, forced WASM proxy provider, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
