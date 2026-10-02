@@ -61,7 +61,7 @@ async function auditEngine(name, engine) {
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') &&
-        (status.includes('1,440 × 960 pixels') || status.includes('1440 × 960 pixels')) &&
+        (status.includes('1,440 × 960') || status.includes('1440 × 960')) &&
         status.includes('background-safe local processing');
     }, null, { timeout: 60000 });
 
