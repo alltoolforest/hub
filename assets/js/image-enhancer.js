@@ -1313,7 +1313,8 @@ export async function mount(root, slug) {
 
   async function runEnhancePipeline(signal) {
     const scale = 1;
-    const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
+    const requestedContent = read('enhancer-content');
+    const contentRoute = resolveContentRoute(requestedContent, analysis, scale, caps);
     const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
     const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
     const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
@@ -1342,8 +1343,9 @@ export async function mount(root, slug) {
 
       const blurEligible =
         analysis?.likelyBlurred &&
-        contentRoute.engine !== 'standard' &&
-        !['text-logo', 'illustration'].includes(contentRoute.id);
+        Math.min(image.width, image.height) >= 96 &&
+        ['auto', 'general', 'low-resolution', 'portrait', 'old-photo'].includes(requestedContent) &&
+        contentRoute.engine !== 'standard';
 
       if (blurEligible) {
         status('Blur detected. Running dedicated deblur reconstruction…');
