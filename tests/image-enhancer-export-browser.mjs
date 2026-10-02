@@ -114,8 +114,8 @@ async function createExport(format, quality, background) {
 
 try {
   await page.goto('http://127.0.0.1:4176/images/enhance/', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#enhancer-export-panel');
-  await page.waitForSelector('#enhancer-export-format');
+  await page.waitForSelector('#enhancer-export-panel', { state: 'attached' });
+  await page.waitForSelector('#enhancer-export-format', { state: 'attached' });
 
   assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Export settings must stay hidden until a processed result exists.');
   assert.equal(await page.locator('#enhancer-export-format').inputValue(), 'png');
