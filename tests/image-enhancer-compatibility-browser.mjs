@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import assert from 'node:assert/strict';
-import { tileCorePlan } from '../assets/js/image-enhancer-tiles.js';
+import { aiInferenceDimensions, tileCorePlan } from '../assets/js/image-enhancer-tiles.js';
 
 const ROOT = process.cwd();
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://staticimgly.com blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'";
@@ -165,9 +165,12 @@ async function testMobileSafety() {
 }
 
 try {
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [96, 72, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [72, 56, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [128, 96, 72, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [96, 72, 56, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: true, isMobile: false }), [160, 112, 80, 56]);
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 240, height: 320 });
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 480, height: 640 });
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   await testDesktopFormats();
   await testMobileSafety();
   console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, canonical processing, mobile 8 MP/20 MB safety caps and tile plans verified.');
