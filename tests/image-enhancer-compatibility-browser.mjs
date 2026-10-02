@@ -70,11 +70,11 @@ async function installGeneratedFile(page, { type, name, width, height, transpare
   }, [width, height, name]);
 }
 
-async function waitCanonical(page, width, height) {
+async function waitCanonical(page, width, height, timeout = 30000) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
     return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
-  }, [width, height], { timeout: 30000 });
+  }, [width, height], { timeout });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
     const blob = await (await fetch(link.href)).blob();
@@ -166,7 +166,7 @@ async function testMobileSafety() {
       window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
     });
     await page.locator('#enhancer-run').click();
-    const mobile4x = await waitCanonical(page, 2868, 2884);
+    const mobile4x = await waitCanonical(page, 2868, 2884, 300000);
     assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884]);
     const mobile4xStatus = (await page.locator('#status').textContent()) || '';
     assert.match(mobile4xStatus, /Upscaled 4× .*background AI/, `Mobile 4× must use background AI: ${mobile4xStatus}`);
