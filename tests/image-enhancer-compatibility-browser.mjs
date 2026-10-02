@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import assert from 'node:assert/strict';
 import { aiInferenceDimensions, tileCorePlan } from '../assets/js/image-enhancer-tiles.js';
+import { resolveContentRoute } from '../assets/js/image-enhancer-routing.js';
 
 const ROOT = process.cwd();
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://staticimgly.com blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'";
@@ -143,7 +144,7 @@ async function testMobileSafety() {
     const mobileOutput = await waitCanonical(page, 960, 720);
     assert.deepEqual(mobileOutput.slice(0, 2), [960, 720]);
     const mobileStatus = (await page.locator('#status').textContent()) || '';
-    assert.match(mobileStatus, /AI super-resolution.*AI input 240 × 180.*wasm-worker/, `Mobile AI must use the responsive worker path: ${mobileStatus}`);
+    assert.match(mobileStatus, /AI super-resolution.*AI input 288 × 216.*wasm-worker/, `Mobile AI must use the responsive worker path: ${mobileStatus}`);
     const mobileHeartbeat = await page.evaluate(() => {
       clearInterval(window.__mobileHeartbeatTimer);
       return window.__mobileHeartbeat;
@@ -190,10 +191,24 @@ try {
   assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [128, 96, 72, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [96, 72, 56, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: true, isMobile: false }), [160, 112, 80, 56]);
-  assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 240, height: 320 });
-  assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 480, height: 640 });
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 480, height: 640 }, 'Desktop 1× must retain at least half-resolution source detail for AI restoration.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 720, height: 960 }, 'Desktop 2× must retain a 75% linear source working image.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4, { isMobile: true }), { width: 384, height: 512 }, 'Mobile 1× keeps a bounded quality floor without reverting to full-source inference.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4, { isMobile: true }), { width: 576, height: 768 }, 'Mobile 2× keeps a bounded 60% linear quality floor.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
+
+  const softOneX = resolveContentRoute('auto', {
+    falseResolution: false, lowResolution: false, recoveryScore: 0.24,
+    softness: 0.50, lowDetail: 0.52, jpegArtifacts: 0.10, noise: 0.10
+  }, 1, { isMobile: false, wasm: true, webgpu: false });
+  assert.equal(softOneX.id, 'low-resolution', 'Soft 1× photos must not be routed to the conservative high-fidelity path.');
+
+  const cleanPhoto = resolveContentRoute('auto', {
+    falseResolution: false, lowResolution: false, recoveryScore: 0.12,
+    softness: 0.16, lowDetail: 0.20, jpegArtifacts: 0.08, noise: 0.12
+  }, 1, { isMobile: false, wasm: true, webgpu: false });
+  assert.equal(cleanPhoto.id, 'high-fidelity', 'Genuinely clean sources should retain the conservative fidelity route.');
   await testDesktopFormats();
   await testMobileSafety();
   console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, 8 MP/20 MB safety caps and tile plans verified.');

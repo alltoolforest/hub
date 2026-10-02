@@ -148,6 +148,69 @@ async function sourcePreviewHash() {
   });
 }
 
+async function latestOutputPerceptualMetrics() {
+  return page.evaluate(async () => {
+    const source = document.querySelector('canvas[aria-label="Source image preview"]');
+    const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
+    if (!source || !link) return null;
+    const blob = await (await fetch(link.href)).blob();
+    const bitmap = await createImageBitmap(blob);
+    const sampleW = Math.max(32, Math.min(256, source.width));
+    const sampleH = Math.max(32, Math.round(sampleW * source.height / source.width));
+
+    const sample = input => {
+      const canvas = document.createElement('canvas');
+      canvas.width = sampleW;
+      canvas.height = sampleH;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(input, 0, 0, sampleW, sampleH);
+      return ctx.getImageData(0, 0, sampleW, sampleH).data;
+    };
+
+    const before = sample(source);
+    const after = sample(bitmap);
+    bitmap.close();
+
+    const gray = rgba => {
+      const out = new Float32Array(sampleW * sampleH);
+      for (let i = 0, p = 0; i < out.length; i++, p += 4) {
+        out[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
+      }
+      return out;
+    };
+    const beforeGray = gray(before);
+    const afterGray = gray(after);
+
+    let lumaDelta = 0;
+    for (let i = 0; i < beforeGray.length; i++) lumaDelta += Math.abs(beforeGray[i] - afterGray[i]);
+    const lumaMae = lumaDelta / beforeGray.length;
+
+    const edgeEnergy = values => {
+      let sum = 0;
+      let count = 0;
+      for (let y = 0; y < sampleH - 1; y++) {
+        for (let x = 0; x < sampleW - 1; x++) {
+          const i = y * sampleW + x;
+          sum += Math.abs(values[i + 1] - values[i]) + Math.abs(values[i + sampleW] - values[i]);
+          count += 2;
+        }
+      }
+      return count ? sum / count : 0;
+    };
+
+    const beforeEdge = edgeEnergy(beforeGray);
+    const afterEdge = edgeEnergy(afterGray);
+    return {
+      lumaMae,
+      beforeEdge,
+      afterEdge,
+      edgeRatio: beforeEdge > 0.001 ? afterEdge / beforeEdge : 1
+    };
+  });
+}
+
 async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /AI super-resolution/) {
   await page.locator('#enhancer-scale').selectOption(String(scale));
   await page.locator('#enhancer-content').selectOption(content);
@@ -252,14 +315,18 @@ try {
 
   await upload('tile-test.png', 500, 350);
   const realisticOriginalHash = await sourcePreviewHash();
-  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'off', /General Photo.*AI super-resolution.*AI input 125 × 88.*wasm-worker.*Recovery profile/);
+  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /General Photo.*AI super-resolution.*AI input 250 × 175.*wasm-worker.*Recovery profile.*Sharpen Auto/);
   assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
+  const perceptual1x = await latestOutputPerceptualMetrics();
+  console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)}`);
+  assert.ok((perceptual1x?.lumaMae || 0) >= 1.75, `1× restoration must be perceptually different, not merely hash-different: ${JSON.stringify(perceptual1x)}`);
+  assert.ok((perceptual1x?.edgeRatio || 0) >= 1.01, `Soft-image 1× restoration must produce measurable detail/edge gain: ${JSON.stringify(perceptual1x)}`);
 
   await page.evaluate(() => {
     window.__enhancerHeartbeat = 0;
     window.__enhancerHeartbeatTimer = setInterval(() => { window.__enhancerHeartbeat += 1; }, 25);
   });
-  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'general', 'auto', 'auto', /General Photo.*AI super-resolution · 4 tiles · AI input 250 × 175.*wasm-worker/);
+  const tiled = await runAiScale(2, [1000, 700, 'tile-test-upscaled-2x.png'], 'general', 'auto', 'auto', /General Photo.*AI super-resolution · 9 tiles · AI input 375 × 263.*wasm-worker/);
   const heartbeat = await page.evaluate(() => {
     clearInterval(window.__enhancerHeartbeatTimer);
     return window.__enhancerHeartbeat;
@@ -314,7 +381,7 @@ try {
   await testWebGpuFailureFallsBackToWorker();
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN 1x/2x/4x, target-scaled AI working resolution, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
+  console.log('PASS: Real-ESRGAN 1x/2x/4x, perceptual 1× quality gate, quality-preserving AI working resolution, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

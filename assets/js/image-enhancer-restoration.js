@@ -165,7 +165,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
       id: 'fidelity',
       label: 'Fidelity',
       preclean: analysis?.noise > 0.72 ? 0.06 : 0,
-      aiBlend: scaleFactor === 1 ? 0.68 : 0.80,
+      aiBlend: scaleFactor === 1 ? 0.78 : 0.84,
       disclosure: 'Fidelity-focused AI restoration with source-detail blending.'
     });
   }
@@ -182,7 +182,7 @@ export function resolveRestorationProfile(requested, analysis, scale) {
     id: 'balanced',
     label: 'Balanced',
     preclean: analysis?.noise > 0.62 || analysis?.jpegArtifacts > 0.62 ? 0.08 : 0,
-    aiBlend: scaleFactor === 1 ? 0.84 : 0.92,
+    aiBlend: scaleFactor === 1 ? 0.90 : 0.94,
     disclosure: 'Balanced AI restoration with conservative source-detail blending.'
   });
 }
@@ -234,15 +234,15 @@ export function blendForFidelity(aiCanvas, sourceImage, scale, profile) {
 
 export function resolveSharpening(requested, analysis, profile) {
   if (requested === 'off') return Object.freeze({ id: 'off', label: 'Off', amount: 0, threshold: 255, maxDelta: 0 });
-  if (requested === 'low') return Object.freeze({ id: 'low', label: 'Low', amount: 0.22, threshold: 5, maxDelta: 8 });
-  if (requested === 'medium') return Object.freeze({ id: 'medium', label: 'Medium', amount: 0.38, threshold: 4, maxDelta: 12 });
+  if (requested === 'low') return Object.freeze({ id: 'low', label: 'Low', amount: 0.26, threshold: 4.5, maxDelta: 10 });
+  if (requested === 'medium') return Object.freeze({ id: 'medium', label: 'Medium', amount: 0.46, threshold: 3.5, maxDelta: 15 });
 
   const softness = analysis?.softness || 0;
   const noise = analysis?.noise || 0;
-  const recoveryBias = profile?.id === 'recovery' ? 0.04 : profile?.id === 'fidelity' ? -0.04 : 0;
-  const amount = clamp(0.22 + softness * 0.18 + recoveryBias - noise * 0.10, 0.14, 0.40);
-  const threshold = clamp(4 + noise * 10, 4, 14);
-  const maxDelta = clamp(8 + softness * 5 - noise * 2, 7, 13);
+  const recoveryBias = profile?.id === 'recovery' ? 0.06 : profile?.id === 'fidelity' ? -0.02 : 0;
+  const amount = clamp(0.26 + softness * 0.24 + recoveryBias - noise * 0.08, 0.18, 0.52);
+  const threshold = clamp(3.5 + noise * 9, 3.5, 12);
+  const maxDelta = clamp(10 + softness * 7 - noise * 2, 9, 17);
   return Object.freeze({ id: 'auto', label: 'Auto', amount, threshold, maxDelta });
 }
 
