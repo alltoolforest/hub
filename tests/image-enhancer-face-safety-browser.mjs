@@ -104,6 +104,7 @@ try {
       throw new Error(`Face model checksum mismatch: ${digest}`);
     }
 
+    const modelByteLength = modelBytes.byteLength;
     const loader = {
       loadRuntime: async signal => loadRuntime(signal),
       loadFaceSafetyModel: async () => ({ config:faceConfig, bytes:modelBytes })
@@ -177,7 +178,7 @@ try {
     return {
       detectorAvailable,
       faces:faces.map(face => ({...face})),
-      modelBytes:modelBytes.byteLength,
+      modelBytes:modelByteLength,
       beforeMae,
       afterMae,
       centerLimit,
