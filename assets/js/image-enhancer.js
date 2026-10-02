@@ -18,6 +18,11 @@ import {
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 import { detectEnhancerCapabilities } from './image-enhancer-capabilities.js';
+import {
+  FaceIdentitySafetyEngine,
+  applyFaceIdentityGuard,
+  fallbackPortraitSafetyRegion
+} from './image-enhancer-face-safety.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -108,7 +113,7 @@ class ProcessingWorkerBridge {
     return result.bitmap;
   }
 
-  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, signal) {
+  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, faces, signal) {
     if (!this.available) return null;
     const sourceBitmap = await createImageBitmap(sourceImage);
     const deblurBitmap = await createImageBitmap(deblurCanvas);
@@ -117,7 +122,8 @@ class ProcessingWorkerBridge {
       result = await this.request('adaptive-deblur-blend', {
         sourceBitmap,
         deblurBitmap,
-        analysis: analysis || null
+        analysis: analysis || null,
+        faces: faces || []
       }, [sourceBitmap, deblurBitmap], signal);
     } catch (error) {
       sourceBitmap.close?.();
@@ -238,6 +244,7 @@ class EnhancerModelLoader {
     this.runtimePromise = null;
     this.modelPromise = null;
     this.deblurModelPromise = null;
+    this.faceSafetyModelPromise = null;
   }
 
   async loadManifest(signal) {
@@ -344,6 +351,60 @@ class EnhancerModelLoader {
       return await this.modelPromise;
     } catch (error) {
       this.modelPromise = null;
+      throw error;
+    }
+  }
+
+  async loadFaceSafetyModel(signal, onProgress) {
+    if (this.faceSafetyModelPromise) return this.faceSafetyModelPromise;
+    this.faceSafetyModelPromise = (async () => {
+      const manifest = await this.loadManifest(signal);
+      const model = manifest.models['face-safety-ultraface'];
+      let bytes = null;
+
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open(MODEL_CACHE);
+          const cached = await cache.match(model.url);
+          if (cached) {
+            onProgress?.('Checking cached face safety model…');
+            bytes = await cached.arrayBuffer();
+            if (!(await verifySha256(bytes, model.sha256))) {
+              bytes = null;
+              await cache.delete(model.url);
+            }
+          }
+        } catch {}
+      }
+
+      if (!bytes) {
+        onProgress?.('Downloading face safety model…');
+        const response = await fetch(model.url, { signal, cache: 'force-cache' });
+        if (!response.ok) throw new Error(`Face safety model download failed (${response.status}).`);
+        bytes = await readResponseWithProgress(response, signal, (loaded, total) => {
+          if (total) onProgress?.(`Downloading face safety model… ${Math.min(100, Math.round(loaded / total * 100))}%`);
+          else onProgress?.(`Downloading face safety model… ${format(loaded / MB, 1)} MB`);
+        });
+        onProgress?.('Verifying face safety model…');
+        if (!(await verifySha256(bytes, model.sha256))) {
+          throw new Error('Face safety model integrity check failed. The downloaded model was not used.');
+        }
+        if ('caches' in window) {
+          try {
+            const cache = await caches.open(MODEL_CACHE);
+            await cache.put(model.url, new Response(bytes.slice(0), {
+              headers: { 'content-type': 'application/octet-stream' }
+            }));
+          } catch {}
+        }
+      }
+
+      return { config: model, bytes };
+    })();
+    try {
+      return await this.faceSafetyModelPromise;
+    } catch (error) {
+      this.faceSafetyModelPromise = null;
       throw error;
     }
   }
@@ -1073,6 +1134,7 @@ export async function mount(root, slug) {
   const processor = new ProcessingWorkerBridge(caps);
   const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
   const deblurEngine = new OnnxDeblurEngine(loader, caps, processor);
+  const faceSafetyEngine = new FaceIdentitySafetyEngine(loader, caps);
   const fallbackEngine = new BrowserResampleEngine();
   const browserEnhanceEngine = new BrowserEnhanceEngine();
   let image = null;
@@ -1189,6 +1251,7 @@ export async function mount(root, slug) {
       throw new Error(`This image is beyond this device's safe decoded-image limit (about ${sourceLimitMP} MP). Try the same file on a device with more available memory.`);
     }
     clearOutputs();
+    faceSafetyEngine.reset();
     frame.hidden = false;
     drawSource();
     hasTransparency = await detectTransparency(image);
@@ -1316,6 +1379,7 @@ export async function mount(root, slug) {
     controller?.abort();
     controller = null;
     clearOutputs();
+    faceSafetyEngine.reset();
     $('#enhancer-scale').value = '2';
     $('#enhancer-content').value = 'auto';
     $('#enhancer-restoration').value = 'auto';
@@ -1337,6 +1401,19 @@ export async function mount(root, slug) {
       console.warn('Background finishing unavailable; preserving completed image.', error);
       return { canvas, applied: false, label: 'Skipped safely' };
     }
+  }
+
+  async function resolveFaceSafety(signal, requestedContent = 'auto') {
+    const faces = await faceSafetyEngine.detect(image, signal, message => status(message));
+    if (faces.length) return faces;
+
+    // If the dedicated detector cannot run, only an explicitly selected portrait
+    // receives a conservative center fallback. Auto/general photos are never
+    // assumed to contain a face.
+    if (!faceSafetyEngine.lastAvailable && requestedContent === 'portrait') {
+      return fallbackPortraitSafetyRegion(image);
+    }
+    return faces;
   }
 
   async function runEnhancePipeline(signal) {
@@ -1369,6 +1446,8 @@ export async function mount(root, slug) {
         return result;
       }
 
+      const faceRegions = await resolveFaceSafety(signal, requestedContent);
+
       const blurEligible =
         analysis?.likelyBlurred &&
         Math.min(image.width, image.height) >= 96 &&
@@ -1388,7 +1467,7 @@ export async function mount(root, slug) {
         // recoverable edges can use more of the NAFNet reconstruction.
         let blended = null;
         try {
-          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, signal);
+          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal);
         } catch (error) {
           if (error?.name === 'AbortError') throw error;
           console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
@@ -1407,6 +1486,8 @@ export async function mount(root, slug) {
 
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
+        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
+        result.canvas = faceGuard.canvas;
 
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
@@ -1444,6 +1525,8 @@ export async function mount(root, slug) {
       result.canvas = finished.canvas;
       const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
       result.canvas = detail.canvas;
+      const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'enhance');
+      result.canvas = faceGuard.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
@@ -1521,6 +1604,9 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
       const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
       result.canvas = finished.canvas;
+      const faceRegions = await resolveFaceSafety(signal, 'auto');
+      const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'upscale');
+      result.canvas = faceGuard.canvas;
 
       status('Creating upscaled image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
@@ -1591,6 +1677,7 @@ export async function mount(root, slug) {
     image?.close?.();
     aiEngine.dispose();
     deblurEngine.dispose();
+    faceSafetyEngine.dispose();
     processor.dispose();
     fallbackEngine.dispose();
     browserEnhanceEngine.dispose();

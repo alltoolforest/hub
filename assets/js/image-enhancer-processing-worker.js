@@ -1,3 +1,5 @@
+import { faceSafetyAiLimitAt } from './image-enhancer-face-safety.js';
+
 const cancelled = new Set();
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -65,7 +67,7 @@ async function tensorToBitmap(buffer, width, height, id) {
   return canvas.transferToImageBitmap();
 }
 
-async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, id) {
+async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, id) {
   if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
   const width = sourceBitmap.width;
   const height = sourceBitmap.height;
@@ -158,6 +160,12 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, id) {
             lostDetail * 0.18 -
             smoothRegion * deviation * 0.16;
           weight = clamp(weight, 0.54, 0.94);
+
+          // Identity safety is a hard ceiling, not another enhancement pass.
+          // Within detected face geometry, never allow the deblur model to
+          // dominate strongly enough to invent facial structure or texture.
+          const faceLimit = faceSafetyAiLimitAt(x + cx, y + cy, faces);
+          weight = Math.min(weight, faceLimit);
 
           for (let channel = 0; channel < 3; channel++) {
             dst[out + channel] = byte(
@@ -275,7 +283,7 @@ self.onmessage = async event => {
       const bitmap = await tensorToBitmap(message.buffer, message.width, message.height, id);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'adaptive-deblur-blend') {
-      const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, id);
+      const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, message.faces || [], id);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'postprocess') {
       const bitmap = await postprocess(message.bitmap, !!message.local, message.analysis, message.sharpening, id);
