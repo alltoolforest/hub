@@ -170,11 +170,12 @@ try {
     );
     const outsideLimit = mod.faceSafetyAiLimitAt(bitmap.width - 1, bitmap.height - 1, faces);
 
+    const detectorAvailable = engine.lastAvailable;
     bitmap.close();
     await engine.dispose();
 
     return {
-      detectorAvailable:engine.lastAvailable,
+      detectorAvailable,
       faces:faces.map(face => ({...face})),
       modelBytes:modelBytes.byteLength,
       beforeMae,
@@ -186,6 +187,7 @@ try {
     };
   });
 
+  assert.equal(result.detectorAvailable, true, 'Face safety detector did not complete successfully.');
   assert.ok(result.faces.length >= 1, `UltraFace did not detect the public face fixture: ${JSON.stringify(result)}`);
   assert.ok(result.faces.every(face =>
     face.score >= 0.65 &&
