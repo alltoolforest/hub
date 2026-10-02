@@ -1134,6 +1134,7 @@ export async function mount(root, slug) {
   const processor = new ProcessingWorkerBridge(caps);
   const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
   const deblurEngine = new OnnxDeblurEngine(loader, caps, processor);
+  const faceSafetyEngine = new FaceIdentitySafetyEngine(loader, caps);
   const fallbackEngine = new BrowserResampleEngine();
   const browserEnhanceEngine = new BrowserEnhanceEngine();
   let image = null;
@@ -1250,6 +1251,7 @@ export async function mount(root, slug) {
       throw new Error(`This image is beyond this device's safe decoded-image limit (about ${sourceLimitMP} MP). Try the same file on a device with more available memory.`);
     }
     clearOutputs();
+    faceSafetyEngine.reset();
     frame.hidden = false;
     drawSource();
     hasTransparency = await detectTransparency(image);
@@ -1377,6 +1379,7 @@ export async function mount(root, slug) {
     controller?.abort();
     controller = null;
     clearOutputs();
+    faceSafetyEngine.reset();
     $('#enhancer-scale').value = '2';
     $('#enhancer-content').value = 'auto';
     $('#enhancer-restoration').value = 'auto';
@@ -1398,6 +1401,19 @@ export async function mount(root, slug) {
       console.warn('Background finishing unavailable; preserving completed image.', error);
       return { canvas, applied: false, label: 'Skipped safely' };
     }
+  }
+
+  async function resolveFaceSafety(signal, requestedContent = 'auto') {
+    const faces = await faceSafetyEngine.detect(image, signal, message => status(message));
+    if (faces.length) return faces;
+
+    // If the dedicated detector cannot run, only an explicitly selected portrait
+    // receives a conservative center fallback. Auto/general photos are never
+    // assumed to contain a face.
+    if (!faceSafetyEngine.lastAvailable && requestedContent === 'portrait') {
+      return fallbackPortraitSafetyRegion(image);
+    }
+    return faces;
   }
 
   async function runEnhancePipeline(signal) {
@@ -1430,6 +1446,8 @@ export async function mount(root, slug) {
         return result;
       }
 
+      const faceRegions = await resolveFaceSafety(signal, requestedContent);
+
       const blurEligible =
         analysis?.likelyBlurred &&
         Math.min(image.width, image.height) >= 96 &&
@@ -1449,7 +1467,7 @@ export async function mount(root, slug) {
         // recoverable edges can use more of the NAFNet reconstruction.
         let blended = null;
         try {
-          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, signal);
+          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal);
         } catch (error) {
           if (error?.name === 'AbortError') throw error;
           console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
@@ -1468,6 +1486,8 @@ export async function mount(root, slug) {
 
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
+        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
+        result.canvas = faceGuard.canvas;
 
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
@@ -1505,6 +1525,8 @@ export async function mount(root, slug) {
       result.canvas = finished.canvas;
       const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
       result.canvas = detail.canvas;
+      const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'enhance');
+      result.canvas = faceGuard.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
@@ -1582,6 +1604,9 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
       const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
       result.canvas = finished.canvas;
+      const faceRegions = await resolveFaceSafety(signal, 'auto');
+      const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'upscale');
+      result.canvas = faceGuard.canvas;
 
       status('Creating upscaled image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
@@ -1652,6 +1677,7 @@ export async function mount(root, slug) {
     image?.close?.();
     aiEngine.dispose();
     deblurEngine.dispose();
+    faceSafetyEngine.dispose();
     processor.dispose();
     fallbackEngine.dispose();
     browserEnhanceEngine.dispose();
