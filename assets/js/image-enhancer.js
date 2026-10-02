@@ -1566,9 +1566,9 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
+      result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
-      result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
       const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
       result.canvas = detail.canvas;
       const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'enhance');
@@ -1648,10 +1648,10 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
-      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
-      result.canvas = finished.canvas;
       const faceRegions = await resolveFaceSafety(signal, 'auto');
       result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'upscale', signal);
+      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+      result.canvas = finished.canvas;
       const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'upscale');
       result.canvas = faceGuard.canvas;
 
