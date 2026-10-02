@@ -38,11 +38,28 @@ export function aiInferenceDimensions(
 }
 
 export function tileCorePlan(caps) {
-  const candidates = caps?.webgpu
-    ? [160, 112, 80, 56]
-    : caps?.isMobile
-      ? [96, 72, 56, 48]
-      : [128, 96, 72, 48];
+  const memory = Number(caps?.deviceMemory) || 0;
+  const cores = Math.max(1, Number(caps?.cores) || 2);
+  const mobile = !!caps?.isMobile;
+  const iosLike = !!caps?.iosLike;
+
+  let candidates;
+  if (caps?.webgpu) {
+    candidates = [192, 160, 128, 96, 72, 56];
+  } else if (mobile) {
+    const capableMobile = memory >= 6 || cores >= 8;
+    const midMobile = memory >= 4 || cores >= 6;
+    candidates = capableMobile
+      ? (iosLike ? [144, 112, 88, 64, 48] : [160, 128, 96, 72, 48])
+      : midMobile
+        ? [128, 104, 80, 60, 48]
+        : [104, 80, 60, 48];
+  } else {
+    candidates = memory >= 8 || cores >= 8
+      ? [176, 144, 112, 88, 64, 48]
+      : [144, 112, 88, 64, 48];
+  }
+
   return Object.freeze([...new Set(candidates.filter(value => Number.isFinite(value) && value >= 48))]);
 }
 
