@@ -27,6 +27,16 @@
       "license": "Apache-2.0",
       "upstream": "https://github.com/megvii-research/NAFNet",
       "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx"
+    },
+    "face-safety-ultraface": {
+      "name": "UltraFace RFB 320 face detector",
+      "url": "https://huggingface.co/onnxmodelzoo/version-RFB-320/resolve/main/models/version-RFB-320.onnx",
+      "sha256": "34cd7e60aeff28744c657de7a3dc64e872d506741de66987f3426f2b79f88017",
+      "bytes": 1270727,
+      "scale": 1,
+      "license": "MIT",
+      "upstream": "https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB",
+      "modelCard": "https://huggingface.co/onnxmodelzoo/version-RFB-320"
     }
   }
 }
