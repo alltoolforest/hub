@@ -22,7 +22,7 @@ const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
+  mobile: { maxPixels: 12e6, maxSide: 8192, maxFileMB: 20 },
   desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
 });
 
@@ -1012,8 +1012,19 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
-      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
-      result.canvas = finished.canvas;
+
+      // Real-ESRGAN already reconstructs edges. Running an additional JavaScript
+      // sharpening scan across very large mobile outputs can take minutes and
+      // adds little value. Keep full sharpening for smaller outputs, but preserve
+      // the completed AI pixels directly above 6 MP on mobile.
+      const largeMobileOutput = caps.isMobile && width * height > 6e6;
+      if (!largeMobileOutput) {
+        const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+        result.canvas = finished.canvas;
+      } else {
+        status('Finalizing large mobile upscale…');
+        await sleepFrame();
+      }
 
       status('Creating upscaled image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);

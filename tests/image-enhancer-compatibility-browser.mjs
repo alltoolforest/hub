@@ -70,11 +70,11 @@ async function installGeneratedFile(page, { type, name, width, height, transpare
   }, [width, height, name]);
 }
 
-async function waitCanonical(page, width, height) {
+async function waitCanonical(page, width, height, timeout = 30000) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
     return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
-  }, [width, height], { timeout: 30000 });
+  }, [width, height], { timeout });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
     const blob = await (await fetch(link.href)).blob();
@@ -150,19 +150,49 @@ async function testMobileSafety() {
     assert.ok(mobileHeartbeat >= 4, `Mobile AI must keep the event loop responsive; heartbeat=${mobileHeartbeat}`);
     assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Mobile AI must keep ONNX WASM proxy enabled.');
 
+    await installGeneratedFile(page, { type: 'image/png', name: 'mobile-717x721.png', width: 717, height: 721, transparent: false });
+    await page.locator('#enhancer-mode-upscale').click();
+    const fourXDetailed = page.locator('#enhancer-scale option[value="4"]');
+    assert.equal(await fourXDetailed.isDisabled(), false, '717×721 must fit the 12 MP mobile worker ceiling at 4×.');
+    await page.locator('#enhancer-scale').selectOption('4');
+    await page.evaluate(() => {
+      window.__mobile4xHeartbeat = { count: 0, maxGap: 0, last: performance.now() };
+      window.__mobile4xTimer = setInterval(() => {
+        const now = performance.now();
+        const state = window.__mobile4xHeartbeat;
+        state.maxGap = Math.max(state.maxGap, now - state.last);
+        state.last = now;
+        state.count++;
+      }, 50);
+    });
+    const mobile4xStarted = Date.now();
+    await page.locator('#enhancer-run').click();
+    const mobile4x = await waitCanonical(page, 2868, 2884, 300000);
+    const mobile4xElapsed = Date.now() - mobile4xStarted;
+    console.log(`DIAGNOSTIC mobile-4x elapsed=${mobile4xElapsed}ms`);
+    assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884]);
+    const mobile4xStatus = (await page.locator('#status').textContent()) || '';
+    assert.match(mobile4xStatus, /Upscaled 4× .*background AI/, `Mobile 4× must complete through background AI: ${mobile4xStatus}`);
+    const mobile4xHeartbeat = await page.evaluate(() => {
+      clearInterval(window.__mobile4xTimer);
+      return window.__mobile4xHeartbeat;
+    });
+    assert.ok(mobile4xHeartbeat.count >= 10, `Mobile 4× heartbeat too low: ${JSON.stringify(mobile4xHeartbeat)}`);
+    assert.ok(mobile4xHeartbeat.maxGap < 3000, `Mobile 4× blocked the page too long: ${JSON.stringify(mobile4xHeartbeat)}`);
+
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-1mp.png', width: 1000, height: 1000, transparent: false });
     const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
     assert.match(summary, /1,000 × 1,000/);
 
     const option2 = page.locator('#enhancer-scale option[value="2"]');
     const option4 = page.locator('#enhancer-scale option[value="4"]');
-    assert.equal(await option2.isDisabled(), false, '2× mobile output should fit the 8 MP safety cap for a 1 MP source.');
-    assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 8 MP cap.');
+    assert.equal(await option2.isDisabled(), false, '2× mobile output should fit the 12 MP safety cap for a 1 MP source.');
+    assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 12 MP cap.');
     assert.match((await option4.textContent()) || '', /too large on this device/);
 
     await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-output-mode').selectOption('dimensions');
-    await page.locator('#enhancer-target-width').fill('3000');
+    await page.locator('#enhancer-target-width').fill('4000');
     await page.locator('#enhancer-target-height').fill('');
     await page.waitForFunction(() => (document.querySelector('#enhancer-output-info')?.textContent || '').includes('too large for the current safety limit'));
     await page.locator('#enhancer-run').click();
@@ -188,12 +218,13 @@ async function testMobileSafety() {
 
 try {
   assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [128, 96, 72, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [96, 72, 56, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [128, 96, 72, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: true, isMobile: false }), [160, 112, 80, 56]);
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 480, height: 640 }, 'Desktop 1× must retain at least half-resolution source detail for AI restoration.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 720, height: 960 }, 'Desktop 2× must retain a 75% linear source working image.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4, { isMobile: true }), { width: 384, height: 512 }, 'Mobile 1× keeps a bounded quality floor without reverting to full-source inference.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4, { isMobile: true }), { width: 576, height: 768 }, 'Mobile 2× keeps a bounded 60% linear quality floor.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true }), { width: 480, height: 640 }, 'Mobile 4× uses a 50% linear hybrid AI working image for practical browser runtime.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
 
@@ -201,7 +232,14 @@ try {
     falseResolution: false, lowResolution: false, recoveryScore: 0.24,
     softness: 0.50, lowDetail: 0.52, jpegArtifacts: 0.10, noise: 0.10
   }, 1, { isMobile: false, wasm: true, webgpu: false });
-  assert.equal(softOneX.id, 'low-resolution', 'Soft 1× photos must not be routed to the conservative high-fidelity path.');
+  assert.equal(softOneX.id, 'general', 'Moderately soft 1× photos should use balanced enhancement instead of aggressive reconstruction.');
+
+  const detailedSmallPhoto = resolveContentRoute('auto', {
+    falseResolution: false, lowResolution: true, recoveryScore: 0.27,
+    recommendedProfile: 'fidelity',
+    softness: 0.00, lowDetail: 0.00, jpegArtifacts: 0.12, noise: 0.56
+  }, 1, { isMobile: false, wasm: true, webgpu: false });
+  assert.equal(detailedSmallPhoto.id, 'high-fidelity', 'Small dimensions alone must not erase real source detail.');
 
   const cleanPhoto = resolveContentRoute('auto', {
     falseResolution: false, lowResolution: false, recoveryScore: 0.12,
@@ -210,7 +248,7 @@ try {
   assert.equal(cleanPhoto.id, 'high-fidelity', 'Genuinely clean sources should retain the conservative fidelity route.');
   await testDesktopFormats();
   await testMobileSafety();
-  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, 8 MP/20 MB safety caps and tile plans verified.');
+  console.log('PASS: JPG/PNG/WebP input decoding, detail-aware routing, real mobile worker-backed AI, 717×721 4× mobile responsiveness, 12 MP/20 MB safety caps and tile plans verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

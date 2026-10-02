@@ -324,6 +324,15 @@ try {
   console.log(`DIAGNOSTIC auto-route terminal status=${autoStatus}`);
   assert.match(autoStatus, /Upscaled 2× .*background AI/);
 
+  await upload('detail-preserve.png', 717, 721);
+  const detailOriginalHash = await sourcePreviewHash();
+  const detailed1x = await runAiScale(1, [717, 721, 'detail-preserve-enhanced.png'], 'auto', 'auto', 'auto', /Enhanced · original size .*background AI/);
+  assert.notEqual(detailed1x.info?.[4], detailOriginalHash, 'Detailed low-resolution Enhance must still improve pixels.');
+  const detailedMetrics = await latestOutputPerceptualMetrics();
+  console.log(`DIAGNOSTIC detail-preserve lumaMae=${detailedMetrics?.lumaMae?.toFixed(3)} edgeRatio=${detailedMetrics?.edgeRatio?.toFixed(3)}`);
+  assert.ok((detailedMetrics?.lumaMae || 0) >= 1.0, `Enhance must remain visibly non-no-op: ${JSON.stringify(detailedMetrics)}`);
+  assert.ok((detailedMetrics?.edgeRatio || 0) >= 0.90, `Enhance must preserve at least 90% of source edge/detail energy: ${JSON.stringify(detailedMetrics)}`);
+
   await upload('tile-test.png', 500, 350);
   const realisticOriginalHash = await sourcePreviewHash();
   const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*background AI/);
