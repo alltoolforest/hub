@@ -215,12 +215,13 @@ async function testMobileSafety() {
 
 try {
   assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: false }), [128, 96, 72, 48]);
-  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [96, 72, 56, 48]);
+  assert.deepEqual(tileCorePlan({ webgpu: false, isMobile: true }), [128, 96, 72, 48]);
   assert.deepEqual(tileCorePlan({ webgpu: true, isMobile: false }), [160, 112, 80, 56]);
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4), { width: 480, height: 640 }, 'Desktop 1× must retain at least half-resolution source detail for AI restoration.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4), { width: 720, height: 960 }, 'Desktop 2× must retain a 75% linear source working image.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 960, 1280, 4, { isMobile: true }), { width: 384, height: 512 }, 'Mobile 1× keeps a bounded quality floor without reverting to full-source inference.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 1920, 2560, 4, { isMobile: true }), { width: 576, height: 768 }, 'Mobile 2× keeps a bounded 60% linear quality floor.');
+  assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4, { isMobile: true }), { width: 624, height: 832 }, 'Mobile 4× caps AI work at 65% linear source size for practical browser runtime.');
   assert.deepEqual(aiInferenceDimensions(960, 1280, 3840, 5120, 4), { width: 960, height: 1280 });
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
 
