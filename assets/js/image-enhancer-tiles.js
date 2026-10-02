@@ -19,17 +19,17 @@ export function aiInferenceDimensions(
 
   // Browser-mobile 4× must not perform full-source x4 inference on every pixel:
   // that can become multi-minute work even though the UI stays responsive.
-  // A 65% linear AI working image still gives the model substantially more
-  // information than the requested 2× path, while the final composition keeps
+  // A 50% linear AI working image gives a true AI-restored information layer
+  // while cutting model work enough for mobile browsers; final composition keeps
   // original-source structure and avoids pathological mobile runtimes.
   const mobile = !!options?.isMobile;
-  const mobileLargeScaleCeiling = mobile && requestedScale > 2.05 ? 0.65 : 1;
+  const mobileLargeScaleCeiling = mobile && requestedScale > 2.05 ? 0.50 : 1;
   const boundedExactFactor = Math.min(exactFactor, mobileLargeScaleCeiling);
   const qualityFloor = requestedScale <= 1.05
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : (mobile ? 0.65 : 1);
+      : (mobile ? 0.50 : 1);
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
   const factor = Math.max(boundedExactFactor, qualityFloor, minimumStableFactor);
