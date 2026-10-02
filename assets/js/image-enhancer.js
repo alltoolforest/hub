@@ -17,6 +17,7 @@ import {
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
+import { decodeEnhancerRaw, disposeEnhancerRawDecoder, isEnhancerRawInput } from './image-enhancer-raw.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -719,7 +720,7 @@ export async function mount(root, slug) {
   let processing = false;
   let taskMode = null;
 
-  const input = fileInput(root, '.jpg,.jpeg,.png,.webp,.heic,.heif', false, 'Open an image');
+  const input = fileInput(root, '.jpg,.jpeg,.png,.webp,.heic,.heif,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.dng,.raf,.orf,.rw2,.pef,.srw,.erf,.kdc,.dcr,.mos,.3fr,.iiq,.rwl,.mef,.mrw,.x3f', false, 'Open an image');
   const summary = el('p', { class: 'status', id: 'enhancer-source-info', text: 'Choose an image to inspect its safe processing limits.' });
   root.append(summary);
 
@@ -813,11 +814,13 @@ export async function mount(root, slug) {
 
   bindFile(input, async files => {
     file = files[0];
-    checkFile(file, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'], caps.maxFileMB);
+    checkFile(file, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'dng', 'raf', 'orf', 'rw2', 'pef', 'srw', 'erf', 'kdc', 'dcr', 'mos', '3fr', 'iiq', 'rwl', 'mef', 'mrw', 'x3f'], caps.maxFileMB);
     image?.close?.();
-    image = isEnhancerHeicInput(file)
-      ? await decodeEnhancerHeic(file, message => status(message))
-      : await decodeImage(file);
+    image = isEnhancerRawInput(file)
+      ? await decodeEnhancerRaw(file, { maxSourcePixels: caps.maxSourcePixels, onProgress: message => status(message) })
+      : isEnhancerHeicInput(file)
+        ? await decodeEnhancerHeic(file, message => status(message))
+        : await decodeImage(file);
     if (image.width * image.height > caps.maxSourcePixels) {
       const maxMP = Math.floor(caps.maxSourcePixels / 1e6);
       image.close?.();
@@ -1195,6 +1198,7 @@ export async function mount(root, slug) {
     image?.close?.();
     aiEngine.dispose();
     processor.dispose();
+    disposeEnhancerRawDecoder();
     fallbackEngine.dispose();
     browserEnhanceEngine.dispose();
   }, { once: true });
