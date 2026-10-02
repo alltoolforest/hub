@@ -85,7 +85,10 @@ jobs:
           grep -q "env.wasm.proxy" assets/js/image-enhancer.js
           grep -q "image-enhancer-processing-worker.js" assets/js/image-enhancer.js
           grep -q "image-enhancer-raw.js" assets/js/image-enhancer.js
-          grep -q "RAWCONVERT_VERSION = '0.1.1'" assets/js/image-enhancer-raw-worker.js
+          grep -q "RUNTIME_VERSION = 'rawconvert-wasm 0.1.1'" assets/js/image-enhancer-raw-worker.js
+          test "$(git hash-object assets/vendor/rawconvert/index.js)" = "7f1336806b1f0a4c89d99f36aa66f6fd754cea62"
+          test "$(git hash-object assets/vendor/rawconvert/rawconvert-core.js)" = "791b81c2ec014e34d6660cc69df777892d303f44"
+          test "$(git hash-object assets/vendor/rawconvert/rawconvert-core.wasm)" = "659476e270698ad1add00181b04ec7d8a279c345"
           ! grep -q "executionProviders: \['webgpu'\]" assets/js/image-enhancer.js
           grep -q "aiInferenceDimensions" assets/js/image-enhancer.js
           grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
