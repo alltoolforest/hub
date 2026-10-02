@@ -126,7 +126,7 @@ await new Promise(r=>server.listen(4188,'127.0.0.1',r));
 
 const width=128, height=96;
 const sharp=makeSharp(width,height);
-const blurred=motionBlur(sharp,width,height,6);
+const blurred=motionBlur(sharp,width,height,5);
 const blurredMse=mse(blurred,sharp);
 const launchOptions={headless:true};
 if(process.env.CHROME_PATH) launchOptions.executablePath=process.env.CHROME_PATH;
