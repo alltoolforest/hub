@@ -721,7 +721,12 @@ function outputScaleOptions(image, caps) {
 
 async function prepareAiInferenceInput(image, targetWidth, targetHeight, nativeScale, signal, caps) {
   if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale, { isMobile: !!caps?.isMobile });
+  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale, {
+    isMobile: !!caps?.isMobile,
+    iosLike: !!caps?.iosLike,
+    deviceMemory: Number(caps?.deviceMemory) || 0,
+    cores: Number(caps?.cores) || 2
+  });
   if (plan.width === image.width && plan.height === image.height) {
     return { image, temporary: null, plan };
   }
