@@ -642,7 +642,7 @@ async function enforceRegionalDetailFloor(resultCanvas, sourceImage, profile, si
 
     let restoreAlpha = 0;
     if (meaningfulSourceDetail && deficit > 0.015) {
-      restoreAlpha = clamp(0.12 + (deficit / Math.max(target, 0.01)) * 4.2, 0.12, 0.92);
+      restoreAlpha = Math.max(0.12, Math.min(0.92, 0.12 + (deficit / Math.max(target, 0.01)) * 4.2));
       protectedRegions++;
     }
 
