@@ -1344,7 +1344,7 @@ export async function mount(root, slug) {
       const blurEligible =
         analysis?.likelyBlurred &&
         Math.min(image.width, image.height) >= 96 &&
-        ['auto', 'general', 'low-resolution', 'portrait', 'old-photo'].includes(requestedContent) &&
+        ['auto', 'low-resolution', 'portrait', 'old-photo'].includes(requestedContent) &&
         contentRoute.engine !== 'standard';
 
       if (blurEligible) {
