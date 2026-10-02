@@ -97,7 +97,8 @@ async function processAtOneX(name, width, height) {
   assert.deepEqual(result.slice(0, 3), [width, height, 'image/png']);
   assert.match(result[3], /-enhanced\.png$/);
   const status = (await page.locator('#status').textContent()) || '';
-  assert.match(status, /Standard high-quality enlargement\. AI deliberately not used\./);
+  assert.match(status, /Local quality enhancement · original dimensions preserved\./);
+  assert.doesNotMatch(status, /Standard high-quality enlargement\. AI deliberately not used\./);
 }
 
 try {
