@@ -239,11 +239,14 @@ export async function applyArtifactFidelityGuard({
     return { canvas, applied: false, stages: 0, analysis: initial };
   }
 
+  // The final zero-alpha stage is an absolute trust fallback: if every
+  // progressively weaker restoration still fails the fidelity gate, return a
+  // source-faithful rendering rather than expose an artifacted reconstruction.
   const alphas = mode === 'deblur'
-    ? [0.88, 0.74, 0.60, 0.46, 0.32]
+    ? [0.88, 0.74, 0.60, 0.46, 0.32, 0]
     : mode === 'upscale'
-      ? [0.90, 0.76, 0.62, 0.48, 0.34]
-      : [0.84, 0.68, 0.52, 0.38, 0.24];
+      ? [0.90, 0.76, 0.62, 0.48, 0.34, 0]
+      : [0.84, 0.68, 0.52, 0.38, 0.24, 0];
 
   let bestCanvas = canvas;
   let bestAnalysis = initial;
