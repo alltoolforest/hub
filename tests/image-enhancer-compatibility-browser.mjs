@@ -166,21 +166,38 @@ async function testMobileSafety() {
 
     await installGeneratedFile(page, { type: 'image/jpeg', name: 'mobile-8mp-target.jpg', width: 717, height: 721, transparent: false });
     await page.locator('#enhancer-mode-upscale').click();
+    const exact4xOption = page.locator('#enhancer-scale option[value="4"]');
+    assert.equal(await exact4xOption.isDisabled(), false, '717×721 → 8.3 MP 4× must not be rejected by a fixed mobile safety cap.');
     await page.locator('#enhancer-scale').selectOption('4');
     await page.evaluate(() => {
       window.__mobile4xHeartbeat = 0;
       window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
     });
     await page.locator('#enhancer-run').click();
-    const mobile4x = await waitCanonical(page, 2868, 2884);
-    assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884], 'Android-class 4× output near 8.3 MP must complete.');
-    const mobile4xStatus = (await page.locator('#status').textContent()) || '';
-    assert.match(mobile4xStatus, /Upscaled 4× .*background AI/);
+    await page.waitForFunction(() => {
+      const status = document.querySelector('#status')?.textContent || '';
+      return window.__mobile4xHeartbeat >= 20 &&
+        !/too large for the current safety limit/i.test(status) &&
+        document.querySelector('#enhancer-run')?.disabled;
+    }, null, { timeout: 30000 });
+    const accepted4xStatus = (await page.locator('#status').textContent()) || '';
+    assert.doesNotMatch(accepted4xStatus, /too large for the current safety limit/i, '8.3 MP 4× must begin processing instead of being rejected.');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('Processing cancelled.'), null, { timeout: 30000 });
     const mobile4xHeartbeat = await page.evaluate(() => {
       clearInterval(window.__mobile4xTimer);
       return window.__mobile4xHeartbeat;
     });
-    assert.ok(mobile4xHeartbeat >= 8, `Mobile 4× must remain responsive; heartbeat=${mobile4xHeartbeat}`);
+    assert.ok(mobile4xHeartbeat >= 20, `Large mobile 4× must keep the page responsive while processing; heartbeat=${mobile4xHeartbeat}`);
+
+    await installGeneratedFile(page, { type: 'image/jpeg', name: 'mobile-4x-complete.jpg', width: 360, height: 360, transparent: false });
+    await page.locator('#enhancer-mode-upscale').click();
+    await page.locator('#enhancer-scale').selectOption('4');
+    await page.locator('#enhancer-run').click();
+    const completed4x = await waitCanonical(page, 1440, 1440);
+    assert.deepEqual(completed4x.slice(0, 2), [1440, 1440], 'Mobile 4× must complete end-to-end on a representative output.');
+    const completed4xStatus = (await page.locator('#status').textContent()) || '';
+    assert.match(completed4xStatus, /Upscaled 4× .*background AI/);
 
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-1mp.png', width: 1000, height: 1000, transparent: false });
     const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
