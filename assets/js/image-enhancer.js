@@ -687,6 +687,10 @@ export async function mount(root, slug) {
       upscaleModeButton.classList.remove('primary');
       enhanceButton.textContent = 'Choose Enhance or Upscale';
       enhanceButton.disabled = true;
+      $('#enhancer-scale', root).disabled = true;
+      $('#enhancer-content', root).disabled = true;
+      $('#enhancer-restoration', root).disabled = true;
+      $('#enhancer-sharpen', root).disabled = true;
       $('#enhancer-mode-help', root).textContent = 'Choose one task first. You will only see controls for that task.';
     } else if (taskMode === 'enhance') {
       form.hidden = false;
@@ -705,6 +709,10 @@ export async function mount(root, slug) {
       upscaleModeButton.classList.remove('primary');
       enhanceButton.textContent = 'Enhance photo';
       enhanceButton.disabled = processing;
+      $('#enhancer-scale', root).disabled = true;
+      $('#enhancer-content', root).disabled = processing;
+      $('#enhancer-restoration', root).disabled = processing;
+      $('#enhancer-sharpen', root).disabled = processing;
       $('#enhancer-mode-help', root).textContent = 'Enhance improves quality at the original pixel dimensions. Choose restoration and sharpening options below.';
     } else {
       form.hidden = false;
@@ -726,6 +734,10 @@ export async function mount(root, slug) {
       upscaleModeButton.classList.add('primary');
       enhanceButton.textContent = 'Upscale image';
       enhanceButton.disabled = processing;
+      $('#enhancer-scale', root).disabled = processing;
+      $('#enhancer-content', root).disabled = true;
+      $('#enhancer-restoration', root).disabled = true;
+      $('#enhancer-sharpen', root).disabled = true;
       $('#enhancer-mode-help', root).textContent = 'Upscale increases resolution. Choose the output size below; restoration settings stay automatic.';
     }
 
