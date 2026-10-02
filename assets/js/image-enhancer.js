@@ -9,7 +9,8 @@ import {
   prepareRestorationInput,
   blendForFidelity,
   resolveSharpening,
-  applyIntelligentSharpen
+  applyIntelligentSharpen,
+  applyLocalEnhancement
 } from './image-enhancer-restoration.js';
 import {
   resolveContentRoute,
@@ -547,6 +548,7 @@ export async function mount(root, slug) {
   let analysis = null;
   let controller = null;
   let processing = false;
+  let taskMode = null;
 
   const input = fileInput(root, '.jpg,.jpeg,.png,.webp,.heic,.heif', false, 'Open an image');
   const summary = el('p', { class: 'status', id: 'enhancer-source-info', text: 'Choose an image to inspect its safe processing limits.' });
@@ -557,10 +559,36 @@ export async function mount(root, slug) {
   frame.append(preview);
   root.append(frame);
 
-  const form = el('div', { class: 'fields' });
+  const modeSection = el('section', { id: 'enhancer-mode-picker', 'aria-label': 'Choose enhancer task' });
+  modeSection.append(
+    el('h2', { text: 'What do you want to do?' }),
+    el('p', {
+      class: 'status',
+      id: 'enhancer-mode-help',
+      text: 'Choose one task first. You will only see controls for that task.'
+    })
+  );
+  const modeActions = el('div', { class: 'actions' });
+  const enhanceModeButton = el('button', {
+    id: 'enhancer-mode-enhance',
+    type: 'button',
+    text: 'Enhance quality',
+    'aria-pressed': 'false'
+  });
+  const upscaleModeButton = el('button', {
+    id: 'enhancer-mode-upscale',
+    type: 'button',
+    text: 'Upscale resolution',
+    'aria-pressed': 'false'
+  });
+  modeActions.append(enhanceModeButton, upscaleModeButton);
+  modeSection.append(modeActions);
+  root.append(modeSection);
+
+  const form = el('div', { class: 'fields', hidden: true });
   form.append(
-    field('enhancer-scale', 'Enhancement mode', 'select', '2', {
-      options: [['1', '1× Enhance / Restore'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
+    field('enhancer-scale', 'Upscale amount', 'select', '2', {
+      options: [['1', '1× internal enhance'], ['2', '2× AI Upscale'], ['4', '4× AI Upscale']]
     }),
     field('enhancer-content', 'Content mode', 'select', 'auto', {
       options: contentRouteOptions()
@@ -583,6 +611,15 @@ export async function mount(root, slug) {
     })
   );
   root.append(form);
+
+  const scaleWrap = $('#enhancer-scale', root).closest('.field');
+  const contentWrap = $('#enhancer-content', root).closest('.field');
+  const restorationWrap = $('#enhancer-restoration', root).closest('.field');
+  const sharpenWrap = $('#enhancer-sharpen', root).closest('.field');
+  scaleWrap.hidden = true;
+  contentWrap.hidden = true;
+  restorationWrap.hidden = true;
+  sharpenWrap.hidden = true;
 
   notice(root, 'AI super-resolution runs locally in your browser. The pinned ONNX runtime and Real-ESRGAN model are downloaded from jsDelivr; image pixels are not uploaded. Auto content routing currently uses verified source-quality signals, not unverified semantic classification. Portrait, Text/Logo, Illustration and Old Photo are manual overrides until dedicated detectors/models pass their gates. Text/Logo deliberately uses standard enlargement to reduce character hallucination risk. Edge-aware sharpening runs after AI restoration and is capped to reduce halos and sharpened noise. Memory-pressure failures retry AI with smaller tiles before falling back.');
 
@@ -617,21 +654,94 @@ export async function mount(root, slug) {
     summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
   });
 
-  const enhanceButton = el('button', { type: 'button', class: 'primary', text: 'Enhance image' });
+  const enhanceButton = el('button', { id: 'enhancer-run', type: 'button', class: 'primary', text: 'Choose Enhance or Upscale', disabled: true });
   const cancelButton = el('button', { type: 'button', text: 'Cancel', disabled: true });
   const resetButton = el('button', { type: 'button', text: 'Reset' });
   const actions = el('div', { class: 'actions' }, [enhanceButton, cancelButton, resetButton]);
   root.append(actions);
 
+  function setTaskMode(mode, silent = false) {
+    taskMode = mode === 'enhance' || mode === 'upscale' ? mode : null;
+    root.dataset.enhancerMode = taskMode || '';
+    const oneX = [...$('#enhancer-scale', root).options].find(option => option.value === '1');
+
+    if (!taskMode) {
+      form.hidden = true;
+      scaleWrap.hidden = true;
+      contentWrap.hidden = true;
+      restorationWrap.hidden = true;
+      sharpenWrap.hidden = true;
+      if (oneX) {
+        oneX.disabled = false;
+        oneX.hidden = false;
+      }
+      enhanceModeButton.setAttribute('aria-pressed', 'false');
+      upscaleModeButton.setAttribute('aria-pressed', 'false');
+      enhanceModeButton.classList.remove('primary');
+      upscaleModeButton.classList.remove('primary');
+      enhanceButton.textContent = 'Choose Enhance or Upscale';
+      enhanceButton.disabled = true;
+      $('#enhancer-mode-help', root).textContent = 'Choose one task first. You will only see controls for that task.';
+    } else if (taskMode === 'enhance') {
+      form.hidden = false;
+      $('#enhancer-scale', root).value = '1';
+      scaleWrap.hidden = true;
+      contentWrap.hidden = false;
+      restorationWrap.hidden = false;
+      sharpenWrap.hidden = false;
+      if (oneX) {
+        oneX.disabled = false;
+        oneX.hidden = false;
+      }
+      enhanceModeButton.setAttribute('aria-pressed', 'true');
+      upscaleModeButton.setAttribute('aria-pressed', 'false');
+      enhanceModeButton.classList.add('primary');
+      upscaleModeButton.classList.remove('primary');
+      enhanceButton.textContent = 'Enhance photo';
+      enhanceButton.disabled = processing;
+      $('#enhancer-mode-help', root).textContent = 'Enhance improves quality at the original pixel dimensions. Choose restoration and sharpening options below.';
+    } else {
+      form.hidden = false;
+      if ($('#enhancer-scale', root).value === '1') $('#enhancer-scale', root).value = '2';
+      scaleWrap.hidden = false;
+      contentWrap.hidden = true;
+      restorationWrap.hidden = true;
+      sharpenWrap.hidden = true;
+      $('#enhancer-content', root).value = 'auto';
+      $('#enhancer-restoration', root).value = 'auto';
+      $('#enhancer-sharpen', root).value = 'auto';
+      if (oneX) {
+        oneX.disabled = true;
+        oneX.hidden = true;
+      }
+      enhanceModeButton.setAttribute('aria-pressed', 'false');
+      upscaleModeButton.setAttribute('aria-pressed', 'true');
+      enhanceModeButton.classList.remove('primary');
+      upscaleModeButton.classList.add('primary');
+      enhanceButton.textContent = 'Upscale image';
+      enhanceButton.disabled = processing;
+      $('#enhancer-mode-help', root).textContent = 'Upscale increases resolution. Choose the output size below; restoration settings stay automatic.';
+    }
+
+    clearOutputs();
+    root.dispatchEvent(new CustomEvent('enhancer-modechange', { detail: { mode: taskMode } }));
+    if (!silent && taskMode) status(taskMode === 'enhance' ? 'Enhance mode selected.' : 'Upscale mode selected.');
+  }
+
+  enhanceModeButton.addEventListener('click', () => setTaskMode('enhance'));
+  upscaleModeButton.addEventListener('click', () => setTaskMode('upscale'));
+
   function setProcessing(active) {
     processing = active;
-    enhanceButton.disabled = active;
+    enhanceButton.disabled = active || !taskMode;
     resetButton.disabled = active;
     input.disabled = active;
-    $('#enhancer-scale').disabled = active;
-    $('#enhancer-content').disabled = active;
-    $('#enhancer-restoration').disabled = active;
-    $('#enhancer-sharpen').disabled = active;
+    enhanceModeButton.disabled = active;
+    upscaleModeButton.disabled = active;
+    $('#enhancer-scale').disabled = active || taskMode !== 'upscale';
+    $('#enhancer-content').disabled = active || taskMode !== 'enhance';
+    $('#enhancer-restoration').disabled = active || taskMode !== 'enhance';
+    $('#enhancer-sharpen').disabled = active || taskMode !== 'enhance';
     cancelButton.disabled = !active;
   }
 
@@ -650,13 +760,18 @@ export async function mount(root, slug) {
     $('#enhancer-restoration').value = 'auto';
     $('#enhancer-sharpen').value = 'auto';
     outputScaleOptions(image, caps);
+    setTaskMode(null, true);
     if (image && file) summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
     drawSource();
-    status('Reset complete.');
+    status('Reset complete. Choose Enhance or Upscale.');
   });
 
   enhanceButton.addEventListener('click', async () => {
     if (processing) return;
+    if (!taskMode) {
+      status('Choose Enhance or Upscale first.', true);
+      return;
+    }
     if (!image || !file) {
       status('Open an image first.', true);
       return;
@@ -665,9 +780,12 @@ export async function mount(root, slug) {
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal;
-    const scale = Number(read('enhancer-scale'));
-    const contentRoute = resolveContentRoute(read('enhancer-content'), analysis, scale, caps);
-    const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
+    const scale = taskMode === 'enhance' ? 1 : Number(read('enhancer-scale'));
+    const requestedContent = taskMode === 'enhance' ? read('enhancer-content') : 'auto';
+    const requestedRestoration = taskMode === 'enhance' ? read('enhancer-restoration') : 'auto';
+    const requestedSharpen = taskMode === 'enhance' ? read('enhancer-sharpen') : 'auto';
+    const contentRoute = resolveContentRoute(requestedContent, analysis, scale, caps);
+    const routeControls = resolveRouteControls(contentRoute, requestedRestoration, requestedSharpen);
     const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
     const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
     let result = null;
@@ -681,9 +799,16 @@ export async function mount(root, slug) {
       if (contentRoute.engine === 'standard') {
         status(`Preparing ${contentRoute.label} fidelity path…`);
         result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
+        if (taskMode === 'enhance') {
+          await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
+          sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
+          result.canvas = sharpened.canvas;
+        }
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, scale === 1 ? '-fidelity' : `-fidelity-${scale}x`, 'png'));
-        status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI deliberately not used. ${contentRoute.disclosure}`);
+        output(blob, safeName(file.name, taskMode === 'enhance' ? '-enhanced' : `-fidelity-${scale}x`, 'png'));
+        status(taskMode === 'enhance'
+          ? `${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Local quality enhancement · original dimensions preserved. ${contentRoute.disclosure}`
+          : `${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI deliberately not used. ${contentRoute.disclosure}`);
         return;
       }
 
@@ -713,6 +838,9 @@ export async function mount(root, slug) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
       temporaryAiInput = null;
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
+      if (taskMode === 'enhance') {
+        await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
+      }
       sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
       result.canvas = sharpened.canvas;
 
@@ -735,11 +863,22 @@ export async function mount(root, slug) {
       console.warn('AI enhancement unavailable; using truthful browser fallback.', error);
       try {
         const { width, height } = safeOutputFor(image, scale, caps);
-        status(`AI unavailable (${error.message}). Using standard high-quality enlargement…`);
         result = await fallbackEngine.process({ image, width, height, signal, onProgress: message => status(message) });
-        const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, scale === 1 ? '-standard' : `-enlarged-${scale}x`, 'png'));
-        status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI enhancement was not used.`);
+
+        if (taskMode === 'enhance') {
+          status(`AI unavailable (${error.message}). Applying local quality enhancement instead…`);
+          await applyLocalEnhancement(result.canvas, analysis, signal, message => status(message));
+          sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
+          result.canvas = sharpened.canvas;
+          const blob = await canvasBlob(result.canvas, 'image/png', 1);
+          output(blob, safeName(file.name, '-enhanced-local', 'png'));
+          status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · Local enhancement fallback · original dimensions preserved · AI model was unavailable, but the result is not a same-pixel redraw.`);
+        } else {
+          status(`AI unavailable (${error.message}). Using standard high-quality enlargement…`);
+          const blob = await canvasBlob(result.canvas, 'image/png', 1);
+          output(blob, safeName(file.name, `-enlarged-${scale}x`, 'png'));
+          status(`${width.toLocaleString()} × ${height.toLocaleString()} pixels · ${format(blob.size / 1024)} KB · ${contentRoute.label} · Standard high-quality enlargement. AI enhancement was not used.`);
+        }
       } catch (fallbackError) {
         console.error(fallbackError);
         status(fallbackError?.message || 'Image processing failed.', true);
