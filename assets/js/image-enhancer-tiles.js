@@ -33,8 +33,8 @@ export function aiInferenceDimensions(
     // source inference and let the final compositor reach the requested size.
     // This keeps 4× practical instead of spending minutes on full-source WASM.
     exactFactor = iosLike
-      ? (capable ? 0.68 : mid ? 0.54 : 0.42)
-      : (capable ? 0.72 : mid ? 0.58 : 0.45);
+      ? (capable ? 0.50 : mid ? 0.47 : 0.43)
+      : (capable ? 0.52 : mid ? 0.49 : 0.45);
   }
 
   // Keep enough source information for restoration without forcing every device
@@ -69,10 +69,10 @@ export function tileCorePlan(caps) {
     const capableMobile = memory >= 6 || cores >= 8;
     const midMobile = memory >= 4 || cores >= 6;
     candidates = capableMobile
-      ? (iosLike ? [176, 144, 112, 88, 64, 48] : [192, 160, 128, 96, 72, 48])
+      ? (iosLike ? [208, 176, 144, 112, 88, 64, 48] : [224, 192, 160, 128, 96, 72, 48])
       : midMobile
-        ? [192, 152, 120, 88, 64, 48]
-        : [192, 144, 112, 80, 56, 48];
+        ? [208, 176, 144, 112, 80, 56, 48]
+        : [192, 160, 128, 96, 72, 48];
   } else {
     candidates = memory >= 8 || cores >= 8
       ? [176, 144, 112, 88, 64, 48]
