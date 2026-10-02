@@ -70,11 +70,11 @@ async function installGeneratedFile(page, { type, name, width, height, transpare
   }, [width, height, name]);
 }
 
-async function waitCanonical(page, width, height) {
+async function waitCanonical(page, width, height, timeout = 30000) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
     return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
-  }, [width, height], { timeout: 30000 });
+  }, [width, height], { timeout });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
     const blob = await (await fetch(link.href)).blob();
@@ -150,19 +150,46 @@ async function testMobileSafety() {
     assert.ok(mobileHeartbeat >= 4, `Mobile AI must keep the event loop responsive; heartbeat=${mobileHeartbeat}`);
     assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Mobile AI must keep ONNX WASM proxy enabled.');
 
+    await installGeneratedFile(page, { type: 'image/png', name: 'mobile-717x721.png', width: 717, height: 721, transparent: false });
+    await page.locator('#enhancer-mode-upscale').click();
+    const fourXDetailed = page.locator('#enhancer-scale option[value="4"]');
+    assert.equal(await fourXDetailed.isDisabled(), false, '717×721 must fit the 12 MP mobile worker ceiling at 4×.');
+    await page.locator('#enhancer-scale').selectOption('4');
+    await page.evaluate(() => {
+      window.__mobile4xHeartbeat = { count: 0, maxGap: 0, last: performance.now() };
+      window.__mobile4xTimer = setInterval(() => {
+        const now = performance.now();
+        const state = window.__mobile4xHeartbeat;
+        state.maxGap = Math.max(state.maxGap, now - state.last);
+        state.last = now;
+        state.count++;
+      }, 50);
+    });
+    await page.locator('#enhancer-run').click();
+    const mobile4x = await waitCanonical(page, 2868, 2884, 300000);
+    assert.deepEqual(mobile4x.slice(0, 2), [2868, 2884]);
+    const mobile4xStatus = (await page.locator('#status').textContent()) || '';
+    assert.match(mobile4xStatus, /Upscaled 4× .*background AI/, `Mobile 4× must complete through background AI: ${mobile4xStatus}`);
+    const mobile4xHeartbeat = await page.evaluate(() => {
+      clearInterval(window.__mobile4xTimer);
+      return window.__mobile4xHeartbeat;
+    });
+    assert.ok(mobile4xHeartbeat.count >= 10, `Mobile 4× heartbeat too low: ${JSON.stringify(mobile4xHeartbeat)}`);
+    assert.ok(mobile4xHeartbeat.maxGap < 3000, `Mobile 4× blocked the page too long: ${JSON.stringify(mobile4xHeartbeat)}`);
+
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-1mp.png', width: 1000, height: 1000, transparent: false });
     const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
     assert.match(summary, /1,000 × 1,000/);
 
     const option2 = page.locator('#enhancer-scale option[value="2"]');
     const option4 = page.locator('#enhancer-scale option[value="4"]');
-    assert.equal(await option2.isDisabled(), false, '2× mobile output should fit the 8 MP safety cap for a 1 MP source.');
-    assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 8 MP cap.');
+    assert.equal(await option2.isDisabled(), false, '2× mobile output should fit the 12 MP safety cap for a 1 MP source.');
+    assert.equal(await option4.isDisabled(), true, '4× mobile output must be disabled when it exceeds the 12 MP cap.');
     assert.match((await option4.textContent()) || '', /too large on this device/);
 
     await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-output-mode').selectOption('dimensions');
-    await page.locator('#enhancer-target-width').fill('3000');
+    await page.locator('#enhancer-target-width').fill('4000');
     await page.locator('#enhancer-target-height').fill('');
     await page.waitForFunction(() => (document.querySelector('#enhancer-output-info')?.textContent || '').includes('too large for the current safety limit'));
     await page.locator('#enhancer-run').click();
