@@ -95,7 +95,7 @@ async function runStandardTarget(expectedWidth, expectedHeight) {
   await page.waitForFunction(([w, h]) => {
     const status = document.querySelector('#status')?.textContent || '';
     const link = document.querySelector('#downloads a[download]');
-    return !!link && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
+    return !!link && status.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
   }, [expectedWidth, expectedHeight], { timeout: 90000 });
   const dims = await outputDimensions();
   assert.deepEqual(dims?.slice(0, 2), [expectedWidth, expectedHeight]);
