@@ -118,10 +118,62 @@ async function runEngine(name, launcher) {
   }
 }
 
+async function runWebkitMobile4x() {
+  const browser = await webkit.launch({ headless: true });
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto('http://127.0.0.1:4179/images/enhance/', { waitUntil: 'networkidle', timeout: 90000 });
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'ios-4x.png',
+      mimeType: 'image/png',
+      buffer: png(717, 721)
+    });
+    await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('717 × 721'));
+    await page.locator('#enhancer-mode-upscale').click();
+    const option4 = page.locator('#enhancer-scale option[value="4"]');
+    assert.equal(await option4.isDisabled(), false, 'iOS/WebKit must allow the 717×721 source to request 4× output.');
+    await page.locator('#enhancer-scale').selectOption('4');
+    await page.evaluate(() => {
+      window.__iosHeartbeat = 0;
+      window.__iosTimer = setInterval(() => { window.__iosHeartbeat += 1; }, 50);
+    });
+    await page.locator('#enhancer-run').click();
+    await page.waitForFunction(() => {
+      const status = document.querySelector('#status')?.textContent || '';
+      return !!document.querySelector('#downloads a[download]') && status.includes('Upscaled 4×');
+    }, null, { timeout: 300000 });
+    const dims = await pngDimensionsFromDownload(page);
+    assert.deepEqual(dims?.slice(0, 3), [2868, 2884, 'image/png']);
+    const status = (await page.locator('#status').textContent()) || '';
+    assert.match(status, /background AI/, `iOS/WebKit 4× must use background AI: ${status}`);
+    const heartbeat = await page.evaluate(() => {
+      clearInterval(window.__iosTimer);
+      return window.__iosHeartbeat;
+    });
+    assert.ok(heartbeat >= 8, `iOS/WebKit 4× must remain responsive; heartbeat=${heartbeat}`);
+    assert.equal(errors.length, 0, `iOS/WebKit console errors:\n${errors.join('\n')}`);
+    console.log(`PASS webkit-ios: 717×721 → 2868×2884 4× background AI remained responsive; heartbeat=${heartbeat}.`);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
 try {
   await runEngine('firefox', firefox);
   await runEngine('webkit', webkit);
-  console.log('PASS: Firefox and WebKit real-WASM enhancer compatibility verified.');
+  await runWebkitMobile4x();
+  console.log('PASS: Firefox, macOS/WebKit engine and iOS/WebKit 4× enhancer compatibility verified.');
 } finally {
   await new Promise(resolveClose => server.close(resolveClose));
 }
