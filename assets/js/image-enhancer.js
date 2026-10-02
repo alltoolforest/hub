@@ -195,8 +195,8 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     this.ort = await this.loader.loadRuntime(signal, onProgress);
     const model = await this.loader.loadModel(signal, onProgress);
     const preferWebGPU = this.caps.webgpu && !this.caps.isMobile;
-    const useWasmProxy = !preferWebGPU && this.caps.workers;
-    onProgress?.(`Preparing AI engine (${preferWebGPU ? 'WebGPU' : useWasmProxy ? 'WASM worker' : 'WASM'})…`);
+    const useWasmProxy = this.caps.workers;
+    onProgress?.(`Preparing AI engine (${preferWebGPU ? 'WebGPU preferred' : useWasmProxy ? 'WASM worker' : 'WASM'})…`);
 
     if (preferWebGPU) {
       try {
@@ -208,13 +208,14 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
         this.backend = 'webgpu';
         return;
       } catch (error) {
-        onProgress?.('WebGPU initialization failed. Using the safe standard fallback for this run…');
-        throw error;
+        if (signal?.aborted) throw error;
+        onProgress?.(`WebGPU initialization failed (${error?.message || 'unavailable'}). Retrying with ${useWasmProxy ? 'WASM worker' : 'WASM'}…`);
       }
     }
 
     // ONNX Runtime's proxy worker keeps WASM inference off the browser UI thread.
-    // The site CSP already permits blob workers and the existing browser matrix verifies this path.
+    // The site CSP permits blob workers; if workers are unavailable, large workloads
+    // are rejected later rather than allowed to freeze the UI thread.
     this.ort.env.wasm.proxy = useWasmProxy;
     this.session = await this.ort.InferenceSession.create(model.bytes, {
       executionProviders: ['wasm'],
@@ -690,27 +691,27 @@ export async function mount(root, slug) {
       if (hasTransparency) throw new Error('AI transparency-safe reconstruction is not verified yet.');
 
       status(`Preparing ${contentRoute.label} · ${restoration.label.toLowerCase()} restoration…`);
-      const prepared = await prepareRestorationInput(image, restoration, signal);
-      temporaryInput = prepared.temporary;
-      const aiPrepared = await prepareAiInferenceInput(prepared.image, width, height, aiEngine.nativeScale, signal);
+      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal);
       temporaryAiInput = aiPrepared.temporary;
-      if (temporaryInput && temporaryAiInput) {
-        temporaryInput.width = temporaryInput.height = 0;
-        temporaryInput = null;
+      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
+      temporaryInput = prepared.temporary;
+      if (temporaryAiInput && temporaryInput) {
+        temporaryAiInput.width = temporaryAiInput.height = 0;
+        temporaryAiInput = null;
       }
-      status(`AI working size ${aiPrepared.plan.width.toLocaleString()} × ${aiPrepared.plan.height.toLocaleString()}…`);
+      status(`AI working size ${prepared.image.width.toLocaleString()} × ${prepared.image.height.toLocaleString()}…`);
       result = await aiEngine.process({
-        image: aiPrepared.image,
+        image: prepared.image,
         scale,
         width,
         height,
         signal,
         onProgress: message => status(message)
       });
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryAiInput = null;
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       temporaryInput = null;
+      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
+      temporaryAiInput = null;
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
       sharpened = await applyIntelligentSharpen(result.canvas, sharpening, signal, message => status(message));
       result.canvas = sharpened.canvas;
