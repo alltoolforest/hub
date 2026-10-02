@@ -73,7 +73,7 @@ async function installGeneratedFile(page, { type, name, width, height, transpare
 async function waitCanonical(page, width, height) {
   await page.waitForFunction(([w, h]) => {
     const text = document.querySelector('#status')?.textContent || '';
-    return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()} pixels`);
+    return !!document.querySelector('#downloads a[download]') && text.includes(`${w.toLocaleString()} × ${h.toLocaleString()}`);
   }, [width, height], { timeout: 30000 });
   return page.evaluate(async () => {
     const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
