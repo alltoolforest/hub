@@ -970,7 +970,7 @@ export async function mount(root, slug) {
 
   async function runUpscalePipeline(signal) {
     const scale = Number(read('enhancer-scale'));
-    if (![2, 4].includes(scale)) throw new Error('Choose 2× or 4× upscale.');
+    if (!Number.isFinite(scale) || scale <= 1) throw new Error('Choose an upscale target larger than the source.');
     const contentRoute = resolveContentRoute('auto', analysis, scale, caps);
     const routeControls = resolveRouteControls(contentRoute, 'auto', 'auto');
     const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
