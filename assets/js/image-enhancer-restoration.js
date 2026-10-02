@@ -160,30 +160,35 @@ export function resolveRestorationProfile(requested, analysis, scale) {
   const profile = ['fidelity', 'balanced', 'recovery'].includes(requestedProfile) ? requestedProfile : 'balanced';
   const scaleFactor = Number(scale) || 1;
 
+  const oneX = scaleFactor <= 1.05;
   if (profile === 'fidelity') {
     return Object.freeze({
       id: 'fidelity',
       label: 'Fidelity',
-      preclean: analysis?.noise > 0.72 ? 0.06 : 0,
-      aiBlend: scaleFactor === 1 ? 0.78 : 0.84,
-      disclosure: 'Fidelity-focused AI restoration with source-detail blending.'
+      preclean: oneX ? 0 : (analysis?.noise > 0.82 ? 0.025 : 0),
+      aiBlend: oneX ? 0.35 : 0.72,
+      minDetailRatio: oneX ? 0.96 : 0.92,
+      disclosure: 'Source-first enhancement that keeps original texture dominant.'
     });
   }
   if (profile === 'recovery') {
+    const severeNoise = (analysis?.noise || 0) > 0.78 || (analysis?.jpegArtifacts || 0) > 0.78;
     return Object.freeze({
       id: 'recovery',
       label: 'Recovery',
-      preclean: analysis?.noise > 0.48 || analysis?.jpegArtifacts > 0.55 ? 0.12 : 0.04,
-      aiBlend: 1,
-      disclosure: 'Recovery-focused AI reconstruction; some fine detail may be reconstructed.'
+      preclean: severeNoise ? (oneX ? 0.025 : 0.045) : 0,
+      aiBlend: oneX ? 0.58 : 0.86,
+      minDetailRatio: oneX ? 0.92 : 0.88,
+      disclosure: 'Stronger repair with a protected contribution from real source detail.'
     });
   }
   return Object.freeze({
     id: 'balanced',
     label: 'Balanced',
-    preclean: analysis?.noise > 0.62 || analysis?.jpegArtifacts > 0.62 ? 0.08 : 0,
-    aiBlend: scaleFactor === 1 ? 0.90 : 0.94,
-    disclosure: 'Balanced AI restoration with conservative source-detail blending.'
+    preclean: (analysis?.noise || 0) > 0.84 || (analysis?.jpegArtifacts || 0) > 0.84 ? (oneX ? 0.015 : 0.03) : 0,
+    aiBlend: oneX ? 0.46 : 0.80,
+    minDetailRatio: oneX ? 0.94 : 0.90,
+    disclosure: 'Balanced enhancement with source texture protected against over-smoothing.'
   });
 }
 
@@ -230,6 +235,63 @@ export function blendForFidelity(aiCanvas, sourceImage, scale, profile) {
   ctx.globalAlpha = 1;
   aiCanvas.width = aiCanvas.height = 0;
   return blended;
+}
+
+function sampledEdgeEnergy(input, sampleWidth = 256) {
+  const width = Math.max(32, Math.min(sampleWidth, input.width || sampleWidth));
+  const height = Math.max(32, Math.round(width * (input.height || width) / Math.max(1, input.width || width)));
+  const sample = canvas(width, height);
+  const ctx = sample.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!ctx) return 0;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(input, 0, 0, width, height);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < height - 1; y++) {
+    for (let x = 0; x < width - 1; x++) {
+      const i = (y * width + x) * 4;
+      const right = i + 4;
+      const down = i + width * 4;
+      const centerY = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+      const rightY = data[right] * 0.2126 + data[right + 1] * 0.7152 + data[right + 2] * 0.0722;
+      const downY = data[down] * 0.2126 + data[down + 1] * 0.7152 + data[down + 2] * 0.0722;
+      sum += Math.abs(rightY - centerY) + Math.abs(downY - centerY);
+      count += 2;
+    }
+  }
+  sample.width = sample.height = 0;
+  return count ? sum / count : 0;
+}
+
+export function enforceDetailPreservation(processedCanvas, sourceImage, scale, profile) {
+  const sourceEnergy = sampledEdgeEnergy(sourceImage);
+  const outputEnergy = sampledEdgeEnergy(processedCanvas);
+  const ratio = sourceEnergy > 0.001 ? outputEnergy / sourceEnergy : 1;
+  const minimum = clamp(profile?.minDetailRatio || (Number(scale) <= 1.05 ? 0.94 : 0.90), 0.80, 1.05);
+
+  if (ratio >= minimum) {
+    return { canvas: processedCanvas, detailRatio: ratio, sourceBlend: 0 };
+  }
+
+  const sourceBlend = clamp(0.16 + (minimum - ratio) * 1.25, 0.16, 0.48);
+  const guarded = canvas(processedCanvas.width, processedCanvas.height);
+  const ctx = guarded.getContext('2d', { alpha: false });
+  if (!ctx) throw new Error('Detail-preservation canvas is unavailable.');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(processedCanvas, 0, 0);
+  ctx.globalAlpha = sourceBlend;
+  ctx.drawImage(sourceImage, 0, 0, guarded.width, guarded.height);
+  ctx.globalAlpha = 1;
+  processedCanvas.width = processedCanvas.height = 0;
+
+  return {
+    canvas: guarded,
+    detailRatio: sampledEdgeEnergy(guarded) / Math.max(0.001, sourceEnergy),
+    sourceBlend
+  };
 }
 
 export async function applyLocalEnhancement(inputCanvas, analysis, signal, onProgress) {
