@@ -129,6 +129,68 @@ async function outputInfo() {
   });
 }
 
+async function enhanceDetailMetrics() {
+  return page.evaluate(async () => {
+    const source = document.querySelector('canvas[aria-label="Source image preview"]');
+    const link = [...document.querySelectorAll('#downloads a[download]')].at(-1);
+    if (!source || !link) return null;
+    const bitmap = await createImageBitmap(await (await fetch(link.href)).blob());
+    const sampleW = Math.min(256, source.width);
+    const sampleH = Math.max(16, Math.round(sampleW * source.height / source.width));
+
+    const sample = input => {
+      const canvas = document.createElement('canvas');
+      canvas.width = sampleW;
+      canvas.height = sampleH;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(input, 0, 0, sampleW, sampleH);
+      const rgba = ctx.getImageData(0, 0, sampleW, sampleH).data;
+      const gray = new Float32Array(sampleW * sampleH);
+      for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
+        gray[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
+      }
+      return gray;
+    };
+
+    const before = sample(source);
+    const after = sample(bitmap);
+    bitmap.close();
+
+    const detail = values => {
+      let edge = 0;
+      let edgeCount = 0;
+      let texture = 0;
+      let textureCount = 0;
+      for (let y = 1; y < sampleH - 1; y++) {
+        for (let x = 1; x < sampleW - 1; x++) {
+          const i = y * sampleW + x;
+          const center = values[i];
+          const left = values[i - 1];
+          const right = values[i + 1];
+          const up = values[i - sampleW];
+          const down = values[i + sampleW];
+          edge += Math.abs(right - center) + Math.abs(down - center);
+          edgeCount += 2;
+          texture += Math.abs(left + right + up + down - 4 * center);
+          textureCount++;
+        }
+      }
+      return {
+        edge: edgeCount ? edge / edgeCount : 0,
+        texture: textureCount ? texture / textureCount : 0
+      };
+    };
+
+    const sourceDetail = detail(before);
+    const outputDetail = detail(after);
+    const edgeRatio = sourceDetail.edge > 0.001 ? outputDetail.edge / sourceDetail.edge : 1;
+    const textureRatio = sourceDetail.texture > 0.001 ? outputDetail.texture / sourceDetail.texture : 1;
+    return { edgeRatio, textureRatio, minimumRatio: Math.min(edgeRatio, textureRatio) };
+  });
+}
+
 async function waitForResult(pattern, timeout) {
   await page.waitForFunction(source => {
     const status = document.querySelector('#status')?.textContent || '';
@@ -161,6 +223,8 @@ try {
   assert.deepEqual([enhanced?.width, enhanced?.height, enhanced?.type], [452, 678, 'image/png']);
   assert.match(enhanced?.name || '', /-enhanced\.png$/);
   assert.match(enhanceStatus, /background AI|background-safe local processing/);
+  const detailMetrics = await enhanceDetailMetrics();
+  assert.ok((detailMetrics?.minimumRatio || 0) >= 0.88, `Enhance must preserve real source edge/texture detail: ${JSON.stringify(detailMetrics)}`);
   assert.ok(enhancePulse.count >= 5, `Enhance heartbeat too low: ${JSON.stringify(enhancePulse)}`);
   assert.ok(enhancePulse.maxGap < 3000, `Enhance blocked the page too long: ${JSON.stringify(enhancePulse)}`);
 
@@ -179,7 +243,7 @@ try {
 
   assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Production desktop Chrome must use worker-backed WASM.');
   assert.equal(errors.length, 0, `Desktop responsiveness console errors:\n${errors.join('\n')}`);
-  console.log(`PASS: realistic 452×678 Enhance and 1808×2712 4× Upscale remained responsive. Enhance maxGap=${enhancePulse.maxGap.toFixed(0)}ms, Upscale maxGap=${upscalePulse.maxGap.toFixed(0)}ms.`);
+  console.log(`PASS: realistic 452×678 Enhance preserved detail (minRatio=${detailMetrics.minimumRatio.toFixed(3)}) and 1808×2712 4× Upscale remained responsive. Enhance maxGap=${enhancePulse.maxGap.toFixed(0)}ms, Upscale maxGap=${upscalePulse.maxGap.toFixed(0)}ms.`);
 } finally {
   await context.close();
   await browser.close();
