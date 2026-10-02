@@ -1,0 +1,8 @@
+AllToolForest Image Enhancer camera RAW support
+
+Runtime wrapper: rawconvert-wasm 0.1.1 (MIT)
+Underlying RAW engine: LibRaw 0.22.x (dual LGPL-2.1 / CDDL-1.0)
+Runtime is loaded from jsDelivr and executes locally in a Web Worker.
+Supported families include CR2, CR3, NEF/NRW, ARW/SRF/SR2, DNG, RAF, ORF, RW2, PEF, SRW, ERF, KDC, DCR, MOS, 3FR, IIQ, RWL, MEF, MRW and X3F.
+
+No user image bytes are uploaded by AllToolForest; RAW decoding happens in the browser.
