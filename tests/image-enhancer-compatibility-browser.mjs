@@ -129,6 +129,28 @@ async function testMobileSafety() {
   page.on('pageerror', err => consoleErrors.push(err.message));
   try {
     await page.goto('http://127.0.0.1:4177/images/enhance/', { waitUntil: 'networkidle' });
+
+    await installGeneratedFile(page, { type: 'image/png', name: 'mobile-ai.png', width: 480, height: 360, transparent: false });
+    await page.locator('#enhancer-scale').selectOption('2');
+    await page.locator('#enhancer-content').selectOption('general');
+    await page.locator('#enhancer-restoration').selectOption('balanced');
+    await page.locator('#enhancer-sharpen').selectOption('off');
+    await page.evaluate(() => {
+      window.__mobileHeartbeat = 0;
+      window.__mobileHeartbeatTimer = setInterval(() => { window.__mobileHeartbeat += 1; }, 25);
+    });
+    await page.getByRole('button', { name: 'Enhance image' }).click();
+    const mobileOutput = await waitCanonical(page, 960, 720);
+    assert.deepEqual(mobileOutput.slice(0, 2), [960, 720]);
+    const mobileStatus = (await page.locator('#status').textContent()) || '';
+    assert.match(mobileStatus, /AI super-resolution.*AI input 240 × 180.*wasm-worker/, `Mobile AI must use the responsive worker path: ${mobileStatus}`);
+    const mobileHeartbeat = await page.evaluate(() => {
+      clearInterval(window.__mobileHeartbeatTimer);
+      return window.__mobileHeartbeat;
+    });
+    assert.ok(mobileHeartbeat >= 4, `Mobile AI must keep the event loop responsive; heartbeat=${mobileHeartbeat}`);
+    assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'Mobile AI must keep ONNX WASM proxy enabled.');
+
     await installGeneratedFile(page, { type: 'image/png', name: 'mobile-1mp.png', width: 1000, height: 1000, transparent: false });
     const summary = (await page.locator('#enhancer-source-info').textContent()) || '';
     assert.match(summary, /1,000 × 1,000/);
@@ -174,7 +196,7 @@ try {
   assert.deepEqual(aiInferenceDimensions(960, 1280, 5760, 7680, 4), { width: 960, height: 1280 }, 'AI input must never pre-enlarge beyond the source for outputs above the model native scale.');
   await testDesktopFormats();
   await testMobileSafety();
-  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, canonical processing, mobile 8 MP/20 MB safety caps and tile plans verified.');
+  console.log('PASS: JPG/PNG/WebP input decoding, transparency detection, real mobile worker-backed AI, mobile responsiveness, 8 MP/20 MB safety caps and tile plans verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
