@@ -104,8 +104,12 @@ async function testDeepMemoryRetries() {
     const NativeWorker = window.Worker;
     window.Worker = class extends NativeWorker {
       postMessage(message, transfer) {
-        if (message?.type === 'pack-tile' && message.width > 105) {
-          throw new RangeError('out of memory two-stage worker retry test');
+        if (message?.type === 'pack-tile') {
+          this.__enhancerRetryFailures = this.__enhancerRetryFailures || 0;
+          if (this.__enhancerRetryFailures < 2) {
+            this.__enhancerRetryFailures++;
+            throw new RangeError('out of memory two-stage worker retry test');
+          }
         }
         return super.postMessage(message, transfer);
       }
