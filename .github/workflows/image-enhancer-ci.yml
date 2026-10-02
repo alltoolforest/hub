@@ -85,7 +85,7 @@ jobs:
           grep -q "env.wasm.proxy" assets/js/image-enhancer.js
           grep -q "image-enhancer-processing-worker.js" assets/js/image-enhancer.js
           grep -q "image-enhancer-raw.js" assets/js/image-enhancer.js
-          grep -q "rawconvert-wasm@0.1.1" assets/js/image-enhancer-raw-worker.js
+          grep -q "RAWCONVERT_VERSION = '0.1.1'" assets/js/image-enhancer-raw-worker.js
           ! grep -q "executionProviders: \['webgpu'\]" assets/js/image-enhancer.js
           grep -q "aiInferenceDimensions" assets/js/image-enhancer.js
           grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
