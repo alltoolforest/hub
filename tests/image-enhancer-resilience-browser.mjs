@@ -106,10 +106,8 @@ async function testDeepMemoryRetries() {
   try {
     await page.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
     await upload(page, 'retry-twice.png', 300, 220);
+    await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-scale').selectOption('2');
-    await page.locator('#enhancer-content').selectOption('general');
-    await page.locator('#enhancer-restoration').selectOption('balanced');
-    await page.locator('#enhancer-sharpen').selectOption('off');
 
     await page.evaluate(() => {
       const proto = CanvasRenderingContext2D.prototype;
@@ -124,7 +122,7 @@ async function testDeepMemoryRetries() {
       };
     });
     try {
-      await page.getByRole('button', { name: 'Enhance image' }).click();
+      await page.locator('#enhancer-run').click();
       const status = await waitResult(page, /AI super-resolution.*memory retry ×2 · 72px tiles/);
       assert.match(status, /wasm/);
       assert.deepEqual(await outputDimensions(page), [600, 440, 'retry-twice-upscaled-2x.png']);
@@ -133,8 +131,8 @@ async function testDeepMemoryRetries() {
     }
 
     await upload(page, 'retry-exhausted.png');
+    await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-scale').selectOption('2');
-    await page.locator('#enhancer-content').selectOption('general');
     await page.evaluate(() => {
       const proto = CanvasRenderingContext2D.prototype;
       const original = proto.getImageData;
@@ -145,7 +143,7 @@ async function testDeepMemoryRetries() {
       };
     });
     try {
-      await page.getByRole('button', { name: 'Enhance image' }).click();
+      await page.locator('#enhancer-run').click();
       const status = await waitResult(page, /Standard high-quality enlargement\. AI enhancement was not used\./);
       assert.doesNotMatch(status, /AI super-resolution/);
       assert.deepEqual(await outputDimensions(page), [220, 140, 'retry-exhausted-enlarged-2x.png']);
@@ -168,8 +166,8 @@ async function testCancellationDuringModelLoad() {
   try {
     await page.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
     await upload(page, 'cancel-load.png', 40, 30);
+    await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-scale').selectOption('2');
-    await page.locator('#enhancer-content').selectOption('general');
 
     await page.evaluate(() => {
       const originalFetch = window.fetch.bind(window);
@@ -191,13 +189,13 @@ async function testCancellationDuringModelLoad() {
     });
 
     try {
-      await page.getByRole('button', { name: 'Enhance image' }).click();
+      await page.locator('#enhancer-run').click();
       await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('Downloading AI model'));
       assert.equal(await page.getByRole('button', { name: 'Cancel', exact: true }).isDisabled(), false);
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.waitForFunction(() => (document.querySelector('#status')?.textContent || '').includes('Processing cancelled'));
       assert.equal(await page.locator('#downloads a[download]').count(), 0, 'Cancelled model load must not create an output.');
-      assert.equal(await page.getByRole('button', { name: 'Enhance image' }).isDisabled(), false, 'Controls must recover after cancellation.');
+      assert.equal(await page.locator('#enhancer-run').isDisabled(), false, 'Controls must recover after cancellation.');
     } finally {
       await page.evaluate(() => window.__restoreResilienceFetch?.());
     }
