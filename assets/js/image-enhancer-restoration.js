@@ -353,7 +353,11 @@ function buildDegradationDiagnosis({
   const megapixels = image.width * image.height / 1e6;
   const maxDimension = Math.max(image.width, image.height);
   const flatNoise = clamp((metrics.flatResidual - 0.9) / 5.4);
-  const noiseConfidence = clamp(flatNoise * 0.64 + noise * 0.36);
+  const noiseConfidence = clamp(Math.max(
+    noise * 0.78,
+    flatNoise * 0.88,
+    flatNoise * 0.55 + noise * 0.45
+  ));
   const lowResolutionConfidence = clamp(Math.max(
     (1280 - maxDimension) / 920,
     (1.15 - megapixels) / 1.0
