@@ -1371,6 +1371,26 @@ export async function mount(root, slug) {
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
 
+        // Deblur-only detail recovery. NAFNet reconstructs the spatial structure;
+        // this conservative, edge-thresholded finish restores perceived local
+        // definition without routing ordinary Enhance/Upscale through a stronger
+        // sharpening path. Keep the correction bounded to avoid halos, skin
+        // texture exaggeration and noise amplification.
+        const deblurStrength = Math.max(0, Math.min(1, analysis?.blurScore || 0));
+        const deblurSharpening = Object.freeze({
+          id: 'deblur-detail',
+          label: 'Deblur detail recovery',
+          amount: 0.46 + deblurStrength * 0.16,
+          threshold: Math.max(2.75, 4.25 - deblurStrength * 1.25 + (analysis?.noise || 0) * 5),
+          maxDelta: Math.min(18, 13 + deblurStrength * 4)
+        });
+        const deblurFinished = await finishInBackground(
+          result.canvas,
+          { local: false, sharpening: deblurSharpening },
+          signal
+        );
+        result.canvas = deblurFinished.canvas;
+
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
         const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
