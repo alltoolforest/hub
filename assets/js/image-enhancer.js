@@ -1447,7 +1447,10 @@ export async function mount(root, slug) {
   }
 
   async function applyRegionAwarePass(canvas, faces, mode, signal) {
-    if (!processor.available) return canvas;
+    // Very small sources do not contain enough spatial evidence for reliable
+    // region classification. Preserve the previously verified path instead of
+    // letting regional heuristics flatten user-selected sharpening.
+    if (!processor.available || Math.min(image.width, image.height) < 96) return canvas;
     status('Applying region-aware restoration…');
     try {
       const restored = await processor.regionAwareRestore(image, canvas, analysis, faces, mode, signal);
