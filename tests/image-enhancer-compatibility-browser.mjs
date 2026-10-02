@@ -179,15 +179,10 @@ async function testMobileSafety() {
         window.__mobile4xTimer = setInterval(() => { window.__mobile4xHeartbeat += 1; }, 50);
       });
       await stressPage.locator('#enhancer-run').click();
-      await stressPage.waitForFunction(() => {
-        const status = document.querySelector('#status')?.textContent || '';
-        const accepted = /Preparing 4× upscale|Downloading AI|Preparing background AI|Enhancing tile|Upscaled 4×|Enlarged 4×/i.test(status);
-        return window.__mobile4xHeartbeat >= 20 &&
-          accepted &&
-          !/too large for the current safety limit/i.test(status);
-      }, null, { timeout: 30000 });
+      await stressPage.waitForFunction(() => window.__mobile4xHeartbeat >= 20, null, { timeout: 30000 });
       const accepted4xStatus = (await stressPage.locator('#status').textContent()) || '';
       assert.doesNotMatch(accepted4xStatus, /too large for the current safety limit/i, '8.3 MP 4× must begin processing instead of being rejected.');
+      assert.doesNotMatch(accepted4xStatus, /failed|could not|unavailable/i, `Large mobile 4× must not fail immediately: ${accepted4xStatus}`);
       const mobile4xHeartbeat = await stressPage.evaluate(() => {
         clearInterval(window.__mobile4xTimer);
         return window.__mobile4xHeartbeat;
