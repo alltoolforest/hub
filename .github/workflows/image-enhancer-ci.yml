@@ -1,0 +1,145 @@
+name: Image Enhancer pre-deployment audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-bootstrap.js'
+      - 'assets/js/image-enhancer-export.js'
+      - 'assets/js/image-enhancer-inspector.js'
+      - 'assets/js/image-enhancer-output.js'
+      - 'assets/js/image-enhancer-restoration.js'
+      - 'assets/js/image-enhancer-routing.js'
+      - 'assets/js/image-enhancer-tiles.js'
+      - 'assets/models/image-enhancer/**'
+      - 'docs/image-enhancer-model-benchmark.md'
+      - 'tests/image-enhancer-browser.mjs'
+      - 'tests/image-enhancer-output-browser.mjs'
+      - 'tests/image-enhancer-inspector-browser.mjs'
+      - 'tests/image-enhancer-export-browser.mjs'
+      - 'tests/image-enhancer-compatibility-browser.mjs'
+      - 'tests/image-enhancer-resilience-browser.mjs'
+      - 'tests/image-enhancer-cross-browser.mjs'
+      - '.github/workflows/image-enhancer-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: image-enhancer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  enhancer-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Protect frozen files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object assets/js/images.js)" = "07caaa63a6c3fa208b5f476e1748d8dfab681f7b"
+          test "$(git hash-object assets/js/batch-image-processor.js)" = "4e3af54dd751fedbd5c15effaebc129c94d8c8a1"
+          test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
+          test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
+          test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
+          echo 'Frozen/shared file SHAs verified.'
+
+      - name: Static enhancer checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-bootstrap.js
+          node --check assets/js/image-enhancer-export.js
+          node --check assets/js/image-enhancer-inspector.js
+          node --check assets/js/image-enhancer-output.js
+          node --check assets/js/image-enhancer-restoration.js
+          node --check assets/js/image-enhancer-routing.js
+          node --check assets/js/image-enhancer-tiles.js
+          node --check assets/js/app.js
+          node --check tests/image-enhancer-compatibility-browser.mjs
+          node --check tests/image-enhancer-resilience-browser.mjs
+          node --check tests/image-enhancer-cross-browser.mjs
+          node -e "const m=require('./assets/models/image-enhancer/manifest.json'); if(m.runtime.version!=='1.30.0'||!m.runtime.wasmModule||!m.runtime.wasmBinary||m.models['general-x4'].sha256!=='09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4') process.exit(1);"
+          grep -q "slug==='enhance'.*image-enhancer-bootstrap.js" assets/js/app.js
+          grep -q "'text-logo': Object.freeze" assets/js/image-enhancer-routing.js
+          grep -q "engine: 'standard'" assets/js/image-enhancer-routing.js
+          grep -q "Memory pressure detected" assets/js/image-enhancer.js
+          grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
+          grep -q "mountInspector" assets/js/image-enhancer-bootstrap.js
+          grep -q "mountExportControls" assets/js/image-enhancer-bootstrap.js
+          grep -q "resolveOutputTarget" assets/js/image-enhancer-output.js
+          grep -q "enhancer-compare-viewport" assets/js/image-enhancer-inspector.js
+          grep -q "enhancer-export-format" assets/js/image-enhancer-export.js
+          grep -q "JPG cannot store transparency" assets/js/image-enhancer-export.js
+          echo 'Enhancer routing, syntax, restoration, content routing, memory-aware tiling, output planning, inspection workspace, export matrix, compatibility and resilience audits, runtime pin and model checksum pin verified.'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Run CSP + real AI browser smoke test
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-browser.mjs
+
+      - name: Run output planner browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-output-browser.mjs
+
+      - name: Run inspection workspace browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-inspector-browser.mjs
+
+      - name: Run export format browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-export-browser.mjs
+
+      - name: Run input and mobile compatibility audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-compatibility-browser.mjs
+
+      - name: Run deep resilience browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-resilience-browser.mjs
+
+  engine-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Run Firefox + WebKit real-WASM audit
+        run: node tests/image-enhancer-cross-browser.mjs

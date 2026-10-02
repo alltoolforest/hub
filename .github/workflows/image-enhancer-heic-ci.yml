@@ -1,0 +1,90 @@
+name: Image Enhancer HEIC/HEIF audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-heic.js'
+      - 'tests/image-enhancer-heic-browser.mjs'
+      - 'tests/image-enhancer-heic-candidate-browser.mjs'
+      - 'tests/image-enhancer-heic-cross-browser.mjs'
+      - '.github/workflows/image-enhancer-heic-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: image-enhancer-heic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  heic-heif-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Protect frozen files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object assets/js/images.js)" = "07caaa63a6c3fa208b5f476e1748d8dfab681f7b"
+          test "$(git hash-object assets/js/batch-image-processor.js)" = "4e3af54dd751fedbd5c15effaebc129c94d8c8a1"
+          test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
+          test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
+          test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
+          node --check assets/js/image-enhancer-heic.js
+          node --check assets/js/image-enhancer.js
+          node --check tests/image-enhancer-heic-browser.mjs
+          node --check tests/image-enhancer-heic-candidate-browser.mjs
+          node --check tests/image-enhancer-heic-cross-browser.mjs
+          grep -q "c189220a7a1e87559758a48ab4700e55629fb23a4cb57489e1e8970be1b9d018" assets/js/image-enhancer-heic.js
+          grep -q "heic-to@1.5.2/dist/csp/heic-to.js" assets/js/image-enhancer-heic.js
+          grep -q "decodeEnhancerHeic" assets/js/image-enhancer.js
+          echo 'Frozen/shared SHAs, enhancer-local HEIC decoder pin and audit syntax verified.'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Benchmark maintained HEIC decoder candidate
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-heic-candidate-browser.mjs
+
+      - name: Run integrated real HEIC + HEIF input audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-heic-browser.mjs
+
+  heic-engine-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Run Firefox + WebKit HEIC input audit
+        run: node tests/image-enhancer-heic-cross-browser.mjs

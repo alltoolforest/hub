@@ -1,0 +1,26 @@
+AllToolForest Image Enhancer — third-party AI notices
+
+1) Real-ESRGAN / realesr-general-x4v3
+Copyright (c) 2021, Xintao Wang
+License: BSD 3-Clause
+Upstream: https://github.com/xinntao/Real-ESRGAN
+Redistributed ONNX file: https://github.com/NovareOrbis/nova-ai-models/tree/v3
+Pinned SHA-256: 09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4
+
+BSD 3-Clause License
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+2) ONNX Runtime Web
+Copyright (c) Microsoft Corporation
+License: MIT
+Package: onnxruntime-web 1.30.0
+Upstream: https://github.com/microsoft/onnxruntime
+
+The ONNX Runtime Web JavaScript/WASM runtime is fetched as a version-pinned dependency. See the upstream repository/package for the complete MIT license text and notices.
