@@ -119,8 +119,7 @@ try {
 
   assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Export settings must stay hidden until a processed result exists.');
   assert.equal(await page.locator('#enhancer-export-format').inputValue(), 'png');
-  assert.equal(await page.getByRole('button', { name: 'Create export copy' }).isDisabled(), true);
-  assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Reset must hide the export panel again.');
+  assert.equal(await page.locator('#enhancer-export-panel button').filter({ hasText: 'Create export copy' }).isDisabled(), true);
   assert.equal(await page.locator('#enhancer-export-quality').evaluate(node => node.closest('.field').hidden), true);
   assert.equal(await page.locator('#enhancer-jpeg-background').evaluate(node => node.closest('.field').hidden), true);
 
@@ -182,7 +181,8 @@ try {
   assert.equal(await page.locator('#enhancer-export-quality').inputValue(), '92');
   assert.equal((await page.locator('#enhancer-jpeg-background').inputValue()).toLowerCase(), '#ffffff');
   assert.equal(await page.locator('#enhancer-export-downloads a[download]').count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Create export copy' }).isDisabled(), true);
+  assert.equal(await page.locator('#enhancer-export-panel button').filter({ hasText: 'Create export copy' }).isDisabled(), true);
+  assert.equal(await page.locator('#enhancer-export-panel').isHidden(), true, 'Reset must hide the export panel again.');
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
   console.log('PASS: PNG/JPG/WebP export, lossy quality controls, transparency preservation, JPEG flattening and reset behavior verified.');
