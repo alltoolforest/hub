@@ -1142,7 +1142,11 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
       const detailGuard = enforceDetailPreservation(result.canvas, image, scale, restoration);
       result.canvas = detailGuard.canvas;
-      const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+      const largeMobileOutput = caps.isMobile && width * height > 6e6;
+      const upscaleSharpening = largeMobileOutput
+        ? { ...sharpening, amount: 0, maxDelta: 0, label: 'Auto (AI detail)' }
+        : sharpening;
+      const finished = await finishInBackground(result.canvas, { local: false, sharpening: upscaleSharpening }, signal);
       result.canvas = finished.canvas;
 
       status('Creating upscaled image…');
