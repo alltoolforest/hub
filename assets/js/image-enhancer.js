@@ -8,7 +8,8 @@ import {
   resolveRestorationProfile,
   prepareRestorationInput,
   blendForFidelity,
-  resolveSharpening
+  resolveSharpening,
+  enforceDetailPreservation
 } from './image-enhancer-restoration.js';
 import {
   resolveContentRoute,
@@ -19,12 +20,55 @@ import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressur
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 
 const MB = 1024 * 1024;
-const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
-const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
-  desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
-});
+const ABSOLUTE_SOURCE_PIXEL_LIMIT = 160e6;
+const ABSOLUTE_OUTPUT_PIXEL_LIMIT = 160e6;
+
+function platformFamily() {
+  const ua = navigator.userAgent || '';
+  const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  if (/iPhone|iPad|iPod/.test(ua) || touchMac) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'macos';
+  if (/Windows/.test(ua)) return 'windows';
+  return 'other';
+}
+
+function adaptiveLimits({ isMobile, platform, memoryGB, concurrency, workers, offscreenCanvas }) {
+  const memory = Number.isFinite(memoryGB) && memoryGB > 0 ? memoryGB : null;
+  const cores = Math.max(1, Number(concurrency) || 2);
+  const workerReady = !!(workers && offscreenCanvas);
+
+  if (isMobile || platform === 'ios' || platform === 'android') {
+    let maxPixels = 12e6;
+    let maxFileMB = 80;
+    if (memory >= 8 && cores >= 6) { maxPixels = 28e6; maxFileMB = 160; }
+    else if (memory >= 6 && cores >= 6) { maxPixels = 22e6; maxFileMB = 140; }
+    else if (memory >= 4 || cores >= 6) { maxPixels = 18e6; maxFileMB = 120; }
+    else if (!memory && platform === 'ios' && cores >= 6) { maxPixels = 18e6; maxFileMB = 120; }
+    if (!workerReady) maxPixels = Math.min(maxPixels, 14e6);
+    return {
+      maxPixels,
+      maxSide: 12288,
+      maxFileMB,
+      maxSourcePixels: Math.min(48e6, Math.max(maxPixels * 2, 24e6))
+    };
+  }
+
+  let maxPixels = 40e6;
+  let maxFileMB = 180;
+  if (memory >= 16 && cores >= 8) { maxPixels = 120e6; maxFileMB = 500; }
+  else if (memory >= 8 && cores >= 8) { maxPixels = 80e6; maxFileMB = 350; }
+  else if (memory >= 6 || cores >= 8) { maxPixels = 64e6; maxFileMB = 300; }
+  else if (!memory && platform === 'macos' && cores >= 8) { maxPixels = 72e6; maxFileMB = 320; }
+  if (!workerReady) maxPixels = Math.min(maxPixels, 36e6);
+  return {
+    maxPixels,
+    maxSide: 32768,
+    maxFileMB,
+    maxSourcePixels: Math.min(ABSOLUTE_SOURCE_PIXEL_LIMIT, Math.max(maxPixels, 64e6))
+  };
+}
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
@@ -516,19 +560,37 @@ async function readResponseWithProgress(response, signal, onProgress) {
 }
 
 async function detectDeviceCapabilities() {
-  const isMobile = mobile();
-  const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
+  const platform = platformFamily();
+  const uaMobile = platform === 'ios' || platform === 'android' || navigator.userAgentData?.mobile === true;
+  const isMobile = mobile() || uaMobile;
+  const workers = typeof Worker !== 'undefined';
+  const offscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+  const createBitmap = typeof createImageBitmap === 'function';
+  const memoryGB = Number(navigator.deviceMemory) || null;
+  const concurrency = Math.max(1, Number(navigator.hardwareConcurrency) || 2);
+  const limits = adaptiveLimits({
+    isMobile,
+    platform,
+    memoryGB,
+    concurrency,
+    workers,
+    offscreenCanvas
+  });
   const caps = {
     isMobile,
+    platform,
+    memoryGB,
+    concurrency,
     webgpu: false,
     wasm: typeof WebAssembly !== 'undefined',
-    workers: typeof Worker !== 'undefined',
-    offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
-    createImageBitmap: typeof createImageBitmap === 'function',
+    workers,
+    offscreenCanvas,
+    createImageBitmap: createBitmap,
     maxTextureDimension2D: null,
-    maxPixels: baseline.maxPixels,
-    maxSide: baseline.maxSide,
-    maxFileMB: baseline.maxFileMB
+    maxPixels: limits.maxPixels,
+    maxSourcePixels: limits.maxSourcePixels,
+    maxSide: limits.maxSide,
+    maxFileMB: limits.maxFileMB
   };
 
   // WebGPU detection is intentionally skipped. The production enhancer uses
@@ -544,20 +606,29 @@ function safeOutputFor(image, scale, caps) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
     throw new Error('The requested output dimensions are invalid.');
   }
-  if (width > caps.maxSide || height > caps.maxSide || pixels > caps.maxPixels) {
-    const sideScale = Math.min(caps.maxSide / image.width, caps.maxSide / image.height);
-    const pixelScale = Math.sqrt(caps.maxPixels / (image.width * image.height));
+
+  const sourcePixels = image.width * image.height;
+  const oneX = Number(scale) <= 1.05;
+  const adaptivePixelLimit = oneX
+    ? Math.min(ABSOLUTE_OUTPUT_PIXEL_LIMIT, Math.max(caps.maxPixels, Math.min(sourcePixels, caps.maxSourcePixels || sourcePixels)))
+    : Math.min(ABSOLUTE_OUTPUT_PIXEL_LIMIT, caps.maxPixels);
+  const adaptiveSide = Math.min(caps.maxSide, 32768);
+
+  if (width > adaptiveSide || height > adaptiveSide || pixels > adaptivePixelLimit) {
+    const sideScale = Math.min(adaptiveSide / image.width, adaptiveSide / image.height);
+    const pixelScale = Math.sqrt(adaptivePixelLimit / Math.max(1, sourcePixels));
     const maxScale = Math.max(0.01, Math.min(sideScale, pixelScale));
     const safeW = Math.max(1, Math.floor(image.width * maxScale));
     const safeH = Math.max(1, Math.floor(image.height * maxScale));
-    throw new Error(`This output is too large for the current safety limit. Maximum safe output is about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels.`);
+    throw new Error(`This output exceeds what this browser/device can process safely in one image. Try up to about ${safeW.toLocaleString()} × ${safeH.toLocaleString()} pixels on this device.`);
   }
   return { width, height, pixels };
 }
 
 function sourceSummary(file, image, caps, analysis) {
   const mp = image.width * image.height / 1e6;
-  const base = `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.wasm && caps.workers ? 'background AI ready' : 'standard fallback only'}`;
+  const deviceLabel = caps.platform === 'ios' ? 'iOS' : caps.platform === 'android' ? 'Android' : caps.platform === 'macos' ? 'macOS' : caps.platform === 'windows' ? 'Windows' : 'browser';
+  const base = `${image.width.toLocaleString()} × ${image.height.toLocaleString()} · ${format(mp, 2)} MP · ${format(file.size / MB, 2)} MB · ${caps.wasm && caps.workers ? 'background AI ready' : 'standard fallback only'} · ${deviceLabel} adaptive limits`;
   return analysis?.note ? `${base} · Analysis: ${analysis.note}` : base;
 }
 
@@ -732,10 +803,12 @@ export async function mount(root, slug) {
     image = isEnhancerHeicInput(file)
       ? await decodeEnhancerHeic(file, message => status(message))
       : await decodeImage(file);
-    if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
+    const sourcePixels = image.width * image.height;
+    const sourceLimit = Math.min(ABSOLUTE_SOURCE_PIXEL_LIMIT, caps.maxSourcePixels || ABSOLUTE_SOURCE_PIXEL_LIMIT);
+    if (sourcePixels > sourceLimit) {
       image.close?.();
       image = null;
-      throw new Error('Use an image below 60 million pixels.');
+      throw new Error(`This source is ${format(sourcePixels / 1e6, 1)} MP. This browser/device can safely decode about ${format(sourceLimit / 1e6, 1)} MP in this session. Use a stronger desktop device for this file or a smaller derivative.`);
     }
     clearOutputs();
     frame.hidden = false;
@@ -939,6 +1012,8 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
+      const detailGuard = enforceDetailPreservation(result.canvas, image, 1, restoration);
+      result.canvas = detailGuard.canvas;
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
 
@@ -946,7 +1021,7 @@ export async function mount(root, slug) {
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI · source detail protected${retryLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -1012,6 +1087,8 @@ export async function mount(root, slug) {
       temporaryAiInput = null;
 
       result.canvas = blendForFidelity(result.canvas, image, scale, restoration);
+      const detailGuard = enforceDetailPreservation(result.canvas, image, scale, restoration);
+      result.canvas = detailGuard.canvas;
       const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
       result.canvas = finished.canvas;
 
