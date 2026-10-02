@@ -15,18 +15,37 @@ export function aiInferenceDimensions(
 
   const [srcWidth, srcHeight, outWidth, outHeight, scale] = values;
   const requestedScale = Math.max(outWidth / srcWidth, outHeight / srcHeight);
-  const exactFactor = Math.min(1, requestedScale / scale);
-
-  // The previous responsiveness hotfix used only exactFactor. That kept the UI
-  // responsive, but 1×/2× paths could discard too much real source detail before
-  // Real-ESRGAN saw the image. Keep a bounded quality floor while still avoiding
-  // full-resolution x4 inference for the smaller output modes.
   const mobile = !!options?.isMobile;
+  const memory = Number(options?.deviceMemory) || 0;
+  const cores = Math.max(1, Number(options?.cores) || 2);
+  const iosLike = !!options?.iosLike;
+
+  let exactFactor = Math.min(1, requestedScale / scale);
+
+  // Mobile 4× uses AI on a bounded high-detail working image, then composes the
+  // model output into the exact requested canvas. This avoids hundreds of seconds
+  // of full-source x4 inference on phones while retaining worker responsiveness.
+  if (mobile && requestedScale >= 3.5) {
+    const capable = memory >= 6 || cores >= 8;
+    const mid = memory >= 4 || cores >= 6;
+    // Keep final output dimensions unchanged, but bound the expensive x4 AI
+    // working image on phones. Low-capability browsers use half-resolution
+    // source inference and let the final compositor reach the requested size.
+    // This keeps 4× practical instead of spending minutes on full-source WASM.
+    exactFactor = iosLike
+      ? (capable ? 0.50 : mid ? 0.47 : 0.43)
+      : (capable ? 0.52 : mid ? 0.49 : 0.45);
+  }
+
+  // Keep enough source information for restoration without forcing every device
+  // to run the x4 model on the full original image.
   const qualityFloor = requestedScale <= 1.05
     ? (mobile ? 0.40 : 0.50)
     : requestedScale <= 2.05
       ? (mobile ? 0.60 : 0.75)
-      : 1;
+      : mobile
+        ? Math.min(exactFactor, 0.86)
+        : 1;
 
   const minimumStableFactor = Math.min(1, MIN_AI_SIDE / Math.min(srcWidth, srcHeight));
   const factor = Math.max(exactFactor, qualityFloor, minimumStableFactor);
@@ -38,11 +57,28 @@ export function aiInferenceDimensions(
 }
 
 export function tileCorePlan(caps) {
-  const candidates = caps?.webgpu
-    ? [160, 112, 80, 56]
-    : caps?.isMobile
-      ? [96, 72, 56, 48]
-      : [128, 96, 72, 48];
+  const memory = Number(caps?.deviceMemory) || 0;
+  const cores = Math.max(1, Number(caps?.cores) || 2);
+  const mobile = !!caps?.isMobile;
+  const iosLike = !!caps?.iosLike;
+
+  let candidates;
+  if (caps?.webgpu) {
+    candidates = [192, 160, 128, 96, 72, 56];
+  } else if (mobile) {
+    const capableMobile = memory >= 6 || cores >= 8;
+    const midMobile = memory >= 4 || cores >= 6;
+    candidates = capableMobile
+      ? (iosLike ? [208, 176, 144, 112, 88, 64, 48] : [224, 192, 160, 128, 96, 72, 48])
+      : midMobile
+        ? [208, 176, 144, 112, 80, 56, 48]
+        : [192, 160, 128, 96, 72, 48];
+  } else {
+    candidates = memory >= 8 || cores >= 8
+      ? [176, 144, 112, 88, 64, 48]
+      : [144, 112, 88, 64, 48];
+  }
+
   return Object.freeze([...new Set(candidates.filter(value => Number.isFinite(value) && value >= 48))]);
 }
 

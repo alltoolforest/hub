@@ -33,8 +33,11 @@ export function safeOutputDimensions(image, width, height, caps) {
   const targetWidth = roundDimension(finitePositive(width, 'output width'));
   const targetHeight = roundDimension(finitePositive(height, 'output height'));
   const pixels = targetWidth * targetHeight;
-  const maxSide = Number(caps?.maxSide) || 8192;
-  const maxPixels = Number(caps?.maxPixels) || 8e6;
+  const maxSide = Number(caps?.maxSide);
+  const maxPixels = Number(caps?.maxPixels);
+  if (!Number.isFinite(maxSide) || maxSide <= 0 || !Number.isFinite(maxPixels) || maxPixels <= 0) {
+    throw new Error('Output safety capabilities are unavailable. Reload the tool and try again.');
+  }
 
   if (targetWidth > maxSide || targetHeight > maxSide || pixels > maxPixels) {
     const sourceWidth = Number(image?.width) || targetWidth;

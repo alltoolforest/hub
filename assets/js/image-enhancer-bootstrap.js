@@ -2,15 +2,11 @@ import { $, el, field, status } from './core.js';
 import { resolveOutputTarget, outputSizingOptions } from './image-enhancer-output.js';
 import { mountInspector } from './image-enhancer-inspector.js';
 import { mountExportControls } from './image-enhancer-export.js';
+import { enhancerPlannerCaps } from './image-enhancer-capabilities.js';
 
 let runtimePromise = null;
 let runtimeScriptBlobURL = null;
 let runtimeModuleBlobURL = null;
-
-const OUTPUT_LIMITS = Object.freeze({
-  mobile: Object.freeze({ maxPixels: 8e6, maxSide: 8192 }),
-  desktop: Object.freeze({ maxPixels: 24e6, maxSide: 16384 })
-});
 
 async function loadScriptFromFetchedSource(url) {
   const response = await fetch(url, { cache: 'force-cache' });
@@ -78,8 +74,7 @@ async function ensureRuntime() {
 }
 
 function currentPlannerCaps() {
-  const isMobile = globalThis.matchMedia?.('(max-width:700px)').matches ?? false;
-  return OUTPUT_LIMITS[isMobile ? 'mobile' : 'desktop'];
+  return enhancerPlannerCaps();
 }
 
 function sourceDimensions(summary) {

@@ -7,6 +7,7 @@ on:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
       - 'assets/js/image-enhancer-bootstrap.js'
+      - 'assets/js/image-enhancer-capabilities.js'
       - 'assets/js/image-enhancer-export.js'
       - 'assets/js/image-enhancer-inspector.js'
       - 'assets/js/image-enhancer-output.js'
@@ -59,6 +60,7 @@ jobs:
           set -euo pipefail
           node --check assets/js/image-enhancer.js
           node --check assets/js/image-enhancer-bootstrap.js
+          node --check assets/js/image-enhancer-capabilities.js
           node --check assets/js/image-enhancer-export.js
           node --check assets/js/image-enhancer-inspector.js
           node --check assets/js/image-enhancer-output.js
@@ -81,6 +83,10 @@ jobs:
           ! grep -q "executionProviders: \['webgpu'\]" assets/js/image-enhancer.js
           grep -q "aiInferenceDimensions" assets/js/image-enhancer.js
           grep -q "mountOutputPlanner" assets/js/image-enhancer-bootstrap.js
+          grep -q "enhancerPlannerCaps" assets/js/image-enhancer-bootstrap.js
+          grep -q "detectEnhancerCapabilities" assets/js/image-enhancer.js
+          ! grep -q "maxPixels: 8e6" assets/js/image-enhancer-bootstrap.js
+          ! grep -q "8e6" assets/js/image-enhancer-output.js
           grep -q "mountInspector" assets/js/image-enhancer-bootstrap.js
           grep -q "mountExportControls" assets/js/image-enhancer-bootstrap.js
           grep -q "resolveOutputTarget" assets/js/image-enhancer-output.js

@@ -1,7 +1,7 @@
 import {
   $, el, field, read, format, notice, setupStatus, status,
   fileInput, bindFile, checkFile, decodeImage, canvasBlob, output,
-  downloads, clearOutputs, safeName, mobile
+  downloads, clearOutputs, safeName
 } from './core.js';
 import {
   analyzeSourceImage,
@@ -17,14 +17,10 @@ import {
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
+import { detectEnhancerCapabilities } from './image-enhancer-capabilities.js';
 
 const MB = 1024 * 1024;
-const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
-const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
-  desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
-});
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
@@ -515,26 +511,95 @@ async function readResponseWithProgress(response, signal, onProgress) {
   return joined.buffer;
 }
 
-async function detectDeviceCapabilities() {
-  const isMobile = mobile();
-  const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
-  const caps = {
-    isMobile,
-    webgpu: false,
-    wasm: typeof WebAssembly !== 'undefined',
-    workers: typeof Worker !== 'undefined',
-    offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
-    createImageBitmap: typeof createImageBitmap === 'function',
-    maxTextureDimension2D: null,
-    maxPixels: baseline.maxPixels,
-    maxSide: baseline.maxSide,
-    maxFileMB: baseline.maxFileMB
+function sampleDetailMetrics(input) {
+  const sourceWidth = Number(input?.width) || 0;
+  const sourceHeight = Number(input?.height) || 0;
+  if (!sourceWidth || !sourceHeight) return { edge: 0, texture: 0 };
+  const sampleW = Math.max(48, Math.min(320, sourceWidth));
+  const sampleH = Math.max(48, Math.round(sampleW * sourceHeight / sourceWidth));
+  const canvas = el('canvas', { width: sampleW, height: sampleH });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+  if (!ctx) return { edge: 0, texture: 0 };
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(input, 0, 0, sampleW, sampleH);
+  const rgba = ctx.getImageData(0, 0, sampleW, sampleH).data;
+  canvas.width = canvas.height = 0;
+
+  const gray = new Float32Array(sampleW * sampleH);
+  for (let i = 0, p = 0; i < gray.length; i++, p += 4) {
+    gray[i] = rgba[p] * 0.2126 + rgba[p + 1] * 0.7152 + rgba[p + 2] * 0.0722;
+  }
+
+  let edge = 0;
+  let texture = 0;
+  let edgeCount = 0;
+  let textureCount = 0;
+  for (let y = 1; y < sampleH - 1; y++) {
+    for (let x = 1; x < sampleW - 1; x++) {
+      const i = y * sampleW + x;
+      edge += Math.abs(gray[i + 1] - gray[i]) + Math.abs(gray[i + sampleW] - gray[i]);
+      edgeCount += 2;
+      const neighbours = (gray[i - 1] + gray[i + 1] + gray[i - sampleW] + gray[i + sampleW]) * 0.25;
+      texture += Math.abs(gray[i] - neighbours);
+      textureCount++;
+    }
+  }
+  return {
+    edge: edgeCount ? edge / edgeCount : 0,
+    texture: textureCount ? texture / textureCount : 0
   };
+}
 
-  // WebGPU detection is intentionally skipped. The production enhancer uses
-  // worker-backed WASM until WebGPU passes the same real-browser responsiveness gate.
+async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, signal) {
+  if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+  const source = sampleDetailMetrics(sourceImage);
+  const current = sampleDetailMetrics(resultCanvas);
+  const edgeRatio = source.edge > 0.001 ? current.edge / source.edge : 1;
+  const textureRatio = source.texture > 0.001 ? current.texture / source.texture : 1;
+  const initialRatio = Math.min(edgeRatio, textureRatio);
+  const target = Number(profile?.minDetailRatio) || 0.90;
 
-  return Object.freeze(caps);
+  if (initialRatio >= target) {
+    return { canvas: resultCanvas, detailRatio: initialRatio, protected: false };
+  }
+
+  let best = resultCanvas;
+  let bestRatio = initialRatio;
+  for (const processedAlpha of [0.48, 0.36, 0.26]) {
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    const candidate = el('canvas', { width: resultCanvas.width, height: resultCanvas.height });
+    const ctx = candidate.getContext('2d', { alpha: false });
+    if (!ctx) {
+      candidate.width = candidate.height = 0;
+      break;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sourceImage, 0, 0, candidate.width, candidate.height);
+    ctx.globalAlpha = processedAlpha;
+    ctx.drawImage(resultCanvas, 0, 0);
+    ctx.globalAlpha = 1;
+
+    const metrics = sampleDetailMetrics(candidate);
+    const ratio = Math.min(
+      source.edge > 0.001 ? metrics.edge / source.edge : 1,
+      source.texture > 0.001 ? metrics.texture / source.texture : 1
+    );
+
+    if (ratio > bestRatio) {
+      if (best !== resultCanvas) best.width = best.height = 0;
+      best = candidate;
+      bestRatio = ratio;
+    } else {
+      candidate.width = candidate.height = 0;
+    }
+    if (bestRatio >= target) break;
+    await sleepFrame();
+  }
+
+  if (best !== resultCanvas) resultCanvas.width = resultCanvas.height = 0;
+  return { canvas: best, detailRatio: bestRatio, protected: best !== resultCanvas };
 }
 
 function safeOutputFor(image, scale, caps) {
@@ -583,7 +648,12 @@ function outputScaleOptions(image, caps) {
 
 async function prepareAiInferenceInput(image, targetWidth, targetHeight, nativeScale, signal, caps) {
   if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale, { isMobile: !!caps?.isMobile });
+  const plan = aiInferenceDimensions(image.width, image.height, targetWidth, targetHeight, nativeScale, {
+    isMobile: !!caps?.isMobile,
+    iosLike: !!caps?.iosLike,
+    deviceMemory: Number(caps?.deviceMemory) || 0,
+    cores: Number(caps?.cores) || 2
+  });
   if (plan.width === image.width && plan.height === image.height) {
     return { image, temporary: null, plan };
   }
@@ -619,7 +689,7 @@ async function detectTransparency(image) {
 export async function mount(root, slug) {
   if (slug !== 'enhance') throw new Error('Image Enhancer mounted for an unsupported tool.');
 
-  const caps = await detectDeviceCapabilities();
+  const caps = detectEnhancerCapabilities();
   const loader = new EnhancerModelLoader();
   const processor = new ProcessingWorkerBridge(caps);
   const aiEngine = new OnnxSuperResolutionEngine(loader, caps, processor);
@@ -732,10 +802,11 @@ export async function mount(root, slug) {
     image = isEnhancerHeicInput(file)
       ? await decodeEnhancerHeic(file, message => status(message))
       : await decodeImage(file);
-    if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
+    if (image.width * image.height > caps.maxSourcePixels) {
+      const sourceLimitMP = format(caps.maxSourcePixels / 1e6, 0);
       image.close?.();
       image = null;
-      throw new Error('Use an image below 60 million pixels.');
+      throw new Error(`This image is beyond this device's safe decoded-image limit (about ${sourceLimitMP} MP). Try the same file on a device with more available memory.`);
     }
     clearOutputs();
     frame.hidden = false;
@@ -908,9 +979,12 @@ export async function mount(root, slug) {
         });
         const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
         result.canvas = finished.canvas;
+        const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+        result.canvas = detail.canvas;
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, '-enhanced', 'png'));
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing.`);
+        const detailLabel = detail.protected ? ' · source detail protected' : '';
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing${detailLabel}.`);
         return result;
       }
 
@@ -941,12 +1015,15 @@ export async function mount(root, slug) {
       result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+      result.canvas = detail.canvas;
 
       status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}.`);
+      const detailLabel = detail.protected ? ' · source detail protected' : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${detailLabel}.`);
       return result;
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
@@ -961,9 +1038,12 @@ export async function mount(root, slug) {
       });
       const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
       result.canvas = finished.canvas;
+      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
+      result.canvas = detail.canvas;
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely.`);
+      const detailLabel = detail.protected ? ' · source detail protected' : '';
+      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely${detailLabel}.`);
       return result;
     }
   }
