@@ -162,6 +162,40 @@ async function runAiScale(scale, expected, content = 'general', profile = 'auto'
   return { statusText, info };
 }
 
+async function testWebGpuFailureFallsBackToWorker() {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    const fakeAdapter = { limits: { maxTextureDimension2D: 8192 } };
+    const fakeGpu = { requestAdapter: async () => fakeAdapter };
+    try {
+      Object.defineProperty(navigator, 'gpu', { configurable: true, value: fakeGpu });
+    } catch {
+      Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => fakeGpu });
+    }
+  });
+  const fallbackPage = await context.newPage();
+  try {
+    await fallbackPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await fallbackPage.locator('input[type=file]').setInputFiles({
+      name: 'webgpu-fallback.png', mimeType: 'image/png', buffer: png(160, 120)
+    });
+    await fallbackPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
+    await fallbackPage.locator('#enhancer-scale').selectOption('1');
+    await fallbackPage.locator('#enhancer-content').selectOption('general');
+    await fallbackPage.locator('#enhancer-restoration').selectOption('balanced');
+    await fallbackPage.locator('#enhancer-sharpen').selectOption('off');
+    await fallbackPage.getByRole('button', { name: 'Enhance image' }).click();
+    await fallbackPage.waitForFunction(() => {
+      const text = document.querySelector('#status')?.textContent || '';
+      return !!document.querySelector('#downloads a[download]') && /AI super-resolution/.test(text);
+    }, null, { timeout: 90000 });
+    const statusText = (await fallbackPage.locator('#status').textContent()) || '';
+    assert.match(statusText, /AI super-resolution.*wasm-worker/, `WebGPU init failure must retry with worker-backed WASM: ${statusText}`);
+  } finally {
+    await context.close();
+  }
+}
+
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
   await page.waitForSelector('#enhancer-scale');
@@ -264,8 +298,10 @@ try {
   assert.deepEqual(alphaInfo?.slice(0, 3), [48, 32, 'alpha-test-enlarged-2x.png']);
   assert.equal(alphaInfo?.[3], 0, 'Transparent source alpha must remain transparent in fallback output.');
 
+  await testWebGpuFailureFallsBackToWorker();
+
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: Real-ESRGAN 1x/2x/4x, target-scaled AI working resolution, WASM proxy-worker responsiveness, content-aware routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
+  console.log('PASS: Real-ESRGAN 1x/2x/4x, target-scaled AI working resolution, WASM proxy-worker responsiveness, WebGPU→WASM-worker fallback, content-aware routing, truthful text/logo standard path, restoration profiles, material edge-aware sharpening, adaptive memory-pressure tile retry, multi-tile stitching, CSP isolation, reset and transparent fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
