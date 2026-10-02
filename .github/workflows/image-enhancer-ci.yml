@@ -197,6 +197,17 @@ jobs:
       - name: Install pinned browser test dependency
         run: npm install --no-save --no-package-lock playwright@1.55.0
 
+      - name: Download pinned real Sony RAW fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2 \
+            -o /tmp/example-sony.ARW \
+            https://raw.githubusercontent.com/ybouane/LibRaw-Wasm/main/example-sony.ARW
+          test "$(git hash-object /tmp/example-sony.ARW)" = "1e18732babba2360c37b07186a89a879094c87d2"
+
       - name: Run Chrome + Firefox + WebKit camera RAW audit
+        env:
+          RAW_FIXTURE: /tmp/example-sony.ARW
         run: node tests/image-enhancer-raw-browser.mjs
 
