@@ -213,7 +213,7 @@ async function testMobileSafety() {
 
     await page.locator('#enhancer-mode-upscale').click();
     await page.locator('#enhancer-output-mode').selectOption('dimensions');
-    await page.locator('#enhancer-target-width').fill('5000');
+    await page.locator('#enhancer-target-width').fill('7000');
     await page.locator('#enhancer-target-height').fill('');
     await page.waitForFunction(() => (document.querySelector('#enhancer-output-info')?.textContent || '').includes('too large for the current safety limit'));
     await page.locator('#enhancer-run').click();
