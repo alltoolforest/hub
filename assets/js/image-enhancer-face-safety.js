@@ -116,8 +116,10 @@ export class FaceIdentitySafetyEngine {
     this.caps = caps;
     this.session = null;
     this.ort = null;
-    this.cachedKey = '';
+    this.cachedImage = null;
     this.cachedFaces = Object.freeze([]);
+    this.lastAvailable = false;
+    this.lastError = null;
   }
 
   async initialize(signal, onProgress) {
@@ -137,8 +139,7 @@ export class FaceIdentitySafetyEngine {
 
   async detect(image, signal, onProgress) {
     if (!image?.width || !image?.height) return Object.freeze([]);
-    const cacheKey = `${image.width}x${image.height}:${image}`;
-    if (this.cachedKey === cacheKey) return this.cachedFaces;
+    if (this.cachedImage === image) return this.cachedFaces;
 
     try {
       await this.initialize(signal, onProgress);
@@ -152,21 +153,27 @@ export class FaceIdentitySafetyEngine {
       const { scores, boxes } = resolveUltraFaceOutputs(results);
       const faces = Object.freeze(decodeFaces(scores, boxes, image.width, image.height));
 
-      this.cachedKey = cacheKey;
+      this.cachedImage = image;
       this.cachedFaces = faces;
+      this.lastAvailable = true;
+      this.lastError = null;
       return faces;
     } catch (error) {
       if (error?.name === 'AbortError' || signal?.aborted) throw error;
       console.warn('Face identity safety detector unavailable; continuing with existing fidelity safeguards.', error);
-      this.cachedKey = '';
+      this.cachedImage = null;
       this.cachedFaces = Object.freeze([]);
+      this.lastAvailable = false;
+      this.lastError = error;
       return this.cachedFaces;
     }
   }
 
   reset() {
-    this.cachedKey = '';
+    this.cachedImage = null;
     this.cachedFaces = Object.freeze([]);
+    this.lastAvailable = false;
+    this.lastError = null;
   }
 
   async dispose() {
@@ -271,4 +278,18 @@ export function faceSafetyAiLimitAt(x, y, faces) {
     limit = Math.min(limit, localLimit);
   }
   return limit;
+}
+
+export function fallbackPortraitSafetyRegion(image) {
+  if (!image?.width || !image?.height) return Object.freeze([]);
+  const width = image.width * 0.42;
+  const height = image.height * 0.48;
+  return Object.freeze([Object.freeze({
+    x: (image.width - width) * 0.5,
+    y: image.height * 0.16,
+    width,
+    height,
+    score: 0.55,
+    fallback: true
+  })]);
 }
