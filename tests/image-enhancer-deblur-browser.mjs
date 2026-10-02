@@ -102,6 +102,36 @@ function mse(a,b) {
   }
   return sum/n;
 }
+function gray(a) {
+  const out=new Float64Array(a.length/4);
+  for(let i=0,p=0;i<a.length;i+=4,p++) out[p]=a[i]*0.2126+a[i+1]*0.7152+a[i+2]*0.0722;
+  return out;
+}
+function globalSsim(a,b) {
+  const x=gray(a), y=gray(b), n=x.length;
+  let mx=0,my=0;
+  for(let i=0;i<n;i++){mx+=x[i];my+=y[i];}
+  mx/=n; my/=n;
+  let vx=0,vy=0,cov=0;
+  for(let i=0;i<n;i++){const dx=x[i]-mx,dy=y[i]-my;vx+=dx*dx;vy+=dy*dy;cov+=dx*dy;}
+  vx/=Math.max(1,n-1); vy/=Math.max(1,n-1); cov/=Math.max(1,n-1);
+  const c1=(0.01*255)**2, c2=(0.03*255)**2;
+  return ((2*mx*my+c1)*(2*cov+c2))/((mx*mx+my*my+c1)*(vx+vy+c2));
+}
+function gradientVector(a,width,height) {
+  const g=gray(a), out=[];
+  for(let y=1;y<height-1;y++) for(let x=1;x<width-1;x++) {
+    const i=y*width+x;
+    out.push(g[i+1]-g[i-1], g[i+width]-g[i-width]);
+  }
+  return out;
+}
+function cosine(a,b) {
+  let dot=0,aa=0,bb=0;
+  const n=Math.min(a.length,b.length);
+  for(let i=0;i<n;i++){dot+=a[i]*b[i];aa+=a[i]*a[i];bb+=b[i]*b[i];}
+  return dot/(Math.sqrt(aa*bb)+1e-9);
+}
 
 const server=createServer(async(req,res)=>{
   try{
@@ -192,8 +222,14 @@ try{
   const output=Uint8Array.from(result.pixels);
   const outputMse=mse(output,sharp);
   const improvement=(blurredMse-outputMse)/blurredMse;
+  const blurredSsim=globalSsim(blurred,sharp);
+  const outputSsim=globalSsim(output,sharp);
+  const blurredGradCorr=cosine(gradientVector(blurred,width,height),gradientVector(sharp,width,height));
+  const outputGradCorr=cosine(gradientVector(output,width,height),gradientVector(sharp,width,height));
+  const reblurred=motionBlur(output,width,height,5);
+  const reblurMse=mse(reblurred,blurred);
 
-  console.log(`DIAGNOSTIC dedicated-deblur blurredMSE=${blurredMse.toFixed(3)} outputMSE=${outputMse.toFixed(3)} improvement=${(improvement*100).toFixed(2)}% heartbeat=${result.heartbeat}`);
+  console.log(`DIAGNOSTIC dedicated-deblur blurredMSE=${blurredMse.toFixed(3)} outputMSE=${outputMse.toFixed(3)} improvement=${(improvement*100).toFixed(2)}% blurredSSIM=${blurredSsim.toFixed(5)} outputSSIM=${outputSsim.toFixed(5)} blurredGradCorr=${blurredGradCorr.toFixed(5)} outputGradCorr=${outputGradCorr.toFixed(5)} reblurMSE=${reblurMse.toFixed(3)} heartbeat=${result.heartbeat}`);
   assert.deepEqual([result.width,result.height],[width,height]);
   assert.match(result.status,/dedicated deblur AI/);
   assert.ok(result.heartbeat>=8,`Dedicated deblur must keep the page responsive; heartbeat=${result.heartbeat}`);
