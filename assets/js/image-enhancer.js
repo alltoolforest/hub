@@ -22,7 +22,7 @@ const MB = 1024 * 1024;
 const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
+  mobile: { maxPixels: 12e6, maxSide: 8192, maxFileMB: 20 },
   desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
 });
 
