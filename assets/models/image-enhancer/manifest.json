@@ -20,13 +20,13 @@
       "redistribution": "https://github.com/NovareOrbis/nova-ai-models/tree/v3"
     },
     "deblur-nafnet": {
-      "name": "NAFNet Deblurring",
-      "url": "https://huggingface.co/opencv/deblurring_nafnet/resolve/main/deblurring_nafnet_2025may.onnx",
-      "sha256": "07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587",
+      "name": "NAFNet GoPro width32 FP16",
+      "url": "https://huggingface.co/bihanikeshav/selects-onnx/resolve/main/nafnet.onnx",
+      "sha256": "05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204",
       "scale": 1,
-      "license": "MIT",
+      "license": "Apache-2.0",
       "upstream": "https://github.com/megvii-research/NAFNet",
-      "modelCard": "https://huggingface.co/opencv/deblurring_nafnet"
+      "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx"
     }
   }
 }
