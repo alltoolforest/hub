@@ -70,7 +70,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolveListen => server.listen(4173, '127.0.0.1', resolveListen));
 
-const launchOptions = { headless: true, args: ['--disable-gpu'] };
+const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 const page = await browser.newPage();
@@ -211,7 +211,7 @@ async function latestOutputPerceptualMetrics() {
   });
 }
 
-async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /AI super-resolution/) {
+async function runAiScale(scale, expected, content = 'general', profile = 'auto', sharpen = 'auto', requiredStatus = /background AI/) {
   if (Number(scale) === 1) {
     await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption(content);
@@ -230,10 +230,10 @@ async function runAiScale(scale, expected, content = 'general', profile = 'auto'
   return { statusText, info };
 }
 
-async function testWebGpuFailureFallsBackToWorker() {
+async function testUnsafeWebGpuIsNotSelected() {
   const context = await browser.newContext();
   await context.addInitScript(() => {
-    const fakeAdapter = { limits: { maxTextureDimension2D: 8192 } };
+    const fakeAdapter = { limits: { maxTextureDimension2D: 16384 } };
     const fakeGpu = { requestAdapter: async () => fakeAdapter };
     try {
       Object.defineProperty(navigator, 'gpu', { configurable: true, value: fakeGpu });
@@ -241,37 +241,38 @@ async function testWebGpuFailureFallsBackToWorker() {
       Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true, get: () => fakeGpu });
     }
   });
-  const fallbackPage = await context.newPage();
+  const testPage = await context.newPage();
   try {
-    await fallbackPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
-    await fallbackPage.evaluate(() => {
+    await testPage.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+    await testPage.evaluate(() => {
       const inference = window.ort?.InferenceSession;
       const originalCreate = inference?.create?.bind(inference);
-      if (!inference || !originalCreate) throw new Error('ONNX Runtime was not available for WebGPU fallback injection.');
-      let injected = false;
+      if (!inference || !originalCreate) throw new Error('ONNX Runtime was not available for provider audit.');
+      window.__enhancerProviders = [];
       inference.create = async (model, options = {}) => {
-        if (!injected && options.executionProviders?.includes('webgpu')) {
-          injected = true;
-          throw new Error('Injected WebGPU initialization failure');
-        }
+        window.__enhancerProviders.push([...(options.executionProviders || [])]);
+        if (options.executionProviders?.includes('webgpu')) throw new Error('Unsafe WebGPU provider was selected.');
         return originalCreate(model, options);
       };
     });
-    await fallbackPage.locator('input[type=file]').setInputFiles({
-      name: 'webgpu-fallback.png', mimeType: 'image/png', buffer: png(160, 120)
+    await testPage.locator('input[type=file]').setInputFiles({
+      name: 'provider-audit.png', mimeType: 'image/png', buffer: png(160, 120)
     });
-    await fallbackPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
-    await fallbackPage.locator('#enhancer-mode-enhance').click();
-    await fallbackPage.locator('#enhancer-content').selectOption('general');
-    await fallbackPage.locator('#enhancer-restoration').selectOption('balanced');
-    await fallbackPage.locator('#enhancer-sharpen').selectOption('off');
-    await fallbackPage.locator('#enhancer-run').click();
-    await fallbackPage.waitForFunction(() => {
+    await testPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
+    await testPage.locator('#enhancer-mode-enhance').click();
+    await testPage.locator('#enhancer-content').selectOption('general');
+    await testPage.locator('#enhancer-restoration').selectOption('balanced');
+    await testPage.locator('#enhancer-sharpen').selectOption('off');
+    await testPage.locator('#enhancer-run').click();
+    await testPage.waitForFunction(() => {
       const text = document.querySelector('#status')?.textContent || '';
-      return !!document.querySelector('#downloads a[download]') && /AI super-resolution/.test(text);
+      return !!document.querySelector('#downloads a[download]') && /background AI/.test(text);
     }, null, { timeout: 90000 });
-    const statusText = (await fallbackPage.locator('#status').textContent()) || '';
-    assert.match(statusText, /AI super-resolution.*wasm-worker/, `WebGPU init failure must retry with worker-backed WASM: ${statusText}`);
+    const providers = await testPage.evaluate(() => window.__enhancerProviders);
+    assert.ok(providers.length >= 1, 'AI provider audit must observe session creation.');
+    assert.equal(providers.some(list => list.includes('webgpu')), false, 'Production must not auto-select WebGPU.');
+    assert.equal(providers.some(list => list.includes('wasm')), true, 'Production must use worker-backed WASM.');
+    assert.equal(await testPage.evaluate(() => window.ort?.env?.wasm?.proxy), true, 'WASM proxy worker must be enabled.');
   } finally {
     await context.close();
   }
