@@ -609,22 +609,70 @@ async function enforceEnhanceDetailFloor(resultCanvas, sourceImage, profile, sig
 async function detectDeviceCapabilities() {
   const isMobile = mobile();
   const baseline = DEFAULT_LIMITS[isMobile ? 'mobile' : 'desktop'];
+  const ua = String(navigator.userAgent || '');
+  const iosLike = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const safariLike = /Safari/i.test(ua) && !/(Chrome|Chromium|Edg|OPR|CriOS|FxiOS)/i.test(ua);
+  const deviceMemory = Number(navigator.deviceMemory) || 0;
+  const cores = Math.max(1, Number(navigator.hardwareConcurrency) || 2);
+
+  let maxPixels = baseline.maxPixels;
+  let maxFileMB = baseline.maxFileMB;
+  let maxSourcePixels = baseline.maxSourcePixels;
+
+  if (isMobile) {
+    if (iosLike) {
+      maxPixels = cores >= 8 ? 24e6 : cores >= 6 ? 20e6 : 16e6;
+      maxSourcePixels = cores >= 8 ? 64e6 : 48e6;
+      maxFileMB = 160;
+    } else if (deviceMemory >= 8) {
+      maxPixels = 28e6;
+      maxSourcePixels = 72e6;
+      maxFileMB = 220;
+    } else if (deviceMemory >= 4) {
+      maxPixels = 20e6;
+      maxSourcePixels = 56e6;
+      maxFileMB = 160;
+    }
+  } else {
+    if (deviceMemory >= 16) {
+      maxPixels = 100e6;
+      maxSourcePixels = 180e6;
+      maxFileMB = 750;
+    } else if (deviceMemory >= 8) {
+      maxPixels = 80e6;
+      maxSourcePixels = 150e6;
+      maxFileMB = 600;
+    } else if (deviceMemory > 0 && deviceMemory <= 4) {
+      maxPixels = 48e6;
+      maxSourcePixels = 96e6;
+      maxFileMB = 350;
+    } else if (safariLike) {
+      maxPixels = 64e6;
+      maxSourcePixels = 120e6;
+      maxFileMB = 500;
+    }
+  }
+
   const caps = {
     isMobile,
+    iosLike,
+    safariLike,
+    deviceMemory,
+    cores,
     webgpu: false,
     wasm: typeof WebAssembly !== 'undefined',
     workers: typeof Worker !== 'undefined',
     offscreenCanvas: typeof OffscreenCanvas !== 'undefined',
     createImageBitmap: typeof createImageBitmap === 'function',
     maxTextureDimension2D: null,
-    maxPixels: baseline.maxPixels,
-    maxSide: baseline.maxSide,
-    maxFileMB: baseline.maxFileMB
+    maxPixels,
+    maxSide: iosLike ? Math.min(8192, baseline.maxSide) : baseline.maxSide,
+    maxFileMB,
+    maxSourcePixels
   };
 
-  // WebGPU detection is intentionally skipped. The production enhancer uses
-  // worker-backed WASM until WebGPU passes the same real-browser responsiveness gate.
-
+  // WebGPU detection is intentionally skipped. Production stays on worker-backed
+  // WASM until the same responsiveness gates pass across Chromium and WebKit.
   return Object.freeze(caps);
 }
 
@@ -823,10 +871,11 @@ export async function mount(root, slug) {
     image = isEnhancerHeicInput(file)
       ? await decodeEnhancerHeic(file, message => status(message))
       : await decodeImage(file);
-    if (image.width * image.height > SOURCE_PIXEL_LIMIT) {
+    if (image.width * image.height > caps.maxSourcePixels) {
+      const sourceLimitMP = format(caps.maxSourcePixels / 1e6, 0);
       image.close?.();
       image = null;
-      throw new Error('Use an image below 60 million pixels.');
+      throw new Error(`This image is beyond this device's safe decoded-image limit (about ${sourceLimitMP} MP). Try the same file on a device with more available memory.`);
     }
     clearOutputs();
     frame.hidden = false;
