@@ -16,7 +16,7 @@ export function isEnhancerRawInput(file) {
 
 function ensureWorker() {
   if (worker) return worker;
-  worker = new Worker(new URL('./image-enhancer-raw-worker.js', import.meta.url), { type: 'module' });
+  worker = new Worker(new URL('./image-enhancer-raw-worker.js', import.meta.url));
   worker.addEventListener('message', event => {
     const message = event.data || {};
     const item = pending.get(message.id);
