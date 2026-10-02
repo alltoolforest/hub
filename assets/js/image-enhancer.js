@@ -19,11 +19,10 @@ import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressur
 import { decodeEnhancerHeic, isEnhancerHeicInput } from './image-enhancer-heic.js';
 
 const MB = 1024 * 1024;
-const SOURCE_PIXEL_LIMIT = 60e6;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
 const DEFAULT_LIMITS = Object.freeze({
-  mobile: { maxPixels: 8e6, maxSide: 8192, maxFileMB: 20 },
-  desktop: { maxPixels: 24e6, maxSide: 16384, maxFileMB: 60 }
+  mobile: { maxPixels: 16e6, maxSide: 8192, maxFileMB: 200, maxSourcePixels: 48e6 },
+  desktop: { maxPixels: 48e6, maxSide: 16384, maxFileMB: 500, maxSourcePixels: 120e6 }
 });
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -135,6 +134,37 @@ class ProcessingWorkerBridge {
       canvas,
       applied: !!(local || sharpening?.amount),
       label: sharpening?.label || 'Auto'
+    };
+  }
+
+  async preserveDetailCanvas(inputCanvas, sourceImage, minimumRatio, signal) {
+    if (!this.available) {
+      return { canvas: inputCanvas, beforeRatio: 1, afterRatio: 1, sourceBlend: 0 };
+    }
+    const [candidateBitmap, sourceBitmap] = await Promise.all([
+      createImageBitmap(inputCanvas),
+      createImageBitmap(sourceImage)
+    ]);
+    const result = await this.request('preserve-detail', {
+      candidateBitmap,
+      sourceBitmap,
+      minimumRatio
+    }, [candidateBitmap, sourceBitmap], signal);
+
+    const canvas = el('canvas', { width: result.bitmap.width, height: result.bitmap.height });
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) {
+      result.bitmap.close?.();
+      throw new Error('Detail-preserved image canvas is unavailable.');
+    }
+    ctx.drawImage(result.bitmap, 0, 0);
+    result.bitmap.close?.();
+    inputCanvas.width = inputCanvas.height = 0;
+    return {
+      canvas,
+      beforeRatio: Number(result.beforeRatio) || 0,
+      afterRatio: Number(result.afterRatio) || 0,
+      sourceBlend: Number(result.sourceBlend) || 0
     };
   }
 
