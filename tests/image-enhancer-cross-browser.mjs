@@ -94,7 +94,8 @@ async function runEngine(name, launcher) {
   page.on('pageerror', err => errors.push(err.message));
   try {
     await page.goto('http://127.0.0.1:4179/images/enhance/', { waitUntil: 'networkidle', timeout: 90000 });
-    await page.waitForSelector('#enhancer-scale');
+    await page.waitForSelector('#enhancer-mode-enhance');
+    await page.waitForSelector('#enhancer-scale', { state: 'attached' });
     await page.locator('input[type=file]').setInputFiles({ name: `${name}-ai.png`, mimeType: 'image/png', buffer: png(12, 8) });
     await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('12 × 8'));
     await page.locator('#enhancer-mode-enhance').click();
