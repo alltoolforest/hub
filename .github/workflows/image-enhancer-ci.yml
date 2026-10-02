@@ -8,6 +8,7 @@ on:
       - 'assets/js/image-enhancer.js'
       - 'assets/js/image-enhancer-bootstrap.js'
       - 'assets/js/image-enhancer-capabilities.js'
+      - 'assets/js/image-enhancer-artifact-guard.js'
       - 'assets/js/image-enhancer-export.js'
       - 'assets/js/image-enhancer-face-safety.js'
       - 'assets/js/image-enhancer-inspector.js'
@@ -20,6 +21,7 @@ on:
       - 'assets/models/image-enhancer/**'
       - 'docs/image-enhancer-model-benchmark.md'
       - 'tests/image-enhancer-browser.mjs'
+      - 'tests/image-enhancer-artifact-guard-browser.mjs'
       - 'tests/image-enhancer-output-browser.mjs'
       - 'tests/image-enhancer-inspector-browser.mjs'
       - 'tests/image-enhancer-export-browser.mjs'
@@ -68,6 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-artifact-guard.js
           node --check assets/js/image-enhancer-bootstrap.js
           node --check assets/js/image-enhancer-capabilities.js
           node --check assets/js/image-enhancer-export.js
@@ -81,6 +84,7 @@ jobs:
           node --check assets/js/image-enhancer-tiles.js
           node --check assets/js/app.js
           node --check tests/image-enhancer-compatibility-browser.mjs
+          node --check tests/image-enhancer-artifact-guard-browser.mjs
           node --check tests/image-enhancer-resilience-browser.mjs
           node --check tests/image-enhancer-responsiveness-browser.mjs
           node --check tests/image-enhancer-deblur-browser.mjs
@@ -99,6 +103,8 @@ jobs:
           grep -q "underexposure" assets/js/image-enhancer-restoration.js
           grep -q "overexposure" assets/js/image-enhancer-restoration.js
           grep -q "FaceIdentitySafetyEngine" assets/js/image-enhancer.js
+          grep -q "applyArtifactFidelityGuard" assets/js/image-enhancer.js
+          grep -q "analyzeArtifactFidelity" assets/js/image-enhancer-artifact-guard.js
           grep -q "applyFaceIdentityGuard" assets/js/image-enhancer.js
           grep -q "faceSafetyAiLimitAt" assets/js/image-enhancer-processing-worker.js
           grep -q "resolveRegionRestorationPlan" assets/js/image-enhancer-region-restoration.js
@@ -137,6 +143,11 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-browser.mjs
+
+      - name: Run artifact/fidelity guard audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-artifact-guard-browser.mjs
 
       - name: Run dedicated deblur ground-truth audit
         env:
