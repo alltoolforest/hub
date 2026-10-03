@@ -9,6 +9,7 @@ import { copyCoverLetter } from "./export-utils.js";
 import { printOrSavePdf } from "./print-export.js";
 import { downloadPdfWithAdapter, hasDirectPdfExporter } from "./pdf-export-adapter.js";
 import { browserPdfExporter } from "./browser-pdf-exporter.js";
+import { parseResumeFile } from "./resume-file-parser.js";
 
 function el(tag, attrs = {}, text = "") {
   const node = document.createElement(tag);
@@ -78,6 +79,17 @@ export function mountCoverLetterTask3(root, options = {}) {
   form.append(candidateTypeWrap);
 
   const fields = {};
+  const resumeFileWrap = el("div", { className: "clv2-field" });
+  const resumeFileLabel = el("label", { htmlFor: "clv2-resume-file" }, "Upload resume (PDF or DOCX)");
+  const resumeFile = el("input", {
+    id: "clv2-resume-file",
+    name: "resumeFile",
+    type: "file",
+    accept: ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  });
+  const resumeFileStatus = el("p", { className: "clv2-file-status", role: "status", "aria-live": "polite" });
+  resumeFileWrap.append(resumeFileLabel, resumeFile, resumeFileStatus);
+
   [
     ["Full name","fullName",{required:true}],
     ["Email","email",{type:"email"}],
@@ -93,6 +105,7 @@ export function mountCoverLetterTask3(root, options = {}) {
   ].forEach(([label,name,config]) => {
     const built = field(label,name,config);
     fields[name] = built.input;
+    if (name === "resumeText") form.append(resumeFileWrap);
     form.append(built.wrap);
   });
 
@@ -205,6 +218,30 @@ export function mountCoverLetterTask3(root, options = {}) {
     updateQuality();
   }
 
+  resumeFile.addEventListener("change", async () => {
+    const file = resumeFile.files?.[0];
+    if (!file) {
+      resumeFileStatus.textContent = "";
+      return;
+    }
+    resumeFile.disabled = true;
+    resumeFileStatus.textContent = "Reading resume locally in your browser…";
+    try {
+      const result = await parseResumeFile(file);
+      if (result.status === "ready") {
+        fields.resumeText.value = result.extractedText;
+        resumeFileStatus.textContent = `Resume text extracted from ${result.name || file.name}. Review it below before generating.`;
+        status.textContent = "Resume loaded. Review the extracted text before continuing.";
+      } else {
+        resumeFileStatus.textContent = result.message || "The resume could not be read. Paste the resume text instead.";
+      }
+    } catch {
+      resumeFileStatus.textContent = "The resume could not be read in this browser. Paste the resume text instead.";
+    } finally {
+      resumeFile.disabled = false;
+    }
+  });
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const input = collectInput();
@@ -289,6 +326,8 @@ export function mountCoverLetterTask3(root, options = {}) {
     state = createBuilderState();
     hydrate(state);
     status.textContent = "Started a new cover letter. The saved draft on this device was cleared.";
+    resumeFile.value = "";
+    resumeFileStatus.textContent = "";
     fields.fullName.focus();
   });
 
