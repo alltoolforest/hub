@@ -201,9 +201,11 @@ function render(root, state) {
       <section class="rs-storage-bar" aria-labelledby="rs-storage-heading">
         <div>
           <strong id="rs-storage-heading">Local draft</strong>
-          <p id="rs-storage-status">Your resume draft is saved only in this browser on this device. It is not uploaded to AllToolForest.</p>
+          <p id="rs-storage-status" role="status" aria-live="polite">Your resume draft is saved only in this browser on this device. It is not uploaded to AllToolForest.</p>
+          <p class="rs-storage-warning">Avoid local draft saving on a shared or public device because resume information can remain in that browser until cleared.</p>
         </div>
         <div class="rs-storage-actions">
+          <button type="button" class="rs-secondary" data-restore-draft hidden>Restore saved draft</button>
           <button type="button" class="rs-secondary" data-clear-draft>Clear saved draft &amp; start new</button>
         </div>
       </section>
@@ -383,7 +385,7 @@ function addItem(store, type) {
 
 export function mountResumeStudioUI(root, store, options = {}) {
   if (!root || !store) throw new TypeError('Resume Studio UI requires a root element and store.');
-  const restoredDraft = options.restoredDraft || { status: 'empty' };
+  let restoredDraft = options.restoredDraft || { status: 'empty' };
 
   const rerender = () => render(root, store.getState());
   const refreshPreview = () => renderResumePreview(root.querySelector('#rs-preview-host'), store.getState());
@@ -391,6 +393,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
 
   function storageMessage(result = {}) {
     if (result.status === 'saved') return 'Draft saved locally in this browser.';
+    if (result.status === 'available') return 'A saved resume draft is available in this browser. Restore it only if it is yours.';
     if (result.status === 'restored') return 'Saved draft restored from this browser.';
     if (result.status === 'cleared' || result.status === 'empty') return 'No saved draft on this browser.';
     if (result.status === 'too-large') return 'Draft is too large to save locally. Your current in-memory resume is still available.';
@@ -403,6 +406,8 @@ export function mountResumeStudioUI(root, store, options = {}) {
   function setStorageStatus(result) {
     const status = root.querySelector('#rs-storage-status');
     if (status) status.textContent = storageMessage(result);
+    const restoreButton = root.querySelector('[data-restore-draft]');
+    if (restoreButton) restoreButton.hidden = !(result?.status === 'available' && restoredDraft?.resume);
   }
 
   if (restoredDraft.status && restoredDraft.status !== 'empty') {
@@ -515,11 +520,24 @@ export function mountResumeStudioUI(root, store, options = {}) {
   });
 
   root.addEventListener('click', (event) => {
+    const restoreDraftButton = event.target.closest('[data-restore-draft]');
+    if (restoreDraftButton) {
+      if (!restoredDraft?.resume) return;
+      store.replace(restoredDraft.resume);
+      restoredDraft = { status: 'empty', resume: null };
+      rerender();
+      setStorageStatus({ status: 'restored' });
+      const fullName = root.querySelector('[data-path="contact.fullName"]');
+      if (fullName) fullName.focus();
+      return;
+    }
+
     const clearDraftButton = event.target.closest('[data-clear-draft]');
     if (clearDraftButton) {
       const confirmed = globalThis.confirm ? globalThis.confirm('Clear the saved resume draft from this browser and start a new resume?') : true;
       if (!confirmed) return;
       const cleared = clearResumeDraft();
+      restoredDraft = { status: 'empty', resume: null };
       store.reset(CANDIDATE_TYPES.FRESHER);
       rerender();
       setStorageStatus(cleared.status === 'cleared' ? cleared : { status: cleared.status });
