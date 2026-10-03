@@ -459,6 +459,8 @@ export function mountResumeStudioUI(root, store) {
           return next;
         });
         rerender();
+        const summaryField = root.querySelector('[data-path="summary.text"]');
+        if (summaryField) summaryField.focus();
         root.querySelector('#rs-state-status').textContent = 'Introduction refined only from the facts and skills you supplied.';
       } catch (error) {
         root.querySelector('#rs-state-status').textContent = error.message;
@@ -478,6 +480,8 @@ export function mountResumeStudioUI(root, store) {
           return next;
         });
         rerender();
+        const responsibilityField = root.querySelector('[data-array="experience"][data-index="' + index + '"][data-key="responsibilities"]');
+        if (responsibilityField) responsibilityField.focus();
         root.querySelector('#rs-state-status').textContent = 'Responsibilities refined from your existing points. No new responsibility was added.';
       } catch (error) {
         root.querySelector('#rs-state-status').textContent = error.message;
@@ -503,6 +507,8 @@ export function mountResumeStudioUI(root, store) {
         return state;
       });
       rerender();
+      const skillsField = root.querySelector('[data-list-path="skills"]');
+      if (skillsField) skillsField.focus();
       root.querySelector('#rs-state-status').textContent = 'Verified skill added. You are responsible for confirming it is true.';
       return;
     }
