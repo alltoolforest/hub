@@ -4,7 +4,7 @@ import { TesseractOcrProvider } from './tesseract-provider.js';
 import { assessFlatBackground,estimateTextColor,reconstructBackground } from './background-safety.js';
 import { computeOcrRenderPlan } from './render-budget.js';
 import { groupOcrWords,targetsForGranularity } from './layout-model.js';
-import { inferScannedTextStyle,cssFont } from './style-match.js';
+import { inferScannedTextStyle,cssFont,fitScannedWord } from './style-match.js';
 
 function button(label,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;return b;}
 function canvasBlob(canvas,type='image/jpeg',quality=.9){return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not encode the edited scan.')),type,quality));}
@@ -19,9 +19,9 @@ function safeName(name){const base=String(name||'document.pdf').replace(/\.pdf$/
 function boxesOverlap(a,b){return a.x0<b.x1&&a.x1>b.x0&&a.y0<b.y1&&a.y1>b.y0;}
 function medianNumber(values){if(!values.length)return 0;const a=[...values].sort((x,y)=>x-y),m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;}
 function groupReplacementStyle(baseCtx,target,bg){
-  if(target.type==='word')return {safe:true,style:inferScannedTextStyle(baseCtx,target.bbox,target.text,bg,target.style||{})};
+  if(target.type==='word')return {safe:true,style:inferScannedTextStyle(baseCtx,target.bbox,target.sourceText||target.text,bg,target.style||{})};
   const members=(target.words||[]).filter(w=>/[A-Za-z]{2,}/.test(String(w.text||''))&&String(w.text||'').length>=3);
-  if(!members.length)return {safe:true,style:inferScannedTextStyle(baseCtx,target.bbox,target.text,bg,target.style||{})};
+  if(!members.length)return {safe:true,style:inferScannedTextStyle(baseCtx,target.bbox,target.sourceText||target.text,bg,target.style||{})};
   const styles=members.map(w=>inferScannedTextStyle(baseCtx,w.bbox,w.text,bg,w.style||{}));
   const families=new Map();for(const st of styles)families.set(st.family,(families.get(st.family)||0)+1);
   const [family,familyCount]=[...families.entries()].sort((a,b)=>b[1]-a[1])[0];
@@ -30,7 +30,7 @@ function groupReplacementStyle(baseCtx,target,bg){
   const medianHeight=medianNumber(heights),minHeight=Math.min(...heights),maxHeight=Math.max(...heights);
   const familyShare=familyCount/styles.length;
   if(familyShare<.85||maxWeight-minWeight>=200||maxHeight>medianHeight*1.25||minHeight<medianHeight*.68)return {safe:false,reason:'OCR_MIXED_STYLE_GROUP_UNSAFE'};
-  const union=inferScannedTextStyle(baseCtx,target.bbox,target.text,bg,target.style||{});
+  const union=inferScannedTextStyle(baseCtx,target.bbox,target.sourceText||target.text,bg,target.style||{});
   return {safe:true,style:{...union,family,weight:medianNumber(weights),italic:false}};
 }
 
@@ -50,7 +50,8 @@ function wrapText(ctx,text,maxWidth){
   for(const word of words){const trial=line?`${line} ${word}`:word;if(!line||ctx.measureText(trial).width<=maxWidth)line=trial;else{lines.push(line);line=word;}}
   if(line)lines.push(line);return lines.length?lines:[''];
 }
-function fitReplacement(ctx,target,text,style){
+function fitReplacement(ctx,target,text,style,rect){
+  if(target.type==='word'&&style.fontPx)return fitScannedWord(ctx,text,style,rect);
   const bb=target.bbox,width=Math.max(4,bb.x1-bb.x0),height=Math.max(5,bb.y1-bb.y0);
   const memberHeights=(target.words||[]).map(w=>w.bbox.y1-w.bbox.y0).filter(v=>v>0).sort((a,b)=>a-b);
   const medianH=memberHeights.length?memberHeights[Math.floor(memberHeights.length/2)]:height;
@@ -155,7 +156,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   }
 
   function removeWordsInside(state,bbox){state.words=(state.words||[]).filter(w=>!boxesOverlap(w.bbox,bbox));}
-  function addSyntheticWord(state,text,bbox,confidence=100){if(!text)return;state.words.push({text,confidence,pageNum:pageIndex+1,blockNum:9999,parNum:9999,lineNum:9999,wordNum:state.words.length+1,key:`edited:${Date.now()}`,bbox:{...bbox}});}
+  function addSyntheticWord(state,text,bbox,confidence=100,sourceText=text){if(!text)return;state.words.push({text,sourceText,confidence,pageNum:pageIndex+1,blockNum:9999,parNum:9999,lineNum:9999,wordNum:state.words.length+1,key:`edited:${Date.now()}`,bbox:{...bbox}});}
 
   function applyReplacement(forceDelete=false){
     if(!selectedTarget)return;const replacement=forceDelete?'':input.value.trim();const {target,state}=selectedTarget;
@@ -169,12 +170,12 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     const styleCheck=groupReplacementStyle(baseCtx,target,bg);
     if(replacement&&!styleCheck.safe){onWarning({code:styleCheck.reason,message:'This line or paragraph uses mixed text styles. Edit the individual words instead to preserve the scan faithfully.'});return;}
     const style=styleCheck.style;
-    let fitted=null;if(replacement){fitted=fitReplacement(workCtx,target,replacement,style);if(!fitted){onWarning({code:'OCR_TEXT_TOO_WIDE',message:'The replacement cannot fit this scanned-text region safely.'});return;}}
+    let fitted=null;if(replacement){fitted=fitReplacement(workCtx,target,replacement,style,eraseRect);if(!fitted){onWarning({code:'OCR_TEXT_TOO_WIDE',message:'The replacement cannot fit this scanned-text region safely.'});return;}}
     workCtx.save();reconstructBackground(workCtx,baseCtx,safety,eraseRect);
-    if(replacement){workCtx.fillStyle=`rgb(${color.r} ${color.g} ${color.b})`;workCtx.font=cssFont(style,fitted.fontPx);workCtx.textBaseline='alphabetic';const baselineStart=bb.y0+fitted.fontPx;for(let i=0;i<fitted.lines.length;i++)workCtx.fillText(fitted.lines[i],bb.x0,baselineStart+i*fitted.lineHeight);}
+    if(replacement){workCtx.fillStyle=`rgb(${color.r} ${color.g} ${color.b})`;workCtx.font=cssFont(style,fitted.fontPx);workCtx.textBaseline='alphabetic';workCtx.textAlign='left';const baselineStart=fitted.baseline??bb.y0+fitted.fontPx;for(let i=0;i<fitted.lines.length;i++)workCtx.fillText(fitted.lines[i],fitted.x??bb.x0,baselineStart+i*fitted.lineHeight);}
     workCtx.restore();
     state.edited=true;state.editedBlob=null;state.edits.push({type:target.type,oldText:target.text,newText:replacement,bbox:{...bb},patchRect:{...eraseRect},confidence:target.confidence,style,tone:safety.tone});
-    removeWordsInside(state,bb);addSyntheticWord(state,replacement,bb,target.confidence);rebuildLayout(state);cancelEdit();renderOverlay(state);updateToolbar();onStatus(replacement?'Scanned text changed locally. Save a copy when finished.':'Scanned text removed locally. Save a copy when finished.');
+    removeWordsInside(state,bb);addSyntheticWord(state,replacement,bb,target.confidence,target.sourceText||target.text);rebuildLayout(state);cancelEdit();renderOverlay(state);updateToolbar();onStatus(replacement?'Scanned text changed locally. Save a copy when finished.':'Scanned text removed locally. Save a copy when finished.');
   }
 
   async function exportCopy(){
