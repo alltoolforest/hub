@@ -5,7 +5,7 @@ import {
   RUN_STATUS
 } from './contracts.js';
 
-export const ANALYSIS_SCHEMA_VERSION = 4;
+export const ANALYSIS_SCHEMA_VERSION = 5;
 
 function emptySourceRef() {
   return {
@@ -43,6 +43,7 @@ export function createEmptyAnalysisState() {
         readingOrderRisk: 'not_assessed',
         warnings: [],
         limitation: '',
+        formatDiagnostics: {},
         confidence: CONFIDENCE_LEVEL.NONE,
         provenance: PROVENANCE_KIND.SYSTEM
       }
@@ -79,7 +80,16 @@ export function createEmptyAnalysisState() {
     analysis: {
       atsReadiness: {
         ...emptyRunState(),
-        findings: []
+        level: 'insufficient_data',
+        findings: [],
+        diagnostics: {
+          detectedSections: [],
+          contactSignals: {},
+          dateSignals: {},
+          duplicateLineCount: 0,
+          unusualSymbolRatio: 0,
+          quantifiedAchievementCount: 0
+        }
       },
       jobMatch: {
         ...emptyRunState(),
@@ -105,7 +115,7 @@ export function createEmptyAnalysisState() {
       createdAt: '',
       updatedAt: '',
       analysisId: '',
-      engineVersion: 'job-match-v2/task-4',
+      engineVersion: 'job-match-v2/task-5',
       claims: {
         reproducesEmployerAts: false,
         predictsHiringOutcome: false,
@@ -148,6 +158,7 @@ export function isCanonicalAnalysisState(value) {
     Array.isArray(value.extracted.experienceRequirements) &&
     Array.isArray(value.extracted.jobTitles) &&
     Array.isArray(value.analysis.atsReadiness.findings) &&
+    value.analysis.atsReadiness.diagnostics && typeof value.analysis.atsReadiness.diagnostics === 'object' &&
     Array.isArray(value.analysis.jobMatch.findings) &&
     Array.isArray(value.analysis.evidenceFindings) &&
     Array.isArray(value.analysis.priorityRecommendations);
