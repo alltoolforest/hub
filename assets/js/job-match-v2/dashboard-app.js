@@ -38,6 +38,7 @@ export function mountJobMatchDashboard({
 
         async onNewAnalysis() {
           workflow.startNewAnalysis();
+          renderer = null;
           if (typeof onRequestNewAnalysis === 'function') {
             await onRequestNewAnalysis();
           }
@@ -45,6 +46,7 @@ export function mountJobMatchDashboard({
 
         async onClearSensitiveData() {
           workflow.clearSensitiveData();
+          renderer = null;
           if (typeof onSensitiveDataCleared === 'function') {
             await onSensitiveDataCleared();
           }
