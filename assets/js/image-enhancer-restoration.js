@@ -514,7 +514,10 @@ export function resolveRestorationProfile(requested, analysis, scale) {
     return Object.freeze({
       id: 'fidelity',
       label: 'Fidelity',
-      preclean: oneX ? 0 : (analysis?.noise > 0.78 ? 0.04 : 0),
+      preclean: oneX
+        ? (((analysis?.diagnosis?.confidence?.compression || analysis?.jpegArtifacts || 0) > 0.55 ||
+            (analysis?.diagnosis?.confidence?.noise || analysis?.noise || 0) > 0.62) ? 0.035 : 0)
+        : (analysis?.noise > 0.78 ? 0.04 : 0),
       aiBlend: oneX ? 0.32 : 0.80,
       minDetailRatio: oneX ? 0.94 : 0.86,
       minRegionalDetailRatio: oneX ? 0.96 : 0.86,
@@ -648,11 +651,22 @@ export function resolveSharpening(requested, analysis, profile) {
   if (requested === 'medium') return Object.freeze({ id: 'medium', label: 'Medium', amount: 0.46, threshold: 3.5, maxDelta: 15 });
 
   const softness = analysis?.softness || 0;
-  const noise = analysis?.noise || 0;
+  const noise = Math.max(
+    analysis?.noise || 0,
+    analysis?.diagnosis?.confidence?.noise || 0
+  );
+  const compression = Math.max(
+    analysis?.jpegArtifacts || 0,
+    analysis?.diagnosis?.confidence?.compression || 0
+  );
   const recoveryBias = profile?.id === 'recovery' ? 0.06 : profile?.id === 'fidelity' ? -0.02 : 0;
-  const amount = clamp(0.26 + softness * 0.24 + recoveryBias - noise * 0.08, 0.18, 0.52);
-  const threshold = clamp(3.5 + noise * 9, 3.5, 12);
-  const maxDelta = clamp(10 + softness * 7 - noise * 2, 9, 17);
+  const amount = clamp(
+    0.26 + softness * 0.24 + recoveryBias - noise * 0.10 - compression * 0.18,
+    compression > 0.55 ? 0.08 : 0.16,
+    0.52
+  );
+  const threshold = clamp(3.5 + noise * 9 + compression * 5, 3.5, 15);
+  const maxDelta = clamp(10 + softness * 7 - noise * 2 - compression * 4, 6, 17);
   return Object.freeze({ id: 'auto', label: 'Auto', amount, threshold, maxDelta });
 }
 
