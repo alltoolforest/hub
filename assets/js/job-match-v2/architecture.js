@@ -44,6 +44,17 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'architecture-boundaries'
   ]),
 
+  implementedInTask2: Object.freeze([
+    'resume-ingestion-validation',
+    'local-parser-loader',
+    'pdf-text-extraction',
+    'docx-text-and-structure-extraction',
+    'pasted-resume-text-ingestion',
+    'pasted-job-description-input',
+    'resume-parsing-diagnostics',
+    'canonical-state-parser-adapter'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
