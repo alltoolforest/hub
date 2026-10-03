@@ -1,6 +1,8 @@
 import { CONFIDENCE_LEVEL, PROVENANCE_KIND } from './contracts.js';
 import {
   INGESTION_ERROR,
+  MAX_DOCX_HTML_CHARS,
+  MAX_EXTRACTED_RESUME_CHARS,
   ResumeIngestionError,
   mapParserError
 } from './ingestion.js';
@@ -116,8 +118,23 @@ export async function parseDocxArrayBuffer(arrayBuffer, mammoth) {
     );
 
     const html = String(result?.value ?? '');
+    if (html.length > MAX_DOCX_HTML_CHARS) {
+      throw new ResumeIngestionError(
+        INGESTION_ERROR.MEMORY_LIMIT,
+        'The DOCX expands to too much content for reliable in-browser resume analysis.',
+        { htmlCharacters: html.length, maxCharacters: MAX_DOCX_HTML_CHARS }
+      );
+    }
+
     const blocks = extractDocxBlocksFromHtml(html);
     const extractedText = blocks.map((block) => block.text).filter(Boolean).join('\n').trim();
+    if (extractedText.length > MAX_EXTRACTED_RESUME_CHARS) {
+      throw new ResumeIngestionError(
+        INGESTION_ERROR.MEMORY_LIMIT,
+        'The extracted DOCX text is too large for reliable in-browser resume analysis.',
+        { extractedCharacters: extractedText.length, maxCharacters: MAX_EXTRACTED_RESUME_CHARS }
+      );
+    }
     const parsedSections = sectionsFromBlocks(blocks);
     const warnings = [];
     const tableBlocks = blocks.filter((block) => block.type === 'table');
