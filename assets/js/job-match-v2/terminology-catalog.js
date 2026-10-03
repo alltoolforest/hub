@@ -35,6 +35,21 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
     ['MS Office','Office Suite'], ['administration','finance','hr','sales']),
   concept('power-bi', 'Power BI', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
     ['PowerBI','Microsoft Power BI'], ['data','finance','sales','operations']),
+  concept('sap-fico', 'SAP FICO', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
+    ['SAP FI/CO','SAP FI CO','FI/CO'], ['finance','accounting','sap','erp'],
+    { contextAny: ['sap','fico','finance','accounting','erp'] }),
+  concept('sap-basis', 'SAP Basis', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
+    ['SAP BASIS','Basis'], ['it','sap','erp'],
+    { contextAny: ['sap','basis administrator','basis consultant','erp'] }),
+  concept('sap-mm', 'SAP MM', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
+    ['SAP Materials Management','Materials Management'], ['supply-chain','logistics','sap','erp'],
+    { contextAny: ['sap','materials management','procurement','erp'] }),
+  concept('sap-sd', 'SAP SD', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
+    ['SAP Sales and Distribution','Sales and Distribution'], ['sales','logistics','sap','erp'],
+    { contextAny: ['sap','sales and distribution','erp'] }),
+  concept('sap-abap', 'SAP ABAP', REQUIREMENT_CATEGORY.HARD_SKILL,
+    ['ABAP'], ['it','software','sap','erp'],
+    { contextAny: ['sap','abap','erp'] }),
 
   // Banking / compliance
   concept('aml', 'Anti-Money Laundering', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
@@ -85,7 +100,7 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
   // HR / recruitment
   concept('human-resources', 'Human Resources', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['HR'], ['hr','administration'],
-    { contextAny: ['human resources','recruitment','employee','talent','payroll','people operations','hr '] }),
+    { contextAny: ['human resources','recruitment','employee','talent','payroll','people operations'] }),
   concept('talent-acquisition', 'Talent Acquisition', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['TA'], ['hr','recruitment'],
     { contextAny: ['talent acquisition','recruiter','recruitment','hiring','candidate','sourcing'] }),
@@ -103,6 +118,12 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
   concept('pos', 'Point of Sale', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
     ['POS'], ['retail','hospitality','sales'],
     { contextAny: ['point of sale','retail','store','restaurant','hospitality','cashier','sales'] }),
+
+  // Legal / compliance
+  concept('gdpr', 'General Data Protection Regulation', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
+    ['GDPR'], ['legal','compliance','privacy']),
+  concept('nda', 'Non-Disclosure Agreement', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
+    ['Non Disclosure Agreement','NDA'], ['legal','compliance','administration']),
 
   // Logistics / operations
   concept('wms', 'Warehouse Management System', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
