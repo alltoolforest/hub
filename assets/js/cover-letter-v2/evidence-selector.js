@@ -56,7 +56,24 @@ export function rankEvidence(task1State, limit = 3) {
     }
   }
 
-  const ranked = [...scored.values()].sort((a,b) => b.score - a.score);
+  let ranked = [...scored.values()].sort((a,b) => b.score - a.score);
+
+  // When two items are otherwise similarly relevant, prefer concrete,
+  // measurable evidence because it produces a more useful letter without
+  // inventing any metric.
+  const metricCandidate = (task1State?.resume?.evidence || [])
+    .filter((item) => hasMetric(item.text))
+    .map((item) => ({
+      evidence: item,
+      score: (SECTION_WEIGHT[item.section] || 0) + 5,
+      supports: [],
+    }))
+    .sort((a,b) => b.score - a.score)[0];
+
+  if (metricCandidate && !ranked.some((item) => item.evidence.id === metricCandidate.evidence.id)) {
+    ranked = [...ranked.slice(0, Math.max(0, limit - 1)), metricCandidate]
+      .sort((a,b) => b.score - a.score);
+  }
 
   if (ranked.length < limit) {
     for (const evidence of task1State?.resume?.evidence || []) {
