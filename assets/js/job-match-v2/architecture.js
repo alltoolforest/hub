@@ -66,6 +66,17 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-job-requirement-adapter'
   ]),
 
+  implementedInTask4: Object.freeze([
+    'terminology-concept-catalog',
+    'safe-alias-normalization',
+    'context-gated-abbreviations',
+    'conservative-word-family-normalization',
+    'cross-domain-false-positive-guardrails',
+    'normalized-requirement-deduplication',
+    'original-wording-preservation',
+    'canonical-state-normalization-diagnostics'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
