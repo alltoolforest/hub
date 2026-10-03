@@ -119,6 +119,22 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-coverage-and-priority-adapter'
   ]),
 
+  implementedInTask8: Object.freeze([
+    'results-dashboard-view-model',
+    'job-requirement-coverage-dashboard',
+    'ats-readiness-dashboard',
+    'requirement-evidence-cards',
+    'resume-and-jd-evidence-highlighting',
+    'priority-actions-dashboard',
+    'same-session-coverage-comparison',
+    'revised-resume-reanalysis-workflow',
+    'copy-txt-print-report-controls',
+    'new-analysis-and-sensitive-data-clear-controls',
+    'mobile-stacked-results-layout',
+    'accessible-native-accordions-and-live-regions',
+    'fresher-and-experienced-plain-language-guidance'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
