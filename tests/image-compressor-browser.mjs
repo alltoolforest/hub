@@ -113,7 +113,8 @@ try{
     {name:'two.jpg',mimeType:'image/jpeg',buffer:bufferFromDataUrl(fixtures.jpg)}
   ]);
   await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Ready to compress.'),null,{timeout:20000});
-  assert.match((await page.locator('#workspace p').first().textContent())||'',/2 images selected/);
+  const batchSummary=(await page.locator('#workspace p').filter({hasText:'images selected'}).last().textContent())||'';
+  assert.match(batchSummary,/2 images selected/);
   await page.locator('#target').fill('0');
   await page.getByRole('button',{name:'Compress images'}).click();
   await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Compression complete.'),null,{timeout:60000});
