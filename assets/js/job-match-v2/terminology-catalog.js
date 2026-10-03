@@ -9,6 +9,7 @@ function concept(id, canonical, category, aliases, domains, options = {}) {
     domains: Object.freeze(domains),
     contextAny: Object.freeze(options.contextAny || []),
     contextNone: Object.freeze(options.contextNone || []),
+    contextRequiredAliases: Object.freeze(options.contextRequiredAliases || []),
     confidence: options.confidence || 'high'
   });
 }
@@ -40,7 +41,10 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
     { contextAny: ['sap','fico','finance','accounting','erp'] }),
   concept('sap-basis', 'SAP Basis', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
     ['SAP BASIS','Basis'], ['it','sap','erp'],
-    { contextAny: ['sap','basis administrator','basis consultant','erp'] }),
+    {
+      contextAny: ['sap','basis administrator','basis consultant','erp'],
+      contextRequiredAliases: ['Basis']
+    }),
   concept('sap-mm', 'SAP MM', REQUIREMENT_CATEGORY.TOOL_PLATFORM,
     ['SAP Materials Management','Materials Management'], ['supply-chain','logistics','sap','erp'],
     { contextAny: ['sap','materials management','procurement','erp'] }),
