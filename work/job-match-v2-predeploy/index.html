@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>ATS & Job Match Analyzer — Resume Readiness & Job Requirement Matching | AllToolForest</title>
+  <meta name="description" content="Understand ATS resume readability, compare resume evidence with required and preferred job qualifications, and review transparent job requirement coverage locally in your browser.">
+  <link rel="canonical" href="https://alltoolforest.github.io/hub/work/job-match/">
+  <meta property="og:title" content="ATS & Job Match Analyzer | AllToolForest">
+  <meta property="og:description" content="Check resume readability and compare resume evidence with a job description using transparent local analysis.">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <link rel="stylesheet" href="../../assets/css/job-match-v2-dashboard.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <main class="container" id="main">
+    <article>
+      <header class="page-intro">
+        <h1>ATS &amp; Job Match Analyzer</h1>
+        <p>Check supported ATS-readiness signals and compare visible resume evidence with the requirements in a job description. The analysis is designed to be transparent and local to your browser.</p>
+        <p><strong>No server upload.</strong> Your resume and job description are analyzed in your browser.</p>
+      </header>
+
+      <section aria-labelledby="what-ats-readability-means">
+        <h2 id="what-ats-readability-means">What ATS resume readability means</h2>
+        <p>An applicant tracking system usually needs to extract readable text and identify common resume information such as contact details, skills, work experience, education, and dates. A resume can look attractive to a person but still create parsing risks if important information is stored only in images, if reading order becomes unclear, or if section labels are difficult to recognize.</p>
+        <p>This analyzer checks supported signals such as selectable text, recognizable sections, date consistency, unusually sparse or dense content, repeated text, possible PDF reading-order issues, and heavy table or image dependence where the local parser can detect them. A positive result does not guarantee identical behavior in every employer ATS.</p>
+      </section>
+
+      <section aria-labelledby="job-description-matching">
+        <h2 id="job-description-matching">How job-description matching works</h2>
+        <p>The analyzer separates useful job requirements from common job-description noise such as company marketing copy, benefits, and equal-opportunity statements. It then compares each identified requirement with evidence that is actually present in the resume.</p>
+        <p>Evidence can come from exact wording, safely normalized equivalent terminology, or relevant resume sections. For example, a tool name can be matched through an equivalent spelling, while a job-title or experience requirement is stronger when it appears in the Work Experience section.</p>
+      </section>
+
+      <section aria-labelledby="hard-soft-skills">
+        <h2 id="hard-soft-skills">Hard skills vs soft skills</h2>
+        <p>Hard skills include technical skills, tools, platforms, domain knowledge, and defined processes. These can often be supported directly by explicit resume wording. Soft skills such as leadership or communication need more care: listing a word in a Skills section is weaker evidence than showing the skill in a real work or project example.</p>
+        <p>The analyzer therefore distinguishes keyword presence from stronger contextual evidence instead of treating every repeated word as an equal match.</p>
+      </section>
+
+      <section aria-labelledby="required-preferred">
+        <h2 id="required-preferred">Required vs preferred qualifications</h2>
+        <p>Job descriptions often distinguish mandatory requirements from preferred qualifications. Missing a required hard skill, qualification, certification, or experience requirement should matter more than missing a preferred soft skill.</p>
+        <p>Job Requirement Coverage uses documented weights so required requirements contribute more than preferred items. Unclear requirements are excluded rather than automatically counted as failures. The result can be reconstructed from the visible requirement weights and evidence status.</p>
+      </section>
+
+      <section aria-labelledby="resume-keywords">
+        <h2 id="resume-keywords">Resume keywords and equivalent terminology</h2>
+        <p>Recruiters and job descriptions may use different wording for the same concept. Safe equivalents such as “PowerBI” and “Power BI”, “MS Excel” and “Microsoft Excel”, or “AWS” and “Amazon Web Services” can be normalized for comparison.</p>
+        <p>The analyzer also keeps explicit guardrails around terms that are related but not equivalent. Java is not JavaScript, SAP Basis is not SAP FICO, React is not JavaScript, and Power BI is not Tableau. The goal is to find defensible evidence rather than inflate a match result.</p>
+      </section>
+
+      <section aria-labelledby="coverage-not-ats-score">
+        <h2 id="coverage-not-ats-score">Why Job Requirement Coverage is not an employer ATS score</h2>
+        <p>There is no universal public ATS scoring formula. Different employers configure different systems, screening rules, workflows, and recruiter processes. AllToolForest therefore does not claim to reproduce an employer ATS, predict an interview, or predict a hiring decision.</p>
+        <p>Job Requirement Coverage is an AllToolForest transparency metric based only on the job requirements that can be assessed from the supplied resume evidence. It is intended to show what is supported, partially supported, missing, or unclear so the candidate can review the resume more systematically.</p>
+      </section>
+
+      <section aria-labelledby="privacy-local">
+        <h2 id="privacy-local">Privacy and local analysis</h2>
+        <p>The replacement analyzer is designed for browser-side processing. PDF.js and Mammoth.js are loaded as local site assets. Resume parsing, requirement extraction, matching, coverage calculations, recommendations, dashboard rendering, and report generation run locally in the browser.</p>
+        <p>Resume text and job-description text are not intended to be sent to a server, third-party parser, analytics service, or remote AI model by this analyzer. Same-session comparison is held in memory and can be cleared with the analysis controls.</p>
+      </section>
+
+      <section aria-labelledby="how-to-use">
+        <h2 id="how-to-use">How to use the results</h2>
+        <ol>
+          <li>Review ATS Readiness for parsing or structure risks.</li>
+          <li>Read Required Requirements before Preferred Requirements.</li>
+          <li>Open evidence cards to compare the employer wording with the resume excerpt.</li>
+          <li>Prioritize genuine required gaps before optional improvements.</li>
+          <li>Add or clarify resume content only when it is true and supported by your real experience, skills, education, or credentials.</li>
+          <li>Revise the source resume and re-analyze to compare the same session’s previous and current coverage.</li>
+        </ol>
+      </section>
+
+      <section aria-labelledby="faqs">
+        <h2 id="faqs">Frequently asked questions</h2>
+
+        <h3>Does a high coverage result guarantee an interview?</h3>
+        <p>No. Coverage describes how much assessable job-description evidence is supported by the resume. It does not predict recruiter decisions, interviews, or hiring outcomes.</p>
+
+        <h3>Should I add every missing keyword?</h3>
+        <p>No. Only add a skill, certification, qualification, responsibility, or achievement when it is genuinely true. Unsupported keyword stuffing can make a resume less credible.</p>
+
+        <h3>Why can a requirement be marked unclear?</h3>
+        <p>Some requirements, such as work authorization, travel availability, shifts, or proprietary terms, may not be provable from a resume. The analyzer marks those cases unclear instead of guessing.</p>
+
+        <h3>Can freshers use the analyzer?</h3>
+        <p>Yes. Freshers may have less formal work history, so relevant evidence can come from verified education, projects, internships, training, certifications, and real skills. The analyzer should not invent employment experience to fill a gap.</p>
+
+        <h3>Can I use PDF or DOCX?</h3>
+        <p>The replacement workflow supports PDF, DOCX, or pasted resume text. Image-only or scanned PDFs may not provide selectable text and can require OCR before text-based analysis.</p>
+
+        <h3>Is my resume uploaded to a server?</h3>
+        <p>The V2 design is local-first: no server upload is required for the analyzer’s resume and job-description processing.</p>
+      </section>
+    </article>
+  </main>
+</body>
+</html>
