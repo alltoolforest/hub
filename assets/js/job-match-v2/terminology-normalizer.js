@@ -110,10 +110,19 @@ function strongerImportance(a, b) {
 }
 
 function normalizeKnownRequirement(requirement, contextText) {
-  const candidates = matchingAliases(
-    [requirement.matchedText, requirement.label, requirement.sourceText].filter(Boolean).join(' '),
+  const originalTerm = clean(requirement.matchedText || requirement.label);
+  let candidates = matchingAliases(
+    [requirement.matchedText, requirement.label].filter(Boolean).join(' '),
     contextText
   );
+
+  if (!candidates.length && requirement.sourceText && originalTerm) {
+    const originalKey = key(originalTerm);
+    candidates = matchingAliases(requirement.sourceText, contextText).filter((candidate) => {
+      const candidateKey = key(candidate.matchedText);
+      return candidateKey.includes(originalKey) || originalKey.includes(candidateKey);
+    });
+  }
 
   if (!candidates.length) {
     return Object.freeze({
