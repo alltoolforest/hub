@@ -24,6 +24,8 @@ function cleanRequirement(text) {
   return text
     .replace(/^[•●▪◦*\-–—\d.)\s]+/, "")
     .replace(/^(required|preferred|requirements?|qualifications?|responsibilities?)\s*[:\-]\s*/i, "")
+    .replace(/^(required|preferred)\s*:\s*/i, "")
+    .replace(/[.;]+$/g, "")
     .trim();
 }
 
