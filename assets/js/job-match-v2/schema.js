@@ -5,7 +5,7 @@ import {
   RUN_STATUS
 } from './contracts.js';
 
-export const ANALYSIS_SCHEMA_VERSION = 1;
+export const ANALYSIS_SCHEMA_VERSION = 2;
 
 function emptySourceRef() {
   return {
@@ -38,6 +38,11 @@ export function createEmptyAnalysisState() {
         ...emptyRunState(),
         pageCount: null,
         textDensity: null,
+        suspiciouslyEmpty: false,
+        probableImageOnly: false,
+        readingOrderRisk: 'not_assessed',
+        warnings: [],
+        limitation: '',
         confidence: CONFIDENCE_LEVEL.NONE,
         provenance: PROVENANCE_KIND.SYSTEM
       }
@@ -85,7 +90,7 @@ export function createEmptyAnalysisState() {
       createdAt: '',
       updatedAt: '',
       analysisId: '',
-      engineVersion: 'job-match-v2/task-1',
+      engineVersion: 'job-match-v2/task-2',
       claims: {
         reproducesEmployerAts: false,
         predictsHiringOutcome: false,
@@ -115,6 +120,7 @@ export function isCanonicalAnalysisState(value) {
 
   return requiredPaths.every((item) => item !== undefined && item !== null) &&
     Array.isArray(value.resume.parsedSections) &&
+    Array.isArray(value.resume.parsing?.warnings) &&
     Array.isArray(value.jobDescription.requirements) &&
     Array.isArray(value.extracted.skills) &&
     Array.isArray(value.extracted.qualifications) &&
