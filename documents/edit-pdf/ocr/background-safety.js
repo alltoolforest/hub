@@ -99,8 +99,12 @@ export function estimateTextColor(ctx,bbox,background){
   const bgL=luminance(background.r,background.g,background.b);
   const preferred=candidates.filter(p=>bgL<128?luminance(p.r,p.g,p.b)>bgL+35:luminance(p.r,p.g,p.b)<bgL-35);
   const pool=preferred.length>=Math.max(3,candidates.length*.18)?preferred:candidates;
-  let r=0,g=0,b=0;for(const p of pool){r+=p.r;g+=p.g;b+=p.b;}
-  return {r:Math.round(r/pool.length),g:Math.round(g/pool.length),b:Math.round(b/pool.length)};
+  // Antialiased edges contain background colour. Sample the solid ink core,
+  // trimming the most extreme pixels so isolated scan speckles do not dominate.
+  const ranked=pool.map(p=>({...p,contrast:colorDistance(p,background)})).sort((a,b)=>a.contrast-b.contrast);
+  const core=ranked.slice(Math.floor(ranked.length*.80),Math.max(Math.floor(ranked.length*.80)+1,Math.ceil(ranked.length*.97)));
+  const channel=key=>{const values=core.map(p=>p[key]).sort((a,b)=>a-b);return values[Math.floor(values.length/2)];};
+  return {r:channel('r'),g:channel('g'),b:channel('b')};
 }
 
 export function repaintPreservedLines(ctx,safety,eraseRect){
