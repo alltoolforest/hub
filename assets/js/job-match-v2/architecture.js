@@ -135,6 +135,21 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'fresher-and-experienced-plain-language-guidance'
   ]),
 
+  implementedInTask9: Object.freeze([
+    'privacy-and-local-processing-documentation',
+    'hostile-input-boundary-sanitization',
+    'malicious-filename-normalization',
+    'pdf-page-and-text-resource-ceilings',
+    'docx-expansion-and-text-resource-ceilings',
+    'large-input-performance-audit',
+    'normalized-evidence-performance-remediation',
+    'object-url-and-parser-cleanup-audit',
+    'accessibility-and-mobile-predeployment-audit',
+    'static-indexable-seo-content-candidate',
+    'cross-browser-source-compatibility-audit',
+    'p0-p1-predeployment-gate'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
