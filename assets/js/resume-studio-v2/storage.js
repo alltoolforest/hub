@@ -138,11 +138,16 @@ export function normalizeResumeDraft(input) {
   resume.personalDetails.gender = text(source.personalDetails?.gender, 80);
   resume.personalDetails.maritalStatus = text(source.personalDetails?.maritalStatus, 80);
 
-  resume.declaration.enabled = bool(source.declaration?.enabled);
-  resume.declaration.text = text(source.declaration?.text, 700);
-  resume.declaration.place = text(source.declaration?.place, 100);
-  resume.declaration.date = text(source.declaration?.date, 20);
-  resume.declaration.candidateName = text(source.declaration?.candidateName, 120);
+  const sourceDeclaration = source.declaration && typeof source.declaration === 'object'
+    ? source.declaration
+    : null;
+  if (sourceDeclaration) {
+    resume.declaration.enabled = bool(sourceDeclaration.enabled);
+    resume.declaration.text = text(sourceDeclaration.text, 700);
+    resume.declaration.place = text(sourceDeclaration.place, 100);
+    resume.declaration.date = text(sourceDeclaration.date, 20);
+    resume.declaration.candidateName = text(sourceDeclaration.candidateName, 120);
+  }
 
   const template = validTemplate(source.settings?.template);
   if (template) resume.settings.template = template;
