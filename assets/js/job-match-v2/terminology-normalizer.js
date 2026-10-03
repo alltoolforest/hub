@@ -239,6 +239,41 @@ function mergeNormalized(requirements) {
   }));
 }
 
+export function findConceptMentions(text, conceptId, contextText = '') {
+  const concept = TERMINOLOGY_CONCEPTS.find((item) => item.id === conceptId);
+  if (!concept) return Object.freeze([]);
+
+  const source = clean(text);
+  const context = contextText || source;
+  const mentions = [];
+
+  for (const alias of [...concept.aliases].sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(phrasePattern(alias).source, 'gi');
+    let match;
+    while ((match = pattern.exec(source))) {
+      if (!contextAllows(concept, alias, context)) continue;
+      const matchedText = match[2] || '';
+      const start = match.index + String(match[1] || '').length;
+      mentions.push(Object.freeze({
+        conceptId: concept.id,
+        canonical: concept.canonical,
+        category: concept.category,
+        alias,
+        matchedText,
+        start,
+        end: start + matchedText.length,
+        method: key(alias) === key(concept.canonical) ? 'canonical' : 'alias'
+      }));
+      if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+    }
+  }
+
+  const deduped = mentions.filter((item, index, all) =>
+    all.findIndex((other) => other.start === item.start && other.end === item.end) === index
+  );
+  return Object.freeze(deduped);
+}
+
 export function normalizeWordFamily(value) {
   const input = key(value);
   if (!input) return '';
