@@ -282,6 +282,7 @@ function render(root, state) {
         </label>
         <div class="rs-suggestion-area">
           <div class="rs-content-actions"><button type="button" class="rs-secondary" data-show-role-suggestions>Refresh skill suggestions</button></div>
+          <p class="rs-help">Suggestions are based on the Target Position. Nothing is added to your resume until you choose it, and you can edit or remove any skill afterward.</p>
           <div id="rs-role-suggestions" aria-live="polite"></div>
         </div>
       </section>
@@ -470,14 +471,28 @@ function renderRoleSuggestions(root, state) {
     host.innerHTML = '<p class="rs-help">Enter a target position to see matching skill suggestions.</p>';
     return;
   }
+
   const suggestions = getRoleSuggestions(state.candidate.targetRole);
+  if (!suggestions.skills.length) {
+    host.innerHTML =
+      '<div class="rs-suggestion-box" role="region" aria-label="Skill suggestions">' +
+      '<p><strong>No role-specific skill profile is available for ' + esc(state.candidate.targetRole) + '.</strong></p>' +
+      '<p class="rs-help">Add your skills manually. Resume Studio will not guess or insert unrelated skills.</p>' +
+      '</div>';
+    return;
+  }
+
   const skillItems = suggestions.skills
     .filter((item) => !state.skills.some((skill) => skill.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
-    .map((item) => '<li><span><strong>Suggested skill:</strong> ' + esc(item.text) + '</span><button type="button" class="rs-secondary" data-verify-suggestion="skill" data-suggestion="' + esc(item.text) + '">Add</button></li>')
+    .map((item) =>
+      '<li><span><strong>' + esc(item.text) + '</strong> <span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></span>' +
+      '<button type="button" class="rs-secondary" data-verify-suggestion="skill" data-suggestion="' + esc(item.text) + '">Add if true</button></li>'
+    )
     .join('');
+
   host.innerHTML = '<div class="rs-suggestion-box" role="region" aria-label="Skill suggestions">' +
-    '<p><strong>Suggested skills for ' + esc(state.candidate.targetRole) + '</strong> · Add only skills you genuinely have, then edit the list as needed.</p>' +
-    (skillItems ? '<ul class="rs-suggestion-list">' + skillItems + '</ul>' : '<p class="rs-help">No additional verified-role skill suggestions are available.</p>') +
+    '<p><strong>Suggested skills for ' + esc(state.candidate.targetRole) + '</strong> · These are role ideas, not claims about you. Add only skills you genuinely have, then edit the Skills list as needed.</p>' +
+    (skillItems ? '<ul class="rs-suggestion-list">' + skillItems + '</ul>' : '<p class="rs-help">All available suggestions for this role are already in your Skills list.</p>') +
     '</div>';
 }
 
