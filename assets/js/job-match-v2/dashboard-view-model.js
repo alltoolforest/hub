@@ -22,11 +22,12 @@ function statusLabel(status) {
   return labels[status] || titleCase(status);
 }
 
-function findingCard(item) {
+function findingCard(item, sourceRequirement = null) {
   return Object.freeze({
     id: item.requirementId || item.id || '',
     requirement: item.requirement || item.title || '',
     jobDescriptionText: item.requirementSourceText || item.sourceText || '',
+    jobHighlightText: sourceRequirement?.originalMatchedText || sourceRequirement?.matchedText || item.requirement || item.title || '',
     importance: item.importance || '',
     importanceLabel: titleCase(item.importance),
     category: item.category || '',
@@ -46,8 +47,10 @@ function findingCard(item) {
   });
 }
 
-function findingCards(items) {
-  return Object.freeze((Array.isArray(items) ? items : []).map(findingCard));
+function findingCards(items, requirementById = new Map()) {
+  return Object.freeze((Array.isArray(items) ? items : []).map((item) =>
+    findingCard(item, requirementById.get(item.requirementId || item.id || '') || null)
+  ));
 }
 
 function atsCard(item) {
@@ -135,6 +138,10 @@ export function buildDashboardViewModel(state, comparison = null) {
   const jobFindings = Array.isArray(state.analysis.jobMatch.findings)
     ? state.analysis.jobMatch.findings
     : [];
+  const requirementById = new Map(
+    (Array.isArray(state.jobDescription?.requirements) ? state.jobDescription.requirements : [])
+      .map((item) => [item.id, item])
+  );
   const atsFindings = Array.isArray(state.analysis.atsReadiness.findings)
     ? state.analysis.atsReadiness.findings
     : [];
@@ -206,13 +213,13 @@ export function buildDashboardViewModel(state, comparison = null) {
       findings: Object.freeze(atsFindings.map(atsCard))
     }),
     sections: Object.freeze({
-      requiredRequirements: findingCards(required),
-      preferredRequirements: findingCards(preferred),
-      matchedEvidence: findingCards(matched),
-      missingUnclearRequirements: findingCards(missingOrUnclear),
-      skillsAnalysis: findingCards(skills),
-      experienceAlignment: findingCards(experience),
-      educationCertifications: findingCards(educationCertifications),
+      requiredRequirements: findingCards(required, requirementById),
+      preferredRequirements: findingCards(preferred, requirementById),
+      matchedEvidence: findingCards(matched, requirementById),
+      missingUnclearRequirements: findingCards(missingOrUnclear, requirementById),
+      skillsAnalysis: findingCards(skills, requirementById),
+      experienceAlignment: findingCards(experience, requirementById),
+      educationCertifications: findingCards(educationCertifications, requirementById),
       resumeStructure: Object.freeze(resumeStructure.map(atsCard)),
       quantifiedImpact: Object.freeze(quantifiedImpact.map(atsCard)),
       priorityActions: priorityCards(state.analysis.priorityRecommendations)
