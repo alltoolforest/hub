@@ -385,8 +385,8 @@ function improvementPanel(doc, callbacks, announce) {
     reanalyze.disabled = true;
     announce('Re-analysis started.');
     try {
-      await callbacks.onReanalyze({ text: revisedText, file: revisedFile });
-      announce('Re-analysis complete.');
+      const outcome = await callbacks.onReanalyze({ text: revisedText, file: revisedFile });
+      if (!outcome?.announcementHandled) announce('Re-analysis complete.');
     } catch (error) {
       announce(error.message || 'Re-analysis failed.');
     } finally {
@@ -407,15 +407,15 @@ function lifecycleControls(doc, callbacks, clearDashboard, announce) {
   const clear = setButtonType(el(doc, 'button', 'jm-button jm-button--danger', 'Clear sensitive data'));
 
   fresh.addEventListener('click', async () => {
-    if (typeof callbacks.onNewAnalysis === 'function') await callbacks.onNewAnalysis();
     clearDashboard('Ready for a new analysis. Previous results were cleared from this dashboard.');
     announce('Started a new analysis and cleared the current dashboard.');
+    if (typeof callbacks.onNewAnalysis === 'function') await callbacks.onNewAnalysis();
   });
 
   clear.addEventListener('click', async () => {
-    if (typeof callbacks.onClearSensitiveData === 'function') await callbacks.onClearSensitiveData();
     clearDashboard('Sensitive resume and job-description results were cleared from this dashboard.');
     announce('Sensitive analysis data cleared.');
+    if (typeof callbacks.onClearSensitiveData === 'function') await callbacks.onClearSensitiveData();
   });
 
   section.append(fresh, clear);
