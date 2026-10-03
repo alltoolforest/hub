@@ -96,7 +96,9 @@ export function findNormalizedConceptEvidence(index, conceptId, sections = null)
 
   for (const line of index.lines || []) {
     if (allowed && !allowed.has(line.section)) continue;
-    const mentions = findConceptMentions(line.text, conceptId, index.text);
+    // Resume evidence must be supported by the local line context.
+    // Avoid repeatedly normalizing the entire resume as context for every line.
+    const mentions = findConceptMentions(line.text, conceptId, line.text);
     for (const mention of mentions) {
       found.push(Object.freeze({
         section: line.section,
