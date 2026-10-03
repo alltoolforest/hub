@@ -51,16 +51,35 @@ function overlap(requirement, evidence) {
   if (explicitlyNonEquivalent(requirement, evidence)) return 0;
   const evidenceVariants = variants(evidence);
   let best = 0;
+
   for (const rv of variants(requirement)) {
     const rt = tokens(rv);
     if (!rt.length) continue;
+
     for (const ev of evidenceVariants) {
-      const et = new Set(tokens(ev));
-      const hits = rt.filter((token) => et.has(token)).length;
-      best = Math.max(best, hits / rt.length);
+      const et = tokens(ev);
+      const evidenceSet = new Set(et);
+      const hits = rt.filter((token) => evidenceSet.has(token)).length;
+      const requirementCoverage = hits / rt.length;
+      const evidenceCoverage = et.length ? hits / et.length : 0;
+
+      // Short, explicit evidence such as a Skills-line "Java" or "SQL" should
+      // count strongly when it appears inside a longer requirement sentence.
+      // This remains conservative because explicit non-equivalence guardrails
+      // run first and no absent term is inferred.
+      const shortExplicitEvidence =
+        et.length <= 3 &&
+        hits === et.length &&
+        hits > 0;
+
+      best = Math.max(
+        best,
+        shortExplicitEvidence ? Math.max(requirementCoverage, 0.78) : requirementCoverage,
+        evidenceCoverage >= 0.8 && hits >= 2 ? Math.max(requirementCoverage, 0.72) : 0
+      );
     }
   }
-  return best;
+  return Math.min(best, 1);
 }
 
 export function matchEvidenceToRequirements(evidenceIndex = [], requirements = []) {
