@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–7 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–8 Foundation
 
-This directory contains the isolated foundations completed through Task 7 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 8 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -441,3 +441,101 @@ Task 7 does **not**:
 - build the production results dashboard
 - implement Task 8 UI/workflow
 - deploy or replace the production analyzer
+
+
+## Task 8 — World-Class Results Dashboard + Improvement Workflow
+
+Task 8 adds the V2 user-facing analysis dashboard as an isolated package. It is intentionally **not wired to the current production `work/job-match/index.html` yet**; production replacement remains Task 10.
+
+Required dashboard sections are implemented:
+
+- Job Requirement Coverage
+- ATS Readiness
+- Required Requirements
+- Preferred Requirements
+- Matched Evidence
+- Missing / Unclear Requirements
+- Skills Analysis
+- Experience Alignment
+- Education / Certifications
+- Resume Structure
+- Quantified Impact
+- Priority Actions
+
+Requirement cards show:
+
+- job requirement
+- original job-description wording
+- visible status text
+- importance label
+- explanation
+- resume evidence excerpt
+- resume section/location
+
+Task 8 preserves both the original job-description term and normalized requirement so equivalent wording such as `PowerBI` → `Power BI` can still highlight the employer wording while showing normalized resume evidence.
+
+### Improvement workflow
+
+The dashboard supports:
+
+`Analyze → edit the source resume externally or paste/upload a revised resume → re-analyze`
+
+The dashboard controller accepts revised PDF/DOCX input or pasted text through a callback into the already-verified analysis engine. It does not duplicate parsing/matching logic.
+
+Optional same-session coverage comparison is in-memory only:
+
+- previous coverage
+- current coverage
+- percentage-point change
+- improved / decreased / unchanged direction
+
+No account, localStorage, sessionStorage, IndexedDB, or persistent history is introduced.
+
+### Report controls
+
+Task 8 implements:
+
+- Copy analysis
+- Download TXT report
+- Print / Save PDF through the browser print path
+- Start new analysis
+- Clear sensitive data
+
+Clear/new-analysis actions clear the same-session analysis state and release the dashboard controller reference to the rendered view model.
+
+### Accessibility and mobile UX
+
+The V2 dashboard uses:
+
+- semantic `h1/h2/h3/h4` headings
+- section navigation
+- native `details/summary` accordions
+- keyboard-accessible native controls
+- explicit labels for revised resume inputs
+- polite status live region
+- non-color-only status symbols and text
+- focus-visible outlines
+- minimum 44px control targets
+- mobile stacked cards instead of wide result tables
+- print styles that hide controls and expose report content
+- plain-language guidance for fresher and experienced candidates
+
+Status text is explicit: Matched, Partial, Not found, Unclear, or Not applicable.
+
+### Security-relevant UI behavior
+
+Task 8 renders user-controlled resume/JD text through DOM text nodes / `textContent`, not `innerHTML`.
+
+The dashboard itself adds no remote API, analytics call, account requirement, or persistent storage.
+
+### Explicit Task 8 boundary
+
+Task 8 does **not**:
+
+- run the Task 9 privacy/security/performance/SEO/pre-deployment audit
+- add production SEO metadata
+- replace or modify the current production analyzer page
+- deploy the V2 dashboard
+- perform production audit/manual verification/final freeze
+
+Those remain Tasks 9 and 10.
