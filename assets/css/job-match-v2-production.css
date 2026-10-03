@@ -26,7 +26,7 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 18px;
-  background: var(--card);
+  background: var(--pale);
 }
 
 .jm-input-card--wide {
@@ -54,7 +54,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
-  background: var(--surface);
+  background: #fff;
   color: inherit;
   font: inherit;
 }
