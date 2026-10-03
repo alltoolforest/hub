@@ -5,7 +5,7 @@ import {
   RUN_STATUS
 } from './contracts.js';
 
-export const ANALYSIS_SCHEMA_VERSION = 5;
+export const ANALYSIS_SCHEMA_VERSION = 6;
 
 function emptySourceRef() {
   return {
@@ -94,6 +94,14 @@ export function createEmptyAnalysisState() {
       jobMatch: {
         ...emptyRunState(),
         findings: [],
+        diagnostics: {
+          requirementCount: 0,
+          matchedCount: 0,
+          partialCount: 0,
+          notFoundCount: 0,
+          uncertainCount: 0,
+          notApplicableCount: 0
+        },
         coverage: null
       },
       evidenceFindings: [],
@@ -115,7 +123,7 @@ export function createEmptyAnalysisState() {
       createdAt: '',
       updatedAt: '',
       analysisId: '',
-      engineVersion: 'job-match-v2/task-5',
+      engineVersion: 'job-match-v2/task-6',
       claims: {
         reproducesEmployerAts: false,
         predictsHiringOutcome: false,
@@ -160,6 +168,7 @@ export function isCanonicalAnalysisState(value) {
     Array.isArray(value.analysis.atsReadiness.findings) &&
     value.analysis.atsReadiness.diagnostics && typeof value.analysis.atsReadiness.diagnostics === 'object' &&
     Array.isArray(value.analysis.jobMatch.findings) &&
+    value.analysis.jobMatch.diagnostics && typeof value.analysis.jobMatch.diagnostics === 'object' &&
     Array.isArray(value.analysis.evidenceFindings) &&
     Array.isArray(value.analysis.priorityRecommendations);
 }
