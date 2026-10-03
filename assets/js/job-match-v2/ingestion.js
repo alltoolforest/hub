@@ -1,9 +1,13 @@
+import { sanitizeDisplayFilename, sanitizeUserText } from './input-safety.js';
 import { PROVENANCE_KIND, RESUME_SOURCE_KIND } from './contracts.js';
 
 export const RESUME_FILE_ACCEPT = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const MAX_RESUME_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_PASTED_TEXT_CHARS = 250000;
 export const MAX_JOB_DESCRIPTION_CHARS = 150000;
+export const MAX_EXTRACTED_RESUME_CHARS = 500000;
+export const MAX_PDF_PAGES = 100;
+export const MAX_DOCX_HTML_CHARS = 2000000;
 
 export const INGESTION_ERROR = Object.freeze({
   NO_INPUT: 'no_input',
@@ -30,7 +34,7 @@ export class ResumeIngestionError extends Error {
 }
 
 function clean(value) {
-  return String(value ?? '').replace(/\u0000/g, '').trim();
+  return sanitizeUserText(value);
 }
 
 function utf8ByteLength(value) {
@@ -78,7 +82,7 @@ export function classifyResumeFile(file) {
   const kind = isPdf ? RESUME_SOURCE_KIND.PDF : RESUME_SOURCE_KIND.DOCX;
   return Object.freeze({
     kind,
-    name: clean(file.name),
+    name: sanitizeDisplayFilename(file.name),
     mediaType: mime || (isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     sizeBytes: size,
     provenance: PROVENANCE_KIND.USER_INPUT
