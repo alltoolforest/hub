@@ -1,0 +1,186 @@
+
+.jm-production-shell {
+  display: grid;
+  gap: 24px;
+}
+
+.jm-input-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.jm-input-panel[hidden],
+#job-match-results[hidden] {
+  display: none !important;
+}
+
+.jm-input-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.jm-input-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--card);
+}
+
+.jm-input-card--wide {
+  grid-column: 1 / -1;
+}
+
+.jm-input-card h2 {
+  margin: 0;
+}
+
+.jm-label {
+  font-weight: 700;
+}
+
+.jm-help,
+.jm-privacy-note {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.jm-file-input,
+.jm-input-textarea {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.jm-input-textarea {
+  resize: vertical;
+  min-height: 190px;
+}
+
+.jm-file-input:focus-visible,
+.jm-input-textarea:focus-visible,
+.jm-production-button:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.jm-production-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.jm-production-button {
+  min-height: 48px;
+  min-width: 48px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  padding: 11px 18px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.jm-production-button[disabled] {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.jm-production-status {
+  min-height: 1.5em;
+  margin: 0;
+  font-weight: 650;
+}
+
+.jm-production-status--error {
+  font-weight: 800;
+}
+
+.jm-local-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 750;
+}
+
+.jm-static-guide {
+  margin-top: 40px;
+  display: grid;
+  gap: 28px;
+}
+
+.jm-static-guide section {
+  max-width: 78ch;
+}
+
+.jm-static-guide h2 {
+  margin-bottom: 8px;
+}
+
+.jm-static-guide p,
+.jm-static-guide li {
+  line-height: 1.65;
+}
+
+.jm-faq {
+  display: grid;
+  gap: 14px;
+}
+
+.jm-faq article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.jm-faq h3 {
+  margin-top: 0;
+}
+
+#job-match-results {
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .jm-input-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .jm-input-card--wide {
+    grid-column: auto;
+  }
+
+  .jm-production-actions {
+    display: grid;
+  }
+
+  .jm-production-button {
+    width: 100%;
+  }
+
+  .jm-input-card {
+    padding: 14px;
+  }
+}
+
+@media print {
+  .jm-input-panel,
+  .jm-static-guide,
+  .breadcrumb,
+  .site-header,
+  .site-footer {
+    display: none !important;
+  }
+}
