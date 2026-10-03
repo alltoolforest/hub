@@ -1,0 +1,415 @@
+
+.jm-dashboard-header,
+.jm-dashboard-main,
+.jm-section-nav {
+  width: min(1120px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.jm-dashboard-header {
+  padding-block: 32px 16px;
+}
+
+.jm-dashboard-title {
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.1;
+}
+
+.jm-dashboard-explanation,
+.jm-audience-guidance,
+.jm-section__intro,
+.jm-plain-language,
+.jm-card__explanation,
+.jm-priority-card__recommendation,
+.jm-priority-card__guardrail {
+  line-height: 1.6;
+}
+
+.jm-audience-guidance {
+  max-width: 76ch;
+}
+
+.jm-section-nav {
+  overflow-x: auto;
+  padding-block: 8px 16px;
+  scrollbar-width: thin;
+}
+
+.jm-section-nav__list {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: max-content;
+}
+
+.jm-section-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.jm-section-nav__link:focus-visible,
+.jm-button:focus-visible,
+.jm-file-input:focus-visible,
+.jm-textarea:focus-visible,
+.jm-card > summary:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.jm-dashboard-main {
+  display: grid;
+  gap: 20px;
+  padding-bottom: 48px;
+}
+
+.jm-section {
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.jm-section__heading {
+  margin: 0;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+}
+
+.jm-section__intro {
+  margin: 8px 0 16px;
+  max-width: 80ch;
+}
+
+.jm-coverage-hero {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+
+.jm-coverage-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.jm-coverage-score__value {
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  line-height: 1;
+}
+
+.jm-coverage-score__label,
+.jm-chip,
+.jm-status,
+.jm-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.jm-meter-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.jm-meter {
+  width: 100%;
+  min-height: 18px;
+}
+
+.jm-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.jm-coverage-group,
+.jm-priority-card {
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.jm-coverage-group__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.jm-coverage-group__value {
+  margin: 8px 0 2px;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.jm-coverage-group__meta,
+.jm-evidence-meta {
+  font-size: 0.9rem;
+}
+
+.jm-comparison {
+  margin-top: 16px;
+  border-inline-start: 4px solid currentColor;
+  padding-inline-start: 12px;
+}
+
+.jm-card-stack,
+.jm-priority-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.jm-card {
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 12px;
+  overflow: clip;
+}
+
+.jm-card__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.jm-card__summary::marker {
+  font-size: 1.1rem;
+}
+
+.jm-card__title {
+  font-weight: 750;
+}
+
+.jm-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.jm-card__body {
+  border-top: 1px solid rgba(127, 127, 127, 0.25);
+  padding: 14px;
+}
+
+.jm-card__subheading {
+  margin: 16px 0 6px;
+  font-size: 1rem;
+}
+
+.jm-card__subheading:first-child {
+  margin-top: 0;
+}
+
+.jm-jd-source,
+.jm-evidence-excerpt {
+  margin: 0;
+  border-inline-start: 4px solid currentColor;
+  padding: 8px 12px;
+  line-height: 1.55;
+}
+
+.jm-evidence-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jm-evidence-list__item {
+  display: grid;
+  gap: 5px;
+}
+
+.jm-evidence-mark {
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.jm-status__symbol,
+.jm-priority__symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  font-weight: 900;
+}
+
+.jm-status--matched,
+.jm-priority--optional {
+  border-style: solid;
+}
+
+.jm-status--partial,
+.jm-priority--medium {
+  border-style: dashed;
+}
+
+.jm-status--not_found,
+.jm-priority--high {
+  border-width: 2px;
+}
+
+.jm-status--uncertain {
+  border-style: dotted;
+}
+
+.jm-priority-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.jm-priority-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.jm-priority-card__guardrail {
+  font-weight: 650;
+}
+
+.jm-toolbar,
+.jm-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.jm-toolbar {
+  padding: 14px 0;
+}
+
+.jm-button {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.jm-button[disabled] {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.jm-improvement-fields {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.jm-label {
+  font-weight: 700;
+}
+
+.jm-textarea,
+.jm-file-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(127, 127, 127, 0.6);
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+}
+
+.jm-textarea {
+  resize: vertical;
+}
+
+.jm-empty,
+.jm-cleared-state {
+  padding: 14px;
+  border: 1px dashed rgba(127, 127, 127, 0.6);
+  border-radius: 10px;
+}
+
+.jm-live-region {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .jm-dashboard-header,
+  .jm-dashboard-main,
+  .jm-section-nav {
+    width: min(100% - 20px, 1120px);
+  }
+
+  .jm-section {
+    padding: 14px;
+  }
+
+  .jm-card__summary,
+  .jm-priority-card__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .jm-card__tags {
+    justify-content: flex-start;
+  }
+
+  .jm-coverage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .jm-toolbar,
+  .jm-button-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .jm-button {
+    width: 100%;
+  }
+}
+
+@media print {
+  .jm-no-print,
+  .jm-section-nav {
+    display: none !important;
+  }
+
+  .jm-dashboard-header,
+  .jm-dashboard-main {
+    width: 100%;
+  }
+
+  .jm-section,
+  .jm-card,
+  .jm-priority-card {
+    break-inside: avoid;
+    border-color: #777;
+  }
+
+  .jm-card > .jm-card__body {
+    display: block;
+  }
+
+  .jm-card > summary {
+    list-style: none;
+  }
+}
