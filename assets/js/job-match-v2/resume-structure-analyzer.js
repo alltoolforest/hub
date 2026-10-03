@@ -140,6 +140,7 @@ function contactSignals(text, lines) {
   const email = clean(text).match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0] || '';
   const phoneCandidates = String(text ?? '').match(/(?:\+?\d[\d\s().-]{6,}\d)/g) || [];
   const phone = phoneCandidates.find((value) => {
+    if (/\b(?:19|20)\d{2}\s*(?:-|–|—|to)\s*(?:19|20)\d{2}\b/i.test(value)) return false;
     const digits = value.replace(/\D/g, '');
     return digits.length >= 8 && digits.length <= 15;
   }) || '';
@@ -277,7 +278,11 @@ export function analyzeResumeStructure(text, parsedSections = []) {
     characterCount: resumeText.length,
     lines: Object.freeze(lines),
     detectedSections: sections.detected,
-    unclearHeadings: sections.unclearHeadings,
+    unclearHeadings: Object.freeze(
+      sections.unclearHeadings.filter((line) =>
+        !contacts.name || normalizedLine(line) !== normalizedLine(contacts.name)
+      )
+    ),
     contactSignals: contacts,
     dateSignals: dates,
     duplicateLines: duplicates,
