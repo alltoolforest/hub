@@ -111,7 +111,7 @@ function strongerImportance(a, b) {
 
 function normalizeKnownRequirement(requirement, contextText) {
   const candidates = matchingAliases(
-    [requirement.matchedText, requirement.label].filter(Boolean).join(' '),
+    [requirement.matchedText, requirement.label, requirement.sourceText].filter(Boolean).join(' '),
     contextText
   );
 
