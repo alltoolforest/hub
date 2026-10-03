@@ -5,6 +5,9 @@ import { createBuilderState, updateBuilderState } from "./builder-state.js";
 import { createDraftStore } from "./draft-store.js";
 import { createCoverLetterDraft, checkCoverLetterQuality } from "./task2-engine.js";
 import { createPreviewModel, renderPreview } from "./template-renderer.js";
+import { copyCoverLetter } from "./export-utils.js";
+import { printOrSavePdf } from "./print-export.js";
+import { downloadPdfWithAdapter, hasDirectPdfExporter } from "./pdf-export-adapter.js";
 
 function el(tag, attrs = {}, text = "") {
   const node = document.createElement(tag);
@@ -126,8 +129,20 @@ export function mountCoverLetterTask3(root, options = {}) {
   });
   form.append(design);
 
-  const exportNotice = el("p", { className: "clv2-task3-boundary" }, "Document export becomes available after the export stage is completed.");
-  form.append(exportNotice);
+  const exportActions = el("div", { className: "clv2-actions clv2-export-actions" });
+  const copyButton = el("button", { type: "button" }, "Copy");
+  const printButton = el("button", { type: "button" }, "Print / Save PDF");
+  const downloadPdfButton = el("button", { type: "button" }, "Download PDF");
+  downloadPdfButton.disabled = !hasDirectPdfExporter(options.pdfExporter);
+  if (downloadPdfButton.disabled) {
+    downloadPdfButton.title = "Direct PDF download is unavailable until a bundled PDF exporter is provided.";
+  }
+  exportActions.append(copyButton, printButton, downloadPdfButton);
+  form.append(exportActions);
+
+  const privacyNotice = el("p", { className: "clv2-privacy-note" },
+    "Your cover-letter content is processed in this browser. Saved drafts use this device's browser storage. No generation request is sent to a server by this V2 builder.");
+  form.append(privacyNotice);
 
   layout.append(form,previewPanel);
   root.append(status,layout);
@@ -223,6 +238,42 @@ export function mountCoverLetterTask3(root, options = {}) {
     state = updateBuilderState(state,{templateId:event.target.value,step:"design"});
     updatePreview();
     status.textContent = `${event.target.value} template selected.`;
+  });
+
+  copyButton.addEventListener("click", async () => {
+    const result = await copyCoverLetter(editor.value);
+    status.textContent = result.ok ? "Cover letter copied." : "Could not copy the cover letter.";
+  });
+
+  printButton.addEventListener("click", () => {
+    const result = printOrSavePdf({ letter: editor.value, templateId: state.templateId, pageSize: "A4" });
+    status.textContent = result.ok
+      ? "Print dialog opened. Choose Save as PDF to create a PDF."
+      : result.reason === "popup_blocked"
+        ? "The print window was blocked by the browser. Allow pop-ups for this action and try again."
+        : "Generate or enter a cover letter before printing.";
+  });
+
+  downloadPdfButton.addEventListener("click", async () => {
+    const result = await downloadPdfWithAdapter({
+      letter: editor.value,
+      templateId: state.templateId,
+      candidate: collectInput().candidate,
+      pdfExporter: options.pdfExporter,
+      pageSize: "A4",
+    });
+    if (!result.ok) {
+      status.textContent = result.reason === "direct_pdf_exporter_unavailable"
+        ? "Direct PDF download is not available in this build. Use Print / Save PDF."
+        : "Could not create the PDF.";
+      return;
+    }
+    const anchor = el("a", { href: result.url, download: result.filename });
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    result.revoke();
+    status.textContent = "PDF downloaded.";
   });
 
   save.addEventListener("click", () => {
