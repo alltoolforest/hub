@@ -8,6 +8,7 @@ import { createPreviewModel, renderPreview } from "./template-renderer.js";
 import { copyCoverLetter } from "./export-utils.js";
 import { printOrSavePdf } from "./print-export.js";
 import { downloadPdfWithAdapter, hasDirectPdfExporter } from "./pdf-export-adapter.js";
+import { browserPdfExporter } from "./browser-pdf-exporter.js";
 
 function el(tag, attrs = {}, text = "") {
   const node = document.createElement(tag);
@@ -38,6 +39,7 @@ export function mountCoverLetterTask3(root, options = {}) {
   if (!root || typeof document === "undefined") throw new Error("A DOM root is required.");
 
   const store = createDraftStore(options.storage || window.localStorage);
+  const pdfExporter = options.pdfExporter || browserPdfExporter;
   const restored = store.load();
   let state = restored.ok && restored.state ? restored.state : createBuilderState();
 
@@ -133,7 +135,7 @@ export function mountCoverLetterTask3(root, options = {}) {
   const copyButton = el("button", { type: "button" }, "Copy");
   const printButton = el("button", { type: "button" }, "Print / Save PDF");
   const downloadPdfButton = el("button", { type: "button" }, "Download PDF");
-  downloadPdfButton.disabled = !hasDirectPdfExporter(options.pdfExporter);
+  downloadPdfButton.disabled = !hasDirectPdfExporter(pdfExporter);
   if (downloadPdfButton.disabled) {
     downloadPdfButton.title = "Direct PDF download is unavailable until a bundled PDF exporter is provided.";
   }
@@ -259,7 +261,7 @@ export function mountCoverLetterTask3(root, options = {}) {
       letter: editor.value,
       templateId: state.templateId,
       candidate: collectInput().candidate,
-      pdfExporter: options.pdfExporter,
+      pdfExporter,
       pageSize: "A4",
     });
     if (!result.ok) {
