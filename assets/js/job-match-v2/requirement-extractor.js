@@ -146,6 +146,12 @@ function hasExplicitRequirementSignal(text) {
   return [...REQUIRED_SIGNALS, ...PREFERRED_SIGNALS].some((pattern) => pattern.test(text));
 }
 
+function isRequirementContext(segment) {
+  if (hasExplicitRequirementSignal(segment.text || '')) return true;
+  return /\b(requirements?|qualifications?|skills?|experience|education|certifications?|what\s+you(?:'|’)ll\s+need|what\s+we(?:'|’)re\s+looking\s+for)\b/i
+    .test(segment.sectionHeading || '');
+}
+
 function isBoilerplate(segment) {
   if (segment.sectionKind === 'noise' && !hasExplicitRequirementSignal(segment.text)) return true;
   return BOILERPLATE_PATTERNS.some((pattern) => pattern.test(segment.text)) &&
@@ -285,7 +291,7 @@ function dedupeCandidates(candidates) {
 }
 
 function unknownRequirementCandidate(segment) {
-  if (!hasExplicitRequirementSignal(segment.text)) return null;
+  if (!isRequirementContext(segment)) return null;
   return {
     category: REQUIREMENT_CATEGORY.UNKNOWN,
     matchedText: clean(segment.text),
