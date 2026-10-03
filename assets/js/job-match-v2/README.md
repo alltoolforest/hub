@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Task 1 Architecture
+# ATS & Job Match Analyzer V2 — Tasks 1–2 Foundation
 
-This directory contains only the Task 1 foundation from the approved Replacement Master Blueprint.
+This directory contains the isolated foundations completed through Task 2 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -107,3 +107,36 @@ Task 1 does **not**:
 - change SEO
 
 Production replacement remains prohibited until the later blueprint deployment gate.
+
+
+## Task 2 — local resume ingestion and parsing
+
+Task 2 adds only the input/parsing layer required by the blueprint:
+
+- PDF resume files
+- DOCX resume files
+- pasted resume text
+- pasted job-description text as raw input only
+- local same-origin PDF.js and Mammoth parser loading
+- PDF page count, text density, sparse/image-only risk, and conservative reading-order diagnostics
+- DOCX headings, paragraphs, lists and tables in logical extracted order
+- explicit warnings for parser limitations and embedded image text
+- clean errors for unsupported, empty, oversized, protected, corrupt, unreadable and memory-constrained inputs
+
+The file-picker acceptance contract is exported as `RESUME_FILE_ACCEPT` for the later UI task. Task 2 does not create production UI.
+
+The parser deliberately does **not**:
+
+- extract job requirements
+- classify hard/soft skills
+- normalize synonyms
+- calculate ATS Readiness findings
+- match resume evidence to job requirements
+- calculate Job Requirement Coverage
+- generate recommendations
+- implement the results dashboard
+- replace the production analyzer
+
+The job description is stored as raw user input with an empty `requirements` collection until Task 3.
+
+PDF and DOCX parser assets are existing same-origin vendor files already shipped by AllToolForest. Resume contents are passed to those local browser libraries and are not sent to an analysis server by this Task 2 implementation.
