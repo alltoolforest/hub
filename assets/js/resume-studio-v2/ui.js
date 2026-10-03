@@ -449,6 +449,7 @@ export function mountResumeStudioUI(root, store) {
         setPath(state, target.dataset.listPath, values);
         if (target.dataset.listPath === 'skills') state.skillProvenance = markListProvenance(values.length, CONTENT_PROVENANCE.USER);
         if (target.dataset.listPath === 'achievements') state.achievementProvenance = markListProvenance(values.length, CONTENT_PROVENANCE.USER);
+        if (target.dataset.listPath === 'interests') state.settings.enabledSections.interests = values.length > 0;
         return state;
       });
       refreshPreview();
