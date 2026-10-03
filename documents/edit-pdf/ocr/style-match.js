@@ -36,7 +36,7 @@ export function inferScannedTextStyle(ctx,bbox,text='',background={r:255,g:255,b
 }
 
 export function cssFont(style,sizePx){
-  const family=style.family==='monospace'?'ui-monospace,Consolas,"Courier New",monospace':style.family==='serif'?'Georgia,"Times New Roman",serif':'Arial,Helvetica,sans-serif';
+  const family=style.fontFace||(style.family==='monospace'?'ui-monospace,Consolas,"Courier New",monospace':style.family==='serif'?'Georgia,"Times New Roman",serif':'Arial,Helvetica,sans-serif');
   return `${style.italic?'italic ':''}${style.weight||400} ${Math.max(5,sizePx)}px ${family}`;
 }
 
@@ -70,11 +70,19 @@ function matchScannedWord(ctx,data,width,height,x0,y0,text,background,hint,fallb
     const v=Math.min(1,contrasts[sy*width+sx]/peak);source[y*w+x]=v;sourceEnergy+=v*v;
   }
   let best=null;
-  const families=hint.fontFamily?[hint.fontFamily]:['sans-serif','serif','monospace'];
+  const candidates=[
+    {family:'sans-serif',fontFace:'Arial,Helvetica,sans-serif'},
+    {family:'sans-serif',fontFace:'"DejaVu Sans",Arial,sans-serif'},
+    {family:'sans-serif',fontFace:'Verdana,Geneva,sans-serif'},
+    {family:'serif',fontFace:'Georgia,"Times New Roman",serif'},
+    {family:'serif',fontFace:'"Times New Roman",Times,serif'},
+    {family:'monospace',fontFace:'ui-monospace,Consolas,"Courier New",monospace'},
+  ].filter(candidate=>!hint.fontFamily||candidate.family===hint.fontFamily);
+  if(!candidates.length)candidates.push({family:fallback.family});
   const weights=hint.bold?[700]:[400,700];
   try{
-    for(const family of families)for(const weight of weights){
-      const style={...fallback,family,weight};probe.font=cssFont(style,100);
+    for(const candidate of candidates)for(const weight of weights){
+      const style={...fallback,...candidate,weight};probe.font=cssFont(style,100);
       probe.textBaseline='alphabetic';probe.textAlign='left';
       const m=probe.measureText(text),mw=m.actualBoundingBoxLeft+m.actualBoundingBoxRight,mh=m.actualBoundingBoxAscent+m.actualBoundingBoxDescent;
       if(!(mw>0&&mh>0))continue;
