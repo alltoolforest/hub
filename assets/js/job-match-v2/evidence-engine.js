@@ -298,7 +298,7 @@ function genericExperienceTerms(text) {
   }
   return value
     .split(/\s*(?:,| and | or |\/)\s*/i)
-    .map((item) => clean(item))
+    .map((item) => clean(item).replace(/^[,;:.\s]+|[,;:.\s]+$/g, ''))
     .filter((item) => item.length >= 3 && item.length <= 70);
 }
 
