@@ -1,4 +1,4 @@
-const NUMBER_TOKEN = /(?:\d+(?:\.\d+)?%?|[$€£₹]\s?\d[\d,.]*)/g;
+const NUMBER_TOKEN = /(?:[$€£₹]\s?\d[\d,.]*|\d+(?:\.\d+)?%?)/g;
 
 function normalize(value) {
   return String(value || "").toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}%$€£₹+#.]+/gu, " ").replace(/\s+/g, " ").trim();
