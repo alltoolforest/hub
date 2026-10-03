@@ -120,6 +120,16 @@ export async function parseDocxArrayBuffer(arrayBuffer, mammoth) {
     const extractedText = blocks.map((block) => block.text).filter(Boolean).join('\n').trim();
     const parsedSections = sectionsFromBlocks(blocks);
     const warnings = [];
+    const tableBlocks = blocks.filter((block) => block.type === 'table');
+    const headingBlocks = blocks.filter((block) => block.type === 'heading');
+    const paragraphBlocks = blocks.filter((block) => block.type === 'paragraph');
+    const listItemBlocks = blocks.filter((block) => block.type === 'list_item');
+    const totalTextCharacters = extractedText.replace(/\s/g, '').length;
+    const tableTextCharacters = tableBlocks
+      .map((block) => block.text)
+      .join('')
+      .replace(/\s/g, '')
+      .length;
 
     if (/<img\b/i.test(html)) {
       warnings.push('Embedded images are not used as resume text. Review the extracted text if important information is stored inside an image.');
@@ -148,6 +158,15 @@ export async function parseDocxArrayBuffer(arrayBuffer, mammoth) {
         probableImageOnly: false,
         readingOrderRisk: 'not_assessed',
         warnings: Object.freeze([...new Set(warnings)]),
+        formatDiagnostics: Object.freeze({
+          blockCount: blocks.length,
+          tableCount: tableBlocks.length,
+          headingCount: headingBlocks.length,
+          paragraphCount: paragraphBlocks.length,
+          listItemCount: listItemBlocks.length,
+          tableTextRatio: totalTextCharacters ? tableTextCharacters / totalTextCharacters : 0,
+          embeddedImagePresent: /<img\b/i.test(html)
+        }),
         confidence: CONFIDENCE_LEVEL.MEDIUM,
         provenance: PROVENANCE_KIND.PARSED,
         limitation: 'DOCX text is reconstructed in logical document order; complex floating layouts, headers, footers, and text inside images may not be fully represented.'
