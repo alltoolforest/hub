@@ -35,7 +35,16 @@ export function validateGeneratedClaims(letter, task1State) {
   const corpus = buildGroundingCorpus(task1State);
   const corpusNumbers = numbers(corpus);
   const generatedNumbers = [...numbers(letter)];
-  const unsupportedNumbers = generatedNumbers.filter((value) => !corpusNumbers.has(value));
+  // Contact details can legitimately contain numbers (phone numbers, portfolio
+  // paths). They are identity metadata, not achievement claims.
+  const contactNumbers = numbers([
+    task1State?.candidate?.phone,
+    task1State?.candidate?.email,
+    task1State?.candidate?.linkedinOrPortfolio,
+  ].filter(Boolean).join(" "));
+  const unsupportedNumbers = generatedNumbers.filter((value) =>
+    !corpusNumbers.has(value) && !contactNumbers.has(value)
+  );
 
   const candidate = task1State?.candidate || {};
   const requiredIdentityTerms = [
