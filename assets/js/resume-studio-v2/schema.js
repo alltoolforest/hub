@@ -83,8 +83,8 @@ export function createEmptyResume(candidateType = CANDIDATE_TYPES.FRESHER) {
       maritalStatus: ''
     },
     declaration: {
-      enabled: false,
-      text: '',
+      enabled: true,
+      text: 'I hereby declare that the information provided above is true and correct to the best of my knowledge.',
       place: '',
       date: '',
       candidateName: ''
@@ -103,7 +103,7 @@ export function createEmptyResume(candidateType = CANDIDATE_TYPES.FRESHER) {
         achievements: true,
         interests: false,
         personalDetails: false,
-        declaration: false
+        declaration: true
       }
     }
   };
