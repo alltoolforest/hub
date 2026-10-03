@@ -149,6 +149,9 @@ function declarationSection(declaration) {
 
 function sectionMap(resume) {
   return {
+    careerObjective: clean(resume.careerObjective?.text)
+      ? section('Career Objective', '<p>' + esc(resume.careerObjective.text) + '</p>')
+      : '',
     summary: clean(resume.summary?.text)
       ? section(resume.summary.heading || 'Profile', '<p>' + esc(resume.summary.text) + '</p>')
       : '',

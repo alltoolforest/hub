@@ -3,8 +3,8 @@ import { summarizeValidation, validateResume } from './validation.js';
 import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
 import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
-import { getRoleSuggestions } from './role-engine.js';
-import { CONTENT_PROVENANCE, createSuggestedUnit, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
+import { getRoleSuggestions, getTargetRoleSuggestions } from './role-engine.js';
+import { CONTENT_PROVENANCE, createSuggestedUnit, generateCareerObjective, generateProfessionalSummary, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
 import { CANDIDATE_TYPES } from './schema.js';
 
 function esc(value) {
@@ -226,10 +226,14 @@ function render(root, state) {
             </select>
           </label>
           <label>Target position
-            <input id="target-role" name="targetRole" maxlength="120" required autocomplete="organization-title" value="${esc(state.candidate.targetRole)}" placeholder="e.g. Financial Crime Analyst">
+            <input id="target-role" name="targetRole" maxlength="120" required autocomplete="organization-title" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="target-role-suggestions-list" aria-describedby="target-role-help target-role-suggestions-status" value="${esc(state.candidate.targetRole)}" placeholder="e.g. SAP, Financial Crime Analyst">
+            <div id="target-role-suggestions" class="rs-inline-suggestions">
+              <span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span>
+              <div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>
+            </div>
           </label>
         </div>
-        <p class="rs-help">The target position guides later wording and suggestions. Resume Studio must not invent your employers, dates, qualifications, achievements or metrics.</p>
+        <p class="rs-help" id="target-role-help">Start typing a role keyword such as SAP, Data, Quality or AML. Resume Studio will suggest matching target positions. For Fresher profiles, the selected target position can generate a Career Objective without inventing experience, qualifications, achievements or metrics.</p>
       </section>
 
       <section class="rs-panel" aria-labelledby="rs-contact-heading">
@@ -246,17 +250,30 @@ function render(root, state) {
         </div>
       </section>
 
+      <section class="rs-panel" aria-labelledby="rs-objective-heading">
+        <div class="rs-section-head"><div><p class="rs-kicker">${experienced ? 'Experienced profile' : 'Fresher profile'}</p><h2 id="rs-objective-heading">Career Objective</h2></div></div>
+        <label class="rs-block">Career objective
+          <textarea data-path="careerObjective.text" rows="5" maxlength="1200" placeholder="Describe the direction you are targeting and how you hope to contribute.">${esc(state.careerObjective?.text || '')}</textarea>
+        </label>
+        <div class="rs-content-actions">
+          <button type="button" class="rs-secondary" data-refine-objective>Refine objective</button>
+          <span class="rs-provenance" data-provenance="${esc(state.careerObjective?.provenance || 'user')}">${esc((state.careerObjective?.provenance || 'user').toUpperCase())}</span>
+        </div>
+        <p class="rs-help">A target-role-based Career Objective is generated for both Fresher and Experienced profiles. Keep it, refine it, or replace it with your own objective. Manual edits are not silently overwritten.</p>
+      </section>
+
+      ${experienced ? `
       <section class="rs-panel" aria-labelledby="rs-summary-heading">
-        <div class="rs-section-head"><div><p class="rs-kicker">${experienced ? 'Experienced profile' : 'Fresher profile'}</p><h2 id="rs-summary-heading">${esc(state.summary.heading)}</h2></div></div>
-        <label class="rs-block">Your facts / draft
-          <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="${experienced ? 'Summarize your experience, domain, strengths and evidence you can support.' : 'Describe your education, relevant skills, training/projects and career interest.'}">${esc(state.summary.text)}</textarea>
+        <div class="rs-section-head"><div><p class="rs-kicker">Experienced profile</p><h2 id="rs-summary-heading">Professional Summary</h2></div></div>
+        <label class="rs-block">Professional summary
+          <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="Summarize your experience, domain, strengths and evidence you can support.">${esc(state.summary.text)}</textarea>
         </label>
         <div class="rs-content-actions">
           <button type="button" class="rs-secondary" data-refine-summary>Refine from my facts</button>
           <span class="rs-provenance" data-provenance="${esc(state.summary.provenance || 'user')}">${esc((state.summary.provenance || 'user').toUpperCase())}</span>
         </div>
-        <p class="rs-help">Refinement may improve wording only from the facts and skills you entered. Review the result before use.</p>
-      </section>
+        <p class="rs-help">A role-based professional summary of about 50 words is generated automatically. Keep it, add your own verified points, edit it directly, or refine it. Manual edits are not silently overwritten.</p>
+      </section>` : ''}
 
       <section class="rs-panel" aria-labelledby="rs-skills-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Core section</p><h2 id="rs-skills-heading">Skills</h2></div></div>
@@ -264,7 +281,8 @@ function render(root, state) {
           <textarea data-list-path="skills" rows="5" maxlength="1600" placeholder="Enter one skill per line">${esc(multiline(state.skills))}</textarea>
         </label>
         <div class="rs-suggestion-area">
-          <div class="rs-content-actions"><button type="button" class="rs-secondary" data-show-role-suggestions>Show role suggestions</button></div>
+          <div class="rs-content-actions"><button type="button" class="rs-secondary" data-show-role-suggestions>Refresh skill suggestions</button></div>
+          <p class="rs-help">Suggestions are based on the Target Position. Nothing is added to your resume until you choose it, and you can edit or remove any skill afterward.</p>
           <div id="rs-role-suggestions" aria-live="polite"></div>
         </div>
       </section>
@@ -315,10 +333,11 @@ function render(root, state) {
       </section>
 
       <section class="rs-panel" aria-labelledby="rs-declaration-heading">
-        <div class="rs-section-head"><div><p class="rs-kicker">Optional</p><h2 id="rs-declaration-heading">Declaration</h2></div></div>
+        <div class="rs-section-head"><div><p class="rs-kicker">Auto-created</p><h2 id="rs-declaration-heading">Declaration</h2></div></div>
         <label class="rs-switch"><input type="checkbox" data-toggle-section="declaration" ${state.declaration.enabled ? 'checked' : ''}> Include declaration</label>
+        <p class="rs-help">A standard declaration is created automatically. You may edit the wording, then enter Place, Date and Candidate Name below it. You can also disable the declaration when it is not appropriate for the application.</p>
         <div class="rs-grid ${state.declaration.enabled ? '' : 'rs-disabled-block'}" aria-disabled="${state.declaration.enabled ? 'false' : 'true'}">
-          <label class="rs-full">Declaration text<textarea rows="3" data-path="declaration.text" maxlength="700" ${state.declaration.enabled ? '' : 'disabled'}>${esc(state.declaration.text)}</textarea></label>
+          <label class="rs-full">Declaration text <span>(editable)</span><textarea rows="3" data-path="declaration.text" maxlength="700" ${state.declaration.enabled ? '' : 'disabled'}>${esc(state.declaration.text)}</textarea></label>
           <label>Place<input data-path="declaration.place" maxlength="100" ${state.declaration.enabled ? '' : 'disabled'} value="${esc(state.declaration.place)}"></label>
           <label>Date<input type="date" data-path="declaration.date" ${state.declaration.enabled ? '' : 'disabled'} value="${esc(state.declaration.date)}"></label>
           <label>Candidate name<input data-path="declaration.candidateName" maxlength="120" ${state.declaration.enabled ? '' : 'disabled'} value="${esc(state.declaration.candidateName)}"></label>
@@ -385,41 +404,109 @@ function renderValidationResults(root, state) {
   `;
 }
 
+function closeTargetRoleSuggestions(root) {
+  const host = root.querySelector('#target-role-suggestions');
+  const input = root.querySelector('#target-role');
+  if (host) {
+    host.innerHTML = '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span><div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>';
+  }
+  if (input) {
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+}
+
+function setActiveTargetRoleOption(root, index) {
+  const input = root.querySelector('#target-role');
+  const options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+  if (!input || !options.length) return -1;
+  const safeIndex = ((index % options.length) + options.length) % options.length;
+  options.forEach((option, optionIndex) => {
+    const active = optionIndex === safeIndex;
+    option.setAttribute('aria-selected', active ? 'true' : 'false');
+    option.dataset.active = active ? 'true' : 'false';
+  });
+  input.setAttribute('aria-activedescendant', options[safeIndex].id);
+  options[safeIndex].scrollIntoView?.({ block: 'nearest' });
+  return safeIndex;
+}
+
+function renderTargetRoleSuggestions(root, query) {
+  const host = root.querySelector('#target-role-suggestions');
+  const input = root.querySelector('#target-role');
+  if (!host || !input) return [];
+
+  const normalized = String(query || '').trim();
+  if (normalized.length < 2) {
+    closeTargetRoleSuggestions(root);
+    return [];
+  }
+
+  const roles = getTargetRoleSuggestions(normalized, 8);
+  if (!roles.length) {
+    host.innerHTML =
+      '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite">No matching target positions. You can keep your own job title.</span>' +
+      '<div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>' +
+      '<div class="rs-inline-empty">No matching role found. You can keep your own target position.</div>';
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+    return [];
+  }
+
+  host.innerHTML =
+    '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite">' + roles.length + ' target position suggestions available. Use Arrow Down and Arrow Up to review them, then Enter to select.</span>' +
+    '<div id="target-role-suggestions-list" class="rs-inline-suggestion-list" role="listbox" aria-label="Target position suggestions">' +
+    roles.map((role, index) =>
+      '<div id="target-role-option-' + index + '" class="rs-inline-suggestion" role="option" aria-selected="false" data-target-role-option="' + esc(role) + '">' + esc(role) + '</div>'
+    ).join('') +
+    '</div>';
+  input.setAttribute('aria-expanded', 'true');
+  input.removeAttribute('aria-activedescendant');
+  return roles;
+}
+
 function renderRoleSuggestions(root, state) {
   const host = root.querySelector('#rs-role-suggestions');
   if (!host) return;
-  const suggestions = getRoleSuggestions(state.candidate.targetRole);
   if (!state.candidate.targetRole.trim()) {
-    host.innerHTML = '<p class="rs-help">Enter a target position first.</p>';
+    host.innerHTML = '<p class="rs-help">Enter a target position to see matching skill suggestions.</p>';
+    return;
+  }
+
+  const suggestions = getRoleSuggestions(state.candidate.targetRole);
+  if (!suggestions.skills.length) {
+    host.innerHTML =
+      '<div class="rs-suggestion-box" role="region" aria-label="Skill suggestions">' +
+      '<p><strong>No role-specific skill profile is available for ' + esc(state.candidate.targetRole) + '.</strong></p>' +
+      '<p class="rs-help">Add your skills manually. Resume Studio will not guess or insert unrelated skills.</p>' +
+      '</div>';
     return;
   }
 
   const skillItems = suggestions.skills
     .filter((item) => !state.skills.some((skill) => skill.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
-    .map((item) => `<li><span><strong>Suggested skill:</strong> ${esc(item.text)}</span><button type="button" class="rs-secondary" data-verify-suggestion="skill" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
+    .map((item) =>
+      '<li><span><strong>' + esc(item.text) + '</strong> <span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></span>' +
+      '<button type="button" class="rs-secondary" data-verify-suggestion="skill" data-suggestion="' + esc(item.text) + '">Add if true</button></li>'
+    )
     .join('');
 
-  const responsibilityItems = suggestions.responsibilities
-    .map((item) => `<li><span><strong>Responsibility idea:</strong> ${esc(item.text)}</span><span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></li>`)
-    .join('');
-
-  host.innerHTML = `
-    <div class="rs-suggestion-box" role="region" aria-label="Role suggestions">
-      <p><strong>Suggestions for ${esc(state.candidate.targetRole)}</strong> · Verify every item before adding it to your resume.</p>
-      ${skillItems ? `<ul class="rs-suggestion-list">${skillItems}</ul>` : '<p class="rs-help">No new skill suggestions for this role.</p>'}
-      ${responsibilityItems ? `<details><summary>Responsibility ideas to consider</summary><ul class="rs-suggestion-list">${responsibilityItems}</ul></details>` : ''}
-    </div>`;
+  host.innerHTML = '<div class="rs-suggestion-box" role="region" aria-label="Skill suggestions">' +
+    '<p><strong>Suggested skills for ' + esc(state.candidate.targetRole) + '</strong> · These are role ideas, not claims about you. Add only skills you genuinely have, then edit the Skills list as needed.</p>' +
+    (skillItems ? '<ul class="rs-suggestion-list">' + skillItems + '</ul>' : '<p class="rs-help">All available suggestions for this role are already in your Skills list.</p>') +
+    '</div>';
 }
 
 
 function renderResponsibilitySuggestions(root, state, index) {
   const host = root.querySelector('[data-responsibility-suggestions-host="' + index + '"]');
   if (!host) return;
-  if (!state.candidate.targetRole.trim()) {
-    host.innerHTML = '<p class="rs-help">Enter a target position first.</p>';
+  const jobTitle = state.experience[index]?.position?.trim() || '';
+  if (!jobTitle) {
+    host.innerHTML = '<p class="rs-help">Enter the Position / Job Title for this experience first.</p>';
     return;
   }
-  const suggestions = getRoleSuggestions(state.candidate.targetRole).responsibilities || [];
+  const suggestions = getRoleSuggestions(jobTitle).responsibilities || [];
   if (!suggestions.length) {
     host.innerHTML = '<p class="rs-help">No responsibility ideas are available for this role. Add only duties you actually performed.</p>';
     return;
@@ -427,10 +514,10 @@ function renderResponsibilitySuggestions(root, state, index) {
   const current = state.experience[index]?.responsibilities || [];
   const items = suggestions
     .filter((item) => !current.some((value) => value.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
-    .map((item) => `<li><span><strong>Suggested:</strong> ${esc(item.text)}</span><button type="button" class="rs-secondary" data-verify-responsibility data-index="${index}" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
+    .map((item) => `<li><span><strong>${esc(item.text)}</strong> <span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></span><button type="button" class="rs-secondary" data-verify-responsibility data-index="${index}" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
     .join('');
   host.innerHTML = items
-    ? `<div class="rs-suggestion-box" role="region" aria-label="Responsibility suggestions"><p><strong>Role ideas for ${esc(state.candidate.targetRole)}</strong> · Add only duties you personally performed.</p><ul class="rs-suggestion-list">${items}</ul></div>`
+    ? `<div class="rs-suggestion-box" role="region" aria-label="Responsibility suggestions"><p><strong>Role ideas for ${esc(jobTitle)}</strong> · These are job-title-based ideas, not claims about your work. Add only duties you personally performed.</p><ul class="rs-suggestion-list">${items}</ul></div>`
     : '<p class="rs-help">All available role ideas are already included in this experience entry.</p>';
 }
 
@@ -461,6 +548,8 @@ export function mountResumeStudioUI(root, store, options = {}) {
 
   const rerender = () => {
     render(root, store.getState());
+    const current = store.getState();
+    if (current.candidate.targetRole) renderRoleSuggestions(root, current);
     if (restoredDraft?.status === 'restored' && restoredDraft?.resume) {
       setStorageStatus({ status: 'available', savedAt: restoredDraft.savedAt });
     }
@@ -470,6 +559,32 @@ export function mountResumeStudioUI(root, store, options = {}) {
     const results = root.querySelector('#rs-validation-results');
     if (results && results.hasChildNodes()) renderValidationResults(root, store.getState());
   };
+
+  const selectTargetRole = (role) => {
+    store.update((state) => {
+      state.candidate.targetRole = role;
+      if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+        const generated = generateCareerObjective({ targetRole: role });
+        state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
+      }
+      if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+          (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+        const generatedSummary = generateProfessionalSummary({
+          targetRole: role,
+          skills: state.skills,
+          experience: state.experience
+        });
+        state.summary.text = generatedSummary.text;
+        state.summary.provenance = generatedSummary.provenance;
+      }
+      return state;
+    });
+    rerender();
+    renderRoleSuggestions(root, store.getState());
+    const targetInput = root.querySelector('#target-role');
+    if (targetInput) targetInput.focus();
+  };
+
   rerender();
 
   function storageMessage(result = {}) {
@@ -500,6 +615,23 @@ export function mountResumeStudioUI(root, store, options = {}) {
 
     if (target.id === 'candidate-type') {
       store.setCandidateType(target.value);
+      store.update((state) => {
+        if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+          const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
+          state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
+        }
+        if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generatedSummary = generateProfessionalSummary({
+            targetRole: state.candidate.targetRole,
+            skills: state.skills,
+            experience: state.experience
+          });
+          state.summary.text = generatedSummary.text;
+          state.summary.provenance = generatedSummary.provenance;
+        }
+        return state;
+      });
       rerender();
       return;
     }
@@ -538,11 +670,84 @@ export function mountResumeStudioUI(root, store, options = {}) {
     }
   });
 
+  root.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (target.id !== 'target-role') return;
+
+    let options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !options.length) {
+      renderTargetRoleSuggestions(root, target.value);
+      options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+    }
+
+    if (event.key === 'ArrowDown' && options.length) {
+      event.preventDefault();
+      const current = options.findIndex((option) => option.dataset.active === 'true');
+      setActiveTargetRoleOption(root, current < 0 ? 0 : current + 1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp' && options.length) {
+      event.preventDefault();
+      const current = options.findIndex((option) => option.dataset.active === 'true');
+      setActiveTargetRoleOption(root, current < 0 ? options.length - 1 : current - 1);
+      return;
+    }
+
+    if (event.key === 'Enter' && options.length) {
+      const active = options.find((option) => option.dataset.active === 'true');
+      if (active) {
+        event.preventDefault();
+        selectTargetRole(active.dataset.targetRoleOption);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      closeTargetRoleSuggestions(root);
+    }
+  });
+
+  root.addEventListener('focusout', (event) => {
+    if (event.target.id !== 'target-role') return;
+    globalThis.setTimeout(() => {
+      const host = root.querySelector('#target-role-suggestions');
+      if (!host?.contains(globalThis.document?.activeElement)) closeTargetRoleSuggestions(root);
+    }, 0);
+  });
+
   root.addEventListener('input', (event) => {
     const target = event.target;
 
     if (target.id === 'target-role') {
-      store.setTargetRole(target.value);
+      store.update((state) => {
+        state.candidate.targetRole = String(target.value || '').trim();
+        if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+          const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
+          state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
+        }
+        if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generatedSummary = generateProfessionalSummary({
+            targetRole: state.candidate.targetRole,
+            skills: state.skills,
+            experience: state.experience
+          });
+          state.summary.text = generatedSummary.text;
+          state.summary.provenance = generatedSummary.provenance;
+        }
+        return state;
+      });
+      renderTargetRoleSuggestions(root, target.value);
+      renderRoleSuggestions(root, store.getState());
+      const objectiveField = root.querySelector('[data-path="careerObjective.text"]');
+      if (objectiveField && store.getState().careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+        objectiveField.value = store.getState().careerObjective.text;
+      }
+      const summaryField = root.querySelector('[data-path="summary.text"]');
+      if (summaryField && store.getState().summary.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+        summaryField.value = store.getState().summary.text;
+      }
       refreshPreview();
       refreshValidationIfVisible();
       return;
@@ -551,6 +756,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.matches('[data-path]')) {
       store.update((state) => {
         setPath(state, target.dataset.path, target.value);
+        if (target.dataset.path === 'careerObjective.text') state.careerObjective.provenance = CONTENT_PROVENANCE.USER;
         if (target.dataset.path === 'summary.text') state.summary.provenance = CONTENT_PROVENANCE.USER;
         if (/^projects\.\d+\.description$/.test(target.dataset.path)) {
           const index = Number(target.dataset.path.split('.')[1]);
@@ -605,6 +811,12 @@ export function mountResumeStudioUI(root, store, options = {}) {
   });
 
   root.addEventListener('click', (event) => {
+    const roleOption = event.target.closest('[data-target-role-option]');
+    if (roleOption) {
+      selectTargetRole(roleOption.dataset.targetRoleOption);
+      return;
+    }
+
     const printButton = event.target.closest('[data-print-resume]');
     if (printButton) {
       const state = store.getState();
@@ -675,6 +887,31 @@ export function mountResumeStudioUI(root, store, options = {}) {
       onDraftResolved();
       const candidateType = root.querySelector('#candidate-type');
       if (candidateType) candidateType.focus();
+      return;
+    }
+
+    const objectiveButton = event.target.closest('[data-refine-objective]');
+    if (objectiveButton) {
+      const state = store.getState();
+      try {
+        const unit = refineSummary({
+          candidateType: state.candidate.type,
+          targetRole: state.candidate.targetRole,
+          draft: state.careerObjective?.text || '',
+          skills: []
+        });
+        store.update((next) => {
+          next.careerObjective.text = unit.text;
+          next.careerObjective.provenance = unit.provenance;
+          return next;
+        });
+        rerender();
+        const objectiveField = root.querySelector('[data-path="careerObjective.text"]');
+        if (objectiveField) objectiveField.focus();
+        root.querySelector('#rs-state-status').textContent = 'Career Objective refined from your selected target role and current objective text.';
+      } catch (error) {
+        root.querySelector('#rs-state-status').textContent = error.message;
+      }
       return;
     }
 

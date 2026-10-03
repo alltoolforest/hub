@@ -104,8 +104,19 @@ export function normalizeResumeDraft(input) {
     resume.contact[key] = text(source.contact?.[key], key === 'linkedin' || key === 'portfolio' ? 240 : 160);
   }
 
-  resume.summary.text = text(source.summary?.text, 1800);
-  resume.summary.provenance = ['user', 'refined'].includes(source.summary?.provenance)
+  const legacyFresherObjective = candidateType === CANDIDATE_TYPES.FRESHER && !source.careerObjective
+    ? source.summary
+    : null;
+
+  resume.careerObjective.text = text(source.careerObjective?.text ?? legacyFresherObjective?.text, 1200);
+  resume.careerObjective.provenance = ['user', 'refined', 'suggested'].includes(source.careerObjective?.provenance ?? legacyFresherObjective?.provenance)
+    ? (source.careerObjective?.provenance ?? legacyFresherObjective?.provenance)
+    : 'user';
+
+  resume.summary.text = candidateType === CANDIDATE_TYPES.EXPERIENCED
+    ? text(source.summary?.text, 1800)
+    : '';
+  resume.summary.provenance = ['user', 'refined', 'suggested'].includes(source.summary?.provenance)
     ? source.summary.provenance
     : 'user';
 
@@ -127,11 +138,16 @@ export function normalizeResumeDraft(input) {
   resume.personalDetails.gender = text(source.personalDetails?.gender, 80);
   resume.personalDetails.maritalStatus = text(source.personalDetails?.maritalStatus, 80);
 
-  resume.declaration.enabled = bool(source.declaration?.enabled);
-  resume.declaration.text = text(source.declaration?.text, 700);
-  resume.declaration.place = text(source.declaration?.place, 100);
-  resume.declaration.date = text(source.declaration?.date, 20);
-  resume.declaration.candidateName = text(source.declaration?.candidateName, 120);
+  const sourceDeclaration = source.declaration && typeof source.declaration === 'object'
+    ? source.declaration
+    : null;
+  if (sourceDeclaration) {
+    resume.declaration.enabled = bool(sourceDeclaration.enabled);
+    resume.declaration.text = text(sourceDeclaration.text, 700);
+    resume.declaration.place = text(sourceDeclaration.place, 100);
+    resume.declaration.date = text(sourceDeclaration.date, 20);
+    resume.declaration.candidateName = text(sourceDeclaration.candidateName, 120);
+  }
 
   const template = validTemplate(source.settings?.template);
   if (template) resume.settings.template = template;
@@ -143,6 +159,14 @@ export function normalizeResumeDraft(input) {
     }
   }
 
+  // Candidate-type-controlled sections must remain internally consistent
+  // after restoring older drafts, regardless of legacy enabled-section flags.
+  resume.settings.enabledSections.careerObjective = true;
+  resume.settings.enabledSections.summary = candidateType === CANDIDATE_TYPES.EXPERIENCED;
+  resume.settings.enabledSections.experience = candidateType === CANDIDATE_TYPES.EXPERIENCED;
+  resume.settings.enabledSections.projects = candidateType === CANDIDATE_TYPES.FRESHER;
+  resume.settings.enabledSections.internships = candidateType === CANDIDATE_TYPES.FRESHER;
+
   return resume;
 }
 
@@ -152,6 +176,7 @@ export function hasMeaningfulResumeData(resume) {
     text(resume.candidate?.targetRole) ||
     text(resume.contact?.fullName) ||
     text(resume.contact?.email) ||
+    text(resume.careerObjective?.text) ||
     text(resume.summary?.text) ||
     list(resume.skills).length ||
     (Array.isArray(resume.experience) && resume.experience.length) ||
