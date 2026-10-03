@@ -104,7 +104,18 @@ export function normalizeResumeDraft(input) {
     resume.contact[key] = text(source.contact?.[key], key === 'linkedin' || key === 'portfolio' ? 240 : 160);
   }
 
-  resume.summary.text = text(source.summary?.text, 1800);
+  const legacyFresherObjective = candidateType === CANDIDATE_TYPES.FRESHER && !source.careerObjective
+    ? source.summary
+    : null;
+
+  resume.careerObjective.text = text(source.careerObjective?.text ?? legacyFresherObjective?.text, 1200);
+  resume.careerObjective.provenance = ['user', 'refined', 'suggested'].includes(source.careerObjective?.provenance ?? legacyFresherObjective?.provenance)
+    ? (source.careerObjective?.provenance ?? legacyFresherObjective?.provenance)
+    : 'user';
+
+  resume.summary.text = candidateType === CANDIDATE_TYPES.EXPERIENCED
+    ? text(source.summary?.text, 1800)
+    : '';
   resume.summary.provenance = ['user', 'refined', 'suggested'].includes(source.summary?.provenance)
     ? source.summary.provenance
     : 'user';
@@ -152,6 +163,7 @@ export function hasMeaningfulResumeData(resume) {
     text(resume.candidate?.targetRole) ||
     text(resume.contact?.fullName) ||
     text(resume.contact?.email) ||
+    text(resume.careerObjective?.text) ||
     text(resume.summary?.text) ||
     list(resume.skills).length ||
     (Array.isArray(resume.experience) && resume.experience.length) ||
