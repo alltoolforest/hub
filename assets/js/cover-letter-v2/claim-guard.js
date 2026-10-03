@@ -5,7 +5,9 @@ function normalize(value) {
 }
 
 function canonicalNumber(value) {
-  return String(value || "").replace(/\s+/g, "").replace(/,$/, "");
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/[,.]+$/g, "");
 }
 
 function numbers(value) {
