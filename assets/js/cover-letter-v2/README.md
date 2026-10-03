@@ -86,3 +86,19 @@ The repository currently has no bundled PDF-generation library. Task 4 intention
 DOCX remains a preferred, non-blocking enhancement and is not implemented in Task 4.
 
 Task 4 does not deploy, replace the production page, modify production SEO tags, or freeze the tool. Those gates belong to Task 5.
+
+
+## Final release status
+
+**Cover Letter Builder V2 → PRODUCTION VERIFIED → FROZEN**
+
+Final Task 5 gate:
+- pre-deployment audit: PASS
+- production replacement: PASS
+- production audit: PASS
+- manual verification: PASS
+- final regression: PASS
+- P0: 0
+- P1: 0
+
+Freeze policy: do not modify, refactor, redesign, or add features to this tool unless there is a confirmed production defect, security/privacy issue, compatibility regression, legal/compliance requirement, or an explicitly approved future release.
