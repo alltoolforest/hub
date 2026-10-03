@@ -1,3 +1,4 @@
+import { sanitizeUserText } from './input-safety.js';
 import {
   CONFIDENCE_LEVEL,
   PROVENANCE_KIND,
@@ -66,7 +67,7 @@ export async function parseResumeFile(file, options = {}) {
 
   return Object.freeze({
     source,
-    extractedText: parsed.extractedText,
+    extractedText: sanitizeUserText(parsed.extractedText),
     parsedSections: parsed.parsedSections,
     pages: parsed.pages || Object.freeze([]),
     blocks: parsed.blocks || Object.freeze([]),
@@ -92,7 +93,7 @@ export function applyParsedResumeToState(state, parsed) {
     : JSON.parse(JSON.stringify(state));
 
   next.resume.source = { ...parsed.source };
-  next.resume.extractedText = String(parsed.extractedText || '');
+  next.resume.extractedText = sanitizeUserText(parsed.extractedText || '');
   next.resume.parsedSections = Array.isArray(parsed.parsedSections)
     ? parsed.parsedSections.map((section) => ({ ...section }))
     : [];
