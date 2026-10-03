@@ -406,6 +406,32 @@ function matchProfile(roleTitle) {
   }) || null;
 }
 
+function withinOneEdit(a, b) {
+  if (!a || !b || Math.abs(a.length - b.length) > 1) return false;
+  if (a === b) return true;
+
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  if (i < a.length || j < b.length) edits += 1;
+  return edits <= 1;
+}
+
 export function getTargetRoleSuggestions(query, limit = 8) {
   const value = normalize(query);
   if (value.length < 2) return [];
@@ -431,6 +457,13 @@ export function getTargetRoleSuggestions(query, limit = 8) {
     if (matchedTokens) {
       const misses = tokens.length - matchedTokens;
       score = Math.min(score, 40 + misses * 20 - matchedTokens * 2);
+    }
+
+    // A conservative one-edit tolerance helps with common typing mistakes
+    // without turning the catalogue into broad fuzzy matching.
+    if (value.length >= 5 && tokens.length === 1) {
+      const typoMatch = titleTokens.some((titleToken) => withinOneEdit(value, titleToken));
+      if (typoMatch) score = Math.min(score, 35);
     }
 
     // Aliases are useful for abbreviations such as HR, SRE, KYC and SAP,
