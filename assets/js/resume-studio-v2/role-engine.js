@@ -477,19 +477,34 @@ export function getTargetRoleSuggestions(query, limit = 8) {
       }
     }
 
-    return { title: entry.title, score };
+    return { title: entry.title, family: entry.family, score };
   })
     .filter((item) => Number.isFinite(item.score))
     .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title));
 
-  const seen = new Set();
-  return scored
-    .filter((item) => {
-      const key = normalize(item.title);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
+  const seenTitles = new Set();
+  const uniqueScored = scored.filter((item) => {
+    const key = normalize(item.title);
+    if (seenTitles.has(key)) return false;
+    seenTitles.add(key);
+    return true;
+  });
+
+  // For broad queries, expose representative titles across matching families
+  // before filling remaining slots with closely related variants.
+  const familySeen = new Set();
+  const representatives = [];
+  const remaining = [];
+  for (const item of uniqueScored) {
+    if (!familySeen.has(item.family)) {
+      familySeen.add(item.family);
+      representatives.push(item);
+    } else {
+      remaining.push(item);
+    }
+  }
+
+  return [...representatives, ...remaining]
     .slice(0, safeLimit)
     .map((item) => item.title);
 }
