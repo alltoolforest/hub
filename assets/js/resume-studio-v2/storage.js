@@ -105,7 +105,7 @@ export function normalizeResumeDraft(input) {
   }
 
   resume.summary.text = text(source.summary?.text, 1800);
-  resume.summary.provenance = ['user', 'refined'].includes(source.summary?.provenance)
+  resume.summary.provenance = ['user', 'refined', 'suggested'].includes(source.summary?.provenance)
     ? source.summary.provenance
     : 'user';
 
