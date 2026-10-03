@@ -410,20 +410,54 @@ export function getTargetRoleSuggestions(query, limit = 8) {
   const value = normalize(query);
   if (value.length < 2) return [];
   const tokens = value.split(' ').filter(Boolean);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 8, 20));
 
-  return ROLE_INDEX
-    .map((entry) => {
-      const haystacks = [entry.normalizedTitle, ...entry.aliases];
-      const starts = haystacks.some((text) => text.startsWith(value)) ? 0 : 1;
-      const phrase = haystacks.some((text) => text.includes(value)) ? 0 : 1;
-      const tokenMisses = Math.min(...haystacks.map((text) =>
-        tokens.filter((token) => !text.includes(token)).length
-      ));
-      return { title: entry.title, rank: starts * 100 + phrase * 30 + tokenMisses * 10 };
+  const scored = ROLE_INDEX.map((entry) => {
+    const title = entry.normalizedTitle;
+    const titleTokens = title.split(' ').filter(Boolean);
+
+    let score = Number.POSITIVE_INFINITY;
+
+    // Exact and prefix title matches are strongest.
+    if (title === value) score = 0;
+    else if (title.startsWith(value)) score = 10 + Math.max(0, title.length - value.length) / 100;
+    else if (titleTokens.some((token) => token.startsWith(value))) score = 20;
+    else if (title.includes(value)) score = 30;
+
+    // Multi-token queries should reward ordered title coverage.
+    const matchedTokens = tokens.filter((token) =>
+      titleTokens.some((titleToken) => titleToken.startsWith(token) || titleToken.includes(token))
+    ).length;
+    if (matchedTokens) {
+      const misses = tokens.length - matchedTokens;
+      score = Math.min(score, 40 + misses * 20 - matchedTokens * 2);
+    }
+
+    // Aliases are useful for abbreviations such as HR, SRE, KYC and SAP,
+    // but canonical title text still decides which family title ranks highest.
+    for (const alias of entry.aliases) {
+      if (alias === value) {
+        const titleAffinity = title.includes(value) ? 0 : 8;
+        score = Math.min(score, 45 + titleAffinity);
+      } else if (alias.startsWith(value) || alias.includes(value)) {
+        score = Math.min(score, 55);
+      }
+    }
+
+    return { title: entry.title, score };
+  })
+    .filter((item) => Number.isFinite(item.score))
+    .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title));
+
+  const seen = new Set();
+  return scored
+    .filter((item) => {
+      const key = normalize(item.title);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     })
-    .filter((item) => item.rank < 130)
-    .sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title))
-    .slice(0, Math.max(1, Math.min(Number(limit) || 8, 20)))
+    .slice(0, safeLimit)
     .map((item) => item.title);
 }
 
