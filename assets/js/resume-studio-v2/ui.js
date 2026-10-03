@@ -1,3 +1,4 @@
+import { cleanupPrintResume, downloadResumeText, printResume } from './export.js';
 import { summarizeValidation, validateResume } from './validation.js';
 import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
@@ -337,6 +338,11 @@ function render(root, state) {
 
       <section class="rs-panel rs-preview-panel" aria-labelledby="rs-preview-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Live preview</p><h2 id="rs-preview-heading">Resume preview</h2></div></div>
+        <div class="rs-export-actions" aria-label="Resume export options">
+          <button type="button" class="rs-secondary" data-print-resume>Print / Save as PDF</button>
+          <button type="button" class="rs-secondary" data-download-txt>Download TXT</button>
+        </div>
+        <p class="rs-help">For PDF, use your browser's print dialog and choose Save as PDF when available. PDF output remains text-based because it prints the resume HTML, not a screenshot.</p>
         <div class="rs-preview-frame" id="rs-preview-host"></div>
       </section>
 
@@ -572,6 +578,41 @@ export function mountResumeStudioUI(root, store, options = {}) {
   });
 
   root.addEventListener('click', (event) => {
+    const printButton = event.target.closest('[data-print-resume]');
+    if (printButton) {
+      const state = store.getState();
+      const hasContent = Boolean(state.contact?.fullName || state.candidate?.targetRole || state.summary?.text || state.skills?.length || state.education?.length || state.experience?.length || state.projects?.length);
+      const status = root.querySelector('#rs-state-status');
+      if (!hasContent) {
+        if (status) status.textContent = 'Add resume information before printing or saving as PDF.';
+        return;
+      }
+      const result = printResume(state);
+      if (globalThis.window?.addEventListener) {
+        globalThis.window.addEventListener('afterprint', () => cleanupPrintResume(), { once: true });
+      }
+      if (status) status.textContent = result.status === 'opened'
+        ? 'Print dialog opened. Choose Save as PDF if your browser provides that option.'
+        : 'Printing is not available in this browser.';
+      return;
+    }
+
+    const textButton = event.target.closest('[data-download-txt]');
+    if (textButton) {
+      const state = store.getState();
+      const hasContent = Boolean(state.contact?.fullName || state.candidate?.targetRole || state.summary?.text || state.skills?.length || state.education?.length || state.experience?.length || state.projects?.length);
+      const status = root.querySelector('#rs-state-status');
+      if (!hasContent) {
+        if (status) status.textContent = 'Add resume information before downloading.';
+        return;
+      }
+      const result = downloadResumeText(state);
+      if (status) status.textContent = result.status === 'downloaded'
+        ? 'TXT resume downloaded.'
+        : 'TXT download is not supported in this browser.';
+      return;
+    }
+
     const validationButton = event.target.closest('[data-run-validation]');
     if (validationButton) {
       renderValidationResults(root, store.getState());
