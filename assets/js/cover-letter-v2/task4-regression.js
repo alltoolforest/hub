@@ -30,8 +30,12 @@ export async function runTask4Regression(){
   assert(!hasDirectPdfExporter(null),"Missing direct PDF exporter should be detected.");
   const unavailable=await downloadPdfWithAdapter({letter:"Text",pdfExporter:null});
   assert(!unavailable.ok&&unavailable.reason==="direct_pdf_exporter_unavailable","Direct PDF should fail explicitly when adapter is unavailable.");
-  const invalid=await downloadPdfWithAdapter({letter:"Text",pdfExporter:{exportPdf:async()=>new Blob(["bad"],{type:"text/plain"})}});
-  assert(!invalid.ok&&invalid.reason==="invalid_pdf_blob","Invalid PDF blobs must be rejected.");
+  let invalidPdfBlobCheck = "browser_blob_api_unavailable_in_harness";
+  if (typeof Blob !== "undefined") {
+    const invalid=await downloadPdfWithAdapter({letter:"Text",pdfExporter:{exportPdf:async()=>new Blob(["bad"],{type:"text/plain"})}});
+    assert(!invalid.ok&&invalid.reason==="invalid_pdf_blob","Invalid PDF blobs must be rejected.");
+    invalidPdfBlobCheck = true;
+  }
 
   const sanitized=sanitizeEditableText("A\u0000B\r\nC");
   assert(sanitized==="AB\nC","Control characters should be removed and newlines normalized.");
@@ -71,6 +75,7 @@ export async function runTask4Regression(){
     htmlEscaping:true,
     filenameSanitization:true,
     directPdfAdapterBoundary:true,
+    invalidPdfBlobCheck,
     securityGuards:true,
     performanceBudgets:true,
     seoContent:true,
