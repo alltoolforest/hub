@@ -19,7 +19,7 @@ function opening(candidate, evidence, tone) {
 
   if (candidate.candidateType === CANDIDATE_TYPES.FRESHER) {
     return first
-      ? `I am applying for the ${role} position at ${company}. My background includes ${first.replace(/[.!?]+$/,"")}, which I hope to apply in this opportunity.`
+      ? `I am applying for the ${role} position at ${company}. As a fresher, I am drawing on my education, projects, and skills; relevant evidence includes ${first.replace(/[.!?]+$/,"")}.`
       : `I am applying for the ${role} position at ${company} and would welcome the opportunity to apply my education, projects, and developing skills in a professional setting.`;
   }
 
