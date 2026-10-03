@@ -384,11 +384,25 @@ function matchProfile(roleTitle) {
   if (exact) return exact;
 
   return ROLE_PROFILES.find((profile) => {
-    const candidates = [...profile.titles, ...(profile.aliases || [])].map(normalize);
-    return candidates.some((candidate) => candidate && (
-      query.includes(candidate) ||
-      (candidate.length >= 4 && candidate.includes(query))
-    ));
+    const titleCandidates = profile.titles.map(normalize);
+    const aliasCandidates = (profile.aliases || []).map(normalize);
+
+    const specificTitleMatch = titleCandidates.some((candidate) =>
+      candidate && (
+        query === candidate ||
+        (candidate.includes(' ') && query.includes(candidate)) ||
+        (query.includes(' ') && candidate.includes(query))
+      )
+    );
+
+    const specificAliasMatch = aliasCandidates.some((candidate) =>
+      candidate && (
+        query === candidate ||
+        (candidate.includes(' ') && query.includes(candidate))
+      )
+    );
+
+    return specificTitleMatch || specificAliasMatch;
   }) || null;
 }
 
