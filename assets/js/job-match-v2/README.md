@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–3 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–4 Foundation
 
-This directory contains the isolated foundations completed through Task 3 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 4 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -176,4 +176,65 @@ Task 3 also does not:
 - calculate Job Requirement Coverage
 - assign priority recommendations
 - create the production dashboard
+- replace the production analyzer
+
+
+## Task 4 — Terminology, Synonym + Skill Normalization
+
+Task 4 adds a separate conservative terminology layer that converts safe equivalent spellings and abbreviations into canonical concepts while preserving the employer's original wording.
+
+Examples include:
+
+- PowerBI → Power BI
+- MS Excel / Excel → Microsoft Excel
+- AML → Anti-Money Laundering
+- KYC → Know Your Customer
+- CI CD / CI-CD → CI/CD
+- AWS → Amazon Web Services
+- GCP / Google Cloud → Google Cloud Platform
+- SAP FI/CO → SAP FICO
+- SAP Materials Management → SAP MM
+- C Sharp → C#
+- C Plus Plus → C++
+- ICD10 → ICD-10
+- Customer Support → Customer Service
+- GDPR → General Data Protection Regulation
+
+Ambiguous short forms are context-gated. Examples include JS, HR, TA, RN, AP, AR, GL, BI, ML, SOC and bare Basis.
+
+The independent Task 4 catalog covers common terminology across IT/software, BPO/customer service, banking/compliance, finance/accounting, healthcare, engineering/manufacturing, HR/recruitment, sales/marketing, legal/privacy, logistics, construction, education, retail/hospitality, administration, design, data/AI, cybersecurity, cloud, public-service/GIS and skilled trades.
+
+Explicit false-equivalence guardrails include:
+
+- Java ≠ JavaScript
+- SAP Basis ≠ SAP FICO
+- SAP MM ≠ SAP SD
+- React ≠ JavaScript
+- AML ≠ general banking
+- KYC ≠ AML
+- Power BI ≠ Tableau
+- AWS ≠ Azure
+- GCP ≠ AWS
+
+Task 4 also exposes conservative word-family normalization for analyze/analysis/analytical, manage/management, and coordinate/coordination. It does not use these families to invent requirements.
+
+Normalized requirements retain:
+
+- original JD source text
+- original matched text
+- canonical label
+- concept ID
+- normalization method
+- normalization confidence
+- original mentions and normalized mentions
+- Task 3 importance/provenance
+
+Task 4 does **not**:
+
+- inspect the candidate's resume for matching evidence
+- infer that the candidate possesses any normalized skill
+- calculate ATS Readiness
+- calculate Job Requirement Coverage
+- assign recommendations or priority levels
+- implement the production dashboard
 - replace the production analyzer
