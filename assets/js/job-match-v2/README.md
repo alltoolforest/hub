@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–8 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–9 Foundation
 
-This directory contains the isolated foundations completed through Task 8 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 9 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -539,3 +539,40 @@ Task 8 does **not**:
 - perform production audit/manual verification/final freeze
 
 Those remain Tasks 9 and 10.
+
+
+## Task 9 — Privacy, Security, Performance, SEO + Full Pre-Deployment Audit
+
+Task 9 hardens the isolated V2 replacement before production replacement.
+
+Implemented and audited:
+
+- documented local/no-server-upload processing
+- local PDF.js + local Mammoth.js dependency disclosure
+- analytics boundary: no resume/JD text telemetry
+- malicious filename normalization
+- control/bidi/zero-width text sanitization
+- PDF page-count and extracted-text ceilings
+- DOCX expansion and extracted-text ceilings
+- malformed/corrupt document handling
+- formula-like text treated as inert text
+- object URL cleanup
+- parser/document cleanup
+- repeated re-analysis cleanup
+- large-resume and long-JD performance
+- accessibility/mobile semantic audit
+- current-browser source compatibility audit
+- static useful SEO content candidate
+- final P0/P1 gate
+
+Task 9 also fixed one confirmed P1 performance defect: normalized resume evidence lookup no longer re-normalizes the entire resume as context for every evidence line.
+
+The full audit record is in `TASK9-PREDEPLOY-AUDIT.md`.
+
+Task 9 result:
+
+- P0 = 0
+- P1 = 0
+- Pre-deployment audit = PASS
+
+Task 9 does **not** deploy or replace the production analyzer. The current `work/job-match/index.html` remains unchanged. Production replacement, production audit, manual verification, final regression and freeze remain Task 10.
