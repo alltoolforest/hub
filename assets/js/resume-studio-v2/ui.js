@@ -513,10 +513,10 @@ function renderResponsibilitySuggestions(root, state, index) {
   const current = state.experience[index]?.responsibilities || [];
   const items = suggestions
     .filter((item) => !current.some((value) => value.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
-    .map((item) => `<li><span><strong>Suggested:</strong> ${esc(item.text)}</span><button type="button" class="rs-secondary" data-verify-responsibility data-index="${index}" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
+    .map((item) => `<li><span><strong>${esc(item.text)}</strong> <span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></span><button type="button" class="rs-secondary" data-verify-responsibility data-index="${index}" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
     .join('');
   host.innerHTML = items
-    ? `<div class="rs-suggestion-box" role="region" aria-label="Responsibility suggestions"><p><strong>Role ideas for ${esc(jobTitle)}</strong> · Add only duties you personally performed.</p><ul class="rs-suggestion-list">${items}</ul></div>`
+    ? `<div class="rs-suggestion-box" role="region" aria-label="Responsibility suggestions"><p><strong>Role ideas for ${esc(jobTitle)}</strong> · These are job-title-based ideas, not claims about your work. Add only duties you personally performed.</p><ul class="rs-suggestion-list">${items}</ul></div>`
     : '<p class="rs-help">All available role ideas are already included in this experience entry.</p>';
 }
 
