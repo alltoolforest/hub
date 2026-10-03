@@ -159,6 +159,14 @@ export function normalizeResumeDraft(input) {
     }
   }
 
+  // Candidate-type-controlled sections must remain internally consistent
+  // after restoring older drafts, regardless of legacy enabled-section flags.
+  resume.settings.enabledSections.careerObjective = true;
+  resume.settings.enabledSections.summary = candidateType === CANDIDATE_TYPES.EXPERIENCED;
+  resume.settings.enabledSections.experience = candidateType === CANDIDATE_TYPES.EXPERIENCED;
+  resume.settings.enabledSections.projects = candidateType === CANDIDATE_TYPES.FRESHER;
+  resume.settings.enabledSections.internships = candidateType === CANDIDATE_TYPES.FRESHER;
+
   return resume;
 }
 
