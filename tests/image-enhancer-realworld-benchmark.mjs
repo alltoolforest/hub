@@ -187,12 +187,27 @@ try {
     await page.locator('#enhancer-sharpen').selectOption('auto');
     await page.locator('#enhancer-run').click();
 
-    await page.waitForFunction(before => {
-      const links = [...document.querySelectorAll('#downloads a[download]')];
-      const last = links.at(-1);
-      const button = document.querySelector('#enhancer-run');
-      return !!last && !!button && !button.disabled && last.href !== before;
-    }, beforeHref || '', { timeout: 150000 });
+    try {
+      await page.waitForFunction(before => {
+        const links = [...document.querySelectorAll('#downloads a[download]')];
+        const last = links.at(-1);
+        const button = document.querySelector('#enhancer-run');
+        return !!last && !!button && !button.disabled && last.href !== before;
+      }, beforeHref || '', { timeout: 150000 });
+    } catch (error) {
+      const state = await page.evaluate(before => {
+        const links = [...document.querySelectorAll('#downloads a[download]')];
+        return {
+          status: document.querySelector('#status')?.textContent || '',
+          selected: document.querySelector('.selected-files')?.textContent || '',
+          lastHref: links.at(-1)?.href || '',
+          beforeHref: before,
+          runDisabled: !!document.querySelector('#enhancer-run')?.disabled
+        };
+      }, beforeHref || '');
+      console.error('TASK5-TIMEOUT', name, JSON.stringify(state), diagnostics.join('\n'));
+      throw error;
+    }
 
     const status = (await page.locator('#status').textContent()) || '';
     const metrics = await page.evaluate(async targetDataUrl => {
