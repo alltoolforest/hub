@@ -11,10 +11,22 @@ export function startResumeStudioV2(root = document.querySelector('#resume-studi
     throw new Error('Resume Studio V2 root element was not found.');
   }
 
-  const ui = mountResumeStudioUI(root, resumeStore, { restoredDraft: detectedDraft });
-  const stopAutosave = createDraftAutosaver(resumeStore, (result) => {
-    ui.setStorageStatus(result);
+  let stopAutosave = () => {};
+  let autosaveStarted = false;
+  const startAutosave = () => {
+    if (autosaveStarted) return;
+    autosaveStarted = true;
+    stopAutosave = createDraftAutosaver(resumeStore, (result) => {
+      ui.setStorageStatus(result);
+    });
+  };
+
+  const ui = mountResumeStudioUI(root, resumeStore, {
+    restoredDraft: detectedDraft,
+    onDraftResolved: startAutosave
   });
+
+  if (detectedDraft.status !== 'restored') startAutosave();
 
   if (detectedDraft.status === 'restored') {
     ui.setStorageStatus({ status: 'available', savedAt: detectedDraft.savedAt });
