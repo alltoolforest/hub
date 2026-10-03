@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–4 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–5 Foundation
 
-This directory contains the isolated foundations completed through Task 4 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 5 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -237,4 +237,59 @@ Task 4 does **not**:
 - calculate Job Requirement Coverage
 - assign recommendations or priority levels
 - implement the production dashboard
+- replace the production analyzer
+
+
+## Task 5 — ATS Readiness Engine
+
+Task 5 adds the independent ATS Readiness half of the product. It does not compare the resume to the job description.
+
+The engine produces explainable findings across:
+
+- parseability
+- candidate contact signals
+- standard resume sections
+- date and chronology consistency
+- content density
+- repeated lines
+- custom/unclear heading signals
+- unusual symbol usage
+- PDF reading-order risk
+- DOCX table dependence
+- embedded-image text risk
+- quantified achievement evidence
+
+Supported section equivalents include common headings for Summary/Objective, Skills, Work Experience, Education, Certifications/Licenses and Projects.
+
+Uploaded PDF/DOCX checks use parser evidence only. The engine never claims that every ATS will reject a table, image, layout or file that raises a risk signal.
+
+Pasted text receives structure/content checks but uploaded-file formatting is explicitly marked NOT_APPLICABLE because file-layout risk cannot be inferred reliably from pasted text.
+
+Quantified achievement detection intentionally excludes obvious phone numbers and date-only lines. It looks for outcome/count contexts such as percentages, currencies, handled/processed volumes, users, cases, tickets and similar measurable evidence.
+
+The ATS Readiness result is a transparent classification:
+
+- STRONG
+- NEEDS_REVIEW
+- HIGH_RISK
+- INSUFFICIENT_DATA
+
+There is no hidden employer score and no interview/hiring prediction.
+
+Task 5 extends Task 2 parser diagnostics only where required for ATS readiness:
+
+- DOCX block/table/heading/list counts
+- DOCX table-text ratio
+- embedded-image presence
+- PDF sparse-page ratio
+- PDF possible reading-order page count
+
+Task 5 does **not**:
+
+- compare candidate evidence with job requirements
+- infer that a requirement is matched
+- calculate Job Requirement Coverage
+- prioritize job-match recommendations
+- generate tailored resume content
+- build the results dashboard
 - replace the production analyzer
