@@ -340,7 +340,7 @@ function render(root, state) {
         <div class="rs-preview-frame" id="rs-preview-host"></div>
       </section>
 
-      <div class="rs-task-note" role="status" aria-live="polite" id="rs-state-status">Information is held only in memory for this isolated build. Suggested content is never added automatically. Local draft saving is not enabled yet.</div>
+      <div class="rs-task-note" role="status" aria-live="polite" id="rs-state-status">Resume data stays in this browser. Suggested content is never added automatically.</div>
     </form>
   `;
   renderResumePreview(root.querySelector('#rs-preview-host'), state);
@@ -433,6 +433,10 @@ export function mountResumeStudioUI(root, store, options = {}) {
     }
   };
   const refreshPreview = () => renderResumePreview(root.querySelector('#rs-preview-host'), store.getState());
+  const refreshValidationIfVisible = () => {
+    const results = root.querySelector('#rs-validation-results');
+    if (results && results.hasChildNodes()) renderValidationResults(root, store.getState());
+  };
   rerender();
 
   function storageMessage(result = {}) {
@@ -507,6 +511,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.id === 'target-role') {
       store.setTargetRole(target.value);
       refreshPreview();
+      refreshValidationIfVisible();
       return;
     }
 
@@ -521,6 +526,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
         return state;
       });
       refreshPreview();
+      refreshValidationIfVisible();
       return;
     }
 
@@ -534,6 +540,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
         return state;
       });
       refreshPreview();
+      refreshValidationIfVisible();
       return;
     }
 
@@ -560,6 +567,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
         return state;
       });
       refreshPreview();
+      refreshValidationIfVisible();
     }
   });
 
