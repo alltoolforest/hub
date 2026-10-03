@@ -335,6 +335,7 @@ function render(root, state) {
       <section class="rs-panel" aria-labelledby="rs-declaration-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Auto-created</p><h2 id="rs-declaration-heading">Declaration</h2></div></div>
         <label class="rs-switch"><input type="checkbox" data-toggle-section="declaration" ${state.declaration.enabled ? 'checked' : ''}> Include declaration</label>
+        <p class="rs-help">A standard declaration is created automatically. You may edit the wording, then enter Place, Date and Candidate Name below it. You can also disable the declaration when it is not appropriate for the application.</p>
         <div class="rs-grid ${state.declaration.enabled ? '' : 'rs-disabled-block'}" aria-disabled="${state.declaration.enabled ? 'false' : 'true'}">
           <label class="rs-full">Declaration text <span>(editable)</span><textarea rows="3" data-path="declaration.text" maxlength="700" ${state.declaration.enabled ? '' : 'disabled'}>${esc(state.declaration.text)}</textarea></label>
           <label>Place<input data-path="declaration.place" maxlength="100" ${state.declaration.enabled ? '' : 'disabled'} value="${esc(state.declaration.place)}"></label>
