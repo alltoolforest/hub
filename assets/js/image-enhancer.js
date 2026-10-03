@@ -1516,6 +1516,42 @@ export async function mount(root, slug) {
 
       const faceRegions = await resolveFaceSafety(signal, requestedContent);
 
+      const diagnosisConfidence = analysis?.diagnosis?.confidence || {};
+      const compressionConfidence = Math.max(
+        Number(diagnosisConfidence.compression) || 0,
+        Number(analysis?.jpegArtifacts) || 0
+      );
+      const blurConfidence = Math.max(
+        Number(diagnosisConfidence.blur) || 0,
+        Number(analysis?.blurScore) || 0
+      );
+
+      // Trust-first JPEG handling. The general restoration model can turn block
+      // boundaries into false texture when compression is the dominant problem.
+      // Until a dedicated deblocking model is verified, preserve the photographed
+      // pixels rather than knowingly make a compressed image less faithful.
+      if (compressionConfidence >= 0.72 && blurConfidence < 0.34 && !analysis?.likelyBlurred) {
+        status('Compression damage detected. Preserving source fidelity…');
+        const safeCanvas = el('canvas', { width, height });
+        const safeCtx = safeCanvas.getContext('2d', { alpha: false });
+        if (!safeCtx) throw new Error('Compression fidelity canvas is unavailable.');
+        safeCtx.imageSmoothingEnabled = true;
+        safeCtx.imageSmoothingQuality = 'high';
+        safeCtx.drawImage(image, 0, 0, width, height);
+        result = {
+          canvas: safeCanvas,
+          aiUsed: false,
+          backend: 'compression-fidelity'
+        };
+
+        const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'enhance', signal);
+        result.canvas = fidelityGuard.canvas;
+        const blob = await canvasBlob(result.canvas, 'image/png', 1);
+        output(blob, safeName(file.name, '-enhanced', 'png'));
+        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · compression-safe source fidelity.`);
+        return result;
+      }
+
       const blurEligible =
         analysis?.likelyBlurred &&
         Math.min(image.width, image.height) >= 96 &&
