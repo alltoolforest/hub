@@ -122,7 +122,12 @@ function requirementCard(doc, card) {
   const body = el(doc, 'div', 'jm-card__body');
   const jdLabel = el(doc, 'h4', 'jm-card__subheading', 'Job description wording');
   const jd = el(doc, 'blockquote', 'jm-jd-source');
-  appendHighlightedText(doc, jd, card.jobDescriptionText || card.requirement, card.requirement);
+  appendHighlightedText(
+    doc,
+    jd,
+    card.jobDescriptionText || card.requirement,
+    card.jobHighlightText || card.requirement
+  );
 
   const evidenceLabel = el(doc, 'h4', 'jm-card__subheading', 'Resume evidence');
   const explanation = el(doc, 'p', 'jm-card__explanation', card.explanation || 'No additional explanation.');
