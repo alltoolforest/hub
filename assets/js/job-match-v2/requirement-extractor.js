@@ -177,12 +177,31 @@ function isBoilerplate(segment) {
 }
 
 function escaped(value) {
+  return value.replace(/[|\\{}()[\]^$+*?.-]/g, '\\function escaped(value) {
   return value.replace(/[|\\{}()[\]^$+*?.-]/g, '\\$&');
 }
 
 function findPhrase(text, phrase) {
   const pattern = new RegExp('(^|[^A-Za-z0-9+#])(' + escaped(phrase) + ')(?=$|[^A-Za-z0-9+#])', 'i');
   const match = text.match(pattern);
+  return match ? match[2] : '';
+}');
+}
+
+const PHRASE_PATTERN_CACHE = new Map();
+
+function phrasePattern(phrase) {
+  if (!PHRASE_PATTERN_CACHE.has(phrase)) {
+    PHRASE_PATTERN_CACHE.set(
+      phrase,
+      new RegExp('(^|[^A-Za-z0-9+#])(' + escaped(phrase) + ')(?=$|[^A-Za-z0-9+#])', 'i')
+    );
+  }
+  return PHRASE_PATTERN_CACHE.get(phrase);
+}
+
+function findPhrase(text, phrase) {
+  const match = text.match(phrasePattern(phrase));
   return match ? match[2] : '';
 }
 
