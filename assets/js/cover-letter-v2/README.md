@@ -39,3 +39,24 @@ Task 1 defines safe PDF/DOCX intake and extraction-result behavior. The producti
 - No persistent storage.
 - No unsafe HTML rendering.
 - No dependency on the frozen ATS Analyzer.
+
+
+## Task 2 — Evidence-Based Writing Engine + Quality Checker
+
+Task 2 adds only the approved writing-intelligence layer on top of the verified Task 1 foundation.
+
+Implemented:
+
+- complete cover-letter text structure: candidate header, greeting, opening, evidence body, motivation, closing and sign-off
+- candidate-aware framing for fresher/student, experienced and career-changer modes
+- evidence prioritization with a maximum of three supporting items
+- preference for truthful measurable evidence when available
+- REQUIRED requirements weighted above PREFERRED requirements during evidence selection
+- Professional, Concise, Warm and Confident tone controls
+- Concise and Standard length modes
+- controlled section refinements: shorten, strengthen wording, opening adjustment and closing adjustment
+- numeric claim-grounding guard that blocks unsupported generated metrics
+- deterministic Cover Letter Quality Checker for role/company presence, greeting, closing, length, paragraph structure, motivation, metrics, repetition and unsupported numbers
+- no interview-probability or employer-ATS claims
+
+Task 2 does **not** add templates, live preview, production UI, draft persistence, PDF/DOCX export, production SEO changes, deployment or production replacement. Those remain Tasks 3–5.
