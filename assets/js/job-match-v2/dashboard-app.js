@@ -1,0 +1,100 @@
+import { renderJobMatchDashboard } from './dashboard-ui.js';
+import { createImprovementWorkflow } from './improvement-workflow.js';
+
+export function mountJobMatchDashboard({
+  root,
+  initialState,
+  analyzeRevisedResume,
+  onRequestNewAnalysis = null,
+  onSensitiveDataCleared = null,
+  documentRef = root?.ownerDocument || globalThis.document
+}) {
+  if (!root) throw new TypeError('A dashboard root element is required.');
+  if (!initialState?.analysis?.jobMatch) {
+    throw new TypeError('A completed ATS & Job Match V2 state is required.');
+  }
+
+  const workflow = createImprovementWorkflow({
+    initialState,
+    analyzeRevisedResume
+  });
+
+  let renderer = null;
+
+  function render(state, comparison = null) {
+    renderer?.destroy?.();
+    renderer = renderJobMatchDashboard({
+      root,
+      state,
+      comparison,
+      documentRef,
+      callbacks: {
+        async onReanalyze(input) {
+          const result = await workflow.reanalyze(input.file || input.text);
+          render(result.state, result.comparison);
+        },
+
+        async onNewAnalysis() {
+          workflow.startNewAnalysis();
+          if (typeof onRequestNewAnalysis === 'function') {
+            await onRequestNewAnalysis();
+          }
+        },
+
+        async onClearSensitiveData() {
+          workflow.clearSensitiveData();
+          if (typeof onSensitiveDataCleared === 'function') {
+            await onSensitiveDataCleared();
+          }
+        }
+      }
+    });
+    return renderer;
+  }
+
+  render(initialState, workflow.getComparison());
+
+  return Object.freeze({
+    getState() {
+      return workflow.getState();
+    },
+
+    getComparison() {
+      return workflow.getComparison();
+    },
+
+    update(state) {
+      if (!state?.analysis?.jobMatch) throw new TypeError('A completed analysis state is required.');
+      workflow.startNewAnalysis();
+      const nextWorkflow = createImprovementWorkflow({ initialState: state, analyzeRevisedResume });
+      const comparison = nextWorkflow.getComparison();
+      renderer?.destroy?.();
+      renderer = renderJobMatchDashboard({
+        root,
+        state,
+        comparison,
+        documentRef,
+        callbacks: {
+          async onReanalyze(input) {
+            const result = await nextWorkflow.reanalyze(input.file || input.text);
+            renderer?.destroy?.();
+            renderer = renderJobMatchDashboard({
+              root,
+              state: result.state,
+              comparison: result.comparison,
+              documentRef,
+              callbacks: {}
+            });
+          }
+        }
+      });
+      return renderer.viewModel;
+    },
+
+    destroy() {
+      workflow.clearSensitiveData();
+      renderer?.destroy?.();
+      renderer = null;
+    }
+  });
+}
