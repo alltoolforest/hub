@@ -1,3 +1,4 @@
+import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
 import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
 import { getRoleSuggestions } from './role-engine.js';
@@ -197,6 +198,16 @@ function render(root, state) {
         <span class="active">1. Profile</span><span>2. Content</span><span>3. Template</span><span>4. Review</span>
       </div>
 
+      <section class="rs-storage-bar" aria-labelledby="rs-storage-heading">
+        <div>
+          <strong id="rs-storage-heading">Local draft</strong>
+          <p id="rs-storage-status">Your resume draft is saved only in this browser on this device. It is not uploaded to AllToolForest.</p>
+        </div>
+        <div class="rs-storage-actions">
+          <button type="button" class="rs-secondary" data-clear-draft>Clear saved draft &amp; start new</button>
+        </div>
+      </section>
+
       <section class="rs-panel" aria-labelledby="rs-start-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Start here</p><h2 id="rs-start-heading">Candidate profile</h2></div></div>
         <div class="rs-grid">
@@ -370,12 +381,33 @@ function addItem(store, type) {
   });
 }
 
-export function mountResumeStudioUI(root, store) {
+export function mountResumeStudioUI(root, store, options = {}) {
   if (!root || !store) throw new TypeError('Resume Studio UI requires a root element and store.');
+  const restoredDraft = options.restoredDraft || { status: 'empty' };
 
   const rerender = () => render(root, store.getState());
   const refreshPreview = () => renderResumePreview(root.querySelector('#rs-preview-host'), store.getState());
   rerender();
+
+  function storageMessage(result = {}) {
+    if (result.status === 'saved') return 'Draft saved locally in this browser.';
+    if (result.status === 'restored') return 'Saved draft restored from this browser.';
+    if (result.status === 'cleared' || result.status === 'empty') return 'No saved draft on this browser.';
+    if (result.status === 'too-large') return 'Draft is too large to save locally. Your current in-memory resume is still available.';
+    if (result.status === 'unavailable') return 'Local draft saving is unavailable in this browser or browsing mode.';
+    if (result.status === 'discarded') return 'An unreadable or unsupported saved draft was discarded safely.';
+    if (result.status === 'failed') return 'Local draft could not be saved. Your current in-memory resume is still available.';
+    return 'Your resume draft is saved only in this browser on this device. It is not uploaded to AllToolForest.';
+  }
+
+  function setStorageStatus(result) {
+    const status = root.querySelector('#rs-storage-status');
+    if (status) status.textContent = storageMessage(result);
+  }
+
+  if (restoredDraft.status && restoredDraft.status !== 'empty') {
+    setStorageStatus(restoredDraft);
+  }
 
   root.addEventListener('change', (event) => {
     const target = event.target;
@@ -483,6 +515,19 @@ export function mountResumeStudioUI(root, store) {
   });
 
   root.addEventListener('click', (event) => {
+    const clearDraftButton = event.target.closest('[data-clear-draft]');
+    if (clearDraftButton) {
+      const confirmed = globalThis.confirm ? globalThis.confirm('Clear the saved resume draft from this browser and start a new resume?') : true;
+      if (!confirmed) return;
+      const cleared = clearResumeDraft();
+      store.reset(CANDIDATE_TYPES.FRESHER);
+      rerender();
+      setStorageStatus(cleared.status === 'cleared' ? cleared : { status: cleared.status });
+      const candidateType = root.querySelector('#candidate-type');
+      if (candidateType) candidateType.focus();
+      return;
+    }
+
     const summaryButton = event.target.closest('[data-refine-summary]');
     if (summaryButton) {
       const state = store.getState();
@@ -574,6 +619,7 @@ export function mountResumeStudioUI(root, store) {
 
   return {
     getState: store.getState,
+    setStorageStatus,
     destroy() {
       root.replaceChildren();
     }
