@@ -132,13 +132,31 @@ function clean(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
-function importanceOf(segment) {
+function signalImportance(text) {
+  const required = REQUIRED_SIGNALS.some((pattern) => pattern.test(text));
+  const preferred = PREFERRED_SIGNALS.some((pattern) => pattern.test(text));
+  if (required && !preferred) return REQUIREMENT_IMPORTANCE.REQUIRED;
+  if (preferred && !required) return REQUIREMENT_IMPORTANCE.PREFERRED;
+  return null;
+}
+
+function importanceOf(segment, matchedText = '') {
   const text = segment.text || '';
   const heading = segment.sectionHeading || '';
+
+  if (matchedText) {
+    const clauses = text.split(/\s*;\s*/);
+    const needle = matchedText.toLowerCase();
+    const clause = clauses.find((item) => item.toLowerCase().includes(needle));
+    const local = clause ? signalImportance(clause) : null;
+    if (local) return local;
+  }
+
+  const explicit = signalImportance(text);
+  if (explicit) return explicit;
+
   if (/\b(preferred|desirable|nice to have)\b/i.test(heading)) return REQUIREMENT_IMPORTANCE.PREFERRED;
   if (/\b(required|mandatory|minimum|essential)\b/i.test(heading)) return REQUIREMENT_IMPORTANCE.REQUIRED;
-  if (REQUIRED_SIGNALS.some((pattern) => pattern.test(text))) return REQUIREMENT_IMPORTANCE.REQUIRED;
-  if (PREFERRED_SIGNALS.some((pattern) => pattern.test(text))) return REQUIREMENT_IMPORTANCE.PREFERRED;
   return REQUIREMENT_IMPORTANCE.GENERAL;
 }
 
@@ -178,7 +196,7 @@ function pushCandidate(candidates, category, matchedText, segment, confidence = 
     sourceSegmentId: segment.id,
     lineIndex: segment.lineIndex,
     sectionHeading: clean(segment.sectionHeading),
-    importance: importanceOf(segment),
+    importance: importanceOf(segment, term),
     confidence,
     provenance: PROVENANCE_KIND.PARSED
   });
@@ -299,7 +317,7 @@ function unknownRequirementCandidate(segment) {
     sourceSegmentId: segment.id,
     lineIndex: segment.lineIndex,
     sectionHeading: clean(segment.sectionHeading),
-    importance: importanceOf(segment),
+    importance: importanceOf(segment, clean(segment.text)),
     confidence: CONFIDENCE_LEVEL.LOW,
     provenance: PROVENANCE_KIND.PARSED
   };
