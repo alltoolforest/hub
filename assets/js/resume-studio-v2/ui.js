@@ -4,7 +4,7 @@ import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
 import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
 import { getRoleSuggestions, getTargetRoleSuggestions } from './role-engine.js';
-import { CONTENT_PROVENANCE, createSuggestedUnit, generateAutomaticIntroduction, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
+import { CONTENT_PROVENANCE, createSuggestedUnit, generateCareerObjective, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
 import { CANDIDATE_TYPES } from './schema.js';
 
 function esc(value) {
@@ -233,7 +233,7 @@ function render(root, state) {
             </div>
           </label>
         </div>
-        <p class="rs-help" id="target-role-help">Start typing a role keyword such as SAP, Data, Quality or AML. Resume Studio will suggest matching target positions and generate role-based draft content without inventing your employers, dates, qualifications, achievements or metrics.</p>
+        <p class="rs-help" id="target-role-help">Start typing a role keyword such as SAP, Data, Quality or AML. Resume Studio will suggest matching target positions. For Fresher profiles, the selected target position can generate a Career Objective without inventing experience, qualifications, achievements or metrics.</p>
       </section>
 
       <section class="rs-panel" aria-labelledby="rs-contact-heading">
@@ -534,9 +534,12 @@ export function mountResumeStudioUI(root, store, options = {}) {
   const selectTargetRole = (role) => {
     store.update((state) => {
       state.candidate.targetRole = role;
-      const generated = generateAutomaticIntroduction({ candidateType: state.candidate.type, targetRole: role });
-      state.summary.text = generated.text;
-      state.summary.provenance = generated.provenance;
+      if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
+          (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+        const generated = generateCareerObjective({ targetRole: role });
+        state.summary.text = generated.text;
+        state.summary.provenance = generated.provenance;
+      }
       return state;
     });
     rerender();
@@ -576,8 +579,9 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.id === 'candidate-type') {
       store.setCandidateType(target.value);
       store.update((state) => {
-        if (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED) {
-          const generated = generateAutomaticIntroduction({ candidateType: state.candidate.type, targetRole: state.candidate.targetRole });
+        if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
           state.summary.text = generated.text;
           state.summary.provenance = generated.provenance;
         }
@@ -673,8 +677,9 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.id === 'target-role') {
       store.update((state) => {
         state.candidate.targetRole = String(target.value || '').trim();
-        if (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED) {
-          const generated = generateAutomaticIntroduction({ candidateType: state.candidate.type, targetRole: state.candidate.targetRole });
+        if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
           state.summary.text = generated.text;
           state.summary.provenance = generated.provenance;
         }
