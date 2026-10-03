@@ -4,7 +4,7 @@ import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
 import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
 import { getRoleSuggestions, getTargetRoleSuggestions } from './role-engine.js';
-import { CONTENT_PROVENANCE, createSuggestedUnit, generateCareerObjective, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
+import { CONTENT_PROVENANCE, createSuggestedUnit, generateCareerObjective, generateProfessionalSummary, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
 import { CANDIDATE_TYPES } from './schema.js';
 
 function esc(value) {
@@ -272,7 +272,7 @@ function render(root, state) {
           <button type="button" class="rs-secondary" data-refine-summary>Refine from my facts</button>
           <span class="rs-provenance" data-provenance="${esc(state.summary.provenance || 'user')}">${esc((state.summary.provenance || 'user').toUpperCase())}</span>
         </div>
-        <p class="rs-help">Write or refine your professional summary using facts you can support. Automatic summary generation belongs to the next remediation subtask.</p>
+        <p class="rs-help">A role-based professional summary of about 50 words is generated automatically. Keep it, add your own verified points, edit it directly, or refine it. Manual edits are not silently overwritten.</p>
       </section>` : ''}
 
       <section class="rs-panel" aria-labelledby="rs-skills-heading">
@@ -551,6 +551,16 @@ export function mountResumeStudioUI(root, store, options = {}) {
         const generated = generateCareerObjective({ targetRole: role });
         state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
       }
+      if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+          (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+        const generatedSummary = generateProfessionalSummary({
+          targetRole: role,
+          skills: state.skills,
+          experience: state.experience
+        });
+        state.summary.text = generatedSummary.text;
+        state.summary.provenance = generatedSummary.provenance;
+      }
       return state;
     });
     rerender();
@@ -593,6 +603,16 @@ export function mountResumeStudioUI(root, store, options = {}) {
         if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
           const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
           state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
+        }
+        if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generatedSummary = generateProfessionalSummary({
+            targetRole: state.candidate.targetRole,
+            skills: state.skills,
+            experience: state.experience
+          });
+          state.summary.text = generatedSummary.text;
+          state.summary.provenance = generatedSummary.provenance;
         }
         return state;
       });
@@ -690,6 +710,16 @@ export function mountResumeStudioUI(root, store, options = {}) {
           const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
           state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
         }
+        if (state.candidate.type === CANDIDATE_TYPES.EXPERIENCED &&
+            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+          const generatedSummary = generateProfessionalSummary({
+            targetRole: state.candidate.targetRole,
+            skills: state.skills,
+            experience: state.experience
+          });
+          state.summary.text = generatedSummary.text;
+          state.summary.provenance = generatedSummary.provenance;
+        }
         return state;
       });
       renderTargetRoleSuggestions(root, target.value);
@@ -697,6 +727,10 @@ export function mountResumeStudioUI(root, store, options = {}) {
       const objectiveField = root.querySelector('[data-path="careerObjective.text"]');
       if (objectiveField && store.getState().careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
         objectiveField.value = store.getState().careerObjective.text;
+      }
+      const summaryField = root.querySelector('[data-path="summary.text"]');
+      if (summaryField && store.getState().summary.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+        summaryField.value = store.getState().summary.text;
       }
       refreshPreview();
       refreshValidationIfVisible();
