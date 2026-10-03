@@ -5,7 +5,7 @@ import {
   RUN_STATUS
 } from './contracts.js';
 
-export const ANALYSIS_SCHEMA_VERSION = 2;
+export const ANALYSIS_SCHEMA_VERSION = 3;
 
 function emptySourceRef() {
   return {
@@ -50,7 +50,16 @@ export function createEmptyAnalysisState() {
 
     jobDescription: {
       rawText: '',
-      requirements: []
+      segments: [],
+      requirements: [],
+      ignoredSegments: [],
+      uncertainSegments: [],
+      diagnostics: {
+        segmentCount: 0,
+        requirementCount: 0,
+        ignoredSegmentCount: 0,
+        uncertainSegmentCount: 0
+      }
     },
 
     extracted: {
@@ -90,7 +99,7 @@ export function createEmptyAnalysisState() {
       createdAt: '',
       updatedAt: '',
       analysisId: '',
-      engineVersion: 'job-match-v2/task-2',
+      engineVersion: 'job-match-v2/task-3',
       claims: {
         reproducesEmployerAts: false,
         predictsHiringOutcome: false,
@@ -121,7 +130,11 @@ export function isCanonicalAnalysisState(value) {
   return requiredPaths.every((item) => item !== undefined && item !== null) &&
     Array.isArray(value.resume.parsedSections) &&
     Array.isArray(value.resume.parsing?.warnings) &&
+    Array.isArray(value.jobDescription.segments) &&
     Array.isArray(value.jobDescription.requirements) &&
+    Array.isArray(value.jobDescription.ignoredSegments) &&
+    Array.isArray(value.jobDescription.uncertainSegments) &&
+    value.jobDescription.diagnostics && typeof value.jobDescription.diagnostics === 'object' &&
     Array.isArray(value.extracted.skills) &&
     Array.isArray(value.extracted.qualifications) &&
     Array.isArray(value.extracted.certifications) &&
