@@ -172,6 +172,12 @@ export async function parsePdfArrayBuffer(arrayBuffer, pdfjs) {
         probableImageOnly,
         readingOrderRisk: possibleReadingOrderPages > 0 ? 'possible' : 'none_detected',
         warnings: Object.freeze(warnings),
+        formatDiagnostics: Object.freeze({
+          pageCount,
+          pagesWithVeryLittleText,
+          possibleReadingOrderPages,
+          sparsePageRatio
+        }),
         confidence: probableImageOnly ? CONFIDENCE_LEVEL.LOW : CONFIDENCE_LEVEL.MEDIUM,
         provenance: PROVENANCE_KIND.PARSED,
         limitation: 'Successful PDF text extraction does not guarantee identical parsing by every employer ATS.'
