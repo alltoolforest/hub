@@ -77,6 +77,21 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-normalization-diagnostics'
   ]),
 
+  implementedInTask5: Object.freeze([
+    'ats-parseability-findings',
+    'contact-signal-detection',
+    'resume-section-recognition',
+    'date-and-chronology-diagnostics',
+    'content-density-diagnostics',
+    'duplicate-line-detection',
+    'unusual-symbol-diagnostics',
+    'docx-table-and-image-risk-signals',
+    'pdf-reading-order-risk-signals',
+    'quantified-achievement-detection',
+    'explainable-ats-readiness-level',
+    'canonical-state-ats-readiness-adapter'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
