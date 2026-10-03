@@ -46,6 +46,23 @@ export const REQUIREMENT_CATEGORY = Object.freeze({
   UNKNOWN: 'unknown'
 });
 
+
+export const ATS_READINESS_CATEGORY = Object.freeze({
+  PARSEABILITY: 'parseability',
+  CONTACT: 'contact',
+  SECTIONS: 'sections',
+  STRUCTURE: 'structure',
+  FORMATTING_RISK: 'formatting_risk',
+  QUANTIFIED_IMPACT: 'quantified_impact'
+});
+
+export const ATS_READINESS_LEVEL = Object.freeze({
+  STRONG: 'strong',
+  NEEDS_REVIEW: 'needs_review',
+  HIGH_RISK: 'high_risk',
+  INSUFFICIENT_DATA: 'insufficient_data'
+});
+
 export const RUN_STATUS = Object.freeze({
   NOT_STARTED: 'not_started',
   READY: 'ready',
