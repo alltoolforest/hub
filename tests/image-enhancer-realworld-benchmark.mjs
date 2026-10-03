@@ -192,7 +192,9 @@ try {
 
       const outputBlob = await (await fetch(link.href)).blob();
       const output = await createImageBitmap(outputBlob);
-      const targetBlob = await (await fetch(targetDataUrl)).blob();
+      const targetPayload = targetDataUrl.split(',')[1] || '';
+      const targetBytes = Uint8Array.from(atob(targetPayload), ch => ch.charCodeAt(0));
+      const targetBlob = new Blob([targetBytes], { type: 'image/png' });
       const target = await createImageBitmap(targetBlob);
 
       const width = 192, height = 128;
