@@ -12,7 +12,7 @@ export const TEMPLATE_IDS = Object.freeze({
 
 export const DEFAULT_SECTION_ORDER = Object.freeze({
   fresher: Object.freeze([
-    'summary',
+    'careerObjective',
     'skills',
     'education',
     'projects',
@@ -24,6 +24,7 @@ export const DEFAULT_SECTION_ORDER = Object.freeze({
     'declaration'
   ]),
   experienced: Object.freeze([
+    'careerObjective',
     'summary',
     'skills',
     'experience',
@@ -59,8 +60,13 @@ export function createEmptyResume(candidateType = CANDIDATE_TYPES.FRESHER) {
       linkedin: '',
       portfolio: ''
     },
+    careerObjective: {
+      heading: 'Career Objective',
+      text: '',
+      provenance: 'user'
+    },
     summary: {
-      heading: type === CANDIDATE_TYPES.EXPERIENCED ? 'Professional Summary' : 'Career Objective',
+      heading: 'Professional Summary',
       text: '',
       provenance: 'user'
     },
@@ -93,7 +99,8 @@ export function createEmptyResume(candidateType = CANDIDATE_TYPES.FRESHER) {
       template: type === CANDIDATE_TYPES.FRESHER ? TEMPLATE_IDS.FRESHER : TEMPLATE_IDS.ATS_CLASSIC,
       sectionOrder: clone(DEFAULT_SECTION_ORDER[type]),
       enabledSections: {
-        summary: true,
+        careerObjective: true,
+        summary: type === CANDIDATE_TYPES.EXPERIENCED,
         skills: true,
         experience: type === CANDIDATE_TYPES.EXPERIENCED,
         education: true,
