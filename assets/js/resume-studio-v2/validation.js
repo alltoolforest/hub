@@ -66,6 +66,7 @@ export function validateResume(resume) {
   const type = resume?.candidate?.type === 'experienced' ? 'experienced' : 'fresher';
   const contact = resume?.contact || {};
   const targetRole = clean(resume?.candidate?.targetRole);
+  const careerObjective = clean(resume?.careerObjective?.text);
   const summary = clean(resume?.summary?.text);
   const skills = list(resume?.skills);
   const education = (resume?.education || []).filter(meaningfulEducation);
@@ -90,11 +91,20 @@ export function validateResume(resume) {
   if (!validHttpUrl(contact.linkedin)) findings.push(issue(VALIDATION_LEVELS.WARNING, 'linkedin-url', 'LinkedIn should use a complete http:// or https:// URL.', 'contact'));
   if (!validHttpUrl(contact.portfolio)) findings.push(issue(VALIDATION_LEVELS.WARNING, 'portfolio-url', 'Portfolio / website should use a complete http:// or https:// URL.', 'contact'));
 
-  if (!summary) {
-    findings.push(issue(VALIDATION_LEVELS.WARNING, 'missing-introduction', type === 'experienced' ? 'Add a professional summary.' : 'Add a career objective.', 'summary'));
+  if (!careerObjective) {
+    findings.push(issue(VALIDATION_LEVELS.WARNING, 'missing-career-objective', 'Add a career objective.', 'careerObjective'));
   } else {
-    if (summary.length < 40) findings.push(issue(VALIDATION_LEVELS.INFO, 'short-introduction', 'The introduction is very short; make sure it explains your relevant value clearly.', 'summary'));
-    if (summary.length > 700) findings.push(issue(VALIDATION_LEVELS.WARNING, 'long-introduction', 'The introduction is long. Consider shortening it for easier scanning.', 'summary'));
+    if (careerObjective.length < 40) findings.push(issue(VALIDATION_LEVELS.INFO, 'short-career-objective', 'The career objective is very short; make sure it clearly states your direction and intended contribution.', 'careerObjective'));
+    if (careerObjective.length > 700) findings.push(issue(VALIDATION_LEVELS.WARNING, 'long-career-objective', 'The career objective is long. Consider shortening it for easier scanning.', 'careerObjective'));
+  }
+
+  if (type === 'experienced') {
+    if (!summary) {
+      findings.push(issue(VALIDATION_LEVELS.WARNING, 'missing-summary', 'Add a professional summary.', 'summary'));
+    } else {
+      if (summary.length < 40) findings.push(issue(VALIDATION_LEVELS.INFO, 'short-summary', 'The professional summary is very short; make sure it explains your relevant value clearly.', 'summary'));
+      if (summary.length > 700) findings.push(issue(VALIDATION_LEVELS.WARNING, 'long-summary', 'The professional summary is long. Consider shortening it for easier scanning.', 'summary'));
+    }
   }
 
   if (!skills.length) {
