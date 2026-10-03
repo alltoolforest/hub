@@ -226,8 +226,10 @@ function render(root, state) {
             </select>
           </label>
           <label>Target position
-            <input id="target-role" name="targetRole" maxlength="120" required autocomplete="organization-title" aria-describedby="target-role-help" value="${esc(state.candidate.targetRole)}" placeholder="e.g. SAP, Financial Crime Analyst">
-            <div id="target-role-suggestions" class="rs-inline-suggestions" aria-live="polite"></div>
+            <input id="target-role" name="targetRole" maxlength="120" required autocomplete="organization-title" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="target-role-suggestions-list" aria-describedby="target-role-help target-role-suggestions-status" value="${esc(state.candidate.targetRole)}" placeholder="e.g. SAP, Financial Crime Analyst">
+            <div id="target-role-suggestions" class="rs-inline-suggestions">
+              <span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span>
+            </div>
           </label>
         </div>
         <p class="rs-help" id="target-role-help">Start typing a role keyword such as SAP, Data, Quality or AML. Resume Studio will suggest matching target positions and generate role-based draft content without inventing your employers, dates, qualifications, achievements or metrics.</p>
@@ -386,15 +388,64 @@ function renderValidationResults(root, state) {
   `;
 }
 
+function closeTargetRoleSuggestions(root) {
+  const host = root.querySelector('#target-role-suggestions');
+  const input = root.querySelector('#target-role');
+  if (host) {
+    host.innerHTML = '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span>';
+  }
+  if (input) {
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+}
+
+function setActiveTargetRoleOption(root, index) {
+  const input = root.querySelector('#target-role');
+  const options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+  if (!input || !options.length) return -1;
+  const safeIndex = ((index % options.length) + options.length) % options.length;
+  options.forEach((option, optionIndex) => {
+    const active = optionIndex === safeIndex;
+    option.setAttribute('aria-selected', active ? 'true' : 'false');
+    option.dataset.active = active ? 'true' : 'false';
+  });
+  input.setAttribute('aria-activedescendant', options[safeIndex].id);
+  options[safeIndex].scrollIntoView?.({ block: 'nearest' });
+  return safeIndex;
+}
+
 function renderTargetRoleSuggestions(root, query) {
   const host = root.querySelector('#target-role-suggestions');
-  if (!host) return;
-  const roles = getTargetRoleSuggestions(query);
-  host.innerHTML = roles.length
-    ? '<div class="rs-inline-suggestion-list" role="listbox" aria-label="Target position suggestions">' +
-      roles.map((role) => '<button type="button" class="rs-inline-suggestion" data-target-role-option="' + esc(role) + '">' + esc(role) + '</button>').join('') +
-      '</div>'
-    : '';
+  const input = root.querySelector('#target-role');
+  if (!host || !input) return [];
+
+  const normalized = String(query || '').trim();
+  if (normalized.length < 2) {
+    closeTargetRoleSuggestions(root);
+    return [];
+  }
+
+  const roles = getTargetRoleSuggestions(normalized, 8);
+  if (!roles.length) {
+    host.innerHTML =
+      '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite">No matching target positions. You can keep your own job title.</span>' +
+      '<div class="rs-inline-empty">No matching role found. You can keep your own target position.</div>';
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+    return [];
+  }
+
+  host.innerHTML =
+    '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite">' + roles.length + ' target position suggestions available. Use Arrow Down and Arrow Up to review them, then Enter to select.</span>' +
+    '<div id="target-role-suggestions-list" class="rs-inline-suggestion-list" role="listbox" aria-label="Target position suggestions">' +
+    roles.map((role, index) =>
+      '<div id="target-role-option-' + index + '" class="rs-inline-suggestion" role="option" aria-selected="false" data-target-role-option="' + esc(role) + '">' + esc(role) + '</div>'
+    ).join('') +
+    '</div>';
+  input.setAttribute('aria-expanded', 'true');
+  input.removeAttribute('aria-activedescendant');
+  return roles;
 }
 
 function renderRoleSuggestions(root, state) {
@@ -477,6 +528,21 @@ export function mountResumeStudioUI(root, store, options = {}) {
     const results = root.querySelector('#rs-validation-results');
     if (results && results.hasChildNodes()) renderValidationResults(root, store.getState());
   };
+
+  const selectTargetRole = (role) => {
+    store.update((state) => {
+      state.candidate.targetRole = role;
+      const generated = generateAutomaticIntroduction({ candidateType: state.candidate.type, targetRole: role });
+      state.summary.text = generated.text;
+      state.summary.provenance = generated.provenance;
+      return state;
+    });
+    rerender();
+    renderRoleSuggestions(root, store.getState());
+    const targetInput = root.querySelector('#target-role');
+    if (targetInput) targetInput.focus();
+  };
+
   rerender();
 
   function storageMessage(result = {}) {
@@ -551,6 +617,52 @@ export function mountResumeStudioUI(root, store, options = {}) {
       });
       rerender();
     }
+  });
+
+  root.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (target.id !== 'target-role') return;
+
+    let options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !options.length) {
+      renderTargetRoleSuggestions(root, target.value);
+      options = Array.from(root.querySelectorAll('[data-target-role-option]'));
+    }
+
+    if (event.key === 'ArrowDown' && options.length) {
+      event.preventDefault();
+      const current = options.findIndex((option) => option.dataset.active === 'true');
+      setActiveTargetRoleOption(root, current < 0 ? 0 : current + 1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp' && options.length) {
+      event.preventDefault();
+      const current = options.findIndex((option) => option.dataset.active === 'true');
+      setActiveTargetRoleOption(root, current < 0 ? options.length - 1 : current - 1);
+      return;
+    }
+
+    if (event.key === 'Enter' && options.length) {
+      const active = options.find((option) => option.dataset.active === 'true');
+      if (active) {
+        event.preventDefault();
+        selectTargetRole(active.dataset.targetRoleOption);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      closeTargetRoleSuggestions(root);
+    }
+  });
+
+  root.addEventListener('focusout', (event) => {
+    if (event.target.id !== 'target-role') return;
+    globalThis.setTimeout(() => {
+      const host = root.querySelector('#target-role-suggestions');
+      if (!host?.contains(globalThis.document?.activeElement)) closeTargetRoleSuggestions(root);
+    }, 0);
   });
 
   root.addEventListener('input', (event) => {
@@ -636,18 +748,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
   root.addEventListener('click', (event) => {
     const roleOption = event.target.closest('[data-target-role-option]');
     if (roleOption) {
-      const role = roleOption.dataset.targetRoleOption;
-      store.update((state) => {
-        state.candidate.targetRole = role;
-        const generated = generateAutomaticIntroduction({ candidateType: state.candidate.type, targetRole: role });
-        state.summary.text = generated.text;
-        state.summary.provenance = generated.provenance;
-        return state;
-      });
-      rerender();
-      renderRoleSuggestions(root, store.getState());
-      const targetInput = root.querySelector('#target-role');
-      if (targetInput) targetInput.focus();
+      selectTargetRole(roleOption.dataset.targetRoleOption);
       return;
     }
 
