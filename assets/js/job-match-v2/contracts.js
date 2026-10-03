@@ -47,6 +47,20 @@ export const REQUIREMENT_CATEGORY = Object.freeze({
 });
 
 
+
+export const JOB_COVERAGE_LEVEL = Object.freeze({
+  STRONG: 'strong',
+  MODERATE: 'moderate',
+  LIMITED: 'limited',
+  INSUFFICIENT_DATA: 'insufficient_data'
+});
+
+export const RECOMMENDATION_PRIORITY = Object.freeze({
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  OPTIONAL: 'optional'
+});
+
 export const ATS_READINESS_CATEGORY = Object.freeze({
   PARSEABILITY: 'parseability',
   CONTACT: 'contact',
