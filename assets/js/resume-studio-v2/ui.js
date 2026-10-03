@@ -1,7 +1,5 @@
 import { CANDIDATE_TYPES } from './schema.js';
 
-const clone = (value) => JSON.parse(JSON.stringify(value));
-
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -362,6 +360,8 @@ export function mountResumeStudioUI(root, store) {
       });
       return;
     }
+
+    if (target.type === 'checkbox') return;
 
     if (target.matches('[data-array][data-key]')) {
       const collection = target.dataset.array;
