@@ -107,6 +107,18 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-job-match-adapter'
   ]),
 
+  implementedInTask7: Object.freeze([
+    'documented-requirement-weight-model',
+    'transparent-job-requirement-coverage',
+    'matched-partial-not-found-evidence-credit',
+    'uncertain-and-not-applicable-exclusions',
+    'required-preferred-breakdowns',
+    'hard-skill-tool-qualification-certification-experience-soft-skill-breakdowns',
+    'high-medium-optional-prioritization',
+    'truthful-add-only-if-supported-guardrails',
+    'canonical-state-coverage-and-priority-adapter'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
