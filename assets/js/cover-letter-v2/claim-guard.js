@@ -4,8 +4,12 @@ function normalize(value) {
   return String(value || "").toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}%$€£₹+#.]+/gu, " ").replace(/\s+/g, " ").trim();
 }
 
+function canonicalNumber(value) {
+  return String(value || "").replace(/\s+/g, "").replace(/,$/, "");
+}
+
 function numbers(value) {
-  return new Set(String(value || "").match(NUMBER_TOKEN) || []);
+  return new Set((String(value || "").match(NUMBER_TOKEN) || []).map(canonicalNumber));
 }
 
 function containsPhrase(haystack, needle) {
