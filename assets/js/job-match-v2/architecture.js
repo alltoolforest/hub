@@ -92,6 +92,21 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-ats-readiness-adapter'
   ]),
 
+  implementedInTask6: Object.freeze([
+    'section-aware-resume-evidence-index',
+    'exact-phrase-evidence',
+    'normalized-equivalent-evidence',
+    'contextual-soft-skill-evidence',
+    'job-title-experience-evidence',
+    'certification-section-evidence',
+    'education-level-and-field-evidence',
+    'non-overlapping-experience-duration',
+    'topic-specific-experience-evidence',
+    'constraint-uncertainty-guardrails',
+    'requirement-by-requirement-job-match-findings',
+    'canonical-state-job-match-adapter'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
