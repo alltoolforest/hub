@@ -55,6 +55,17 @@ export const JOB_MATCH_V2_ARCHITECTURE = Object.freeze({
     'canonical-state-parser-adapter'
   ]),
 
+  implementedInTask3: Object.freeze([
+    'job-description-segmentation',
+    'requirement-category-extraction',
+    'required-preferred-general-importance',
+    'multi-word-phrase-preservation',
+    'boilerplate-noise-filtering',
+    'source-evidence-provenance',
+    'uncertain-unknown-requirement-fallback',
+    'canonical-state-job-requirement-adapter'
+  ]),
+
   prohibitedClaims: Object.freeze([
     'reproduces a specific employer ATS',
     'employer assigned this result',
