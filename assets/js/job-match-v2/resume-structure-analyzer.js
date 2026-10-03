@@ -69,7 +69,7 @@ function meaningfulLines(text) {
     .filter(Boolean);
 }
 
-function canonicalSection(line) {
+export function identifyResumeSectionHeading(line) {
   const candidate = clean(line).replace(/[:：]\s*$/, '');
   for (const [section, patterns] of Object.entries(SECTION_PATTERNS)) {
     if (patterns.some((pattern) => pattern.test(candidate))) return section;
@@ -100,17 +100,17 @@ function detectSections(lines, parsedSections = []) {
   };
 
   for (const section of parsedSections || []) {
-    const canonical = canonicalSection(section?.heading);
+    const canonical = identifyResumeSectionHeading(section?.heading);
     if (canonical) add(canonical, section.heading, 'parsed_heading');
   }
 
   for (const line of lines) {
-    const canonical = canonicalSection(line);
+    const canonical = identifyResumeSectionHeading(line);
     if (canonical) add(canonical, line.replace(/[:：]\s*$/, ''), 'text_heading');
   }
 
   const unclearHeadings = lines
-    .filter((line) => headingLike(line) && !canonicalSection(line))
+    .filter((line) => headingLike(line) && !identifyResumeSectionHeading(line))
     .slice(0, 20);
 
   return Object.freeze({
@@ -122,7 +122,7 @@ function detectSections(lines, parsedSections = []) {
 function likelyName(lines) {
   const candidates = lines.slice(0, 8);
   for (const line of candidates) {
-    if (canonicalSection(line)) break;
+    if (identifyResumeSectionHeading(line)) break;
     if (/[@]|https?:\/\/|www\.|linkedin/i.test(line)) continue;
     if (/\d/.test(line)) continue;
 
@@ -218,7 +218,7 @@ function duplicateLines(lines) {
   const counts = new Map();
   for (const line of lines) {
     const normalized = normalizedLine(line);
-    if (normalized.length < 20 || canonicalSection(line)) continue;
+    if (normalized.length < 20 || identifyResumeSectionHeading(line)) continue;
     counts.set(normalized, (counts.get(normalized) || 0) + 1);
   }
   return Object.freeze([...counts.entries()]
