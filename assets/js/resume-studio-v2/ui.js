@@ -1,3 +1,4 @@
+import { summarizeValidation, validateResume } from './validation.js';
 import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
 import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
@@ -325,6 +326,15 @@ function render(root, state) {
         <p class="rs-help">All four templates use the same resume data and a linear single-column reading order. Switching templates changes presentation only.</p>
       </section>
 
+      <section class="rs-panel" aria-labelledby="rs-quality-heading">
+        <div class="rs-section-head">
+          <div><p class="rs-kicker">Quality check</p><h2 id="rs-quality-heading">Resume review</h2></div>
+          <button type="button" class="rs-secondary" data-run-validation>Review resume</button>
+        </div>
+        <p class="rs-help">This checker uses deterministic rules. It does not provide a fake ATS percentage or guarantee employer-system acceptance.</p>
+        <div id="rs-validation-results" aria-live="polite"></div>
+      </section>
+
       <section class="rs-panel rs-preview-panel" aria-labelledby="rs-preview-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Live preview</p><h2 id="rs-preview-heading">Resume preview</h2></div></div>
         <div class="rs-preview-frame" id="rs-preview-host"></div>
@@ -336,6 +346,34 @@ function render(root, state) {
   renderResumePreview(root.querySelector('#rs-preview-host'), state);
 }
 
+
+
+function validationLabel(level) {
+  if (level === 'error') return 'Needs attention';
+  if (level === 'warning') return 'Review';
+  if (level === 'info') return 'Suggestion';
+  return 'Passed';
+}
+
+function renderValidationResults(root, state) {
+  const host = root.querySelector('#rs-validation-results');
+  if (!host) return;
+  const findings = validateResume(state);
+  const summary = summarizeValidation(findings);
+  const actionable = findings.filter((item) => item.level !== 'pass');
+  const passed = findings.filter((item) => item.level === 'pass');
+
+  host.innerHTML = `
+    <div class="rs-validation-summary" role="status">
+      <strong>${summary.error} required issue${summary.error === 1 ? '' : 's'}, ${summary.warning} warning${summary.warning === 1 ? '' : 's'}, ${summary.info} suggestion${summary.info === 1 ? '' : 's'}</strong>
+    </div>
+    ${actionable.length ? `<ul class="rs-validation-list">${actionable.map((item) => `
+      <li data-level="${esc(item.level)}"><span class="rs-validation-level">${esc(validationLabel(item.level))}</span><span>${esc(item.message)}</span></li>`).join('')}</ul>` : '<p class="rs-validation-clear">No required issues or warnings were found by the current checks.</p>'}
+    <details class="rs-validation-passes"><summary>Structural checks passed (${passed.length})</summary>
+      <ul class="rs-validation-list">${passed.map((item) => `<li data-level="pass"><span class="rs-validation-level">Passed</span><span>${esc(item.message)}</span></li>`).join('')}</ul>
+    </details>
+  `;
+}
 
 function renderRoleSuggestions(root, state) {
   const host = root.querySelector('#rs-role-suggestions');
@@ -526,6 +564,19 @@ export function mountResumeStudioUI(root, store, options = {}) {
   });
 
   root.addEventListener('click', (event) => {
+    const validationButton = event.target.closest('[data-run-validation]');
+    if (validationButton) {
+      renderValidationResults(root, store.getState());
+      const results = root.querySelector('#rs-validation-results');
+      if (results) {
+        results.setAttribute('tabindex', '-1');
+        results.focus();
+      }
+      const status = root.querySelector('#rs-state-status');
+      if (status) status.textContent = 'Resume review completed using deterministic checks.';
+      return;
+    }
+
     const restoreDraftButton = event.target.closest('[data-restore-draft]');
     if (restoreDraftButton) {
       if (!restoredDraft?.resume) return;
