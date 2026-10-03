@@ -229,6 +229,7 @@ function render(root, state) {
             <input id="target-role" name="targetRole" maxlength="120" required autocomplete="organization-title" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="target-role-suggestions-list" aria-describedby="target-role-help target-role-suggestions-status" value="${esc(state.candidate.targetRole)}" placeholder="e.g. SAP, Financial Crime Analyst">
             <div id="target-role-suggestions" class="rs-inline-suggestions">
               <span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span>
+              <div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>
             </div>
           </label>
         </div>
@@ -392,7 +393,7 @@ function closeTargetRoleSuggestions(root) {
   const host = root.querySelector('#target-role-suggestions');
   const input = root.querySelector('#target-role');
   if (host) {
-    host.innerHTML = '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span>';
+    host.innerHTML = '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite"></span><div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>';
   }
   if (input) {
     input.setAttribute('aria-expanded', 'false');
@@ -430,6 +431,7 @@ function renderTargetRoleSuggestions(root, query) {
   if (!roles.length) {
     host.innerHTML =
       '<span id="target-role-suggestions-status" class="rs-sr-only" aria-live="polite">No matching target positions. You can keep your own job title.</span>' +
+      '<div id="target-role-suggestions-list" role="listbox" aria-label="Target position suggestions" hidden></div>' +
       '<div class="rs-inline-empty">No matching role found. You can keep your own target position.</div>';
     input.setAttribute('aria-expanded', 'false');
     input.removeAttribute('aria-activedescendant');
