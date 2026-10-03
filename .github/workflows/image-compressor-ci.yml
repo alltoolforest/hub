@@ -1,0 +1,74 @@
+name: Image Compressor pre-deployment audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/js/batch-image-processor.js'
+      - 'images/batch/index.html'
+      - 'images/index.html'
+      - 'tests/image-compressor-browser.mjs'
+      - '.github/workflows/image-compressor-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: image-compressor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compressor-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Protect scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          echo "$changed"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              assets/js/batch-image-processor.js|images/batch/index.html|images/index.html|tests/image-compressor-browser.mjs|.github/workflows/image-compressor-ci.yml) ;;
+              *) echo "Out-of-scope file changed: $file"; exit 1 ;;
+            esac
+          done <<< "$changed"
+          echo 'Image Compressor scope verified.'
+
+      - name: Static checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/js/batch-image-processor.js
+          node --check tests/image-compressor-browser.mjs
+          grep -q '<h1>Image Compressor</h1>' images/batch/index.html
+          grep -q '<h3>Image Compressor</h3>' images/index.html
+          grep -q "image/png" assets/js/batch-image-processor.js
+          grep -q "image/jpeg" assets/js/batch-image-processor.js
+          grep -q "image/webp" assets/js/batch-image-processor.js
+          grep -q "dimensionSearch" assets/js/batch-image-processor.js
+          grep -q "Compress images" assets/js/batch-image-processor.js
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Run JPG PNG WebP browser audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-compressor-browser.mjs
