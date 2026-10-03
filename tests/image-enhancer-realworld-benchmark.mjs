@@ -159,18 +159,45 @@ try {
 
   const targetUrl = fixtures.target;
 
+  async function sourcePreviewHash() {
+    return page.evaluate(() => {
+      const canvas = document.querySelector('canvas[aria-label="Source image preview"]');
+      if (!canvas) return null;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let hash = 2166136261;
+      for (let i = 0; i < pixels.length; i++) {
+        hash ^= pixels[i];
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
+    });
+  }
+
   async function runCase(name, spec) {
+    const previousHash = await sourcePreviewHash();
     await page.locator('input[type=file]').setInputFiles({
       name: spec.name,
       mimeType: spec.mime,
       buffer: fromDataUrl(spec.data)
     });
-    await page.waitForFunction(() => {
-      const text = document.querySelector('#enhancer-source-info')?.textContent || '';
-      return text.includes('192 × 128') && text.includes('Analysis:');
-    }, null, { timeout: 30000 });
+    await page.waitForFunction(prev => {
+      const input = document.querySelector('input[type=file]');
+      const canvas = document.querySelector('canvas[aria-label="Source image preview"]');
+      const run = document.querySelector('#enhancer-run');
+      const info = document.querySelector('#enhancer-source-info')?.textContent || '';
+      if (!input?.files?.[0] || !canvas || !run || run.disabled || !info.includes('Analysis:')) return false;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let hash = 2166136261;
+      for (let i = 0; i < pixels.length; i++) {
+        hash ^= pixels[i];
+        hash = Math.imul(hash, 16777619);
+      }
+      return input.files[0].name.length > 0 && (prev === null || (hash >>> 0) !== prev);
+    }, previousHash, { timeout: 30000 });
 
-    const beforeCount = await page.locator('#downloads a[download]').count();
+    const beforeHref = await page.locator('#downloads a[download]').last().getAttribute('href').catch(() => '');
     await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption(
       name === 'blur' || name === 'mixed' ? 'auto' : 'high-fidelity'
@@ -179,11 +206,12 @@ try {
     await page.locator('#enhancer-sharpen').selectOption('auto');
     await page.locator('#enhancer-run').click();
 
-    await page.waitForFunction(count => {
-      const links = document.querySelectorAll('#downloads a[download]').length;
+    await page.waitForFunction(before => {
+      const links = [...document.querySelectorAll('#downloads a[download]')];
+      const last = links.at(-1);
       const button = document.querySelector('#enhancer-run');
-      return links > count && !!button && !button.disabled;
-    }, beforeCount, { timeout: 150000 });
+      return !!last && !!button && !button.disabled && last.href !== before;
+    }, beforeHref || '', { timeout: 150000 });
 
     const status = (await page.locator('#status').textContent()) || '';
     const metrics = await page.evaluate(async targetDataUrl => {
