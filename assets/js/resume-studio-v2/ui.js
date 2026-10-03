@@ -106,7 +106,7 @@ function renderExperience(items) {
   }
   return items.map((item, index) => `
     <article class="rs-entry" data-entry="experience" data-index="${index}">
-      <div class="rs-entry-head"><h3>Experience ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="experience" data-index="${index}">Remove</button></div>
+      <div class="rs-entry-head"><h3>Experience ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="experience" data-index="${index}" aria-label="Remove experience ${index + 1}">Remove</button></div>
       <div class="rs-grid">
         <label>Company / Organization<input data-array="experience" data-index="${index}" data-key="company" maxlength="120" value="${esc(item.company)}"></label>
         <label>Position / Job Title<input data-array="experience" data-index="${index}" data-key="position" maxlength="120" value="${esc(item.position)}"></label>
@@ -115,7 +115,11 @@ function renderExperience(items) {
         <label>End month<input type="month" data-array="experience" data-index="${index}" data-key="endDate" value="${esc(item.endDate)}" ${item.current ? 'disabled' : ''}></label>
         <label class="rs-check"><input type="checkbox" data-array="experience" data-index="${index}" data-key="current" ${item.current ? 'checked' : ''}>Currently working here</label>
         <label class="rs-full">Roles &amp; Responsibilities<textarea rows="5" data-array="experience" data-index="${index}" data-key="responsibilities" data-kind="list" maxlength="2500" placeholder="One responsibility per line">${esc(multiline(item.responsibilities))}</textarea></label>
-        <div class="rs-full rs-content-actions"><button type="button" class="rs-secondary" data-refine-responsibilities data-index="${index}">Refine these responsibilities</button></div>
+        <div class="rs-full rs-content-actions">
+          <button type="button" class="rs-secondary" data-refine-responsibilities data-index="${index}">Refine these responsibilities</button>
+          <button type="button" class="rs-secondary" data-show-responsibility-suggestions data-index="${index}">Show role ideas</button>
+        </div>
+        <div class="rs-full" data-responsibility-suggestions-host="${index}" aria-live="polite"></div>
         <label class="rs-full">Achievements <span>(optional)</span><textarea rows="4" data-array="experience" data-index="${index}" data-key="achievements" data-kind="list" maxlength="1800" placeholder="One truthful achievement per line">${esc(multiline(item.achievements))}</textarea></label>
       </div>
     </article>`).join('');
@@ -125,7 +129,7 @@ function renderEducation(items) {
   if (!items.length) return '<p class="rs-empty">No education record added yet.</p>';
   return items.map((item, index) => `
     <article class="rs-entry" data-entry="education" data-index="${index}">
-      <div class="rs-entry-head"><h3>Education ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="education" data-index="${index}">Remove</button></div>
+      <div class="rs-entry-head"><h3>Education ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="education" data-index="${index}" aria-label="Remove education ${index + 1}">Remove</button></div>
       <div class="rs-grid">
         <label>Qualification / Degree<input data-array="education" data-index="${index}" data-key="qualification" maxlength="120" value="${esc(item.qualification)}"></label>
         <label>Specialization <span>(optional)</span><input data-array="education" data-index="${index}" data-key="specialization" maxlength="120" value="${esc(item.specialization)}"></label>
@@ -143,7 +147,7 @@ function renderProjects(items) {
   if (!items.length) return '<p class="rs-empty">No project added yet.</p>';
   return items.map((item, index) => `
     <article class="rs-entry">
-      <div class="rs-entry-head"><h3>Project ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="projects" data-index="${index}">Remove</button></div>
+      <div class="rs-entry-head"><h3>Project ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="projects" data-index="${index}" aria-label="Remove project ${index + 1}">Remove</button></div>
       <div class="rs-grid">
         <label>Project title<input data-array="projects" data-index="${index}" data-key="title" maxlength="140" value="${esc(item.title)}"></label>
         <label>Your role <span>(optional)</span><input data-array="projects" data-index="${index}" data-key="role" maxlength="120" value="${esc(item.role)}"></label>
@@ -158,7 +162,7 @@ function renderInternships(items) {
   if (!items.length) return '<p class="rs-empty">No internship or training added yet.</p>';
   return items.map((item, index) => `
     <article class="rs-entry">
-      <div class="rs-entry-head"><h3>Internship / Training ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="internships" data-index="${index}">Remove</button></div>
+      <div class="rs-entry-head"><h3>Internship / Training ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="internships" data-index="${index}" aria-label="Remove internship or training ${index + 1}">Remove</button></div>
       <div class="rs-grid">
         <label>Organization<input data-array="internships" data-index="${index}" data-key="organization" maxlength="140" value="${esc(item.organization)}"></label>
         <label>Program / Title<input data-array="internships" data-index="${index}" data-key="title" maxlength="140" value="${esc(item.title)}"></label>
@@ -174,7 +178,7 @@ function renderCertifications(items) {
   if (!items.length) return '<p class="rs-empty">No certification added yet.</p>';
   return items.map((item, index) => `
     <article class="rs-entry">
-      <div class="rs-entry-head"><h3>Certification ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="certifications" data-index="${index}">Remove</button></div>
+      <div class="rs-entry-head"><h3>Certification ${index + 1}</h3><button type="button" class="rs-link-danger" data-remove="certifications" data-index="${index}" aria-label="Remove certification ${index + 1}">Remove</button></div>
       <div class="rs-grid">
         <label>Certification<input data-array="certifications" data-index="${index}" data-key="name" maxlength="160" value="${esc(item.name)}"></label>
         <label>Issuing organization<input data-array="certifications" data-index="${index}" data-key="issuer" maxlength="160" value="${esc(item.issuer)}"></label>
@@ -405,6 +409,29 @@ function renderRoleSuggestions(root, state) {
       ${skillItems ? `<ul class="rs-suggestion-list">${skillItems}</ul>` : '<p class="rs-help">No new skill suggestions for this role.</p>'}
       ${responsibilityItems ? `<details><summary>Responsibility ideas to consider</summary><ul class="rs-suggestion-list">${responsibilityItems}</ul></details>` : ''}
     </div>`;
+}
+
+
+function renderResponsibilitySuggestions(root, state, index) {
+  const host = root.querySelector('[data-responsibility-suggestions-host="' + index + '"]');
+  if (!host) return;
+  if (!state.candidate.targetRole.trim()) {
+    host.innerHTML = '<p class="rs-help">Enter a target position first.</p>';
+    return;
+  }
+  const suggestions = getRoleSuggestions(state.candidate.targetRole).responsibilities || [];
+  if (!suggestions.length) {
+    host.innerHTML = '<p class="rs-help">No responsibility ideas are available for this role. Add only duties you actually performed.</p>';
+    return;
+  }
+  const current = state.experience[index]?.responsibilities || [];
+  const items = suggestions
+    .filter((item) => !current.some((value) => value.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
+    .map((item) => `<li><span><strong>Suggested:</strong> ${esc(item.text)}</span><button type="button" class="rs-secondary" data-verify-responsibility data-index="${index}" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
+    .join('');
+  host.innerHTML = items
+    ? `<div class="rs-suggestion-box" role="region" aria-label="Responsibility suggestions"><p><strong>Role ideas for ${esc(state.candidate.targetRole)}</strong> · Add only duties you personally performed.</p><ul class="rs-suggestion-list">${items}</ul></div>`
+    : '<p class="rs-help">All available role ideas are already included in this experience entry.</p>';
 }
 
 function markListProvenance(length, provenance) {
@@ -694,6 +721,34 @@ export function mountResumeStudioUI(root, store, options = {}) {
       } catch (error) {
         root.querySelector('#rs-state-status').textContent = error.message;
       }
+      return;
+    }
+
+    const responsibilitySuggestionButton = event.target.closest('[data-show-responsibility-suggestions]');
+    if (responsibilitySuggestionButton) {
+      renderResponsibilitySuggestions(root, store.getState(), Number(responsibilitySuggestionButton.dataset.index));
+      return;
+    }
+
+    const verifyResponsibilityButton = event.target.closest('[data-verify-responsibility]');
+    if (verifyResponsibilityButton) {
+      const index = Number(verifyResponsibilityButton.dataset.index);
+      const suggested = createSuggestedUnit(verifyResponsibilityButton.dataset.suggestion, 'role responsibility suggestion');
+      const verified = verifySuggestion(suggested);
+      store.update((state) => {
+        const item = state.experience[index];
+        if (!item) return state;
+        if (!item.responsibilities.some((value) => value.toLocaleLowerCase() === verified.text.toLocaleLowerCase())) {
+          item.responsibilities.push(verified.text);
+          item.responsibilityProvenance.push(verified.provenance);
+        }
+        return state;
+      });
+      rerender();
+      const field = root.querySelector('[data-array="experience"][data-index="' + index + '"][data-key="responsibilities"]');
+      if (field) field.focus();
+      const status = root.querySelector('#rs-state-status');
+      if (status) status.textContent = 'Verified responsibility added. Keep it only if it accurately describes work you performed.';
       return;
     }
 
