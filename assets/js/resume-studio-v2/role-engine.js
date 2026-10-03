@@ -1,7 +1,7 @@
 const ROLE_FAMILIES = Object.freeze([
   {
     id: 'financial-crime-compliance',
-    match: /\b(aml|kyc|financial crime|fraud|compliance|sanctions|transaction monitoring|risk analyst)\b/i,
+    match: /\b(aml|kyc|financial crime|fraud|compliance|sanctions|transaction monitoring)\b/i,
     skills: ['KYC review', 'AML controls', 'Transaction monitoring', 'Case documentation', 'Risk assessment'],
     responsibilities: [
       'Review customer or transaction information against defined compliance requirements.',
@@ -20,16 +20,6 @@ const ROLE_FAMILIES = Object.freeze([
     ]
   },
   {
-    id: 'software-data',
-    match: /\b(software|developer|engineer|programmer|java|python|frontend|backend|full stack|data analyst|data scientist|sql|business intelligence|bi developer)\b/i,
-    skills: ['Problem solving', 'Technical documentation', 'Testing and debugging', 'Version control', 'Data analysis'],
-    responsibilities: [
-      'Build or maintain solutions using the technologies relevant to the role.',
-      'Test work for correctness and resolve identified defects.',
-      'Document technical decisions, changes or analysis clearly.'
-    ]
-  },
-  {
     id: 'quality-operations',
     match: /\b(quality|qa|quality analyst|operations|process|process associate|process developer|auditor)\b/i,
     skills: ['Quality auditing', 'Root-cause analysis', 'Process compliance', 'Reporting', 'Coaching feedback'],
@@ -37,6 +27,16 @@ const ROLE_FAMILIES = Object.freeze([
       'Review work against defined quality and process standards.',
       'Identify recurring gaps and document findings for follow-up.',
       'Provide clear feedback or reporting based on observed evidence.'
+    ]
+  },
+  {
+    id: 'software-data',
+    match: /\b(software|developer|engineer|programmer|java|python|frontend|backend|full stack|data analyst|data scientist|sql|business intelligence|bi developer)\b/i,
+    skills: ['Problem solving', 'Technical documentation', 'Testing and debugging', 'Version control', 'Data analysis'],
+    responsibilities: [
+      'Build or maintain solutions using the technologies relevant to the role.',
+      'Test work for correctness and resolve identified defects.',
+      'Document technical decisions, changes or analysis clearly.'
     ]
   },
   {
