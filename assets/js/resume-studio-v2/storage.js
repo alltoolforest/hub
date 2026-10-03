@@ -5,8 +5,6 @@ export const STORAGE_KEY = 'alltoolforest.resume-studio.v2.draft';
 export const STORAGE_VERSION = 1;
 const MAX_DRAFT_BYTES = 250000;
 
-const clone = (value) => JSON.parse(JSON.stringify(value));
-
 function text(value, max = 5000) {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
