@@ -402,8 +402,8 @@ function impactFindings(structure) {
 }
 
 function readinessLevel(state, findings, structure) {
-  if (!structure.wordCount) return ATS_READINESS_LEVEL.INSUFFICIENT_DATA;
   if (state.resume?.parsing?.probableImageOnly) return ATS_READINESS_LEVEL.HIGH_RISK;
+  if (!structure.wordCount) return ATS_READINESS_LEVEL.INSUFFICIENT_DATA;
 
   const materialCategories = new Set([
     ATS_READINESS_CATEGORY.PARSEABILITY,
