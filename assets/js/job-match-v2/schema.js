@@ -5,7 +5,7 @@ import {
   RUN_STATUS
 } from './contracts.js';
 
-export const ANALYSIS_SCHEMA_VERSION = 6;
+export const ANALYSIS_SCHEMA_VERSION = 7;
 
 function emptySourceRef() {
   return {
@@ -123,7 +123,7 @@ export function createEmptyAnalysisState() {
       createdAt: '',
       updatedAt: '',
       analysisId: '',
-      engineVersion: 'job-match-v2/task-6',
+      engineVersion: 'job-match-v2/task-7',
       claims: {
         reproducesEmployerAts: false,
         predictsHiringOutcome: false,
