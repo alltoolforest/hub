@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–2 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–3 Foundation
 
-This directory contains the isolated foundations completed through Task 2 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 3 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -140,3 +140,40 @@ The parser deliberately does **not**:
 The job description is stored as raw user input with an empty `requirements` collection until Task 3.
 
 PDF and DOCX parser assets are existing same-origin vendor files already shipped by AllToolForest. Resume contents are passed to those local browser libraries and are not sent to an analysis server by this Task 2 implementation.
+
+
+## Task 3 — Job Description Requirement Intelligence
+
+Task 3 converts raw job-description text into explainable requirement records without matching those requirements to the resume.
+
+It adds:
+
+- structured JD headings, bullets and sentence segments
+- hard-skill extraction
+- tool/platform extraction
+- domain-knowledge extraction
+- soft-skill extraction
+- certification/license extraction
+- education extraction
+- experience-requirement extraction
+- job-title/function extraction
+- methodology/process extraction
+- safely detectable travel, shift, location and work-authorization constraints
+- REQUIRED / PREFERRED / GENERAL importance
+- multi-word phrase preservation
+- section-context inheritance for required/preferred groups
+- boilerplate, benefits, EEO and company-marketing suppression
+- original source text, source segment and mention provenance
+- UNKNOWN + low-confidence fallback where an explicit requirement cannot be safely classified
+
+Task 3 does **not** normalize equivalent terms. For example, `PowerBI` is not converted into `Power BI` and `JS` is not converted into `JavaScript`; that belongs to Task 4.
+
+Task 3 also does not:
+
+- compare requirements with resume evidence
+- infer candidate skills
+- calculate ATS Readiness
+- calculate Job Requirement Coverage
+- assign priority recommendations
+- create the production dashboard
+- replace the production analyzer
