@@ -60,9 +60,10 @@ function findPhrase(text, phrase) {
   return match ? match[2] : '';
 }
 
-function isShortAmbiguousAlias(alias, concept) {
+function requiresContext(alias, concept) {
   if (!concept.contextAny.length) return false;
   if (key(alias) === key(concept.canonical)) return false;
+  if ((concept.contextRequiredAliases || []).some((item) => key(item) === key(alias))) return true;
   const compact = clean(alias).replace(/[^A-Za-z0-9]/g, '');
   return compact.length <= 3 || /^[A-Z]{2,5}$/.test(clean(alias));
 }
@@ -71,7 +72,7 @@ function contextAllows(concept, alias, contextText) {
   const context = key(contextText);
 
   if (concept.contextNone.some((term) => context.includes(key(term)))) return false;
-  if (!isShortAmbiguousAlias(alias, concept)) return true;
+  if (!requiresContext(alias, concept)) return true;
   return concept.contextAny.some((term) => context.includes(key(term)));
 }
 
