@@ -124,6 +124,9 @@ function buildDeclarationLines(resume) {
 
 function sectionLineMap(resume) {
   return {
+    careerObjective: clean(resume?.careerObjective?.text)
+      ? section('Career Objective', [clean(resume.careerObjective.text)])
+      : [],
     summary: clean(resume?.summary?.text)
       ? section(resume.summary.heading || 'Profile', [clean(resume.summary.text)])
       : [],
