@@ -78,13 +78,14 @@ export function refineSummary({ candidateType, targetRole, draft, skills = [] })
   if (candidateType === 'experienced') {
     text = facts
       ? sentence(facts)
-      : role + ' professional with experience relevant to ' + naturalList(safeSkills) + '.';
+      : 'Experienced candidate targeting ' + role + ' with skills in ' + naturalList(safeSkills) + '.';
     if (facts && safeSkills.length && !safeSkills.some((skill) => facts.toLocaleLowerCase().includes(skill.toLocaleLowerCase()))) {
       text += ' Core skills include ' + naturalList(safeSkills) + '.';
     }
   } else {
-    const evidence = [facts, safeSkills.length ? naturalList(safeSkills) : ''].filter(Boolean).join(' ');
-    text = 'Seeking an opportunity as ' + role + ' to apply ' + sentence(evidence).replace(/\.$/, '') + '.';
+    text = 'Seeking an opportunity as ' + role + '.';
+    if (safeSkills.length) text += ' Ready to apply ' + naturalList(safeSkills) + '.';
+    if (facts) text += ' ' + sentence(facts);
   }
 
   return contentUnit(text, CONTENT_PROVENANCE.REFINED, 'candidate-provided introduction and skills');
