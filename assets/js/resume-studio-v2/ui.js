@@ -250,17 +250,30 @@ function render(root, state) {
         </div>
       </section>
 
-      <section class="rs-panel" aria-labelledby="rs-summary-heading">
-        <div class="rs-section-head"><div><p class="rs-kicker">${experienced ? 'Experienced profile' : 'Fresher profile'}</p><h2 id="rs-summary-heading">${esc(state.summary.heading)}</h2></div></div>
-        <label class="rs-block">${experienced ? 'Professional summary' : 'Career objective'}
-          <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="${experienced ? 'Summarize your experience, domain, strengths and evidence you can support.' : 'Describe your education, relevant skills, training/projects and career interest.'}">${esc(state.summary.text)}</textarea>
+      <section class="rs-panel" aria-labelledby="rs-objective-heading">
+        <div class="rs-section-head"><div><p class="rs-kicker">${experienced ? 'Experienced profile' : 'Fresher profile'}</p><h2 id="rs-objective-heading">Career Objective</h2></div></div>
+        <label class="rs-block">Career objective
+          <textarea data-path="careerObjective.text" rows="5" maxlength="1200" placeholder="Describe the direction you are targeting and how you hope to contribute.">${esc(state.careerObjective?.text || '')}</textarea>
         </label>
         <div class="rs-content-actions">
-          <button type="button" class="rs-secondary" data-refine-summary>${experienced ? 'Refine from my facts' : 'Refine objective'}</button>
+          <button type="button" class="rs-secondary" data-refine-objective>Refine objective</button>
+          <span class="rs-provenance" data-provenance="${esc(state.careerObjective?.provenance || 'user')}">${esc((state.careerObjective?.provenance || 'user').toUpperCase())}</span>
+        </div>
+        <p class="rs-help">A target-role-based Career Objective is generated for both Fresher and Experienced profiles. Keep it, refine it, or replace it with your own objective. Manual edits are not silently overwritten.</p>
+      </section>
+
+      ${experienced ? `
+      <section class="rs-panel" aria-labelledby="rs-summary-heading">
+        <div class="rs-section-head"><div><p class="rs-kicker">Experienced profile</p><h2 id="rs-summary-heading">Professional Summary</h2></div></div>
+        <label class="rs-block">Professional summary
+          <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="Summarize your experience, domain, strengths and evidence you can support.">${esc(state.summary.text)}</textarea>
+        </label>
+        <div class="rs-content-actions">
+          <button type="button" class="rs-secondary" data-refine-summary>Refine from my facts</button>
           <span class="rs-provenance" data-provenance="${esc(state.summary.provenance || 'user')}">${esc((state.summary.provenance || 'user').toUpperCase())}</span>
         </div>
-        <p class="rs-help">${experienced ? 'Write or refine your professional summary using facts you can support.' : 'A role-based career objective is generated automatically. Keep it, refine it, or replace it with your own objective. Manual edits are kept unless you replace them yourself.'}</p>
-      </section>
+        <p class="rs-help">Write or refine your professional summary using facts you can support. Automatic summary generation belongs to the next remediation subtask.</p>
+      </section>` : ''}
 
       <section class="rs-panel" aria-labelledby="rs-skills-heading">
         <div class="rs-section-head"><div><p class="rs-kicker">Core section</p><h2 id="rs-skills-heading">Skills</h2></div></div>
@@ -534,11 +547,9 @@ export function mountResumeStudioUI(root, store, options = {}) {
   const selectTargetRole = (role) => {
     store.update((state) => {
       state.candidate.targetRole = role;
-      if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
-          (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+      if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
         const generated = generateCareerObjective({ targetRole: role });
-        state.summary.text = generated.text;
-        state.summary.provenance = generated.provenance;
+        state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
       }
       return state;
     });
@@ -579,11 +590,9 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.id === 'candidate-type') {
       store.setCandidateType(target.value);
       store.update((state) => {
-        if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
-            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+        if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
           const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
-          state.summary.text = generated.text;
-          state.summary.provenance = generated.provenance;
+          state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
         }
         return state;
       });
@@ -677,19 +686,17 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.id === 'target-role') {
       store.update((state) => {
         state.candidate.targetRole = String(target.value || '').trim();
-        if (state.candidate.type === CANDIDATE_TYPES.FRESHER &&
-            (!state.summary.text || state.summary.provenance === CONTENT_PROVENANCE.SUGGESTED)) {
+        if (!state.careerObjective?.text || state.careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
           const generated = generateCareerObjective({ targetRole: state.candidate.targetRole });
-          state.summary.text = generated.text;
-          state.summary.provenance = generated.provenance;
+          state.careerObjective = { heading: 'Career Objective', text: generated.text, provenance: generated.provenance };
         }
         return state;
       });
       renderTargetRoleSuggestions(root, target.value);
       renderRoleSuggestions(root, store.getState());
-      const summaryField = root.querySelector('[data-path="summary.text"]');
-      if (summaryField && store.getState().summary.provenance === CONTENT_PROVENANCE.SUGGESTED) {
-        summaryField.value = store.getState().summary.text;
+      const objectiveField = root.querySelector('[data-path="careerObjective.text"]');
+      if (objectiveField && store.getState().careerObjective?.provenance === CONTENT_PROVENANCE.SUGGESTED) {
+        objectiveField.value = store.getState().careerObjective.text;
       }
       refreshPreview();
       refreshValidationIfVisible();
@@ -699,6 +706,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
     if (target.matches('[data-path]')) {
       store.update((state) => {
         setPath(state, target.dataset.path, target.value);
+        if (target.dataset.path === 'careerObjective.text') state.careerObjective.provenance = CONTENT_PROVENANCE.USER;
         if (target.dataset.path === 'summary.text') state.summary.provenance = CONTENT_PROVENANCE.USER;
         if (/^projects\.\d+\.description$/.test(target.dataset.path)) {
           const index = Number(target.dataset.path.split('.')[1]);
@@ -829,6 +837,31 @@ export function mountResumeStudioUI(root, store, options = {}) {
       onDraftResolved();
       const candidateType = root.querySelector('#candidate-type');
       if (candidateType) candidateType.focus();
+      return;
+    }
+
+    const objectiveButton = event.target.closest('[data-refine-objective]');
+    if (objectiveButton) {
+      const state = store.getState();
+      try {
+        const unit = refineSummary({
+          candidateType: state.candidate.type,
+          targetRole: state.candidate.targetRole,
+          draft: state.careerObjective?.text || '',
+          skills: []
+        });
+        store.update((next) => {
+          next.careerObjective.text = unit.text;
+          next.careerObjective.provenance = unit.provenance;
+          return next;
+        });
+        rerender();
+        const objectiveField = root.querySelector('[data-path="careerObjective.text"]');
+        if (objectiveField) objectiveField.focus();
+        root.querySelector('#rs-state-status').textContent = 'Career Objective refined from your selected target role and current objective text.';
+      } catch (error) {
+        root.querySelector('#rs-state-status').textContent = error.message;
+      }
       return;
     }
 
