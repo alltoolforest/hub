@@ -1,3 +1,5 @@
+import { renderResumePreview } from './preview.js';
+import { TEMPLATE_CATALOG, isTemplateId } from './templates/index.js';
 import { getRoleSuggestions } from './role-engine.js';
 import { CONTENT_PROVENANCE, createSuggestedUnit, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
 import { CANDIDATE_TYPES } from './schema.js';
@@ -179,6 +181,14 @@ function renderCertifications(items) {
     </article>`).join('');
 }
 
+function templateOptions(state) {
+  return TEMPLATE_CATALOG.map((template) => `
+    <label class="rs-template-option">
+      <input type="radio" name="resume-template" value="${esc(template.id)}" ${state.settings.template === template.id ? 'checked' : ''}>
+      <span><strong>${esc(template.name)}</strong><small>${esc(template.description)}</small></span>
+    </label>`).join('');
+}
+
 function render(root, state) {
   const experienced = state.candidate.type === CANDIDATE_TYPES.EXPERIENCED;
   root.innerHTML = `
@@ -296,9 +306,21 @@ function render(root, state) {
         </div>
       </section>
 
+      <section class="rs-panel" aria-labelledby="rs-template-heading">
+        <div class="rs-section-head"><div><p class="rs-kicker">Template</p><h2 id="rs-template-heading">Choose a resume template</h2></div></div>
+        <div class="rs-template-grid" role="radiogroup" aria-label="Resume template">${templateOptions(state)}</div>
+        <p class="rs-help">All four templates use the same resume data and a linear single-column reading order. Switching templates changes presentation only.</p>
+      </section>
+
+      <section class="rs-panel rs-preview-panel" aria-labelledby="rs-preview-heading">
+        <div class="rs-section-head"><div><p class="rs-kicker">Live preview</p><h2 id="rs-preview-heading">Resume preview</h2></div></div>
+        <div class="rs-preview-frame" id="rs-preview-host"></div>
+      </section>
+
       <div class="rs-task-note" role="status" aria-live="polite" id="rs-state-status">Information is held only in memory for this isolated build. Suggested content is never added automatically. Local draft saving is not enabled yet.</div>
     </form>
   `;
+  renderResumePreview(root.querySelector('#rs-preview-host'), state);
 }
 
 
@@ -352,6 +374,7 @@ export function mountResumeStudioUI(root, store) {
   if (!root || !store) throw new TypeError('Resume Studio UI requires a root element and store.');
 
   const rerender = () => render(root, store.getState());
+  const refreshPreview = () => renderResumePreview(root.querySelector('#rs-preview-host'), store.getState());
   rerender();
 
   root.addEventListener('change', (event) => {
@@ -360,6 +383,18 @@ export function mountResumeStudioUI(root, store) {
     if (target.id === 'candidate-type') {
       store.setCandidateType(target.value);
       rerender();
+      return;
+    }
+
+    if (target.matches('input[name="resume-template"]')) {
+      if (!isTemplateId(target.value)) return;
+      store.update((state) => {
+        state.settings.template = target.value;
+        return state;
+      });
+      refreshPreview();
+      const status = root.querySelector('#rs-state-status');
+      if (status) status.textContent = 'Template changed. Resume content was not modified.';
       return;
     }
 
@@ -390,6 +425,7 @@ export function mountResumeStudioUI(root, store) {
 
     if (target.id === 'target-role') {
       store.setTargetRole(target.value);
+      refreshPreview();
       return;
     }
 
@@ -403,6 +439,7 @@ export function mountResumeStudioUI(root, store) {
         }
         return state;
       });
+      refreshPreview();
       return;
     }
 
@@ -414,6 +451,7 @@ export function mountResumeStudioUI(root, store) {
         if (target.dataset.listPath === 'achievements') state.achievementProvenance = markListProvenance(values.length, CONTENT_PROVENANCE.USER);
         return state;
       });
+      refreshPreview();
       return;
     }
 
@@ -439,6 +477,7 @@ export function mountResumeStudioUI(root, store) {
         }
         return state;
       });
+      refreshPreview();
     }
   });
 
