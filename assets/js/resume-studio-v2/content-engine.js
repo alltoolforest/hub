@@ -56,16 +56,11 @@ export function contentUnit(text, provenance = CONTENT_PROVENANCE.USER, source =
   return Object.freeze({ text: clean(text), provenance, source: clean(source) });
 }
 
-export function generateAutomaticIntroduction({ candidateType, targetRole }) {
+export function generateCareerObjective({ targetRole }) {
   const role = safeRole(targetRole);
   if (!role) return contentUnit('', CONTENT_PROVENANCE.SUGGESTED, 'target role');
 
-  if (candidateType === 'experienced') {
-    const text = `Experienced professional targeting a ${role} position, focused on applying verified domain knowledge, practical experience, structured problem solving, clear communication and reliable execution. Seeking to contribute effectively to role-relevant responsibilities, collaborate with stakeholders, support business objectives and continue strengthening professional capability while building on experience already demonstrated in previous positions.`;
-    return contentUnit(text, CONTENT_PROVENANCE.SUGGESTED, 'target role');
-  }
-
-  const text = `Seeking an opportunity as a ${role} where I can apply my verified education, skills and project or training experience, contribute responsibly to role-relevant work, learn from practical challenges and continue building strong professional capability while supporting the goals of the organization.`;
+  const text = `Seeking an opportunity as a ${role} where I can build practical capability, contribute responsibly to role-relevant work, learn from real-world challenges and support the goals of the organization while developing a strong professional foundation.`;
   return contentUnit(text, CONTENT_PROVENANCE.SUGGESTED, 'target role');
 }
 
