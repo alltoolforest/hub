@@ -134,6 +134,9 @@ function clean(value) {
 
 function importanceOf(segment) {
   const text = segment.text || '';
+  const heading = segment.sectionHeading || '';
+  if (/\b(preferred|desirable|nice to have)\b/i.test(heading)) return REQUIREMENT_IMPORTANCE.PREFERRED;
+  if (/\b(required|mandatory|minimum|essential)\b/i.test(heading)) return REQUIREMENT_IMPORTANCE.REQUIRED;
   if (REQUIRED_SIGNALS.some((pattern) => pattern.test(text))) return REQUIREMENT_IMPORTANCE.REQUIRED;
   if (PREFERRED_SIGNALS.some((pattern) => pattern.test(text))) return REQUIREMENT_IMPORTANCE.PREFERRED;
   return REQUIREMENT_IMPORTANCE.GENERAL;
@@ -218,10 +221,23 @@ function regexCandidates(segment) {
   return candidates;
 }
 
+function removeContainedCandidates(candidates) {
+  return candidates.filter((candidate, index, all) => {
+    const own = candidate.matchedText.toLowerCase();
+    return !all.some((other, otherIndex) =>
+      otherIndex !== index &&
+      other.category === candidate.category &&
+      other.sourceSegmentId === candidate.sourceSegmentId &&
+      other.matchedText.length > candidate.matchedText.length &&
+      other.matchedText.toLowerCase().includes(own)
+    );
+  });
+}
+
 function dedupeCandidates(candidates) {
   const grouped = new Map();
 
-  for (const candidate of candidates) {
+  for (const candidate of removeContainedCandidates(candidates)) {
     const key = candidate.category + '|' + candidate.matchedText.toLowerCase();
     const existing = grouped.get(key);
     const mention = Object.freeze({
