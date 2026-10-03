@@ -13,15 +13,17 @@ export function mountJobMatchDashboard({
   if (!initialState?.analysis?.jobMatch) {
     throw new TypeError('A completed ATS & Job Match V2 state is required.');
   }
+  if (typeof analyzeRevisedResume !== 'function') {
+    throw new TypeError('A revised-resume analysis callback is required.');
+  }
 
-  const workflow = createImprovementWorkflow({
+  let workflow = createImprovementWorkflow({
     initialState,
     analyzeRevisedResume
   });
-
   let renderer = null;
 
-  function render(state, comparison = null) {
+  function renderCurrent(state, comparison = null) {
     renderer?.destroy?.();
     renderer = renderJobMatchDashboard({
       root,
@@ -31,7 +33,7 @@ export function mountJobMatchDashboard({
       callbacks: {
         async onReanalyze(input) {
           const result = await workflow.reanalyze(input.file || input.text);
-          render(result.state, result.comparison);
+          renderCurrent(result.state, result.comparison);
         },
 
         async onNewAnalysis() {
@@ -52,7 +54,7 @@ export function mountJobMatchDashboard({
     return renderer;
   }
 
-  render(initialState, workflow.getComparison());
+  renderCurrent(initialState, workflow.getComparison());
 
   return Object.freeze({
     getState() {
@@ -64,31 +66,15 @@ export function mountJobMatchDashboard({
     },
 
     update(state) {
-      if (!state?.analysis?.jobMatch) throw new TypeError('A completed analysis state is required.');
-      workflow.startNewAnalysis();
-      const nextWorkflow = createImprovementWorkflow({ initialState: state, analyzeRevisedResume });
-      const comparison = nextWorkflow.getComparison();
-      renderer?.destroy?.();
-      renderer = renderJobMatchDashboard({
-        root,
-        state,
-        comparison,
-        documentRef,
-        callbacks: {
-          async onReanalyze(input) {
-            const result = await nextWorkflow.reanalyze(input.file || input.text);
-            renderer?.destroy?.();
-            renderer = renderJobMatchDashboard({
-              root,
-              state: result.state,
-              comparison: result.comparison,
-              documentRef,
-              callbacks: {}
-            });
-          }
-        }
+      if (!state?.analysis?.jobMatch) {
+        throw new TypeError('A completed analysis state is required.');
+      }
+      workflow.clearSensitiveData();
+      workflow = createImprovementWorkflow({
+        initialState: state,
+        analyzeRevisedResume
       });
-      return renderer.viewModel;
+      return renderCurrent(state, workflow.getComparison()).viewModel;
     },
 
     destroy() {
