@@ -34,6 +34,8 @@ export function mountJobMatchDashboard({
         async onReanalyze(input) {
           const result = await workflow.reanalyze(input.file || input.text);
           renderCurrent(result.state, result.comparison);
+          renderer?.announce?.('Re-analysis complete.');
+          return { announcementHandled: true };
         },
 
         async onNewAnalysis() {
