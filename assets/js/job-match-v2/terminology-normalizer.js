@@ -38,6 +38,15 @@ function key(value) {
   return clean(value).toLocaleLowerCase('en-US');
 }
 
+const EXACT_ALIAS_INDEX = new Map();
+for (const concept of TERMINOLOGY_CONCEPTS) {
+  for (const alias of concept.aliases) {
+    const aliasKey = key(alias);
+    if (!EXACT_ALIAS_INDEX.has(aliasKey)) EXACT_ALIAS_INDEX.set(aliasKey, []);
+    EXACT_ALIAS_INDEX.get(aliasKey).push({ concept, alias });
+  }
+}
+
 function escaped(value) {
   return value.replace(/[|\\{}()[\]^$+*?.-]/g, '\\$&');
 }
@@ -240,11 +249,22 @@ export function normalizeWordFamily(value) {
 }
 
 export function normalizeTerm(value, contextText = '') {
-  const matches = matchingAliases(value, contextText || value);
+  const input = clean(value);
+  const context = contextText || input;
+  const exact = (EXACT_ALIAS_INDEX.get(key(input)) || [])
+    .filter(({ concept, alias }) => contextAllows(concept, alias, context))
+    .map(({ concept, alias }) => ({
+      concept,
+      alias,
+      matchedText: input,
+      method: key(alias) === key(concept.canonical) ? 'canonical' : 'alias'
+    }));
+
+  const matches = exact.length ? exact : matchingAliases(input, context);
   if (!matches.length) {
     return Object.freeze({
-      input: clean(value),
-      canonical: clean(value),
+      input,
+      canonical: input,
       conceptId: '',
       category: REQUIREMENT_CATEGORY.UNKNOWN,
       method: 'none',
