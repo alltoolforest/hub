@@ -361,11 +361,12 @@ function unique(values) {
 }
 
 const ROLE_INDEX = Object.freeze(ROLE_PROFILES.flatMap((profile) =>
-  unique(profile.titles).map((title) => Object.freeze({
+  unique(profile.titles).map((title, titlePriority) => Object.freeze({
     title,
     normalizedTitle: normalize(title),
     category: profile.category,
     family: profile.id,
+    titlePriority,
     aliases: unique(profile.aliases || []).map(normalize)
   }))
 ));
@@ -477,7 +478,7 @@ export function getTargetRoleSuggestions(query, limit = 8) {
       }
     }
 
-    return { title: entry.title, family: entry.family, score };
+    return { title: entry.title, family: entry.family, score: score + entry.titlePriority * 0.25 };
   })
     .filter((item) => Number.isFinite(item.score))
     .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title));
