@@ -202,6 +202,20 @@ function pushCandidate(candidates, category, matchedText, segment, confidence = 
   });
 }
 
+function jobTitleHeadingCandidates(segment) {
+  const candidates = [];
+  const heading = clean(segment.text);
+  if (!heading) return candidates;
+
+  for (const phrase of CATALOG[REQUIREMENT_CATEGORY.JOB_TITLE_FUNCTION]) {
+    const found = findPhrase(heading, phrase);
+    if (found) {
+      pushCandidate(candidates, REQUIREMENT_CATEGORY.JOB_TITLE_FUNCTION, found, segment);
+    }
+  }
+  return candidates;
+}
+
 function exactCatalogCandidates(segment) {
   const candidates = [];
   for (const [category, phrases] of Object.entries(CATALOG)) {
@@ -333,7 +347,12 @@ export function extractJobRequirements(parsedJobDescription) {
   const uncertainSegments = [];
 
   for (const segment of segments) {
-    if (!segment || segment.kind === 'heading') continue;
+    if (!segment) continue;
+
+    if (segment.kind === 'heading') {
+      candidates.push(...jobTitleHeadingCandidates(segment));
+      continue;
+    }
 
     if (isBoilerplate(segment)) {
       ignoredSegments.push(Object.freeze({
