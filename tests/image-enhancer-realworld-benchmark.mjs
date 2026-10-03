@@ -181,11 +181,12 @@ try {
       mimeType: spec.mime,
       buffer: fromDataUrl(spec.data)
     });
-    await page.waitForFunction(prev => {
-      const input = document.querySelector('input[type=file]');
+    await page.waitForFunction(({ prev, name }) => {
       const canvas = document.querySelector('canvas[aria-label="Source image preview"]');
       const info = document.querySelector('#enhancer-source-info')?.textContent || '';
-      if (!input?.files?.[0] || !canvas || !info.includes('Analysis:')) return false;
+      const selected = document.querySelector('.selected-files')?.textContent || '';
+      const state = document.querySelector('#status')?.textContent || '';
+      if (!canvas || !info.includes('Analysis:') || !selected.includes(name) || !state.includes('File ready.')) return false;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       let hash = 2166136261;
@@ -193,8 +194,8 @@ try {
         hash ^= pixels[i];
         hash = Math.imul(hash, 16777619);
       }
-      return input.files[0].name.length > 0 && (prev === null || (hash >>> 0) !== prev);
-    }, previousHash, { timeout: 30000 });
+      return prev === null || (hash >>> 0) !== prev;
+    }, { prev: previousHash, name: spec.name }, { timeout: 30000 });
 
     const beforeHref = await page.locator('#downloads a[download]').last().getAttribute('href').catch(() => '');
     await page.locator('#enhancer-mode-enhance').click();
