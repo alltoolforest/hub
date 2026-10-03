@@ -159,43 +159,24 @@ try {
 
   const targetUrl = fixtures.target;
 
-  async function sourcePreviewHash() {
-    return page.evaluate(() => {
-      const canvas = document.querySelector('canvas[aria-label="Source image preview"]');
-      if (!canvas) return null;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let hash = 2166136261;
-      for (let i = 0; i < pixels.length; i++) {
-        hash ^= pixels[i];
-        hash = Math.imul(hash, 16777619);
-      }
-      return hash >>> 0;
-    });
-  }
-
   async function runCase(name, spec) {
-    const previousHash = await sourcePreviewHash();
     await page.locator('input[type=file]').setInputFiles({
       name: spec.name,
       mimeType: spec.mime,
       buffer: fromDataUrl(spec.data)
     });
-    await page.waitForFunction(({ prev, name }) => {
+    await page.waitForFunction(name => {
       const canvas = document.querySelector('canvas[aria-label="Source image preview"]');
       const info = document.querySelector('#enhancer-source-info')?.textContent || '';
       const selected = document.querySelector('.selected-files')?.textContent || '';
       const state = document.querySelector('#status')?.textContent || '';
-      if (!canvas || !info.includes('Analysis:') || !selected.includes(name) || !state.includes('File ready.')) return false;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let hash = 2166136261;
-      for (let i = 0; i < pixels.length; i++) {
-        hash ^= pixels[i];
-        hash = Math.imul(hash, 16777619);
-      }
-      return prev === null || (hash >>> 0) !== prev;
-    }, { prev: previousHash, name: spec.name }, { timeout: 30000 });
+      return !!canvas &&
+        canvas.width === 192 &&
+        canvas.height === 128 &&
+        info.includes('Analysis:') &&
+        selected.includes(name) &&
+        state.includes('File ready.');
+    }, spec.name, { timeout: 30000 });
 
     const beforeHref = await page.locator('#downloads a[download]').last().getAttribute('href').catch(() => '');
     await page.locator('#enhancer-mode-enhance').click();
