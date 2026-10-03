@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–6 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–7 Foundation
 
-This directory contains the isolated foundations completed through Task 6 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 7 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -344,3 +344,100 @@ Task 6 explicitly does **not**:
 - replace the production analyzer
 
 The canonical Task 6 state intentionally keeps `jobMatch.coverage = null` and `priorityRecommendations = []` so Task 7 remains a separate release gate.
+
+
+## Task 7 — Transparent Job Requirement Coverage Model + Prioritization
+
+Task 7 turns the Task 6 requirement-by-requirement evidence findings into a transparent **Job Requirement Coverage** result. It is not an employer ATS score and does not predict hiring outcomes.
+
+### Coverage formula
+
+`Coverage = sum(requirement weight × evidence credit) / sum(assessable requirement weights) × 100`
+
+Evidence credit:
+
+- MATCHED = 1.0
+- PARTIAL = 0.5
+- NOT_FOUND = 0.0
+- UNCERTAIN = excluded from the denominator
+- NOT_APPLICABLE = excluded from the denominator
+- UNKNOWN/unclassified requirements = excluded from the denominator
+
+Importance weights:
+
+- REQUIRED = 3
+- GENERAL = 2
+- PREFERRED = 1
+
+Category multipliers:
+
+- hard skill = 1.25
+- tool/platform = 1.10
+- domain knowledge = 1.25
+- soft skill = 0.75
+- certification/license = 1.25
+- education = 1.25
+- experience = 1.25
+- job title/function = 1.00
+- methodology/process = 1.10
+- other constraint = 1.00
+- unknown = 0
+
+This means required hard skills, qualifications, certifications, and experience carry substantially more weight than preferred/general soft-skill items. The weights are fixed product logic and are regression-tested for monotonic behavior; they are not calibrated to employer ATS systems or chosen to make results look impressive.
+
+### Coverage labels
+
+- STRONG: at least 80% coverage and no assessable REQUIRED item is NOT_FOUND
+- MODERATE: at least 50% coverage, or 80%+ with a required gap
+- LIMITED: below 50%
+- INSUFFICIENT_DATA: no assessable requirements
+
+### Required result breakdowns
+
+Task 7 exposes separate coverage summaries for:
+
+- Required requirements
+- Preferred requirements
+- Hard skills
+- Tools
+- Qualifications
+- Certifications
+- Experience
+- Soft skills
+
+Every assessable requirement also exposes its individual weight, evidence credit, and earned contribution so the percentage can be reconstructed.
+
+### Priority model
+
+- HIGH PRIORITY: an assessable REQUIRED requirement is NOT_FOUND
+- MEDIUM PRIORITY: REQUIRED/PREFERRED-excluded important requirements with partial, uncertain, or general missing evidence as defined by the deterministic priority rules
+- OPTIONAL: missing or weak PREFERRED requirements
+
+MATCHED findings produce no recommendation.
+
+Recommendations are category-aware and always include truthfulness guardrails. Examples:
+
+- certifications: list only credentials genuinely held
+- education: never invent or upgrade a qualification
+- experience: never invent employers, dates, duration, or duties
+- soft skills: support with a real work/project example rather than keyword stuffing
+- travel/work authorization/other constraints: verify manually when the resume cannot prove them
+- unknown requirements: review manually rather than guessing
+
+Every recommendation carries the invariant:
+
+`Add, clarify, or strengthen content only when it is genuinely true and supported by your real experience, skills, qualifications, or credentials.`
+
+### Explicit exclusions
+
+Task 7 does **not**:
+
+- use generic JD boilerplate or noise as coverage input
+- treat UNCERTAIN as a failure
+- treat unknown proprietary requirements as scored failures
+- hide requirement weights
+- manipulate scores to look impressive
+- predict interviews, hiring, recruiter decisions, or employer ATS scores
+- build the production results dashboard
+- implement Task 8 UI/workflow
+- deploy or replace the production analyzer
