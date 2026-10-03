@@ -11,11 +11,14 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 function reconcileCandidateType(resume, nextType) {
   const next = clone(resume);
   next.candidate.type = nextType;
-  next.summary.heading = nextType === CANDIDATE_TYPES.EXPERIENCED
-    ? 'Professional Summary'
-    : 'Career Objective';
+  next.careerObjective = next.careerObjective || { heading: 'Career Objective', text: '', provenance: 'user' };
+  next.careerObjective.heading = 'Career Objective';
+  next.summary = next.summary || { heading: 'Professional Summary', text: '', provenance: 'user' };
+  next.summary.heading = 'Professional Summary';
 
   next.settings.sectionOrder = clone(DEFAULT_SECTION_ORDER[nextType]);
+  next.settings.enabledSections.careerObjective = true;
+  next.settings.enabledSections.summary = nextType === CANDIDATE_TYPES.EXPERIENCED;
   next.settings.enabledSections.experience = nextType === CANDIDATE_TYPES.EXPERIENCED;
   next.settings.enabledSections.projects = nextType === CANDIDATE_TYPES.FRESHER;
   next.settings.enabledSections.internships = nextType === CANDIDATE_TYPES.FRESHER;
