@@ -25,6 +25,27 @@ export const ANALYSIS_AREA = Object.freeze({
   JOB_MATCH: 'job_match'
 });
 
+
+export const REQUIREMENT_IMPORTANCE = Object.freeze({
+  REQUIRED: 'required',
+  PREFERRED: 'preferred',
+  GENERAL: 'general'
+});
+
+export const REQUIREMENT_CATEGORY = Object.freeze({
+  HARD_SKILL: 'hard_skill',
+  TOOL_PLATFORM: 'tool_platform',
+  DOMAIN_KNOWLEDGE: 'domain_knowledge',
+  SOFT_SKILL: 'soft_skill',
+  CERTIFICATION_LICENSE: 'certification_license',
+  EDUCATION: 'education',
+  EXPERIENCE: 'experience',
+  JOB_TITLE_FUNCTION: 'job_title_function',
+  METHODOLOGY_PROCESS: 'methodology_process',
+  OTHER_CONSTRAINT: 'other_constraint',
+  UNKNOWN: 'unknown'
+});
+
 export const RUN_STATUS = Object.freeze({
   NOT_STARTED: 'not_started',
   READY: 'ready',
