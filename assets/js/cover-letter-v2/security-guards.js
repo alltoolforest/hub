@@ -23,8 +23,10 @@ export function sanitizeFilename(value) {
 export function isSafeHttpUrl(value) {
   const text = String(value || "").trim();
   if (!text) return true;
+  if (!/^https?:\/\//i.test(text)) return false;
   try {
-    const url = new URL(text, "https://example.invalid");
+    if (typeof URL === "undefined") return true;
+    const url = new URL(text);
     return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
