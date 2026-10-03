@@ -1473,6 +1473,7 @@ export async function mount(root, slug) {
         sourceImage: image,
         faces,
         mode,
+        degradation: analysis,
         signal,
         onStage: stage => status(`Reducing restoration artifacts · safety pass ${stage}…`)
       });
