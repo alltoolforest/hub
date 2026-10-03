@@ -1,6 +1,8 @@
 import { CONFIDENCE_LEVEL, PROVENANCE_KIND } from './contracts.js';
 import {
   INGESTION_ERROR,
+  MAX_EXTRACTED_RESUME_CHARS,
+  MAX_PDF_PAGES,
   ResumeIngestionError,
   mapParserError
 } from './ingestion.js';
@@ -98,6 +100,14 @@ export async function parsePdfArrayBuffer(arrayBuffer, pdfjs) {
     });
     documentProxy = await loadingTask.promise;
 
+    if (documentProxy.numPages > MAX_PDF_PAGES) {
+      throw new ResumeIngestionError(
+        INGESTION_ERROR.MEMORY_LIMIT,
+        'This PDF has too many pages for reliable in-browser resume analysis.',
+        { pageCount: documentProxy.numPages, maxPages: MAX_PDF_PAGES }
+      );
+    }
+
     const pages = [];
     const textParts = [];
     let totalCharacters = 0;
@@ -118,6 +128,13 @@ export async function parsePdfArrayBuffer(arrayBuffer, pdfjs) {
         if (readingOrder.risk === 'possible') possibleReadingOrderPages += 1;
 
         totalCharacters += characterCount;
+        if (totalCharacters > MAX_EXTRACTED_RESUME_CHARS) {
+          throw new ResumeIngestionError(
+            INGESTION_ERROR.MEMORY_LIMIT,
+            'The extracted PDF text is too large for reliable in-browser resume analysis.',
+            { extractedCharacters: totalCharacters, maxCharacters: MAX_EXTRACTED_RESUME_CHARS }
+          );
+        }
         if (pageText) textParts.push(pageText);
 
         pages.push(Object.freeze({
