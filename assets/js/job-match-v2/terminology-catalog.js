@@ -70,13 +70,13 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
   // Accounting / finance
   concept('accounts-payable', 'Accounts Payable', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['AP'], ['accounting','finance'],
-    { contextAny: ['accounts payable','invoice','vendor','payables','accounting','finance'] }),
+    { contextAny: ['accounts payable','invoice','vendor','payables','accounting','accountant','finance'] }),
   concept('accounts-receivable', 'Accounts Receivable', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['AR'], ['accounting','finance'],
-    { contextAny: ['accounts receivable','billing','collections','receivables','accounting','finance'] }),
+    { contextAny: ['accounts receivable','billing','collections','receivables','accounting','accountant','finance'] }),
   concept('general-ledger', 'General Ledger', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['GL'], ['accounting','finance'],
-    { contextAny: ['general ledger','accounting','journal entries','financial close','reconciliation'] }),
+    { contextAny: ['general ledger','accounting','accountant','journal entries','financial close','reconciliation'] }),
   concept('profit-loss', 'Profit and Loss', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['P&L','P/L','Profit & Loss'], ['accounting','finance']),
 
@@ -104,7 +104,7 @@ export const TERMINOLOGY_CONCEPTS = Object.freeze([
   // HR / recruitment
   concept('human-resources', 'Human Resources', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['HR'], ['hr','administration'],
-    { contextAny: ['human resources','recruitment','employee','talent','payroll','people operations'] }),
+    { contextAny: ['human resources','recruitment','recruiter','hiring','employee','talent','payroll','people operations'] }),
   concept('talent-acquisition', 'Talent Acquisition', REQUIREMENT_CATEGORY.DOMAIN_KNOWLEDGE,
     ['TA'], ['hr','recruitment'],
     { contextAny: ['talent acquisition','recruiter','recruitment','hiring','candidate','sourcing'] }),
