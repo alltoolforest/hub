@@ -160,7 +160,6 @@ try {
   const targetUrl = fixtures.target;
 
   async function runCase(name, spec) {
-    const beforeCount = await page.locator('#downloads a[download]').count();
     await page.locator('input[type=file]').setInputFiles({
       name: spec.name,
       mimeType: spec.mime,
@@ -171,8 +170,11 @@ try {
       return text.includes('192 × 128') && text.includes('Analysis:');
     }, null, { timeout: 30000 });
 
+    const beforeCount = await page.locator('#downloads a[download]').count();
     await page.locator('#enhancer-mode-enhance').click();
-    await page.locator('#enhancer-content').selectOption('auto');
+    await page.locator('#enhancer-content').selectOption(
+      name === 'blur' || name === 'mixed' ? 'auto' : 'high-fidelity'
+    );
     await page.locator('#enhancer-restoration').selectOption('auto');
     await page.locator('#enhancer-sharpen').selectOption('auto');
     await page.locator('#enhancer-run').click();
