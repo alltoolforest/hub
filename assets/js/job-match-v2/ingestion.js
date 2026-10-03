@@ -33,6 +33,12 @@ function clean(value) {
   return String(value ?? '').replace(/\u0000/g, '').trim();
 }
 
+function utf8ByteLength(value) {
+  const text = String(value ?? '');
+  if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).byteLength;
+  return unescape(encodeURIComponent(text)).length;
+}
+
 function extensionOf(name) {
   const value = clean(name).toLowerCase();
   const index = value.lastIndexOf('.');
@@ -97,7 +103,7 @@ export function ingestPastedResumeText(value) {
       kind: RESUME_SOURCE_KIND.TEXT,
       name: 'Pasted resume text',
       mediaType: 'text/plain',
-      sizeBytes: new Blob([text]).size,
+      sizeBytes: utf8ByteLength(text),
       provenance: PROVENANCE_KIND.USER_INPUT
     }),
     extractedText: text,
