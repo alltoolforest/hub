@@ -52,4 +52,15 @@ test('font matching does not mutate source pixels or context',()=>{
   const f=fixture(),before=f.canvas.toBuffer('image/png'),font=f.ctx.font;
   inferScannedTextStyle(f.ctx,f.bbox,f.text,f.background);assert.deepEqual(f.canvas.toBuffer('image/png'),before);assert.equal(f.ctx.font,font);
 });
+test('available source font wins over a heavier fallback',()=>{
+  GlobalFonts.removeAll();
+  assert.ok(GlobalFonts.registerFromPath('/usr/share/fonts/opentype/urw-base35/NimbusSans-Regular.otf','Arial'));
+  assert.ok(GlobalFonts.registerFromPath('/usr/share/fonts/opentype/urw-base35/NimbusSans-Bold.otf','Arial'));
+  assert.ok(GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf','DejaVu Sans'));
+  const f=fixture();
+  f.ctx.fillStyle='#fff';f.ctx.fillRect(0,0,600,130);
+  f.ctx.font='32px "DejaVu Sans"';f.ctx.fillStyle='#182023';f.ctx.fillText('sample',40,80);
+  const s=inferScannedTextStyle(f.ctx,{x0:40,y0:54,x1:160,y1:88},'sample',f.background);
+  assert.match(s.fontFace,/DejaVu Sans/);assert.equal(s.weight,400);assert.ok(Math.abs(s.baseline-80)<=1.5);
+});
 console.log(`${passed} OCR visual regression checks passed.`);
