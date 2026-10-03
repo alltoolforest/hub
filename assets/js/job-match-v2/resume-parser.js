@@ -109,6 +109,9 @@ export function applyParsedResumeToState(state, parsed) {
     readingOrderRisk: parsed.parsing.readingOrderRisk || 'not_assessed',
     warnings: [...(parsed.parsing.warnings || [])],
     limitation: String(parsed.parsing.limitation || ''),
+    formatDiagnostics: parsed.parsing.formatDiagnostics && typeof parsed.parsing.formatDiagnostics === 'object'
+      ? { ...parsed.parsing.formatDiagnostics }
+      : {},
     confidence: parsed.parsing.confidence || CONFIDENCE_LEVEL.NONE,
     provenance: parsed.parsing.provenance || PROVENANCE_KIND.PARSED
   };
