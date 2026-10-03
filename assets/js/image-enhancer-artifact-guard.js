@@ -107,17 +107,40 @@ function maeBetween(source, result, mask = null) {
   return count ? sum / count : 0;
 }
 
-function thresholds(mode) {
+function thresholds(mode, degradation = null) {
+  const confidence = degradation?.diagnosis?.confidence || {};
+  const compression = clamp(Math.max(
+    Number(confidence.compression) || 0,
+    Number(degradation?.jpegArtifacts) || 0
+  ));
+  const noise = clamp(Math.max(
+    Number(confidence.noise) || 0,
+    Number(degradation?.noise) || 0
+  ));
+  const artifactSensitivity = clamp(compression * 2.5 + noise * 0.45);
+
+  let base;
   if (mode === 'deblur') {
-    return { globalMae: 34, faceMae: 24, edgeInflation: 1.78, textureInflation: 1.88, detailFloor: 0.72 };
+    base = { globalMae: 34, faceMae: 24, edgeInflation: 1.78, textureInflation: 1.88, detailFloor: 0.72 };
+  } else if (mode === 'upscale') {
+    base = { globalMae: 36, faceMae: 25, edgeInflation: 1.82, textureInflation: 1.92, detailFloor: 0.70 };
+  } else {
+    base = { globalMae: 30, faceMae: 22, edgeInflation: 1.72, textureInflation: 1.82, detailFloor: 0.74 };
   }
-  if (mode === 'upscale') {
-    return { globalMae: 36, faceMae: 25, edgeInflation: 1.82, textureInflation: 1.92, detailFloor: 0.70 };
-  }
-  return { globalMae: 30, faceMae: 22, edgeInflation: 1.72, textureInflation: 1.82, detailFloor: 0.74 };
+
+  return {
+    ...base,
+    compression,
+    noise,
+    artifactSensitivity,
+    edgeInflationStart: clamp(1.28 - artifactSensitivity * 0.24, 1.04, 1.28),
+    textureInflationStart: clamp(1.30 - artifactSensitivity * 0.32, 1.04, 1.30),
+    edgeInflation: Math.max(1.18, base.edgeInflation - artifactSensitivity * 0.68),
+    textureInflation: Math.max(1.20, base.textureInflation - artifactSensitivity * 0.80)
+  };
 }
 
-export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mode = 'enhance') {
+export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mode = 'enhance', degradation = null) {
   if (!sourceImage?.width || !sourceImage?.height || !resultImage?.width || !resultImage?.height) {
     throw new Error('Artifact/fidelity analysis requires valid source and result dimensions.');
   }
@@ -150,14 +173,20 @@ export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mo
   const faceEdgeRatio = sourceFace?.edge > 0.001 ? resultFace.edge / sourceFace.edge : 1;
   const faceTextureRatio = sourceFace?.texture > 0.001 ? resultFace.texture / sourceFace.texture : 1;
   const clippingIncrease = Math.max(0, resultMetrics.clippedFraction - sourceMetrics.clippedFraction);
-  const limit = thresholds(mode);
+  const limit = thresholds(mode, degradation);
 
   const globalDeviationRisk = clamp((globalMae - limit.globalMae * 0.65) / (limit.globalMae * 0.65));
   const faceDeviationRisk = faceMask
     ? clamp((faceMae - limit.faceMae * 0.65) / (limit.faceMae * 0.65))
     : 0;
-  const edgeInflationRisk = clamp((edgeRatio - 1.28) / Math.max(0.1, limit.edgeInflation - 1.28));
-  const textureInflationRisk = clamp((textureRatio - 1.30) / Math.max(0.1, limit.textureInflation - 1.30));
+  const edgeInflationRisk = clamp(
+    (edgeRatio - limit.edgeInflationStart) /
+    Math.max(0.08, limit.edgeInflation - limit.edgeInflationStart)
+  );
+  const textureInflationRisk = clamp(
+    (textureRatio - limit.textureInflationStart) /
+    Math.max(0.08, limit.textureInflation - limit.textureInflationStart)
+  );
   const faceInflationRisk = faceMask
     ? Math.max(
         clamp((faceEdgeRatio - 1.22) / 0.50),
@@ -205,6 +234,7 @@ export function analyzeArtifactFidelity(sourceImage, resultImage, faces = [], mo
     faceTextureRatio,
     clippingIncrease,
     detailRatio: Math.min(edgeRatio, textureRatio),
+    artifactSensitivity: limit.artifactSensitivity,
     sampleWidth: width,
     sampleHeight: height
   });
@@ -228,13 +258,14 @@ export async function applyArtifactFidelityGuard({
   sourceImage,
   faces = [],
   mode = 'enhance',
+  degradation = null,
   signal,
   onStage
 }) {
   if (!canvas || !sourceImage) return { canvas, applied: false, stages: 0, analysis: null };
   if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
 
-  const initial = analyzeArtifactFidelity(sourceImage, canvas, faces, mode);
+  const initial = analyzeArtifactFidelity(sourceImage, canvas, faces, mode, degradation);
   if (initial.safe) {
     return { canvas, applied: false, stages: 0, analysis: initial };
   }
@@ -258,7 +289,7 @@ export async function applyArtifactFidelityGuard({
     onStage?.(stages, alpha, bestAnalysis);
 
     const candidate = blendCandidate(sourceImage, canvas, alpha);
-    const analysis = analyzeArtifactFidelity(sourceImage, candidate, faces, mode);
+    const analysis = analyzeArtifactFidelity(sourceImage, candidate, faces, mode, degradation);
 
     if (
       analysis.safe ||
