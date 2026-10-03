@@ -1,4 +1,4 @@
-import { cleanupPrintResume, downloadResumeText, printResume } from './export.js';
+import { downloadResumeText, printResume } from './export.js';
 import { summarizeValidation, validateResume } from './validation.js';
 import { clearResumeDraft } from './storage.js';
 import { renderResumePreview } from './preview.js';
@@ -342,7 +342,7 @@ function render(root, state) {
           <button type="button" class="rs-secondary" data-print-resume>Print / Save as PDF</button>
           <button type="button" class="rs-secondary" data-download-txt>Download TXT</button>
         </div>
-        <p class="rs-help">For PDF, use your browser's print dialog and choose Save as PDF when available. PDF output remains text-based because it prints the resume HTML, not a screenshot.</p>
+        <p class="rs-help">For PDF, use your browser's print dialog and choose Save as PDF when available. The export prints HTML text rather than taking a screenshot, which is designed to keep the PDF selectable and searchable where the browser supports it.</p>
         <div class="rs-preview-frame" id="rs-preview-host"></div>
       </section>
 
@@ -588,9 +588,6 @@ export function mountResumeStudioUI(root, store, options = {}) {
         return;
       }
       const result = printResume(state);
-      if (globalThis.window?.addEventListener) {
-        globalThis.window.addEventListener('afterprint', () => cleanupPrintResume(), { once: true });
-      }
       if (status) status.textContent = result.status === 'opened'
         ? 'Print dialog opened. Choose Save as PDF if your browser provides that option.'
         : 'Printing is not available in this browser.';
