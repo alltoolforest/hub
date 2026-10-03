@@ -386,8 +386,14 @@ function addItem(store, type) {
 export function mountResumeStudioUI(root, store, options = {}) {
   if (!root || !store) throw new TypeError('Resume Studio UI requires a root element and store.');
   let restoredDraft = options.restoredDraft || { status: 'empty' };
+  const onDraftResolved = typeof options.onDraftResolved === 'function' ? options.onDraftResolved : () => {};
 
-  const rerender = () => render(root, store.getState());
+  const rerender = () => {
+    render(root, store.getState());
+    if (restoredDraft?.status === 'restored' && restoredDraft?.resume) {
+      setStorageStatus({ status: 'available', savedAt: restoredDraft.savedAt });
+    }
+  };
   const refreshPreview = () => renderResumePreview(root.querySelector('#rs-preview-host'), store.getState());
   rerender();
 
@@ -527,6 +533,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
       restoredDraft = { status: 'empty', resume: null };
       rerender();
       setStorageStatus({ status: 'restored' });
+      onDraftResolved();
       const fullName = root.querySelector('[data-path="contact.fullName"]');
       if (fullName) fullName.focus();
       return;
@@ -541,6 +548,7 @@ export function mountResumeStudioUI(root, store, options = {}) {
       store.reset(CANDIDATE_TYPES.FRESHER);
       rerender();
       setStorageStatus(cleared.status === 'cleared' ? cleared : { status: cleared.status });
+      onDraftResolved();
       const candidateType = root.querySelector('#candidate-type');
       if (candidateType) candidateType.focus();
       return;
