@@ -11,6 +11,8 @@ export function resolveRegionRestorationPlan(analysis, mode = 'enhance') {
   const lowResolution = clamp(Number(confidence.lowResolution) || (analysis?.lowResolution ? 1 : 0));
   const falseResolution = clamp(Number(confidence.falseResolution) || (analysis?.falseResolution ? 1 : 0));
   const badLighting = clamp(Number(confidence.badLighting) || 0);
+  const meanLuma = Number(analysis?.exposure?.meanLuma);
+  const validMeanLuma = Number.isFinite(meanLuma) ? meanLuma : 128;
 
   const detailDemand = clamp(
     blur * 0.46 +
@@ -22,6 +24,27 @@ export function resolveRegionRestorationPlan(analysis, mode = 'enhance') {
   const toneDemand = clamp(Math.max(underexposure, overexposure, lowContrast, badLighting));
 
   const modeBase = mode === 'upscale' ? 0.88 : mode === 'deblur' ? 0.90 : 0.84;
+  // General restoration models can exaggerate sensor noise/JPEG blocks. Keep
+  // more photographed source when cleanup, rather than reconstruction, is the
+  // dominant need.
+  const fidelityAdjustedBase = clamp(
+    modeBase - noise * 0.055 - compression * 0.10,
+    mode === 'upscale' ? 0.72 : 0.68,
+    modeBase
+  );
+  const darkBias = clamp((108 - validMeanLuma) / 78);
+  const brightBias = clamp((validMeanLuma - 150) / 78);
+  const exposureGain = clamp(
+    1 + darkBias * 0.30 - brightBias * 0.20,
+    0.80,
+    1.30
+  );
+  const exposureOffset = clamp(
+    darkBias * 4.5 - brightBias * 3.5,
+    -3.5,
+    4.5
+  );
+  const denoiseStrength = clamp(noise * 0.24 + compression * 0.08, 0, 0.24);
   const smoothRetention = clamp(
     (mode === 'upscale' ? 0.16 : 0.20) +
     noise * 0.12 +
@@ -45,12 +68,16 @@ export function resolveRegionRestorationPlan(analysis, mode = 'enhance') {
     detailDemand,
     cleanupDemand,
     toneDemand,
-    processedBase: modeBase,
+    processedBase: fidelityAdjustedBase,
     smoothRetention,
+    meanLuma: validMeanLuma,
+    exposureGain,
+    exposureOffset,
+    denoiseStrength,
     maxEdgeBoost: clamp(2.5 + detailDemand * 5.5, 2.5, 8),
     shadowLift: clamp(underexposure * 10, 0, 10),
     highlightCompression: clamp(overexposure * 8, 0, 8),
-    contrastGain: clamp(lowContrast * 0.045, 0, 0.045)
+    contrastGain: clamp(lowContrast * 0.035, 0, 0.035)
   });
 }
 
@@ -78,11 +105,13 @@ export function resolveRegionProcessedWeight({
   const region = classifyRestorationRegion(sourceEdge, sourceResidual, faceLimit);
   const safePlan = plan || resolveRegionRestorationPlan(null);
   const deviationPenalty = clamp((Number(deviation) - 4) / 34);
+  const cleanupDetailPenalty = safePlan.cleanupDemand * region.detail * 0.08;
   let weight =
     safePlan.processedBase +
     region.detail * (0.08 + safePlan.detailDemand * 0.06) -
     region.smooth * safePlan.smoothRetention * deviationPenalty -
-    safePlan.cleanupDemand * region.smooth * 0.05;
+    safePlan.cleanupDemand * region.smooth * 0.05 -
+    cleanupDetailPenalty;
 
   if (region.faceProtected) {
     weight = Math.min(weight, clamp(Number(faceLimit), 0.5, 1));
@@ -109,5 +138,9 @@ export function resolveRegionEdgeBoost({
     recovered * 0.12
   );
 
-  return clamp(confidence * safePlan.detailDemand, 0, 1);
+  return clamp(
+    confidence * safePlan.detailDemand * (1 - safePlan.cleanupDemand * 0.70),
+    0,
+    1
+  );
 }

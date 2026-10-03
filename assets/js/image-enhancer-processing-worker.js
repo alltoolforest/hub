@@ -333,12 +333,12 @@ async function regionAwareRestore(sourceBitmap, processedBitmap, analysis, faces
             toneDelta += (resultY - 128) * plan.contrastGain;
           }
 
+          const structureProtection = clamp((sourceEdge - 10) / 18, 0, 1);
           const smoothNoiseBlend = clamp(
-            plan.cleanupDemand *
-            clamp((5 - sourceEdge) / 5, 0, 1) *
-            0.08,
+            (plan.denoiseStrength || 0) *
+            (1 - structureProtection * 0.72),
             0,
-            0.08
+            0.24
           );
 
           for (let channel = 0; channel < 3; channel++) {
@@ -353,6 +353,7 @@ async function regionAwareRestore(sourceBitmap, processedBitmap, analysis, faces
 
             let value = sourceValue + (processedValue - sourceValue) * processedWeight;
             value = value * (1 - smoothNoiseBlend) + neighbourValue * smoothNoiseBlend;
+            value = value * (plan.exposureGain || 1) + (plan.exposureOffset || 0);
             value += boundedEdgeCorrection + toneDelta;
             dst[out + channel] = byte(value);
           }
