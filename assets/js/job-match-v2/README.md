@@ -1,6 +1,6 @@
-# ATS & Job Match Analyzer V2 — Tasks 1–5 Foundation
+# ATS & Job Match Analyzer V2 — Tasks 1–6 Foundation
 
-This directory contains the isolated foundations completed through Task 5 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
+This directory contains the isolated foundations completed through Task 6 of the approved Replacement Master Blueprint. It is not connected to the production analyzer.
 
 ## Product separation
 
@@ -293,3 +293,54 @@ Task 5 does **not**:
 - generate tailored resume content
 - build the results dashboard
 - replace the production analyzer
+
+
+## Task 6 — Resume Evidence + Job Match Engine
+
+Task 6 performs requirement-by-requirement evidence matching between the candidate's parsed resume and the normalized job-description requirements.
+
+Evidence hierarchy:
+
+1. exact resume phrase
+2. safely normalized equivalent terminology
+3. contextual evidence in the relevant resume section
+
+The engine preserves the distinction between a keyword being present and the resume clearly evidencing a requirement.
+
+Examples:
+
+- a direct hard skill/tool such as SQL or Power BI can be supported by explicit resume presence
+- a soft skill such as Leadership is MATCHED when it appears in Work Experience/Projects, but only PARTIAL when it appears as a standalone skill keyword
+- a job title/function is strongest when found in Work Experience
+- a certification is MATCHED in Certifications/Licenses and PARTIAL if wording only appears elsewhere
+- education requirements compare degree level and, when specified, field of study in the Education section
+- numeric experience requirements use non-overlapping Work Experience date ranges only
+- year-only employment dates are treated as estimates
+- topic-specific experience such as transaction monitoring must appear in Work Experience for a full match
+- travel, shift, work-authorization and similar constraints become UNCERTAIN when a resume cannot legitimately prove them
+- unknown/proprietary requirements never become fully matched merely because identical wording appears
+
+Each job-match finding retains:
+
+- requirement
+- original JD source text
+- REQUIRED/PREFERRED/GENERAL importance
+- category
+- MATCHED/PARTIAL/NOT_FOUND/UNCERTAIN status
+- resume evidence excerpts
+- source section/location
+- confidence
+- explanation
+- experience-duration evidence where relevant
+
+Task 6 explicitly does **not**:
+
+- calculate Job Requirement Coverage
+- assign weights to requirements
+- rank or prioritize findings
+- create HIGH/MEDIUM/OPTIONAL recommendations
+- generate resume content
+- build the results dashboard
+- replace the production analyzer
+
+The canonical Task 6 state intentionally keeps `jobMatch.coverage = null` and `priorityRecommendations = []` so Task 7 remains a separate release gate.
