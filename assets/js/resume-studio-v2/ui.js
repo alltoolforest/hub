@@ -256,10 +256,10 @@ function render(root, state) {
           <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="${experienced ? 'Summarize your experience, domain, strengths and evidence you can support.' : 'Describe your education, relevant skills, training/projects and career interest.'}">${esc(state.summary.text)}</textarea>
         </label>
         <div class="rs-content-actions">
-          <button type="button" class="rs-secondary" data-refine-summary>Refine from my facts</button>
+          <button type="button" class="rs-secondary" data-refine-summary>${experienced ? 'Refine from my facts' : 'Refine objective'}</button>
           <span class="rs-provenance" data-provenance="${esc(state.summary.provenance || 'user')}">${esc((state.summary.provenance || 'user').toUpperCase())}</span>
         </div>
-        <p class="rs-help">${experienced ? 'A role-based professional summary is generated automatically. Keep it, add your own verified points, or refine it.' : 'A role-based career objective is generated automatically. Keep it, refine it, or replace it with your own objective.'}</p>
+        <p class="rs-help">${experienced ? 'Write or refine your professional summary using facts you can support.' : 'A role-based career objective is generated automatically. Keep it, refine it, or replace it with your own objective. Manual edits are kept unless you replace them yourself.'}</p>
       </section>
 
       <section class="rs-panel" aria-labelledby="rs-skills-heading">
