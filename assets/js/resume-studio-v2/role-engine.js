@@ -371,6 +371,130 @@ const ROLE_INDEX = Object.freeze(ROLE_PROFILES.flatMap((profile) =>
   }))
 ));
 
+const ROLE_RESPONSIBILITY_OVERRIDES = Object.freeze([
+  { match: /^sap basis (administrator|consultant|engineer)$/i, responsibilities: [
+    'Monitor SAP system availability, background jobs, logs and operational health.',
+    'Perform SAP user, authorization and routine Basis administration within approved procedures.',
+    'Coordinate transports, system changes and technical issue resolution across SAP environments.'
+  ]},
+  { match: /^sap (fico|fi|co|finance) (analyst|consultant)$/i, responsibilities: [
+    'Support SAP FI/CO business processes, configuration activities and user requirements.',
+    'Analyze finance-related issues and document functional findings or change requirements.',
+    'Coordinate testing and issue resolution for SAP finance workflows with relevant stakeholders.'
+  ]},
+  { match: /^sap (mm|materials management) (analyst|consultant)$/i, responsibilities: [
+    'Support SAP MM processes across purchasing, inventory and material master activities.',
+    'Analyze procurement requirements and document functional issues or change requests.',
+    'Coordinate functional testing and resolution of SAP MM process issues.'
+  ]},
+  { match: /^sap sd (analyst|consultant)$/i, responsibilities: [
+    'Support SAP SD processes across sales orders, delivery, billing and related workflows.',
+    'Analyze order-to-cash requirements and document functional issues or changes.',
+    'Coordinate testing and issue resolution for SAP SD processes with business stakeholders.'
+  ]},
+  { match: /^sap abap (developer|consultant)$/i, responsibilities: [
+    'Develop or maintain ABAP programs, reports, enhancements or interfaces according to approved requirements.',
+    'Debug SAP application issues and document technical findings.',
+    'Test code changes and coordinate transport of approved developments across environments.'
+  ]},
+  { match: /^data analyst$/i, responsibilities: [
+    'Analyze structured data to answer defined business questions and reporting requirements.',
+    'Validate source data and investigate inconsistencies before reporting results.',
+    'Prepare clear reports, dashboards or analysis outputs and document relevant logic.'
+  ]},
+  { match: /^soc analyst$/i, responsibilities: [
+    'Monitor security alerts and investigate events according to defined SOC procedures.',
+    'Document incident findings, evidence and escalation decisions accurately.',
+    'Escalate confirmed or high-risk security events through the incident response process.'
+  ]},
+  { match: /^(registered nurse|staff nurse|clinical nurse)$/i, responsibilities: [
+    'Provide patient care within the responsibilities, protocols and authorization of the assigned nursing role.',
+    'Maintain accurate clinical observations, treatment records and care documentation.',
+    'Coordinate patient needs and escalate clinical concerns to authorized healthcare team members.'
+  ]},
+  { match: /^(accountant|senior accountant)$/i, responsibilities: [
+    'Prepare and review accounting records, reconciliations and supporting financial documentation.',
+    'Investigate discrepancies and ensure transactions are recorded accurately.',
+    'Support period-end reporting and maintain documentation required for review or audit.'
+  ]},
+  { match: /^financial analyst$/i, responsibilities: [
+    'Analyze financial data, trends and variances against defined business requirements.',
+    'Prepare financial models, reports or management analysis using verified source data.',
+    'Document assumptions, findings and material financial observations for stakeholders.'
+  ]},
+  { match: /^(recruiter|technical recruiter|talent acquisition specialist)$/i, responsibilities: [
+    'Source and screen candidates against approved role requirements.',
+    'Coordinate interviews, candidate communication and recruitment status updates.',
+    'Maintain accurate applicant records and document recruitment activity in the relevant system.'
+  ]},
+  { match: /^(seo analyst|seo specialist)$/i, responsibilities: [
+    'Research keywords and assess on-page or technical SEO opportunities against defined goals.',
+    'Monitor search performance and document changes in rankings, traffic or site visibility.',
+    'Coordinate approved SEO improvements and report measurable outcomes using available analytics.'
+  ]},
+  { match: /^mechanical engineer$/i, responsibilities: [
+    'Support mechanical design, analysis or maintenance activities according to approved engineering requirements.',
+    'Review technical drawings, calculations or equipment conditions and document findings.',
+    'Coordinate technical issue resolution with relevant engineering, production or maintenance stakeholders.'
+  ]},
+  { match: /^electrical engineer$/i, responsibilities: [
+    'Support design, testing or maintenance of electrical systems according to engineering requirements.',
+    'Investigate electrical faults and document test results or corrective actions.',
+    'Coordinate implementation work while following applicable technical and safety procedures.'
+  ]},
+  { match: /^(electrician|industrial electrician|maintenance electrician)$/i, responsibilities: [
+    'Install, inspect or maintain electrical systems within the scope of the assigned trade role.',
+    'Troubleshoot faults using appropriate testing instruments and approved procedures.',
+    'Follow electrical safety requirements and document completed maintenance or repair work.'
+  ]},
+  { match: /^warehouse supervisor$/i, responsibilities: [
+    'Coordinate daily warehouse receiving, storage, picking or dispatch activities.',
+    'Monitor inventory accuracy, operational exceptions and adherence to safety procedures.',
+    'Assign work, track shift activity and escalate stock, safety or process issues as required.'
+  ]},
+  { match: /^(teacher|primary school teacher|secondary school teacher|high school teacher)$/i, responsibilities: [
+    'Plan and deliver lessons appropriate to the assigned subject and learner group.',
+    'Assess learner progress using approved methods and maintain relevant academic records.',
+    'Communicate learning needs, progress and classroom concerns to appropriate stakeholders.'
+  ]},
+  { match: /^(chef|sous chef|cook)$/i, responsibilities: [
+    'Prepare and execute food items according to approved recipes, quality standards and service requirements.',
+    'Maintain food safety, hygiene and workstation standards throughout kitchen operations.',
+    'Coordinate preparation timing, stock needs and service priorities with the kitchen team.'
+  ]},
+  { match: /^(lawyer|attorney|legal counsel|legal associate|paralegal)$/i, responsibilities: [
+    'Research or review legal information relevant to assigned matters under applicable professional requirements.',
+    'Prepare and maintain accurate legal, contract or case documentation.',
+    'Coordinate deadlines, evidence, filings or stakeholder communication for assigned legal work.'
+  ]},
+  { match: /^(java|python|\.net|c#|c\+\+) developer$/i, responsibilities: [
+    'Develop and maintain application components according to approved functional and technical requirements.',
+    'Debug defects, test code changes and document implementation details.',
+    'Collaborate with relevant technical stakeholders through review, integration and release activities.'
+  ]},
+  { match: /^(frontend|web) developer$/i, responsibilities: [
+    'Build and maintain responsive user interfaces according to approved designs and functional requirements.',
+    'Test browser behavior, debug interface issues and improve accessibility or usability defects.',
+    'Coordinate frontend changes with design, backend and QA stakeholders.'
+  ]},
+  { match: /^backend developer$/i, responsibilities: [
+    'Develop and maintain server-side application logic and APIs according to approved requirements.',
+    'Integrate databases or external services and investigate backend defects.',
+    'Test changes, document implementation details and coordinate releases with technical stakeholders.'
+  ]},
+  { match: /^(devops engineer|site reliability engineer|sre)$/i, responsibilities: [
+    'Operate and improve deployment, infrastructure or reliability workflows according to approved standards.',
+    'Maintain automation, monitoring and operational documentation for supported services.',
+    'Investigate incidents and coordinate corrective or preventive actions with relevant teams.'
+  ]}
+]);
+
+function responsibilitiesForRole(roleTitle, profile) {
+  const role = clean(roleTitle);
+  const override = ROLE_RESPONSIBILITY_OVERRIDES.find((item) => item.match.test(role));
+  return override ? override.responsibilities : profile.responsibilities;
+}
+
 const ROLE_SKILL_OVERRIDES = Object.freeze([
   { match: /^sap basis (administrator|consultant|engineer)$/i, skills: ['SAP Basis administration','SAP system monitoring','Transport management','User and authorization administration','SAP system troubleshooting'] },
   { match: /^sap (fico|fi|co|finance) (analyst|consultant)$/i, skills: ['SAP FI','SAP CO','Financial process analysis','SAP configuration support','Functional testing'] },
@@ -565,7 +689,7 @@ export function getRoleSuggestions(roleTitle) {
     family: found.id,
     category: found.category,
     skills: skillsForRole(role, found).map((text) => makeSuggestion('skill', text, found.id)),
-    responsibilities: found.responsibilities.map((text) => makeSuggestion('responsibility', text, found.id))
+    responsibilities: responsibilitiesForRole(role, found).map((text) => makeSuggestion('responsibility', text, found.id))
   };
 }
 
