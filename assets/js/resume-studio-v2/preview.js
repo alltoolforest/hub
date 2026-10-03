@@ -34,7 +34,7 @@ function bullets(items) {
 
 function section(title, body, className = '') {
   if (!body) return '';
-  return '<section class="resume-section ' + esc(className) + '"><h2>' + esc(title) + '</h2>' + body + '</section>';
+  return '<section class="resume-section ' + esc(className) + '"><h3>' + esc(title) + '</h3>' + body + '</section>';
 }
 
 function experienceSection(items) {
@@ -47,10 +47,10 @@ function experienceSection(items) {
     const dates = [item.startDate, item.current ? 'Present' : item.endDate].filter(Boolean).join(' – ');
     const meta = [item.company, item.location, dates].map(clean).filter(Boolean).join(' · ');
     return '<article class="resume-entry">' +
-      (clean(item.position) ? '<h3>' + esc(item.position) + '</h3>' : '') +
+      (clean(item.position) ? '<h4>' + esc(item.position) + '</h4>' : '') +
       (meta ? '<p class="resume-meta">' + esc(meta) + '</p>' : '') +
       bullets(item.responsibilities) +
-      (nonEmpty(item.achievements).length ? '<div class="resume-subgroup"><h4>Achievements</h4>' + bullets(item.achievements) + '</div>' : '') +
+      (nonEmpty(item.achievements).length ? '<div class="resume-subgroup"><h5>Achievements</h5>' + bullets(item.achievements) + '</div>' : '') +
       '</article>';
   }).join(''));
 }
@@ -66,7 +66,7 @@ function educationSection(items) {
     const dates = [item.startYear, item.completionYear].map(clean).filter(Boolean).join(' – ');
     const meta = [org, item.location, dates, item.grade].map(clean).filter(Boolean).join(' · ');
     return '<article class="resume-entry">' +
-      (title ? '<h3>' + esc(title) + '</h3>' : '') +
+      (title ? '<h4>' + esc(title) + '</h4>' : '') +
       (meta ? '<p class="resume-meta">' + esc(meta) + '</p>' : '') +
       '</article>';
   }).join(''));
@@ -80,7 +80,7 @@ function projectsSection(items) {
   return section('Projects', records.map((item) => {
     const tech = nonEmpty(item.technologies);
     return '<article class="resume-entry">' +
-      (clean(item.title) ? '<h3>' + esc(item.title) + '</h3>' : '') +
+      (clean(item.title) ? '<h4>' + esc(item.title) + '</h4>' : '') +
       (clean(item.role) ? '<p class="resume-meta">' + esc(item.role) + '</p>' : '') +
       (clean(item.description) ? '<p>' + esc(item.description) + '</p>' : '') +
       (tech.length ? '<p><strong>Skills / Technologies:</strong> ' + tech.map(esc).join(', ') + '</p>' : '') +
@@ -99,7 +99,7 @@ function internshipsSection(items) {
     const dates = [item.startDate, item.endDate].map(clean).filter(Boolean).join(' – ');
     const meta = [item.organization, dates].map(clean).filter(Boolean).join(' · ');
     return '<article class="resume-entry">' +
-      (clean(item.title) ? '<h3>' + esc(item.title) + '</h3>' : '') +
+      (clean(item.title) ? '<h4>' + esc(item.title) + '</h4>' : '') +
       (meta ? '<p class="resume-meta">' + esc(meta) + '</p>' : '') +
       bullets(item.responsibilities) +
       (clean(item.outcome) ? '<p><strong>Outcome:</strong> ' + esc(item.outcome) + '</p>' : '') +
@@ -115,7 +115,7 @@ function certificationsSection(items) {
   return section('Certifications', records.map((item) => {
     const meta = [item.issuer, item.year, item.credential].map(clean).filter(Boolean).join(' · ');
     return '<article class="resume-entry">' +
-      (clean(item.name) ? '<h3>' + esc(item.name) + '</h3>' : '') +
+      (clean(item.name) ? '<h4>' + esc(item.name) + '</h4>' : '') +
       (meta ? '<p class="resume-meta">' + esc(meta) + '</p>' : '') +
       '</article>';
   }).join(''));
@@ -185,7 +185,7 @@ export function buildResumePreviewHtml(resume) {
 
   return '<article class="resume-document ' + esc(template.className) + '" data-template="' + esc(template.id) + '" aria-label="Resume preview">' +
     '<header class="resume-header">' +
-      '<h1>' + esc(name) + '</h1>' +
+      '<p class="resume-name">' + esc(name) + '</p>' +
       (targetRole ? '<p class="resume-target-role">' + esc(targetRole) + '</p>' : '') +
       (contacts.length ? '<p class="resume-contact">' + contacts.map(esc).join(' · ') + '</p>' : '') +
     '</header>' +
