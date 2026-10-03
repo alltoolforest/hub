@@ -371,6 +371,42 @@ const ROLE_INDEX = Object.freeze(ROLE_PROFILES.flatMap((profile) =>
   }))
 ));
 
+const ROLE_SKILL_OVERRIDES = Object.freeze([
+  { match: /^sap basis (administrator|consultant|engineer)$/i, skills: ['SAP Basis administration','SAP system monitoring','Transport management','User and authorization administration','SAP system troubleshooting'] },
+  { match: /^sap (fico|fi|co|finance) (analyst|consultant)$/i, skills: ['SAP FI','SAP CO','Financial process analysis','SAP configuration support','Functional testing'] },
+  { match: /^sap (mm|materials management) (analyst|consultant)$/i, skills: ['SAP MM','Procure-to-pay processes','Material master data','Purchasing configuration','Functional testing'] },
+  { match: /^sap sd (analyst|consultant)$/i, skills: ['SAP SD','Order-to-cash processes','Sales order processing','Pricing configuration','Functional testing'] },
+  { match: /^sap abap (developer|consultant)$/i, skills: ['ABAP development','SAP debugging','Reports and enhancements','Object-oriented ABAP','Unit testing'] },
+  { match: /^(java|python|\.net|c#|c\+\+) developer$/i, skills: ['Application development','Debugging','Version control','Unit testing','Software design principles'] },
+  { match: /^(frontend|web) developer$/i, skills: ['HTML','CSS','JavaScript','Responsive web development','Browser debugging'] },
+  { match: /^backend developer$/i, skills: ['Server-side development','API development','Database integration','Application debugging','Version control'] },
+  { match: /^full stack developer$/i, skills: ['Frontend development','Backend development','API integration','Database fundamentals','Version control'] },
+  { match: /^data analyst$/i, skills: ['Data analysis','SQL','Spreadsheet analysis','Data visualization','Data validation'] },
+  { match: /^business intelligence analyst$/i, skills: ['Business intelligence','SQL','Dashboard development','Data modeling','Reporting'] },
+  { match: /^data scientist$/i, skills: ['Statistical analysis','Machine learning','Python or R','Data preparation','Model evaluation'] },
+  { match: /^(devops engineer|site reliability engineer|sre)$/i, skills: ['CI/CD','Infrastructure automation','Cloud platforms','Container orchestration','Monitoring and observability'] },
+  { match: /^(soc analyst|cybersecurity analyst|security analyst)$/i, skills: ['Security monitoring','Incident analysis','SIEM analysis','Threat investigation','Security documentation'] },
+  { match: /^registered nurse$|^staff nurse$|^clinical nurse$/i, skills: ['Patient care','Clinical documentation','Medication safety','Care coordination','Infection control'] },
+  { match: /^medical coder$/i, skills: ['Medical coding','Healthcare documentation','Coding accuracy','Medical terminology','Claims support'] },
+  { match: /^(accountant|senior accountant)$/i, skills: ['Financial accounting','Reconciliation','General ledger','Financial reporting','Spreadsheet analysis'] },
+  { match: /^financial analyst$/i, skills: ['Financial analysis','Financial modeling','Spreadsheet analysis','Variance analysis','Management reporting'] },
+  { match: /^(recruiter|technical recruiter|talent acquisition specialist)$/i, skills: ['Candidate sourcing','Screening','Interview coordination','Applicant tracking systems','Stakeholder communication'] },
+  { match: /^(seo analyst|seo specialist)$/i, skills: ['Keyword research','On-page SEO','Technical SEO','Search performance analysis','SEO reporting'] },
+  { match: /^mechanical engineer$/i, skills: ['Mechanical design','Engineering analysis','CAD','Technical drawings','Problem solving'] },
+  { match: /^electrical engineer$/i, skills: ['Electrical systems','Circuit analysis','Technical drawings','Testing and troubleshooting','Electrical safety'] },
+  { match: /^(electrician|industrial electrician|maintenance electrician)$/i, skills: ['Electrical installation','Electrical troubleshooting','Testing instruments','Safety procedures','Preventive maintenance'] },
+  { match: /^warehouse supervisor$/i, skills: ['Warehouse operations','Inventory control','Team coordination','Safety compliance','Operational reporting'] },
+  { match: /^(teacher|primary school teacher|secondary school teacher|high school teacher)$/i, skills: ['Lesson planning','Classroom instruction','Student assessment','Classroom management','Learner communication'] },
+  { match: /^(chef|sous chef|cook)$/i, skills: ['Food preparation','Kitchen operations','Food safety and hygiene','Menu execution','Time management'] },
+  { match: /^(lawyer|attorney|legal counsel|legal associate|paralegal)$/i, skills: ['Legal research','Document review','Case documentation','Legal writing','Client or stakeholder communication'] }
+]);
+
+function skillsForRole(roleTitle, profile) {
+  const role = clean(roleTitle);
+  const override = ROLE_SKILL_OVERRIDES.find((item) => item.match.test(role));
+  return override ? override.skills : profile.skills;
+}
+
 function makeSuggestion(kind, text, family) {
   return Object.freeze({ kind, text, family, provenance: 'suggested', verified: false });
 }
@@ -528,7 +564,7 @@ export function getRoleSuggestions(roleTitle) {
     role,
     family: found.id,
     category: found.category,
-    skills: found.skills.map((text) => makeSuggestion('skill', text, found.id)),
+    skills: skillsForRole(role, found).map((text) => makeSuggestion('skill', text, found.id)),
     responsibilities: found.responsibilities.map((text) => makeSuggestion('responsibility', text, found.id))
   };
 }
