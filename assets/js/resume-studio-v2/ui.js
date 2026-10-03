@@ -1,3 +1,5 @@
+import { getRoleSuggestions } from './role-engine.js';
+import { CONTENT_PROVENANCE, createSuggestedUnit, refineBulletList, refineSummary, verifySuggestion } from './content-engine.js';
 import { CANDIDATE_TYPES } from './schema.js';
 
 function esc(value) {
@@ -40,7 +42,9 @@ function experienceItem() {
     endDate: '',
     current: false,
     responsibilities: [],
-    achievements: []
+    achievements: [],
+    responsibilityProvenance: [],
+    achievementProvenance: []
   };
 }
 
@@ -63,7 +67,9 @@ function projectItem() {
     role: '',
     description: '',
     technologies: [],
-    outcome: ''
+    outcome: '',
+    descriptionProvenance: CONTENT_PROVENANCE.USER,
+    outcomeProvenance: CONTENT_PROVENANCE.USER
   };
 }
 
@@ -74,7 +80,9 @@ function internshipItem() {
     startDate: '',
     endDate: '',
     responsibilities: [],
-    outcome: ''
+    outcome: '',
+    responsibilityProvenance: [],
+    outcomeProvenance: CONTENT_PROVENANCE.USER
   };
 }
 
@@ -102,6 +110,7 @@ function renderExperience(items) {
         <label>End month<input type="month" data-array="experience" data-index="${index}" data-key="endDate" value="${esc(item.endDate)}" ${item.current ? 'disabled' : ''}></label>
         <label class="rs-check"><input type="checkbox" data-array="experience" data-index="${index}" data-key="current" ${item.current ? 'checked' : ''}>Currently working here</label>
         <label class="rs-full">Roles &amp; Responsibilities<textarea rows="5" data-array="experience" data-index="${index}" data-key="responsibilities" data-kind="list" maxlength="2500" placeholder="One responsibility per line">${esc(multiline(item.responsibilities))}</textarea></label>
+        <div class="rs-full rs-content-actions"><button type="button" class="rs-secondary" data-refine-responsibilities data-index="${index}">Refine these responsibilities</button></div>
         <label class="rs-full">Achievements <span>(optional)</span><textarea rows="4" data-array="experience" data-index="${index}" data-key="achievements" data-kind="list" maxlength="1800" placeholder="One truthful achievement per line">${esc(multiline(item.achievements))}</textarea></label>
       </div>
     </article>`).join('');
@@ -213,7 +222,11 @@ function render(root, state) {
         <label class="rs-block">Your facts / draft
           <textarea data-path="summary.text" rows="6" maxlength="1800" placeholder="${experienced ? 'Summarize your experience, domain, strengths and evidence you can support.' : 'Describe your education, relevant skills, training/projects and career interest.'}">${esc(state.summary.text)}</textarea>
         </label>
-        <p class="rs-help">Task 2 only captures your information. Role-aware rewriting will be connected in a later approved task.</p>
+        <div class="rs-content-actions">
+          <button type="button" class="rs-secondary" data-refine-summary>Refine from my facts</button>
+          <span class="rs-provenance" data-provenance="${esc(state.summary.provenance || 'user')}">${esc((state.summary.provenance || 'user').toUpperCase())}</span>
+        </div>
+        <p class="rs-help">Refinement may improve wording only from the facts and skills you entered. Review the result before use.</p>
       </section>
 
       <section class="rs-panel" aria-labelledby="rs-skills-heading">
@@ -221,6 +234,10 @@ function render(root, state) {
         <label class="rs-block">Professional / technical skills
           <textarea data-list-path="skills" rows="5" maxlength="1600" placeholder="Enter one skill per line">${esc(multiline(state.skills))}</textarea>
         </label>
+        <div class="rs-suggestion-area">
+          <div class="rs-content-actions"><button type="button" class="rs-secondary" data-show-role-suggestions>Show role suggestions</button></div>
+          <div id="rs-role-suggestions" aria-live="polite"></div>
+        </div>
       </section>
 
       ${experienced ? `
@@ -279,9 +296,40 @@ function render(root, state) {
         </div>
       </section>
 
-      <div class="rs-task-note" role="status" aria-live="polite" id="rs-state-status">Information is held only in memory for this isolated Task 2 build. Local draft saving is not enabled yet.</div>
+      <div class="rs-task-note" role="status" aria-live="polite" id="rs-state-status">Information is held only in memory for this isolated build. Suggested content is never added automatically. Local draft saving is not enabled yet.</div>
     </form>
   `;
+}
+
+
+function renderRoleSuggestions(root, state) {
+  const host = root.querySelector('#rs-role-suggestions');
+  if (!host) return;
+  const suggestions = getRoleSuggestions(state.candidate.targetRole);
+  if (!state.candidate.targetRole.trim()) {
+    host.innerHTML = '<p class="rs-help">Enter a target position first.</p>';
+    return;
+  }
+
+  const skillItems = suggestions.skills
+    .filter((item) => !state.skills.some((skill) => skill.toLocaleLowerCase() === item.text.toLocaleLowerCase()))
+    .map((item) => `<li><span><strong>Suggested skill:</strong> ${esc(item.text)}</span><button type="button" class="rs-secondary" data-verify-suggestion="skill" data-suggestion="${esc(item.text)}">Add only if true</button></li>`)
+    .join('');
+
+  const responsibilityItems = suggestions.responsibilities
+    .map((item) => `<li><span><strong>Responsibility idea:</strong> ${esc(item.text)}</span><span class="rs-provenance" data-provenance="suggested">SUGGESTED</span></li>`)
+    .join('');
+
+  host.innerHTML = `
+    <div class="rs-suggestion-box" role="region" aria-label="Role suggestions">
+      <p><strong>Suggestions for ${esc(state.candidate.targetRole)}</strong> · Verify every item before adding it to your resume.</p>
+      ${skillItems ? `<ul class="rs-suggestion-list">${skillItems}</ul>` : '<p class="rs-help">No new skill suggestions for this role.</p>'}
+      ${responsibilityItems ? `<details><summary>Responsibility ideas to consider</summary><ul class="rs-suggestion-list">${responsibilityItems}</ul></details>` : ''}
+    </div>`;
+}
+
+function markListProvenance(length, provenance) {
+  return Array.from({ length }, () => provenance);
 }
 
 function addItem(store, type) {
@@ -348,6 +396,11 @@ export function mountResumeStudioUI(root, store) {
     if (target.matches('[data-path]')) {
       store.update((state) => {
         setPath(state, target.dataset.path, target.value);
+        if (target.dataset.path === 'summary.text') state.summary.provenance = CONTENT_PROVENANCE.USER;
+        if (/^projects\.\d+\.description$/.test(target.dataset.path)) {
+          const index = Number(target.dataset.path.split('.')[1]);
+          if (state.projects[index]) state.projects[index].descriptionProvenance = CONTENT_PROVENANCE.USER;
+        }
         return state;
       });
       return;
@@ -355,7 +408,10 @@ export function mountResumeStudioUI(root, store) {
 
     if (target.matches('[data-list-path]')) {
       store.update((state) => {
-        setPath(state, target.dataset.listPath, textList(target.value));
+        const values = textList(target.value);
+        setPath(state, target.dataset.listPath, values);
+        if (target.dataset.listPath === 'skills') state.skillProvenance = markListProvenance(values.length, CONTENT_PROVENANCE.USER);
+        if (target.dataset.listPath === 'achievements') state.achievementProvenance = markListProvenance(values.length, CONTENT_PROVENANCE.USER);
         return state;
       });
       return;
@@ -372,12 +428,85 @@ export function mountResumeStudioUI(root, store) {
         const item = state[collection]?.[index];
         if (!item) return state;
         item[key] = kind === 'list' ? textList(target.value) : target.value;
+        if (collection === 'experience' && key === 'responsibilities') {
+          item.responsibilityProvenance = markListProvenance(item[key].length, CONTENT_PROVENANCE.USER);
+        }
+        if (collection === 'experience' && key === 'achievements') {
+          item.achievementProvenance = markListProvenance(item[key].length, CONTENT_PROVENANCE.USER);
+        }
+        if (collection === 'internships' && key === 'responsibilities') {
+          item.responsibilityProvenance = markListProvenance(item[key].length, CONTENT_PROVENANCE.USER);
+        }
         return state;
       });
     }
   });
 
   root.addEventListener('click', (event) => {
+    const summaryButton = event.target.closest('[data-refine-summary]');
+    if (summaryButton) {
+      const state = store.getState();
+      try {
+        const unit = refineSummary({
+          candidateType: state.candidate.type,
+          targetRole: state.candidate.targetRole,
+          draft: state.summary.text,
+          skills: state.skills
+        });
+        store.update((next) => {
+          next.summary.text = unit.text;
+          next.summary.provenance = unit.provenance;
+          return next;
+        });
+        rerender();
+        root.querySelector('#rs-state-status').textContent = 'Introduction refined only from the facts and skills you supplied.';
+      } catch (error) {
+        root.querySelector('#rs-state-status').textContent = error.message;
+      }
+      return;
+    }
+
+    const refineResponsibilitiesButton = event.target.closest('[data-refine-responsibilities]');
+    if (refineResponsibilitiesButton) {
+      const index = Number(refineResponsibilitiesButton.dataset.index);
+      const state = store.getState();
+      try {
+        const units = refineBulletList(state.experience[index]?.responsibilities || []);
+        store.update((next) => {
+          next.experience[index].responsibilities = units.map((unit) => unit.text);
+          next.experience[index].responsibilityProvenance = units.map((unit) => unit.provenance);
+          return next;
+        });
+        rerender();
+        root.querySelector('#rs-state-status').textContent = 'Responsibilities refined from your existing points. No new responsibility was added.';
+      } catch (error) {
+        root.querySelector('#rs-state-status').textContent = error.message;
+      }
+      return;
+    }
+
+    const suggestionButton = event.target.closest('[data-show-role-suggestions]');
+    if (suggestionButton) {
+      renderRoleSuggestions(root, store.getState());
+      return;
+    }
+
+    const verifyButton = event.target.closest('[data-verify-suggestion]');
+    if (verifyButton) {
+      const suggested = createSuggestedUnit(verifyButton.dataset.suggestion, 'role suggestion');
+      const verified = verifySuggestion(suggested);
+      store.update((state) => {
+        if (!state.skills.some((skill) => skill.toLocaleLowerCase() === verified.text.toLocaleLowerCase())) {
+          state.skills.push(verified.text);
+          state.skillProvenance.push(verified.provenance);
+        }
+        return state;
+      });
+      rerender();
+      root.querySelector('#rs-state-status').textContent = 'Verified skill added. You are responsible for confirming it is true.';
+      return;
+    }
+
     const addButton = event.target.closest('[data-add]');
     if (addButton) {
       addItem(store, addButton.dataset.add);

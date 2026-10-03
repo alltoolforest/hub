@@ -65,12 +65,14 @@ export function createEmptyResume(candidateType = CANDIDATE_TYPES.FRESHER) {
       provenance: 'user'
     },
     skills: [],
+    skillProvenance: [],
     experience: [],
     education: [],
     projects: [],
     internships: [],
     certifications: [],
     achievements: [],
+    achievementProvenance: [],
     interests: [],
     personalDetails: {
       enabled: false,
