@@ -1,10 +1,10 @@
 import {$,el,field,read,num,format,notice,setupStatus,status,fileInput,checkFile,decodeImage,canvasBlob,output,downloads,clearOutputs,safeName,mobile,errorMessage} from './core.js';
 
-const MAX_FILES=40;
 const SOURCE_PIXEL_CAP_DESKTOP=60e6;
 const SOURCE_PIXEL_CAP_MOBILE=32e6;
 const ZIP_OUTPUT_CAP_DESKTOP=96*1024*1024;
 const ZIP_OUTPUT_CAP_MOBILE=32*1024*1024;
+const TARGET_SEARCH_STEPS=10;
 
 function pixelLimit(w,h){
   if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1)throw Error('Dimensions must be positive whole pixels.');
@@ -14,7 +14,7 @@ function pixelLimit(w,h){
 
 function sourcePixelLimit(width,height){
   const cap=mobile()?SOURCE_PIXEL_CAP_MOBILE:SOURCE_PIXEL_CAP_DESKTOP;
-  if(width*height>cap)throw Error(`Decoded image is too large for safe batch processing on this device. Use an image below ${Math.round(cap/1e6)} million pixels.`);
+  if(width*height>cap)throw Error(`Decoded image is too large for safe processing on this device. Use an image below ${Math.round(cap/1e6)} million pixels.`);
 }
 
 function watermark(ctx,text,w,h){
@@ -30,19 +30,106 @@ function watermark(ctx,text,w,h){
   ctx.fillText(text,w-16,h-16);
 }
 
-async function encodeTarget(canvas,type,quality,targetKB){
-  let blob=await canvasBlob(canvas,type,quality);
-  if(targetKB<=0||blob.size<=targetKB*1024)return {blob,met:true};
-  if(type==='image/png')return {blob,met:false};
-  let low=.02,high=quality,best=null;
-  for(let i=0;i<9;i++){
+async function encodeCanvas(canvas,type,quality){
+  const blob=await canvasBlob(canvas,type,quality);
+  return {blob,actualType:blob.type||type};
+}
+
+async function lossyQualitySearch(canvas,type,quality,targetBytes){
+  let first=await encodeCanvas(canvas,type,quality);
+  if(first.blob.size<=targetBytes)return {...first,met:true,quality};
+  let low=.02,high=quality,best=null,bestQuality=.02;
+  for(let i=0;i<TARGET_SEARCH_STEPS;i++){
     const q=(low+high)/2;
-    const candidate=await canvasBlob(canvas,type,q);
-    if(candidate.size<=targetKB*1024){best=candidate;low=q}else high=q;
+    const candidate=await encodeCanvas(canvas,type,q);
+    if(candidate.blob.size<=targetBytes){
+      best=candidate;
+      bestQuality=q;
+      low=q;
+    }else{
+      high=q;
+    }
   }
-  if(best)return {blob:best,met:true};
-  blob=await canvasBlob(canvas,type,.02);
-  return {blob,met:blob.size<=targetKB*1024};
+  if(best)return {...best,met:true,quality:bestQuality};
+  const minimum=await encodeCanvas(canvas,type,.02);
+  return {...minimum,met:minimum.blob.size<=targetBytes,quality:.02};
+}
+
+function resizedCanvas(source,width,height){
+  const canvas=el('canvas',{width,height});
+  const ctx=canvas.getContext('2d',{alpha:true});
+  if(!ctx)throw Error('Image resize workspace is unavailable.');
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+  ctx.clearRect(0,0,width,height);
+  ctx.drawImage(source,0,0,width,height);
+  return canvas;
+}
+
+async function dimensionSearch(source,type,quality,targetBytes){
+  const originalWidth=source.width,originalHeight=source.height;
+  const minScale=Math.max(1/originalWidth,1/originalHeight);
+  let low=minScale,high=1,best=null;
+
+  for(let i=0;i<TARGET_SEARCH_STEPS;i++){
+    const scale=(low+high)/2;
+    const width=Math.max(1,Math.round(originalWidth*scale));
+    const height=Math.max(1,Math.round(originalHeight*scale));
+    const candidateCanvas=resizedCanvas(source,width,height);
+    let encoded;
+    try{
+      if(type==='image/png'){
+        encoded=await encodeCanvas(candidateCanvas,type,1);
+        encoded={...encoded,met:encoded.blob.size<=targetBytes,quality:1};
+      }else{
+        const preferred=Math.max(.45,Math.min(quality,.82));
+        encoded=await lossyQualitySearch(candidateCanvas,type,preferred,targetBytes);
+      }
+      if(encoded.met){
+        if(best?.canvas)best.canvas.width=best.canvas.height=0;
+        best={...encoded,width,height,canvas:candidateCanvas};
+        low=scale;
+      }else{
+        candidateCanvas.width=candidateCanvas.height=0;
+        high=scale;
+      }
+    }catch(error){
+      candidateCanvas.width=candidateCanvas.height=0;
+      throw error;
+    }
+  }
+
+  if(best){
+    best.canvas.width=best.canvas.height=0;
+    return {...best,canvas:null};
+  }
+
+  const tiny=resizedCanvas(source,1,1);
+  try{
+    const encoded=type==='image/png'
+      ? {...await encodeCanvas(tiny,type,1),quality:1}
+      : {...await encodeCanvas(tiny,type,.45),quality:.45};
+    return {...encoded,met:encoded.blob.size<=targetBytes,width:1,height:1};
+  }finally{
+    tiny.width=tiny.height=0;
+  }
+}
+
+async function encodeTarget(canvas,type,quality,targetKB){
+  const targetBytes=Math.max(0,targetKB)*1024;
+  const initial=await encodeCanvas(canvas,type,quality);
+  if(targetBytes<=0||initial.blob.size<=targetBytes){
+    return {...initial,met:true,width:canvas.width,height:canvas.height,quality};
+  }
+
+  if(type!=='image/png'){
+    const qualityResult=await lossyQualitySearch(canvas,type,quality,targetBytes);
+    if(qualityResult.met){
+      return {...qualityResult,width:canvas.width,height:canvas.height};
+    }
+  }
+
+  return dimensionSearch(canvas,type,quality,targetBytes);
 }
 
 async function inspectSource(file){
@@ -151,7 +238,7 @@ function uniqueZipName(name,seen){
 }
 
 function resultRow(file){
-  const row=el('div',{class:'download-row','data-batch-result':''});
+  const row=el('div',{class:'download-row','data-compressor-result':''});
   const text=el('span',{text:file.name+' · Waiting'});
   row.append(text);
   return {row,text};
@@ -159,20 +246,20 @@ function resultRow(file){
 
 export async function mount(root){
   let files=[],cancelRequested=false,processing=false,results=[];
-  const input=fileInput(root,'.jpg,.jpeg,.png,.webp',true,'Select images for a batch');
+  const input=fileInput(root,'.jpg,.jpeg,.png,.webp',true,'Select one or more JPG, PNG or WebP images');
   const summary=el('p',{text:'No images selected.'});
   root.append(summary);
 
   const form=el('div',{class:'fields'},[
-    field('width','Maximum width','number',1600,{min:1,max:16384,step:1}),
-    field('height','Maximum height','number',1600,{min:1,max:16384,step:1}),
+    field('width','Maximum width (0 = original)','number',0,{min:0,max:16384,step:1}),
+    field('height','Maximum height (0 = original)','number',0,{min:0,max:16384,step:1}),
     field('format','Output format','select','keep',{options:[['keep','Keep source format'],['image/jpeg','JPG'],['image/png','PNG'],['image/webp','WebP']]}),
-    field('quality','Quality (1–100)','number',85,{min:1,max:100}),
-    field('target','Maximum KB (0 = no limit)','number',0,{min:0,max:50000}),
-    field('watermark','Text watermark','text','',{full:true})
+    field('quality','JPG/WebP quality (1–100)','number',85,{min:1,max:100}),
+    field('target','Target maximum size in KB (0 = no target)','number',0,{min:0,max:50000}),
+    field('watermark','Text watermark (optional)','text','',{full:true})
   ]);
-  root.append(form,el('label',{class:'check-row'},[el('input',{type:'checkbox',id:'upscale'}),'Allow upscaling']));
-  notice(root,'Images are processed one at a time in your browser, preserving aspect ratio. A target KB that cannot be reached at the chosen dimensions is reported honestly.');
+  root.append(form,el('label',{class:'check-row'},[el('input',{type:'checkbox',id:'upscale'}),'Allow upscaling when maximum dimensions are larger than the source']));
+  notice(root,'Compress one image or many. JPG and WebP use quality optimization first; PNG stays PNG and preserves transparency. If a requested KB target cannot be reached at the current dimensions, the compressor can reduce dimensions progressively instead of silently changing format.');
 
   const controls=()=>[...root.querySelectorAll('input,select,button')];
   const setProcessing=on=>{
@@ -191,7 +278,6 @@ export async function mount(root){
     active.forEach(n=>n.disabled=true);
     status('Checking selected images…');
     try{
-      if(selected.length>MAX_FILES)throw Error(`Select at most ${MAX_FILES} images per batch.`);
       let total=0;
       for(const file of selected){
         checkFile(file,['jpg','jpeg','png','webp'],mobile()?20:60);
@@ -200,7 +286,7 @@ export async function mount(root){
       }
       files=selected;results=[];clearOutputs();
       summary.textContent=`${files.length} image${files.length===1?'':'s'} selected · ${format(total/1024/1024,1)} MB total.`;
-      status('Batch ready.');
+      status('Ready to compress.');
     }catch(e){
       files=[];results=[];summary.textContent='No images selected.';status(errorMessage(e),true);
     }finally{
@@ -209,10 +295,10 @@ export async function mount(root){
   });
 
   const actions=el('div',{class:'actions'});
-  const processButton=el('button',{type:'button',class:'primary',text:'Process batch'});
-  const cancelButton=el('button',{type:'button',text:'Cancel batch',disabled:true});
+  const processButton=el('button',{type:'button',class:'primary',text:'Compress images'});
+  const cancelButton=el('button',{type:'button',text:'Cancel',disabled:true});
   const zipButton=el('button',{type:'button',text:'Download all (.zip)',disabled:true});
-  const resetButton=el('button',{type:'button',text:'Reset batch'});
+  const resetButton=el('button',{type:'button',text:'Reset'});
   actions.append(processButton,cancelButton,zipButton,resetButton);
   root.append(actions);
   setupStatus(root);
@@ -230,9 +316,9 @@ export async function mount(root){
     files=[];results=[];cancelRequested=false;
     clearOutputs();
     summary.textContent='No images selected.';
-    $('#width').value='1600';$('#height').value='1600';$('#format').value='keep';$('#quality').value='85';$('#target').value='0';$('#watermark').value='';$('#upscale').checked=false;
+    $('#width').value='0';$('#height').value='0';$('#format').value='keep';$('#quality').value='85';$('#target').value='0';$('#watermark').value='';$('#upscale').checked=false;
     zipButton.disabled=true;
-    status('Batch reset.');
+    status('Compressor reset.');
   });
 
   zipButton.addEventListener('click',async()=>{
@@ -245,7 +331,7 @@ export async function mount(root){
       status('Preparing ZIP download…');
       const seen=new Map();
       const zip=await makeStoreZip(results.map(r=>({name:uniqueZipName(r.name,seen),blob:r.blob})));
-      const zipName='alltoolforest-batch-images.zip';
+      const zipName='alltoolforest-compressed-images.zip';
       const zipURL=output(zip,zipName);
       const trigger=el('a',{href:zipURL,download:zipName});
       trigger.style.display='none';
@@ -254,20 +340,21 @@ export async function mount(root){
       trigger.remove();
       const fallback=[...$('#downloads').querySelectorAll('a[download]')].find(a=>a.download===zipName);
       fallback?.scrollIntoView?.({block:'nearest'});
-      status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB. The download should start automatically; if your browser blocks it, use the ZIP Download button below.`);
+      status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB. If your browser blocks the automatic download, use the ZIP download link below.`);
     }catch(e){status(errorMessage(e),true)}finally{zipButton.disabled=false}
   });
 
   processButton.addEventListener('click',async()=>{
     if(processing)return;
-    if(!files.length){status('Choose images first.',true);return}
+    if(!files.length){status('Choose one or more images first.',true);return}
     clearOutputs();results=[];cancelRequested=false;zipButton.disabled=true;
     let failures=0,missed=0,created=0;
-    const w=(()=>{try{return num('width',{min:1,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
-    const h=(()=>{try{return num('height',{min:1,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
+    const w=(()=>{try{return num('width',{min:0,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
+    const h=(()=>{try{return num('height',{min:0,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
     const q=(()=>{try{return num('quality',{min:1,max:100})/100}catch(e){status(errorMessage(e),true);return null}})();
     const target=(()=>{try{return num('target',{min:0,max:50000})}catch(e){status(errorMessage(e),true);return null}})();
     if([w,h,q,target].some(v=>v===null))return;
+
     setProcessing(true);
     try{
       const resultRows=[];
@@ -277,29 +364,44 @@ export async function mount(root){
         const file=files[i],row=resultRows[i];
         let image=null,c=null;
         try{
-          status(`Processing ${i+1} of ${files.length}: ${file.name}`);
+          status(`Compressing ${i+1} of ${files.length}: ${file.name}`);
           row.text.textContent=`${file.name} · Opening…`;
           const inspected=await inspectSource(file);
           image=await decodeImage(file);
           sourcePixelLimit(image.width,image.height);
-          const scale=Math.min(w/image.width,h/image.height,$('#upscale').checked?Infinity:1);
+
+          const widthRatio=w>0?w/image.width:Infinity;
+          const heightRatio=h>0?h/image.height:Infinity;
+          let scale=Math.min(widthRatio,heightRatio);
+          if(!Number.isFinite(scale))scale=1;
+          if(!$('#upscale').checked)scale=Math.min(scale,1);
           const ow=Math.max(1,Math.round(image.width*scale)),oh=Math.max(1,Math.round(image.height*scale));
           pixelLimit(ow,oh);
+
           c=el('canvas',{width:ow,height:oh});
-          const ctx=c.getContext('2d');
+          const ctx=c.getContext('2d',{alpha:true});
+          if(!ctx)throw Error('Image compression workspace is unavailable.');
           const requested=read('format')==='keep'?inspected.type:read('format');
           if(requested==='image/jpeg'){ctx.fillStyle='white';ctx.fillRect(0,0,ow,oh)}
+          else ctx.clearRect(0,0,ow,oh);
           ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
           ctx.drawImage(image,0,0,ow,oh);
           watermark(ctx,read('watermark'),ow,oh);
-          const {blob,met}=await encodeTarget(c,requested,q,target);
-          const actualType=blob.type||requested,ext=outputExt(actualType);
-          const name=safeName(file.name,met?'-processed':'-target-not-met',ext);
+
+          const encoded=await encodeTarget(c,requested,q,target);
+          const blob=encoded.blob,met=encoded.met;
+          const actualType=encoded.actualType||blob.type||requested;
+          const ext=outputExt(actualType);
+          const name=safeName(file.name,met?'-compressed':'-target-not-met',ext);
           if(!met)missed++;
           output(blob,name);
           if(processing)for(const control of controls())if(control!==cancelButton)control.disabled=true;
           results.push({name,blob});created++;
-          row.text.textContent=`${file.name} · ${ow} × ${oh} · ${format(blob.size/1024)} KB · ${met?'Ready':'Target KB not met'}${actualType!==requested?` · Browser returned ${actualType}`:''}`;
+
+          const reduced=encoded.width!==ow||encoded.height!==oh;
+          const targetLabel=target>0?(met?` · target ≤ ${target} KB met`:` · target ${target} KB not met`):'';
+          const resizeLabel=reduced?' · dimensions reduced for target':'';
+          row.text.textContent=`${file.name} · ${encoded.width} × ${encoded.height} · ${format(blob.size/1024)} KB · Ready${targetLabel}${resizeLabel}${actualType!==requested?` · Browser returned ${actualType}`:''}`;
         }catch(e){
           failures++;
           row.text.textContent=`${file.name} · Failed: ${errorMessage(e)}`;
@@ -309,12 +411,13 @@ export async function mount(root){
           if(c)c.width=c.height=0;
         }
       }
+
       if(cancelRequested){
         const processed=created+failures,remaining=files.length-processed;
         for(let j=processed;j<resultRows.length;j++)resultRows[j].text.textContent=`${files[j].name} · Not processed (cancelled)`;
-        status(`Batch cancelled. ${created} created, ${failures} failed, ${Math.max(0,remaining)} not processed.`);
+        status(`Compression cancelled. ${created} created, ${failures} failed, ${Math.max(0,remaining)} not processed.`);
       }else{
-        status(`Batch complete. ${created} created, ${failures} failed, ${missed} over the requested KB limit.`);
+        status(`Compression complete. ${created} created, ${failures} failed, ${missed} above the requested KB target.`);
       }
       zipButton.disabled=!results.length;
     }finally{
