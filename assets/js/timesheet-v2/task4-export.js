@@ -112,8 +112,9 @@ th{background:#f1f1f1}.number{text-align:right;white-space:nowrap}.period{margin
 
 export function printTimesheet(state,{pageSize="A4",win=globalThis.window}={}) {
   if (!win || typeof win.open!=="function") return {ok:false,reason:"window_unavailable"};
-  const popup=win.open("","_blank","noopener,noreferrer");
+  const popup=win.open("","_blank");
   if (!popup) return {ok:false,reason:"popup_blocked"};
+  try { popup.opener=null; } catch {}
   const html=buildPrintableTimesheetHtml(state,{pageSize});
   popup.document.open();
   popup.document.write(html);
