@@ -1,0 +1,33 @@
+name: Image Enhancer Task 1 benchmark harness
+on:
+  pull_request:
+    paths:
+      - 'tests/image-enhancer-benchmark/**'
+      - '.github/workflows/image-enhancer-benchmark-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm Task 1 does not alter production
+        run: git diff --exit-code 92d05302002e12924fab766b784cda2ea97d3f37 HEAD -- assets images calculators documents work _headers
+      - name: Test dataset contract and instrumentation
+        run: |
+          node --test tests/image-enhancer-benchmark/core.test.mjs
+          node --check tests/image-enhancer-benchmark/run.mjs
+      - name: Install pinned test browser dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+      - name: Run real-AI capture parity smoke test
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-benchmark/run.mjs selftest --out "${RUNNER_TEMP}/enhancer-harness"
+      # No image artifact upload: private corpus must never enter public CI.

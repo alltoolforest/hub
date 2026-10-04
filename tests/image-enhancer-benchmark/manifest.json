@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "baseline": "92d05302002e12924fab766b784cda2ea97d3f37",
+  "state": "intake-incomplete",
+  "sources": [],
+  "diversityReview": { "complete": false },
+  "note": "No real-photo corpus has yet completed provenance and consent review. Empty sources are deliberate: target slots and synthetic harness fixtures are not admitted photographs. See CONTRACT.md for intake and blockers."
+}
