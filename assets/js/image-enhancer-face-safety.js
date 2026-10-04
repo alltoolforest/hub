@@ -198,6 +198,40 @@ function faceSourceRetention(analysis, mode, faceScore) {
   return clamp(base + damage * 0.07 + clamp(faceScore) * 0.03, 0.20, 0.36);
 }
 
+// Express the existing radial source overlay as a reconstruction ceiling.
+// The worker can enforce it alongside its face ceiling in ONE source/candidate
+// fusion, instead of attenuating an already protected face a second time.
+export function createFaceRetentionMasks(faces, width, height, analysis, mode = 'deblur') {
+  return (faces || []).flatMap(face => {
+    if (![face.x, face.y, face.width, face.height, face.score, width, height].every(Number.isFinite) ||
+        face.width <= 0 || face.height <= 0 || width <= 0 || height <= 0) return [];
+    const sx = Math.max(0, face.x - face.width * 0.14);
+    const sy = Math.max(0, face.y - face.height * 0.18);
+    const ex = Math.min(width, face.x + face.width * 1.14);
+    const ey = Math.min(height, face.y + face.height * 1.10);
+    if (ex - sx < 8 || ey - sy < 8) return [];
+    return [{
+      cx: (sx + ex) / 2, cy: (sy + ey) / 2,
+      rx: (ex - sx) / 2, ry: (ey - sy) / 2,
+      retention: faceSourceRetention(analysis, mode, face.score)
+    }];
+  });
+}
+
+export function faceRetentionLimitAt(x, y, masks) {
+  let limit = 1;
+  for (const mask of masks || []) {
+    const distance = Math.hypot((x - mask.cx) / mask.rx, (y - mask.cy) / mask.ry);
+    if (distance >= 1) continue;
+    // Match the overlay's stops: (0,1), (.52,.86), (.78,.44), (1,0).
+    const opacity = distance <= 0.52 ? 1 - distance / 0.52 * 0.14
+      : distance <= 0.78 ? 0.86 - (distance - 0.52) / 0.26 * 0.42
+      : (1 - distance) / 0.22 * 0.44;
+    limit = Math.min(limit, 1 - mask.retention * opacity);
+  }
+  return clamp(limit);
+}
+
 export function applyFaceIdentityGuard(outputCanvas, sourceImage, faces, analysis, mode = 'enhance') {
   if (!outputCanvas || !sourceImage || !faces?.length) {
     return { canvas: outputCanvas, applied: false, faceCount: 0 };
