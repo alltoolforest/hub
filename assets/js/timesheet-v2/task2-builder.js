@@ -164,11 +164,15 @@ export function mountTimesheetTask2(root,options={}){
 
   function showDayError(index,message){
     const node=daysWrap.querySelector(`[data-day-error="${index}"]`);
+    const card=daysWrap.querySelector(`[data-day-index="${index}"]`);
     if(node){node.textContent=message;node.hidden=false}
+    card?.querySelectorAll("input,select").forEach(control=>control.setAttribute("aria-invalid","true"));
   }
   function clearDayError(index){
     const node=daysWrap.querySelector(`[data-day-error="${index}"]`);
+    const card=daysWrap.querySelector(`[data-day-index="${index}"]`);
     if(node){node.textContent="";node.hidden=true}
+    card?.querySelectorAll("input,select").forEach(control=>control.removeAttribute("aria-invalid"));
   }
 
   function renderDays(){
