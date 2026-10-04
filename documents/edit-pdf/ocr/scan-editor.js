@@ -1,5 +1,6 @@
 import { renderAddedText } from './added-text.js';
-import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
+import { patchPlacement } from './patch-placement.js';
+import { PDFDocument,degrees } from '../fortress/src/core/pdf-lib.js';
 import { loadPdfjs } from '../fortress/src/rendering/pdfjs.js';
 import { TesseractOcrProvider } from './tesseract-provider.js';
 import { assessFlatBackground,estimateTextColor,reconstructBackground } from './background-safety.js';
@@ -140,14 +141,14 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     const ctx=canvas.getContext('2d',{willReadFrequently:true});await page.render({canvasContext:ctx,viewport}).promise;
     const base=document.createElement('canvas');base.width=canvas.width;base.height=canvas.height;base.getContext('2d').drawImage(canvas,0,0);
     const annotations=await page.getAnnotations({intent:'display'});
-    return {pageNumber:index+1,canvas,base,words:null,layout:null,edited:false,edits:[],additions:[],additionChanges:0,editedBlob:null,annotationCount:annotations.length,renderPlan:plan,pixelWidth:canvas.width,pixelHeight:canvas.height};
+    return {pageNumber:index+1,canvas,base,words:null,layout:null,edited:false,edits:[],additions:[],additionChanges:0,editedBlob:null,annotationCount:annotations.length,viewportTransform:viewport.transform?[...viewport.transform]:[plan.scale,0,0,-plan.scale,0,viewport.height],renderPlan:plan,pixelWidth:canvas.width,pixelHeight:canvas.height};
   }
 
   async function hydrateState(index){
     let state=pages.get(index);
     if(!state){state=await createPageState(index);pages.set(index,state);return state;}
     if(state.canvas)return state;
-    const fresh=await createPageState(index);state.canvas=fresh.canvas;state.base=fresh.base;state.renderPlan=fresh.renderPlan;state.pixelWidth=fresh.pixelWidth;state.pixelHeight=fresh.pixelHeight;
+    const fresh=await createPageState(index);state.canvas=fresh.canvas;state.base=fresh.base;state.renderPlan=fresh.renderPlan;state.viewportTransform=fresh.viewportTransform;state.pixelWidth=fresh.pixelWidth;state.pixelHeight=fresh.pixelHeight;
     if(state.editedBlob)await drawBlobToCanvas(state.editedBlob,state.canvas);
     return state;
   }
@@ -254,16 +255,16 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
         const [copied]=await doc.copyPages(sourceDoc,[idx]);doc.addPage(copied);
         const state=editedMap.get(idx);if(!state)continue;
         if(!state.canvas)await hydrateState(idx);
-        const size=copied.getSize(),sx=size.width/state.canvas.width,sy=size.height/state.canvas.height;
+        const placement=rect=>{const {angle,...geometry}=patchPlacement(rect,state.viewportTransform);return {...geometry,rotate:degrees(angle)};};
         for(const edit of state.edits){
           const rect=edit.patchRect||{x:edit.bbox.x0,y:edit.bbox.y0,width:edit.bbox.x1-edit.bbox.x0,height:edit.bbox.y1-edit.bbox.y0};
           const patchBlob=await canvasRegionBlob(state.canvas,rect,'image/png');
           const patch=await doc.embedPng(await blobBytes(patchBlob));
-          copied.drawImage(patch,{x:rect.x*sx,y:size.height-(rect.y+rect.height)*sy,width:rect.width*sx,height:rect.height*sy});
+          copied.drawImage(patch,placement(rect));
         }
         for(const addition of state.additions){
           const {canvas,rect}=renderAddedText(addition,state);
-          try{const patch=await doc.embedPng(await blobBytes(await canvasBlob(canvas,'image/png')));copied.drawImage(patch,{x:rect.x*sx,y:size.height-(rect.y+rect.height)*sy,width:rect.width*sx,height:rect.height*sy});}
+          try{const patch=await doc.embedPng(await blobBytes(await canvasBlob(canvas,'image/png')));copied.drawImage(patch,placement(rect));}
           finally{releaseCanvas(canvas);}
         }
       }
