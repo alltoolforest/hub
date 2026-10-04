@@ -1,4 +1,4 @@
-import { DISPLAY_FORMAT, ROUNDING_MODE, WEEK_START } from "./contracts.js";
+import { DISPLAY_FORMAT, ROUNDING_MODE, WEEK_START, MAX_PERIODS_PER_DAY } from "./contracts.js";
 import {
   createTask2State,
   setWeekStart,
@@ -10,8 +10,7 @@ import {
   updatePeriod,
   appendPeriod,
   deletePeriod,
-  getTask2ViewModel,
-  MAX_PERIODS_PER_DAY,
+  getTask2ViewModel
 } from "./task2-state.js";
 
 function el(tag,attrs={},text=""){
