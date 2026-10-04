@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-04",
+  "baseline": "92d05302002e12924fab766b784cda2ea97d3f37",
+  "task1Ready": false,
+  "architectureDecision": "deferred",
+  "candidates": [
+    {
+      "id": "nafnet",
+      "capabilities": [
+        "deblur"
+      ],
+      "codeLicense": "Apache-2.0",
+      "status": "comparator",
+      "artifact": {
+        "name": "NAFNet GoPro width32 FP16",
+        "url": "https://huggingface.co/bihanikeshav/selects-onnx/resolve/main/nafnet.onnx",
+        "sha256": "05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204",
+        "scale": 1,
+        "license": "Apache-2.0",
+        "upstream": "https://github.com/megvii-research/NAFNet",
+        "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx"
+      },
+      "note": "Current GoPro FP16 comparator. Manifest hash is recorded; conversion provenance, exact weight rights and immutable mirror revision need verification. Do not assume GoPro motion training covers defocus.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "executed on ORT1.30 single-thread Node WASM at 64x64; other shapes/backends unverified",
+      "deviceRuns": [],
+      "observedArtifact": {
+        "url": "https://huggingface.co/bihanikeshav/selects-onnx/resolve/658de7d93d582a30a919dbbda4d75a677a050991/nafnet.onnx",
+        "bytes": 36041772,
+        "sha256": "05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204",
+        "downloadHashVerified": true,
+        "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx/blob/658de7d93d582a30a919dbbda4d75a677a050991/README.md",
+        "declaredLicense": "Apache-2.0",
+        "exporterParityClaim": "cos >= 0.9998; not independently reproduced"
+      },
+      "diagnosticEvidence": "nafnet-probe.json"
+    },
+    {
+      "id": "realesrgan",
+      "capabilities": [
+        "super-resolution"
+      ],
+      "codeLicense": "BSD-3-Clause",
+      "status": "comparator",
+      "artifact": {
+        "name": "Real-ESRGAN general x4v3",
+        "url": "https://cdn.jsdelivr.net/gh/NovareOrbis/nova-ai-models@v3/realesr-general-x4v3.onnx",
+        "sha256": "09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4",
+        "bytes": 4871181,
+        "scale": 4,
+        "license": "BSD-3-Clause",
+        "upstream": "https://github.com/xinntao/Real-ESRGAN",
+        "redistribution": "https://github.com/NovareOrbis/nova-ai-models/tree/v3"
+      },
+      "note": "Current compact x4 comparator. Historical browser inference exists; not a winner by default. Tag/hash is not source conversion parity evidence.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "executed on ORT1.30 single-thread Node WASM at 64x64; other shapes/backends unverified",
+      "deviceRuns": [],
+      "diagnosticEvidence": "realesr-probe.json"
+    },
+    {
+      "id": "realesrgan-wdn",
+      "sourceId": "realesrgan",
+      "capabilities": [
+        "denoise-deblocking"
+      ],
+      "codeLicense": "BSD-3-Clause",
+      "status": "hold",
+      "artifact": null,
+      "note": "Small WDN companion shortlist; no exact ONNX artifact admitted. Evaluate both texture preservation and JPEG edges; do not assume denoise training proves deblocking.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    },
+    {
+      "id": "restormer",
+      "capabilities": [
+        "deblur",
+        "denoise-deblocking"
+      ],
+      "codeLicense": "MIT",
+      "status": "hold",
+      "artifact": null,
+      "note": "Use task-specific motion, single-image defocus and denoise weights as separate experiments. No exact converted artifact admitted; deblocking not established.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    },
+    {
+      "id": "gfpgan",
+      "capabilities": [
+        "portrait"
+      ],
+      "codeLicense": "Apache-2.0 with third-party exceptions",
+      "status": "hold",
+      "artifact": null,
+      "note": "V1.3 clean-architecture research candidate; upstream LICENSE includes restricted third-party components. Resolve exact dependency path and checkpoint rights before export; identity not verified.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    },
+    {
+      "id": "oldphotos",
+      "capabilities": [
+        "scratch-repair"
+      ],
+      "codeLicense": "MIT",
+      "status": "hold",
+      "artifact": null,
+      "note": "Global scratch pipeline candidate only; separate detector/repair checkpoint rights and export graph needed. Do not bundle face pipeline implicitly.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    },
+    {
+      "id": "colorization",
+      "capabilities": [
+        "colorization"
+      ],
+      "codeLicense": "BSD-2-Clause",
+      "status": "hold",
+      "artifact": null,
+      "note": "ECCV16 candidate. Exact checkpoint rights, Lab preprocessing and ONNX parity remain open; plausible color is not historical accuracy.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    },
+    {
+      "id": "codeformer",
+      "capabilities": [
+        "portrait"
+      ],
+      "codeLicense": "S-Lab License 1.0",
+      "status": "rejected",
+      "artifact": null,
+      "note": "Commercial deployment requires separate permission per upstream license; not approved for this business.",
+      "weightRights": "unverified",
+      "conversionParity": "not-tested",
+      "operatorAudit": "not-tested",
+      "deviceRuns": []
+    }
+  ],
+  "sources": [
+    {
+      "id": "nafnet",
+      "repo": "megvii-research/NAFNet",
+      "commit": "2b4af71ebe098a92a75910c233a3965a3e93ede4",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/megvii-research/NAFNet/blob/2b4af71ebe098a92a75910c233a3965a3e93ede4/LICENSE"
+    },
+    {
+      "id": "restormer",
+      "repo": "swz30/Restormer",
+      "commit": "68dc6ac472db26f16361150cb7a96a1bc87da93f",
+      "licensePath": "LICENSE.md",
+      "url": "https://github.com/swz30/Restormer/blob/68dc6ac472db26f16361150cb7a96a1bc87da93f/LICENSE.md"
+    },
+    {
+      "id": "gfpgan",
+      "repo": "TencentARC/GFPGAN",
+      "commit": "7552a7791caad982045a7bbe5634bbf1cd5c8679",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/TencentARC/GFPGAN/blob/7552a7791caad982045a7bbe5634bbf1cd5c8679/LICENSE"
+    },
+    {
+      "id": "oldphotos",
+      "repo": "microsoft/Bringing-Old-Photos-Back-to-Life",
+      "commit": "33875eccf4ebcd3665cf38cc56f3a0ce563d3a9c",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/blob/33875eccf4ebcd3665cf38cc56f3a0ce563d3a9c/LICENSE"
+    },
+    {
+      "id": "colorization",
+      "repo": "richzhang/colorization",
+      "commit": "4f6009ed1495b1300231ebeb41cc4015557ddef7",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/richzhang/colorization/blob/4f6009ed1495b1300231ebeb41cc4015557ddef7/LICENSE"
+    },
+    {
+      "id": "codeformer",
+      "repo": "sczhou/CodeFormer",
+      "commit": "b33cc7d639d6545bfcccc7e0bc6ae51f24e79c2b",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/sczhou/CodeFormer/blob/b33cc7d639d6545bfcccc7e0bc6ae51f24e79c2b/LICENSE"
+    },
+    {
+      "id": "realesrgan",
+      "repo": "xinntao/Real-ESRGAN",
+      "commit": "a4abfb2979a7bbff3f69f58f58ae324608821e27",
+      "licensePath": "LICENSE",
+      "url": "https://github.com/xinntao/Real-ESRGAN/blob/a4abfb2979a7bbff3f69f58f58ae324608821e27/LICENSE"
+    }
+  ]
+}
