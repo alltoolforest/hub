@@ -1578,6 +1578,7 @@ export async function mount(root, slug) {
           console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
         }
 
+        const faceSafetyFused = !!blended;
         if (!blended) {
           const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
           blended = el('canvas', { width, height });
@@ -1591,8 +1592,12 @@ export async function mount(root, slug) {
 
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
-        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
-        result.canvas = faceGuard.canvas;
+        // The worker already enforced both face ceilings against the original
+        // candidate. Keep the legacy overlay for the global-blend fallback only.
+        if (!faceSafetyFused) {
+          const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
+          result.canvas = faceGuard.canvas;
+        }
         const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
         result.canvas = fidelityGuard.canvas;
 

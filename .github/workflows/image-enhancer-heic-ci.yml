@@ -34,7 +34,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git hash-object assets/js/images.js)" = "07caaa63a6c3fa208b5f476e1748d8dfab681f7b"
-          test "$(git hash-object assets/js/batch-image-processor.js)" = "4e3af54dd751fedbd5c15effaebc129c94d8c8a1"
+          # Approved compressor baseline from 2eac6ac; source is unchanged.
+          test "$(git hash-object assets/js/batch-image-processor.js)" = "6afdae7f4f13d5f412e04d9a86baf2dcf665e5ae"
           test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
           test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
           test "$(git hash-object assets/js/calculators.js)" = "99632e840cf9f77269724f2af81daff225231c39"
