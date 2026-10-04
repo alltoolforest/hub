@@ -3,6 +3,7 @@ import { createTimesheetStore } from "./task3-storage.js";
 import { validateTimesheetState } from "./task3-validation.js";
 import { buildTimesheetReport } from "./task4-report.js";
 import { copyTimesheetSummary, createCsvDownload, printTimesheet } from "./task4-export.js";
+import { TIMESHEET_PRIVACY_NOTICE } from "./task5-hardening.js";
 import {
   createTask2State,
   setWeekStart,
@@ -78,6 +79,8 @@ export function mountTimesheetTask2(root,options={}){
     field("Display format",format)
   );
 
+  const privacyNotice=el("div",{className:"tsv2-privacy",role:"note"},TIMESHEET_PRIVACY_NOTICE);
+
   const persistence=el("section",{className:"tsv2-persistence","aria-labelledby":"tsv2-persistence-heading"});
   persistence.append(el("h2",{id:"tsv2-persistence-heading"},"Timesheet draft"));
   const persistenceActions=el("div",{className:"tsv2-persistence-actions"});
@@ -115,15 +118,18 @@ export function mountTimesheetTask2(root,options={}){
   });
   summary.append(summaryGrid);
 
-  root.append(settings,persistence,daysWrap,summary,exportSection,status);
+  root.append(settings,privacyNotice,persistence,daysWrap,summary,exportSection,status);
 
   function periodRow(dayIndex,periodIndex,period){
     const row=el("div",{className:"tsv2-period",dataset:{dayIndex:String(dayIndex),periodIndex:String(periodIndex)}});
     const title=el("div",{className:"tsv2-period-title"},`Period ${periodIndex+1}`);
-    const start=el("input",{type:"time",value:period.start,"aria-label":`Day ${dayIndex+1} period ${periodIndex+1} start time`});
-    const end=el("input",{type:"time",value:period.end,"aria-label":`Day ${dayIndex+1} period ${periodIndex+1} end time`});
-    const br=el("input",{type:"number",min:"0",max:"1440",step:"1",inputMode:"numeric",value:String(period.unpaidBreakMinutes),"aria-label":`Day ${dayIndex+1} period ${periodIndex+1} unpaid break minutes`});
-    const next=el("input",{type:"checkbox",checked:Boolean(period.nextDay),"aria-label":`Day ${dayIndex+1} period ${periodIndex+1} ends next day`});
+    const day=state.days[dayIndex];
+    const context=`${day.name} ${day.date}, period ${periodIndex+1}`;
+    const errorId=`tsv2-day-error-${dayIndex}`;
+    const start=el("input",{type:"time",value:period.start,"aria-label":`${context} start time`,"aria-describedby":errorId});
+    const end=el("input",{type:"time",value:period.end,"aria-label":`${context} end time`,"aria-describedby":errorId});
+    const br=el("input",{type:"number",min:"0",max:"1440",step:"1",inputMode:"numeric",value:String(period.unpaidBreakMinutes),"aria-label":`${context} unpaid break minutes`,"aria-describedby":errorId});
+    const next=el("input",{type:"checkbox",checked:Boolean(period.nextDay),"aria-label":`${context} ends next day`,"aria-describedby":errorId});
     const nextLabel=el("label",{className:"tsv2-check"});
     nextLabel.append(next,document.createTextNode(" Ends next day"));
     const remove=el("button",{type:"button",className:"tsv2-remove"},"Remove");
@@ -183,7 +189,7 @@ export function mountTimesheetTask2(root,options={}){
       add.disabled=day.periods.length>=MAX_PERIODS_PER_DAY;
       const daily=el("div",{className:"tsv2-daily-total"});
       daily.append(el("span",{},"Worked"),el("strong",{dataset:{dayTotal:String(dayIndex)}},"0h 00m"));
-      const error=el("p",{className:"tsv2-day-error",role:"alert",dataset:{dayError:String(dayIndex)},hidden:true});
+      const error=el("p",{id:`tsv2-day-error-${dayIndex}`,className:"tsv2-day-error",role:"alert",dataset:{dayError:String(dayIndex)},hidden:true});
 
       include.addEventListener("change",()=>{
         state=setDayIncluded(state,dayIndex,include.checked);
@@ -275,7 +281,7 @@ export function mountTimesheetTask2(root,options={}){
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
-      setTimeout(()=>result.revoke(),0);
+      setTimeout(()=>result.revoke(),1500);
       exportStatus.textContent="CSV prepared for download.";
     }catch(error){
       exportStatus.textContent=error.message||"Fix timesheet errors before exporting.";
