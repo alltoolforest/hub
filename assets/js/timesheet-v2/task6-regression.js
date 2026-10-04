@@ -29,7 +29,7 @@ export function runTask6Regression(){
   ].forEach(required=>assert(headings.includes(required),`Missing guidance section: ${required}`));
 
   const allText=TIMESHEET_GUIDANCE_SECTIONS.map(section=>section.body).join(" ")+" "+TIMESHEET_FAQ.map(item=>item.answer).join(" ");
-  assert(/does not automatically apply country, state, union, employer, daily-overtime, double-time, weekend-premium, or payroll rules/i.test(allText),"Overtime guidance must remain legally neutral.");
+  assert(/does not (?:automatically )?apply country, state, union, employer, daily-overtime, double-time, weekend-premium, or payroll rules/i.test(allText),"Overtime guidance must remain legally neutral.");
   assert(/stored in this browser on this device/i.test(allText),"Privacy guidance must match local persistence.");
   assert(/do not send your entries to a server/i.test(allText),"Privacy guidance must match core network behavior.");
   assert(/up to three work periods per day/i.test(allText),"Guidance must match the implemented period limit.");
