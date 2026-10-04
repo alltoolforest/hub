@@ -59,3 +59,26 @@ Implemented:
 - 44px mobile control baseline and reduced-motion handling
 
 Task 2 intentionally does not implement persistence/localStorage, CSV/PDF/copy export, production SEO, production wiring, deployment, or freeze.
+
+
+## Task 3 — Persistence, Validation & Recovery
+
+Task 3 adds scoped browser-local persistence and stronger recovery/validation without changing production.
+
+Implemented:
+
+- explicit Save this week
+- Restore saved week
+- Start new timesheet without deleting the saved week
+- Clear saved data
+- scoped storage key: `alltoolforest.timesheet-v2.week`
+- versioned storage envelope and engine-version guard
+- bounded stored payload size
+- corrupt JSON / unsupported schema / unsupported engine-version recovery
+- storage-unavailable failure handling
+- per-day validation for malformed time, invalid break, overlap and invalid period data
+- global validation for week start, date, overtime threshold, rounding and display format
+- invalid days remain in state and do not erase other valid days
+- weekly summary is withheld while blocking validation errors remain
+
+Task 3 intentionally does not implement CSV, copy/PDF export, production SEO, production wiring, deployment, or freeze.
