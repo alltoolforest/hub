@@ -1,4 +1,6 @@
 import { DISPLAY_FORMAT, ROUNDING_MODE, WEEK_START, MAX_PERIODS_PER_DAY } from "./contracts.js";
+import { createTimesheetStore } from "./task3-storage.js";
+import { validateTimesheetState } from "./task3-validation.js";
 import {
   createTask2State,
   setWeekStart,
@@ -31,6 +33,11 @@ export function mountTimesheetTask2(root,options={}){
   if(!root||typeof document==="undefined")throw new Error("A DOM root is required.");
 
   let state=createTask2State(options.seed||{});
+  let browserStorage=options.storage||null;
+  if(!browserStorage){
+    try{browserStorage=window.localStorage}catch{}
+  }
+  const store=createTimesheetStore(browserStorage);
   root.replaceChildren();
   root.classList.add("tsv2-builder");
 
@@ -69,6 +76,17 @@ export function mountTimesheetTask2(root,options={}){
     field("Display format",format)
   );
 
+  const persistence=el("section",{className:"tsv2-persistence","aria-labelledby":"tsv2-persistence-heading"});
+  persistence.append(el("h2",{id:"tsv2-persistence-heading"},"Timesheet draft"));
+  const persistenceActions=el("div",{className:"tsv2-persistence-actions"});
+  const saveButton=el("button",{type:"button"},"Save this week");
+  const restoreButton=el("button",{type:"button"},"Restore saved week");
+  const newButton=el("button",{type:"button"},"Start new timesheet");
+  const clearSavedButton=el("button",{type:"button"},"Clear saved data");
+  persistenceActions.append(saveButton,restoreButton,newButton,clearSavedButton);
+  const persistenceStatus=el("p",{className:"tsv2-persistence-status",role:"status","aria-live":"polite"});
+  persistence.append(persistenceActions,persistenceStatus);
+
   const daysWrap=el("section",{className:"tsv2-days","aria-label":"Weekly timesheet"});
   const summary=el("section",{className:"tsv2-summary","aria-labelledby":"tsv2-summary-heading"});
   summary.append(el("h2",{id:"tsv2-summary-heading"},"Weekly summary"));
@@ -83,7 +101,7 @@ export function mountTimesheetTask2(root,options={}){
   });
   summary.append(summaryGrid);
 
-  root.append(settings,daysWrap,summary,status);
+  root.append(settings,persistence,daysWrap,summary,status);
 
   function periodRow(dayIndex,periodIndex,period){
     const row=el("div",{className:"tsv2-period",dataset:{dayIndex:String(dayIndex),periodIndex:String(periodIndex)}});
@@ -183,13 +201,34 @@ export function mountTimesheetTask2(root,options={}){
   }
 
   function refreshTotals(){
+    const validation=validateTimesheetState(state);
+    state.days.forEach((day,index)=>{
+      const target=daysWrap.querySelector(`[data-day-total="${index}"]`);
+      const dayValidation=validation.dayResults[index];
+      clearDayError(index);
+      if(dayValidation?.ok&&dayValidation.result){
+        const result=dayValidation.result;
+        target.textContent=state.displayFormat===DISPLAY_FORMAT.DECIMAL?`${result.decimalHours} h`:result.hoursMinutes;
+      }else if(dayValidation&&!dayValidation.ok){
+        target.textContent="—";
+        showDayError(index,dayValidation.issues[0]?.message||"Fix this day before calculating totals.");
+      }else if(target){
+        target.textContent=day.included?"—":"0h 00m";
+      }
+    });
+
+    if(!validation.ok){
+      regular.textContent="—";
+      overtime.textContent="—";
+      total.textContent="—";
+      const first=validation.globalIssues[0]||validation.dayResults.flatMap(item=>item.issues)[0];
+      status.textContent=first?.message||"Fix the highlighted timesheet entry.";
+      status.classList.add("error");
+      return;
+    }
+
     try{
       const view=getTask2ViewModel(state);
-      view.days.forEach((day,index)=>{
-        const target=daysWrap.querySelector(`[data-day-total="${index}"]`);
-        if(target)target.textContent=day.displayTotal;
-        clearDayError(index);
-      });
       regular.textContent=view.totals.displayRegular;
       overtime.textContent=view.totals.displayOvertime;
       total.textContent=view.totals.displayTotal;
@@ -198,13 +237,57 @@ export function mountTimesheetTask2(root,options={}){
     }catch(error){
       status.textContent=error.message;
       status.classList.add("error");
-      const match=String(error.message).match(/on (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/);
-      if(match){
-        const index=state.days.findIndex(day=>day.name===match[1]);
-        if(index>=0)showDayError(index,error.message);
-      }
     }
   }
+
+  saveButton.addEventListener("click",()=>{
+    const result=store.save(state);
+    persistenceStatus.textContent=result.ok
+      ?"Saved on this device."
+      :result.reason==="invalid_state"
+        ?result.message||"Fix timesheet errors before saving."
+        :"This browser could not save the timesheet.";
+  });
+
+  restoreButton.addEventListener("click",()=>{
+    const result=store.load();
+    if(!result.ok){
+      persistenceStatus.textContent=result.reason==="unsupported_schema"||result.reason==="unsupported_engine_version"
+        ?"The saved timesheet uses an unsupported older format. Start a new timesheet or clear the saved data."
+        :result.reason==="corrupt_data"
+          ?"The saved timesheet is corrupted and was not loaded. Your current entries were kept."
+          :"The saved timesheet could not be read in this browser.";
+      return;
+    }
+    if(!result.state){
+      persistenceStatus.textContent="No saved timesheet was found on this device.";
+      return;
+    }
+    state=result.state;
+    renderDays();
+    syncSettings();
+    refreshTotals();
+    persistenceStatus.textContent="Saved timesheet restored.";
+  });
+
+  newButton.addEventListener("click",()=>{
+    state=createTask2State({
+      weekStartDate:state.weekStartDate,
+      weekStart:state.weekStart,
+      overtimeThresholdHours:state.overtimeThresholdHours,
+      roundingMinutes:state.roundingMinutes,
+      displayFormat:state.displayFormat,
+    });
+    renderDays();
+    syncSettings();
+    refreshTotals();
+    persistenceStatus.textContent="Started a new timesheet. Your separately saved week was not deleted.";
+  });
+
+  clearSavedButton.addEventListener("click",()=>{
+    const result=store.clear();
+    persistenceStatus.textContent=result.ok?"Saved timesheet data was cleared from this browser.":"Saved data could not be cleared in this browser.";
+  });
 
   weekDate.addEventListener("change",()=>{
     try{state=setWeekStartDate(state,weekDate.value);renderDays();syncSettings();refreshTotals()}catch(error){status.textContent=error.message;status.classList.add("error")}
@@ -223,6 +306,13 @@ export function mountTimesheetTask2(root,options={}){
   return {
     getState:()=>state,
     getViewModel:()=>getTask2ViewModel(state),
+    save:()=>store.save(state),
+    restore:()=>{
+      const result=store.load();
+      if(result.ok&&result.state){state=result.state;renderDays();syncSettings();refreshTotals()}
+      return result;
+    },
+    clearSaved:()=>store.clear(),
     rerender:()=>{renderDays();syncSettings();refreshTotals()},
   };
 }
