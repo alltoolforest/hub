@@ -1,6 +1,8 @@
 import { DISPLAY_FORMAT, ROUNDING_MODE, WEEK_START, MAX_PERIODS_PER_DAY } from "./contracts.js";
 import { createTimesheetStore } from "./task3-storage.js";
 import { validateTimesheetState } from "./task3-validation.js";
+import { buildTimesheetReport } from "./task4-report.js";
+import { copyTimesheetSummary, createCsvDownload, printTimesheet } from "./task4-export.js";
 import {
   createTask2State,
   setWeekStart,
@@ -87,6 +89,18 @@ export function mountTimesheetTask2(root,options={}){
   const persistenceStatus=el("p",{className:"tsv2-persistence-status",role:"status","aria-live":"polite"});
   persistence.append(persistenceActions,persistenceStatus);
 
+  const exportSection=el("section",{className:"tsv2-export","aria-labelledby":"tsv2-export-heading"});
+  exportSection.append(el("h2",{id:"tsv2-export-heading"},"Report & export"));
+  const exportControls=el("div",{className:"tsv2-export-controls"});
+  const pageSize=el("select",{id:"tsv2-page-size","aria-label":"Print page size"});
+  pageSize.append(option("A4","A4"),option("LETTER","US Letter"));
+  const copyButton=el("button",{type:"button"},"Copy summary");
+  const csvButton=el("button",{type:"button"},"Download CSV");
+  const printButton=el("button",{type:"button"},"Print / Save PDF");
+  exportControls.append(field("Print page size",pageSize),copyButton,csvButton,printButton);
+  const exportStatus=el("p",{className:"tsv2-export-status",role:"status","aria-live":"polite"});
+  exportSection.append(exportControls,exportStatus);
+
   const daysWrap=el("section",{className:"tsv2-days","aria-label":"Weekly timesheet"});
   const summary=el("section",{className:"tsv2-summary","aria-labelledby":"tsv2-summary-heading"});
   summary.append(el("h2",{id:"tsv2-summary-heading"},"Weekly summary"));
@@ -101,7 +115,7 @@ export function mountTimesheetTask2(root,options={}){
   });
   summary.append(summaryGrid);
 
-  root.append(settings,persistence,daysWrap,summary,status);
+  root.append(settings,persistence,daysWrap,summary,exportSection,status);
 
   function periodRow(dayIndex,periodIndex,period){
     const row=el("div",{className:"tsv2-period",dataset:{dayIndex:String(dayIndex),periodIndex:String(periodIndex)}});
@@ -239,6 +253,48 @@ export function mountTimesheetTask2(root,options={}){
       status.classList.add("error");
     }
   }
+
+  copyButton.addEventListener("click",async()=>{
+    try{
+      buildTimesheetReport(state);
+      const result=await copyTimesheetSummary(state);
+      exportStatus.textContent=result.ok?"Timesheet summary copied.":"Clipboard access is unavailable in this browser.";
+    }catch(error){
+      exportStatus.textContent=error.message||"Fix timesheet errors before copying.";
+    }
+  });
+
+  csvButton.addEventListener("click",()=>{
+    try{
+      const result=createCsvDownload(state);
+      if(!result.ok){
+        exportStatus.textContent="CSV download is unavailable in this browser.";
+        return;
+      }
+      const anchor=el("a",{href:result.url,download:result.filename});
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(()=>result.revoke(),0);
+      exportStatus.textContent="CSV prepared for download.";
+    }catch(error){
+      exportStatus.textContent=error.message||"Fix timesheet errors before exporting.";
+    }
+  });
+
+  printButton.addEventListener("click",()=>{
+    try{
+      buildTimesheetReport(state);
+      const result=printTimesheet(state,{pageSize:pageSize.value});
+      exportStatus.textContent=result.ok
+        ?"Print dialog opened. Choose Save as PDF to create a PDF."
+        :result.reason==="popup_blocked"
+          ?"The print window was blocked by the browser. Allow pop-ups for this action and try again."
+          :"Printing is unavailable in this browser.";
+    }catch(error){
+      exportStatus.textContent=error.message||"Fix timesheet errors before printing.";
+    }
+  });
 
   saveButton.addEventListener("click",()=>{
     const result=store.save(state);
