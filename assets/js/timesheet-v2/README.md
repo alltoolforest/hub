@@ -37,3 +37,25 @@ Task 1 intentionally does not implement:
 - production deployment
 
 Those belong to later blueprint tasks.
+
+
+## Task 2 — Mobile-First Timesheet Builder UX
+
+Task 2 adds an isolated responsive builder layer without changing production.
+
+Implemented:
+
+- responsive weekly builder
+- stacked mobile day cards; no core table/horizontal-scroll workflow
+- real day/date context
+- include/exclude day control
+- up to three work periods per day
+- add/remove work-period controls
+- start/end time, unpaid break and next-day controls
+- live daily totals
+- live regular/overtime/total weekly summary
+- week-start, week-date, overtime-threshold, rounding and display-format controls
+- contextual day errors for overlap/calculation failures
+- 44px mobile control baseline and reduced-motion handling
+
+Task 2 intentionally does not implement persistence/localStorage, CSV/PDF/copy export, production SEO, production wiring, deployment, or freeze.
