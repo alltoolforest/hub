@@ -2,7 +2,7 @@ import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
 import { withPdfDocument } from '../fortress/src/rendering/with-document.js';
 import { createAdvancedPdfTextEngine } from '../fortress/src/main.js';
 import { createPdfPageClassifier } from './classifier.js';
-import { createScannedPdfEditor } from './scan-editor.js?v=20261004-scan-mobile';
+import { createScannedPdfEditor } from './scan-editor.js?v=20261004-scan-geometry';
 import { DEFAULT_LIMITS } from '../fortress/src/core/pdf-loader.js';
 
 const OCR_PAGE_CONFIDENCE_MIN=.85;
