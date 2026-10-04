@@ -82,3 +82,24 @@ Implemented:
 - weekly summary is withheld while blocking validation errors remain
 
 Task 3 intentionally does not implement CSV, copy/PDF export, production SEO, production wiring, deployment, or freeze.
+
+
+## Task 4 — Timesheet Reporting & Export
+
+Task 4 adds engine-backed reporting and export without changing production.
+
+Implemented:
+
+- structured weekly report model sourced directly from the Task 1 calculation engine
+- week range, included days, work periods, unpaid breaks, daily totals, weekly regular/overtime/total
+- applied overtime threshold and rounding information
+- Copy summary
+- CSV export with UTF-8 BOM
+- spreadsheet-formula injection neutralization for CSV cells
+- sanitized deterministic week-based CSV filename
+- Print / Save PDF through the browser print dialog
+- A4 and US Letter print layouts
+- invalid timesheets are blocked from report/export
+- mobile-stacked export controls
+
+Task 4 intentionally does not implement Task 5 accessibility/security/performance hardening, Task 6 production SEO/content changes, production wiring, deployment, or freeze.
