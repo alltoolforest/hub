@@ -98,7 +98,7 @@ export function createHybridPdfEditor({
   root.append(toolbar,nativeHost,ocrHost);container.replaceChildren(root);
 
   function activePage(){return pages[activePageIndex]||null;}
-  function setStatus(message=''){onStatus(message);}
+  function setStatus(message=''){const scanStatus=ocrHost.querySelector('.ocr-status');if(scanStatus)scanStatus.textContent=message;onStatus(message);}
   function updateToolbar(){
     const page=activePage();
     const mode=page?.route==='ocr'?'OCR scan':'Native';
