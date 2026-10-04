@@ -121,4 +121,3 @@ export function getTask2ViewModel(state) {
   };
 }
 
-export { MAX_PERIODS_PER_DAY };
