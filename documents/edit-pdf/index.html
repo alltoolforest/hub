@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="../../assets/css/main.css">
   <link rel="stylesheet" href="./fortress/src/styles.css">
   <link rel="stylesheet" href="./fortress/src/font-size-precision.css">
-  <link rel="stylesheet" href="./ocr/styles.css">
+  <link rel="stylesheet" href="./ocr/styles.css?v=20261004-scan-mobile">
   <style>
     .fortress-shell{padding:0;overflow:hidden;min-height:620px}
     .fortress-picker{min-height:620px;display:grid;place-content:center;gap:14px;text-align:center;padding:28px;background:var(--surface,#fff)}
@@ -60,7 +60,7 @@ import {configurePdfWorker} from './fortress/src/main.js';
 import {attachPrecisionFontSize} from './fortress/src/font-size-precision.js';
 import {attachInsertAnchorBridge} from './fortress/src/insert-anchor-bridge.js';
 import {attachSmartLineInsertion} from './fortress/src/smart-line-insertion-v8.js';
-import {createHybridPdfEditor} from './ocr/hybrid-editor.js';
+import {createHybridPdfEditor} from './ocr/hybrid-editor.js?v=20261004-scan-mobile';
 
 const picker=document.querySelector('#fortress-picker');
 const input=document.querySelector('#fortress-file');
