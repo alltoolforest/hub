@@ -103,3 +103,26 @@ Implemented:
 - mobile-stacked export controls
 
 Task 4 intentionally does not implement Task 5 accessibility/security/performance hardening, Task 6 production SEO/content changes, production wiring, deployment, or freeze.
+
+
+## Task 5 — Accessibility, Privacy, Security & Performance Hardening
+
+Task 5 hardens the isolated V2 builder without changing production or adding Task 6 SEO work.
+
+Implemented:
+
+- browser-local privacy disclosure covering calculation and local-storage behavior
+- scoped Clear Saved Data behavior verified not to remove unrelated storage
+- day/date/period-specific accessible names for time, break and overnight controls
+- day-level validation messages linked through aria-describedby
+- aria-invalid applied to controls while their day contains blocking validation errors
+- visible invalid-control styling with forced-colors support
+- existing 44px touch targets and reduced-motion behavior retained
+- CSV spreadsheet-formula injection protection retained and regression-tested
+- printable output script-tag safety regression and overtime disclaimer retained
+- delayed CSV object-URL revocation for safer browser download completion
+- maximum supported workload test: 7 days × 3 periods = 21 periods
+- calculation/validation/report pipeline performance budget: 75 ms in the deterministic regression harness
+- no network dependency added to the core timesheet workflow
+
+Task 5 intentionally does not implement Task 6 SEO/user-guidance changes, production wiring, deployment, production audit, manual verification, final regression, or freeze.
