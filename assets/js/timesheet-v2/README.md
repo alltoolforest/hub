@@ -126,3 +126,32 @@ Implemented:
 - no network dependency added to the core timesheet workflow
 
 Task 5 intentionally does not implement Task 6 SEO/user-guidance changes, production wiring, deployment, production audit, manual verification, final regression, or freeze.
+
+
+## Task 6 — Technical SEO & User Guidance
+
+Task 6 prepares the SEO metadata and crawlable static guidance required for launch without changing the production Timesheet page. Production wiring remains Task 7.
+
+Prepared:
+
+- production title and meta description
+- canonical path: `/hub/work/timesheet/`
+- expected single H1 text: `Timesheet & Work Hours`
+- Open Graph title, description and type
+- intentional omission of structured data because no schema is required for launch
+- crawlable static guidance covering:
+  - how the calculator works
+  - work-hours calculation
+  - unpaid breaks
+  - overnight shifts
+  - decimal hours vs hours/minutes
+  - user-defined weekly overtime
+  - rounding
+  - employees/freelancers/shift workers
+  - privacy
+  - FAQ
+- relevant internal links to Time & Duration, Freelance Rate Calculator and Invoice Builder
+- legally neutral overtime wording with no jurisdiction-specific compliance claim
+- privacy wording aligned to the actual browser-local calculation and local-storage behavior
+
+Task 6 intentionally does not modify `work/timesheet/index.html`, wire production metadata/content, deploy, audit production, run manual verification, final regression, or freeze. Those belong to Task 7.
