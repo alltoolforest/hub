@@ -18,6 +18,7 @@ export function buildMaximumLoadState() {
   });
 
   for(let dayIndex=0;dayIndex<7;dayIndex+=1){
+    state.days[dayIndex].included=true;
     while(state.days[dayIndex].periods.length<MAX_PERIODS_PER_DAY){
       state=appendPeriod(state,dayIndex);
     }
