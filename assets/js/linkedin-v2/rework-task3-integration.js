@@ -1,3 +1,4 @@
+import { PROFILE_MODE } from "./contracts.js";
 import { STARTER_STATE,STARTER_SECTION } from "./rework-task2-starter-pack.js";
 import { generateOptimization,HEADLINE_MAX } from "./task2-optimizer.js";
 import { reviewProfile } from "./task2-review.js";
@@ -83,7 +84,7 @@ export function buildConfirmedOptimizationInput(state){
   const safeInput=Object.freeze({
     mode:input.mode,
     targetRole:clean(state?.roleSelection?.title||input.targetRole),
-    currentRole:clean(input.currentRole),
+    currentRole:clean(input.currentRole)||(input.mode===PROFILE_MODE.EXPERIENCED?"professional":""),
     industry:clean(input.industry),
     currentHeadline:String(input.currentHeadline||""),
     currentAbout:String(input.currentAbout||""),
