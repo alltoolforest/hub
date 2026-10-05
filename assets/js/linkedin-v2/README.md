@@ -47,3 +47,28 @@ Task 2 intentionally does not implement:
 - copy-per-section controls
 - accessibility/SEO hardening
 - production wiring or deployment
+
+
+## Task 3 — Profile Builder UX, Editing & Local Drafts
+
+Implemented Task 3 scope:
+
+- guided profile workflow: details → review → optimize
+- mobile-first stacked form and section-card layout
+- editable Headline, About, Experience and Skills outputs
+- three selectable headline alternatives
+- copy-per-section controls
+- manual edits preserved across regeneration
+- explicit Reset to suggestion per section
+- visible separation of supported skills and suggested-to-review skills
+- local browser draft save, restore, start new and clear saved data
+- scoped storage key: `alltoolforest.linkedin-v2.draft`
+- corrupt saved-data recovery and unrelated-storage preservation
+- character counters for Headline and About
+- 44px mobile action targets and no core horizontal-scroll workflow
+
+Task 3 intentionally does not implement:
+- Task 4 accessibility/security/performance hardening
+- technical SEO/user-guidance content
+- production wiring
+- deployment or freeze
