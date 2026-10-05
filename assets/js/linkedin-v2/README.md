@@ -272,3 +272,12 @@ Task 4 intentionally does not:
 Those actions belong only to Task 5.
 
 Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
+
+
+## Rework release status
+
+**DEPLOYED → PRODUCTION SOURCE VERIFIED → MANUAL VERIFICATION PENDING**
+
+The guided LinkedIn Profile Helper rework passed final hardening, P0/P1 pre-deployment audit, production replacement, production source audit and final automated regression.
+
+Manual real-browser/device verification remains required before the tool can be marked **PRODUCTION VERIFIED → FROZEN**.
