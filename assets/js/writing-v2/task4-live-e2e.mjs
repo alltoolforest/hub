@@ -40,7 +40,7 @@ async function run(browserName,browserType){
     const stored=await page.evaluate(()=>localStorage.getItem("alltoolforest.professional-writing-v2.draft"));
     assert.ok(stored&&stored.includes("Updated quarterly report"));
 
-    await page.locator("#pwa2-mode-improve").check();
+    await page.locator('label[for="pwa2-mode-improve"]').click();
     await page.locator("#pwa2-existing-text").fill("hi Priya, pls review invoice 42 by October 10, 2026.");
     await page.locator("#pwa2-improvement").selectOption("make_professional");
     await page.getByRole("button",{name:"Improve writing"}).click();
