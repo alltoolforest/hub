@@ -173,11 +173,13 @@ export function mountLinkedInTask3(root,options={}){
   }
   let roleOptions=[];
   let activeRoleIndex=-1;
+  let roleSelectionBeforeEdit=null;
 
   function renderSelectedRole(){
-    if(state.roleSelection&&isCatalogRole(state.roleSelection)){
+    if(state.roleSelection){
       selectedRoleNote.hidden=false;
-      selectedRoleNote.textContent="Selected role: "+state.roleSelection.title+" · "+state.roleSelection.category;
+      selectedRoleNote.textContent="Selected role: "+state.roleSelection.title+" · "+
+        (isCatalogRole(state.roleSelection)?state.roleSelection.category:"Custom role");
     }else{
       selectedRoleNote.hidden=true;
       selectedRoleNote.textContent="";
@@ -212,24 +214,32 @@ export function mountLinkedInTask3(root,options={}){
   }
 
   function confirmRoleChange(record){
-    if(!state.roleSelection||state.roleSelection.id===record.id)return true;
+    const previous=state.roleSelection||roleSelectionBeforeEdit;
+    if(!previous||previous.id===record.id)return true;
     const affected=confirmedTargetRoleItems();
     if(!affected.length)return true;
     const message="Changing target role will refresh unconfirmed role suggestions. "+affected.length+
       " confirmed item"+(affected.length===1?"":"s")+" will be kept and marked for review. Continue?";
-    if(typeof options.confirmTargetRoleChange==="function")return options.confirmTargetRoleChange({message,affected,from:state.roleSelection,to:record})!==false;
+    if(typeof options.confirmTargetRoleChange==="function")return options.confirmTargetRoleChange({message,affected,from:previous,to:record})!==false;
     if(typeof window!=="undefined"&&typeof window.confirm==="function")return window.confirm(message);
     return false;
   }
 
   function chooseRole(record){
     if(!confirmRoleChange(record)){
+      const previous=state.roleSelection||roleSelectionBeforeEdit;
+      if(previous){
+        state=selectTargetRole(state,previous);
+        inputs.targetRole.value=previous.title;
+        renderSelectedRole();
+      }
       status.textContent="Target role change cancelled. Your current confirmed information was kept.";
       hideRoleList();
-      inputs.targetRole.value=state.roleSelection?.title||state.input.targetRole;
+      roleSelectionBeforeEdit=null;
       return;
     }
     state=selectTargetRole(state,record);
+    roleSelectionBeforeEdit=null;
     state={...state,starterPack:refreshRoleStarterPack(
       state.starterPack,record,state.input.mode,{currentRole:state.input.currentRole}
     )};
@@ -248,8 +258,7 @@ export function mountLinkedInTask3(root,options={}){
     roleList.replaceChildren();
     activeRoleIndex=-1;
     if(!roleOptions.length){
-      hideRoleList();
-      return;
+      roleOptions=[createLinkedInRoleRecord(value)];
     }
     roleOptions.forEach((record,index)=>{
       const item=el("div",{
@@ -261,7 +270,7 @@ export function mountLinkedInTask3(root,options={}){
       });
       item.append(
         el("strong",{},record.title),
-        el("small",{},record.category)
+        el("small",{},isCatalogRole(record)?record.category:"Use as a custom role")
       );
       item.addEventListener("pointerdown",event=>{
         event.preventDefault();
@@ -492,6 +501,9 @@ export function mountLinkedInTask3(root,options={}){
     refreshStarterContext();
   });
   Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{
+    if(key==="targetRole"&&state.roleSelection&&node.value.trim()!==state.roleSelection.title){
+      roleSelectionBeforeEdit=state.roleSelection;
+    }
     state=updateInput(state,key,node.value);
     if(key==="targetRole"){
       renderSelectedRole();
