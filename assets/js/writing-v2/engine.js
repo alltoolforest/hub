@@ -218,7 +218,19 @@ function warmEnding(tone,audience){
   if(tone===TONE.WARM)return "Thank you for your time and understanding.";
   if(tone===TONE.DIPLOMATIC)return "Thank you for considering this.";
   if(tone===TONE.CONFIDENT&&audience===AUDIENCE.CLIENT)return "I look forward to your response.";
+  if(audience===AUDIENCE.RECRUITER)return "Thank you for your consideration.";
+  if(audience===AUDIENCE.CLIENT)return "Thank you for your time.";
+  if(audience===AUDIENCE.VENDOR)return "Thank you for your cooperation.";
+  if(audience===AUDIENCE.COLLEAGUE)return "Thank you for your help.";
   return "";
+}
+function detailedEnding(messageType){
+  switch(messageType){
+    case MESSAGE_TYPE.LEAVE_REQUEST:return "Please let me know if you need any additional information from me.";
+    case MESSAGE_TYPE.RESIGNATION:return "Please let me know how I can best support the transition.";
+    case MESSAGE_TYPE.MEETING_FOLLOW_UP:return "Please let me know if I missed or misrepresented any of the points above.";
+    default:return "Please let me know if any additional information would be helpful.";
+  }
 }
 function buildMessage({messageType,audience=AUDIENCE.OTHER,tone=TONE.PROFESSIONAL,length=LENGTH.STANDARD,recipient="",senderName="",fields={}}){
   validateChoice(messageType,ALL.messageType,"message type");
@@ -233,6 +245,7 @@ function buildMessage({messageType,audience=AUDIENCE.OTHER,tone=TONE.PROFESSIONA
   let blocks=writeBlocks(messageType,fields||{},context);
   const ending=warmEnding(tone,audience);
   if(ending&&length!==LENGTH.SHORT)blocks.push(ending);
+  if(length===LENGTH.DETAILED)blocks.push(detailedEnding(messageType));
   if(length===LENGTH.SHORT)blocks=blocks.slice(0,3);
 
   return Object.freeze({
