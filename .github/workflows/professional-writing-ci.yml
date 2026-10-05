@@ -9,6 +9,14 @@ on:
       - 'assets/css/writing-v2-task2.css'
       - 'assets/css/writing-v2-task3.css'
       - '.github/workflows/professional-writing-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'work/writing/**'
+      - 'assets/js/writing-v2/**'
+      - 'assets/css/writing-v2-task2.css'
+      - 'assets/css/writing-v2-task3.css'
+      - '.github/workflows/professional-writing-ci.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,11 +35,11 @@ jobs:
           node-version: '22'
 
       - name: Verify Task 4 scope
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
-          if [ -z "$BASE" ]; then BASE="$(git merge-base HEAD origin/main)"; fi
           git diff --name-only "$BASE"...HEAD > /tmp/changed.txt
           cat /tmp/changed.txt
           if grep -Ev '^(work/writing/|assets/js/writing-v2/|assets/css/writing-v2-task2\.css$|assets/css/writing-v2-task3\.css$|\.github/workflows/professional-writing-ci\.yml$)' /tmp/changed.txt | grep -q .; then
@@ -55,3 +63,26 @@ jobs:
           node assets/js/writing-v2/task2-regression.js
           node assets/js/writing-v2/task3-regression.js
           node assets/js/writing-v2/task4-regression.js
+
+      - name: Verify published GitHub Pages artifact
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAGE='https://alltoolforest.github.io/hub/work/writing/'
+          CSS2='https://alltoolforest.github.io/hub/assets/css/writing-v2-task2.css'
+          CSS3='https://alltoolforest.github.io/hub/assets/css/writing-v2-task3.css'
+          BOOT='https://alltoolforest.github.io/hub/assets/js/writing-v2/task3-bootstrap.js'
+          ok=0
+          for attempt in $(seq 1 18); do
+            if curl -fsSL --max-time 20 "$PAGE" -o /tmp/writing.html               && grep -q 'id="writing-v2-workspace"' /tmp/writing.html               && grep -q 'writing-v2/task3-bootstrap.js' /tmp/writing.html               && grep -q 'Private by design' /tmp/writing.html               && ! grep -q 'assets/js/app.js' /tmp/writing.html; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ok" = "1"
+          curl -fsSI --max-time 20 "$CSS2" | head -n 1 | grep -q '200'
+          curl -fsSI --max-time 20 "$CSS3" | head -n 1 | grep -q '200'
+          curl -fsSI --max-time 20 "$BOOT" | head -n 1 | grep -q '200'
+          echo "Published Professional Writing Assistant V2 verified."
