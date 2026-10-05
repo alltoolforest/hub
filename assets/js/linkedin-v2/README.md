@@ -226,3 +226,49 @@ Task 3 intentionally does not:
 Those actions remain Tasks 4–5.
 
 Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
+
+
+## Rework Blueprint — Task 4: Rebuild the User Experience Around the Guided Flow
+
+Implemented only Task 4 of the LinkedIn Profile Helper rework:
+
+- final one-page guided flow:
+  1. Tell us your direction
+  2. Build your profile content
+  3. Optional existing profile
+  4. Review & Optimize
+  5. Final profile
+- optional existing LinkedIn/resume inputs are collapsed by default so a new user is not confronted with a large blank form
+- current role remains available early for career-changer transferable suggestions
+- role starter cards retain Suggested / Confirmed / Added by you states
+- target-role changes with confirmed role-based items now require an explicit confirmation:
+  - unconfirmed role suggestions refresh
+  - confirmed/user-entered information is preserved
+  - old target-role confirmed items remain marked for review
+- custom/unrecognized roles can explicitly continue through the guided flow using safe editable starter prompts
+- local draft persistence upgraded to schema 2 and now preserves:
+  - profile mode
+  - target role and canonical role selection
+  - starter suggestions
+  - confirmation states
+  - user-entered starter items
+  - existing-profile inputs
+  - optimized drafts
+  - manual-edit dirty state
+  - optimized workflow stage
+- schema 1 drafts migrate safely without fabricating starter suggestions
+- restored optimized drafts reconstruct review/generated context without overwriting manual final edits
+- scoped Clear saved data behavior remains unchanged
+- mobile layout explicitly covers 760px, 360px and 320px breakpoints with no table-based or horizontal-scroll workflow
+
+Task 4 intentionally does not:
+
+- perform final accessibility/security/performance hardening beyond what this guided flow requires
+- rewrite SEO/user-guidance content for the new workflow
+- deploy the rework
+- run production audit/manual verification/final regression
+- freeze the tool
+
+Those actions belong only to Task 5.
+
+Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
