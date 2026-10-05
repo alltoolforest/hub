@@ -252,6 +252,11 @@ function protectedTokens(text){
     pattern.lastIndex=0;
     for(const match of text.matchAll(pattern))found.push(match[0]);
   }
+  const leadingContext=new Set(["Contact","Please","Hello","Dear","Send","Review","Tell","Ask","Meet","Discuss"]);
+  for(const token of [...found]){
+    const parts=token.split(/\s+/);
+    if(parts.length>=3&&leadingContext.has(parts[0]))found.push(parts.slice(1).join(" "));
+  }
   return unique(found);
 }
 function protect(text){
