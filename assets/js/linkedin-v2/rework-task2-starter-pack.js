@@ -19,6 +19,7 @@ export const STARTER_SECTION=Object.freeze({
 const SECTION_KEYS=Object.freeze(Object.values(STARTER_SECTION));
 const MIN_OPTIONS=5;
 const MAX_OPTIONS=8;
+export const STARTER_ITEM_MAX=3000;
 
 function clean(value){
   return String(value||"").trim().replace(/\s+/g," ");
@@ -58,7 +59,7 @@ function makeItem(section,text,index,{
   return Object.freeze({
     id:itemId(section,text,index,sourceRoleId),
     section,
-    text:clean(text),
+    text:safeText,
     state,
     kind,
     source,
@@ -306,6 +307,7 @@ function replaceItem(pack,section,id,transform){
 
 export function editStarterItem(pack,section,id,text){
   const value=clean(text);
+  if(value.length>STARTER_ITEM_MAX)throw new Error("Starter item exceeds the supported length.");
   return replaceItem(pack,section,id,item=>({
     ...item,
     text:value,
@@ -332,6 +334,8 @@ export function setStarterItemConfirmed(pack,section,id,confirmed){
 let userSequence=0;
 export function addUserStarterItem(pack,section,text=""){
   if(!SECTION_KEYS.includes(section))throw new Error("Unsupported starter-pack section.");
+  const safeText=clean(text);
+  if(safeText.length>STARTER_ITEM_MAX)throw new Error("Starter item exceeds the supported length.");
   const next=clonePack(pack);
   userSequence+=1;
   const item=Object.freeze({
