@@ -5,6 +5,7 @@ import { createLinkedInRoleRecord } from "./rework-task1-role-adapter.js";
 import {
   STARTER_SECTION,STARTER_STATE,createRoleStarterPack,setStarterItemConfirmed,addUserStarterItem
 } from "./rework-task2-starter-pack.js";
+import { assessTargetRoleChange } from "./rework-task4-flow.js";
 
 const assert=(condition,message)=>{if(!condition)throw new Error(message)};
 
@@ -45,6 +46,23 @@ export function runLinkedInReworkTask4Regression(){
   const storage=memoryStorage();
   const store=createLinkedInDraftStore(storage);
   const state=buildState();
+
+  const dataRole=createLinkedInRoleRecord("Data Analyst");
+  const roleImpact=assessTargetRoleChange(state,dataRole);
+  assert(roleImpact.changesRole===true,"Different target role should be detected.");
+  assert(roleImpact.requiresConfirmation===true,"Confirmed target-role information should require confirmation before role change.");
+  assert(roleImpact.affected.length>0,"Role-change warning should identify affected confirmed items.");
+
+  let noConfirmed=createTask3State({mode:PROFILE_MODE.EXPERIENCED});
+  const fraudRole=createLinkedInRoleRecord("Fraud Analyst");
+  noConfirmed=selectTargetRole(noConfirmed,fraudRole);
+  noConfirmed={...noConfirmed,starterPack:createRoleStarterPack(fraudRole,noConfirmed.input.mode)};
+  const noConfirmedImpact=assessTargetRoleChange(noConfirmed,dataRole);
+  assert(noConfirmedImpact.changesRole===true&&!noConfirmedImpact.requiresConfirmation,"Role change without confirmed target-role items should not require a destructive-change warning.");
+
+  const customRole=createLinkedInRoleRecord("Underwater Basket Specialist");
+  const customPack=createRoleStarterPack(customRole,PROFILE_MODE.EXPERIENCED);
+  assert(customPack.sections.skills.every(item=>item.requiresEdit),"Custom role should retain safe editable prompts rather than fabricated skills.");
 
   const save=store.save(state);
   assert(save.ok,"Full guided-flow state should save.");
@@ -112,5 +130,7 @@ export function runLinkedInReworkTask4Regression(){
     unsupportedSchemaGuard:true,
     corruptRecovery:true,
     scopedClear:true,
+    roleChangeConfirmationGate:true,
+    customRoleGuidedFlow:true,
   });
 }
