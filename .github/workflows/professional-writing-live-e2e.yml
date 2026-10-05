@@ -1,0 +1,24 @@
+name: Professional Writing Assistant Live E2E
+
+on:
+  push:
+    branches:
+      - professional-writing-task4-live-e2e-20261005
+
+permissions:
+  contents: read
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Run live production E2E
+        run: node assets/js/writing-v2/task4-live-e2e.mjs
