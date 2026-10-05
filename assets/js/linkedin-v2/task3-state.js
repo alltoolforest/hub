@@ -95,12 +95,7 @@ export function generateProfileSections(state){
   if(!next.dirty.about)next.drafts.about=generated.about.text||"";
   if(!next.dirty.experience)next.drafts.experience=generated.experience.map(x=>"• "+x.rewritten).join("\n");
   if(!next.dirty.skills){
-    next.drafts.skills=[
-      ...generated.skills.supported.map(x=>"• "+x),
-      ...(generated.skills.suggestedToReview.length
-        ? ["","Suggested to review (verify before adding):",...generated.skills.suggestedToReview.map(x=>"• "+x)]
-        : [])
-    ].join("\n");
+    next.drafts.skills=generated.skills.supported.map(x=>"• "+x).join("\n");
   }
   return next;
 }
@@ -129,10 +124,7 @@ export function resetDraftToGenerated(state,section){
   if(section==="headline")next.drafts.headline=state.generated.headlines[0]?.text||"";
   else if(section==="about")next.drafts.about=state.generated.about.text||"";
   else if(section==="experience")next.drafts.experience=state.generated.experience.map(x=>"• "+x.rewritten).join("\n");
-  else if(section==="skills")next.drafts.skills=[
-    ...state.generated.skills.supported.map(x=>"• "+x),
-    ...(state.generated.skills.suggestedToReview.length?["","Suggested to review (verify before adding):",...state.generated.skills.suggestedToReview.map(x=>"• "+x)]:[])
-  ].join("\n");
+  else if(section==="skills")next.drafts.skills=state.generated.skills.supported.map(x=>"• "+x).join("\n");
   else throw new Error("Unsupported profile section.");
   next.dirty[section]=false;
   return next;
