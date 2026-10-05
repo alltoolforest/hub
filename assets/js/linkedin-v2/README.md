@@ -139,3 +139,51 @@ Task 1 intentionally does not implement:
 - deployment, production audit, or freeze
 
 Production `work/linkedin/index.html` is intentionally unchanged in this task.
+
+
+## Rework Blueprint — Task 2: Role-Based Profile Starter Pack & Confirmation System
+
+Implemented only Task 2 of the LinkedIn Profile Helper rework:
+
+- selecting a canonical target role now creates role-based starter guidance for:
+  - Current headline
+  - Current About section
+  - Experience text
+  - Current skills
+  - Achievements / evidence
+  - Professional focus / next step
+- each main section provides 5–8 options/prompts where appropriate
+- role-specific skills and responsibilities are sourced from the read-only Resume Studio role engine
+- evidence states are explicit:
+  - `suggested`
+  - `confirmed`
+  - `user_entered`
+- every item retains its section, kind, source and role provenance
+- suggestions never become Confirmed without an explicit user action
+- users can:
+  - confirm/deselect suggestions
+  - edit suggestion text
+  - remove suggestions
+  - add their own information
+- achievement prompts use blanks rather than fabricated results or metrics and cannot be confirmed until edited into a completed truthful statement
+- career-changer mode keeps target-role responsibility ideas separate from transferable ideas derived from a recognized current role
+- Fresher mode uses project/education/practical-evidence prompts rather than implying employment history
+- custom/unrecognized target roles receive editable generic prompts instead of fabricated skills or responsibilities
+- target-role changes:
+  - replace unconfirmed role suggestions with new-role suggestions
+  - preserve Confirmed and User-entered information
+  - flag Confirmed target-role items from the previous role for review instead of silently deleting them
+- the existing Role Starter Suggestions UI exposes Suggested / Confirmed / Added by you states and supports mobile selection/editing
+
+Task 2 intentionally does not:
+
+- feed Confirmed/User-entered starter information into Review & Optimize
+- rewrite the existing optimizer around the new evidence-state model
+- rebuild the final guided page structure
+- update persistence to store the new starter-pack state
+- deploy the rework to production
+- run the release/freeze sequence
+
+Those belong to Tasks 3–5.
+
+Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
