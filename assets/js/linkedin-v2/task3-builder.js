@@ -8,6 +8,10 @@ import { LINKEDIN_PRIVACY_NOTICE } from "./task4-hardening.js";
 import {
   searchLinkedInTargetRoles,createLinkedInRoleRecord,isCatalogRole
 } from "./rework-task1-role-adapter.js";
+import {
+  STARTER_STATE,STARTER_SECTION,refreshRoleStarterPack,
+  editStarterItem,setStarterItemConfirmed,addUserStarterItem,removeStarterItem
+} from "./rework-task2-starter-pack.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -97,6 +101,14 @@ export function mountLinkedInTask3(root,options={}){
     field("Resume text (optional)",inputs.resumeText)
   );
 
+  const starter=el("section",{className:"liv2-panel liv2-starter-panel",hidden:true,"aria-labelledby":"liv2-starter-heading"});
+  starter.append(
+    el("h2",{id:"liv2-starter-heading"},"Role starter suggestions"),
+    el("p",{className:"liv2-entry-intro"},"These are ideas, not claims about you. Select only what is true, edit suggestions when needed, or add your own information.")
+  );
+  const starterSections=el("div",{className:"liv2-starter-sections"});
+  starter.append(starterSections);
+
   const actions=el("div",{className:"liv2-actions"});
   const generate=el("button",{type:"button"},"Review & optimize");
   const save=el("button",{type:"button"},"Save draft");
@@ -115,7 +127,7 @@ export function mountLinkedInTask3(root,options={}){
   const sections=el("div",{className:"liv2-sections"});
   optimize.append(sections);
 
-  root.append(privacy,details,actions,review,optimize,status);
+  root.append(privacy,details,starter,actions,review,optimize,status);
 
   function syncInputControls(){
     mode.value=state.input.mode;
@@ -166,11 +178,15 @@ export function mountLinkedInTask3(root,options={}){
 
   function chooseRole(record){
     state=selectTargetRole(state,record);
+    state={...state,starterPack:refreshRoleStarterPack(
+      state.starterPack,record,state.input.mode,{currentRole:state.input.currentRole}
+    )};
     inputs.targetRole.value=record.title;
     setTargetRoleError();
     renderSelectedRole();
     hideRoleList();
-    status.textContent=record.title+" selected as your target role.";
+    renderStarterPack();
+    status.textContent=record.title+" selected. Role starter suggestions are ready.";
   }
 
   function renderRoleSuggestions(query){
@@ -203,6 +219,150 @@ export function mountLinkedInTask3(root,options={}){
     });
     roleList.hidden=false;
     inputs.targetRole.setAttribute("aria-expanded","true");
+  }
+
+  const starterMeta=Object.freeze({
+    [STARTER_SECTION.HEADLINE]:{
+      title:"Current headline",
+      help:"Choose role or skill points that are genuinely true about you."
+    },
+    [STARTER_SECTION.ABOUT]:{
+      title:"Current About section",
+      help:"Choose the points you want your About section to cover. These prompts are guidance, not factual claims."
+    },
+    [STARTER_SECTION.EXPERIENCE]:{
+      title:"Experience text",
+      help:"Confirm only responsibilities you have actually performed."
+    },
+    [STARTER_SECTION.SKILLS]:{
+      title:"Current skills",
+      help:"Select only skills you genuinely have. Unselected skills remain suggestions."
+    },
+    [STARTER_SECTION.ACHIEVEMENTS]:{
+      title:"Achievements / evidence",
+      help:"Replace blanks with evidence you can support before confirming an achievement."
+    },
+    [STARTER_SECTION.PROFESSIONAL_FOCUS]:{
+      title:"Professional focus / next step",
+      help:"Choose or edit the direction statement that best matches your intent."
+    }
+  });
+
+  function starterBadge(item){
+    if(item.state===STARTER_STATE.USER_ENTERED)return "Added by you";
+    if(item.state===STARTER_STATE.CONFIRMED)return item.staleForTarget?"Confirmed · review for new target":"Confirmed";
+    return "Suggested";
+  }
+
+  function renderStarterItem(section,item){
+    const row=el("div",{className:"liv2-starter-item",dataset:{state:item.state}});
+    const main=el("div",{className:"liv2-starter-item-main"});
+    let checkbox=null;
+    if(item.state!==STARTER_STATE.USER_ENTERED){
+      checkbox=el("input",{
+        type:"checkbox",
+        checked:item.state===STARTER_STATE.CONFIRMED,
+        "aria-label":"Confirm "+starterMeta[section].title+" suggestion"
+      });
+      main.append(checkbox);
+    }else{
+      main.append(el("span",{className:"liv2-user-marker","aria-hidden":"true"},"+"));
+    }
+
+    const editor=(section===STARTER_SECTION.ABOUT||section===STARTER_SECTION.EXPERIENCE||section===STARTER_SECTION.PROFESSIONAL_FOCUS)
+      ? el("textarea",{rows:2,value:item.text,"aria-label":starterMeta[section].title+" starter text"})
+      : el("input",{type:"text",value:item.text,"aria-label":starterMeta[section].title+" starter text"});
+    const badge=el("span",{className:"liv2-starter-badge"},starterBadge(item));
+    const remove=el("button",{type:"button",className:"liv2-starter-remove","aria-label":"Remove this "+starterMeta[section].title+" item"},"Remove");
+
+    const textWrap=el("div",{className:"liv2-starter-text"});
+    textWrap.append(editor,badge);
+    if(item.requiresEdit)textWrap.append(el("small",{},"Edit this prompt into truthful information before confirming."));
+    main.append(textWrap,remove);
+    row.append(main);
+
+    editor.addEventListener("input",()=>{
+      state={...state,starterPack:editStarterItem(state.starterPack,section,item.id,editor.value)};
+      const updated=state.starterPack.sections[section].find(entry=>entry.id===item.id);
+      if(updated){
+        badge.textContent=starterBadge(updated);
+        if(checkbox)checkbox.checked=updated.state===STARTER_STATE.CONFIRMED;
+      }
+    });
+    if(checkbox)checkbox.addEventListener("change",()=>{
+      try{
+        state={...state,starterPack:setStarterItemConfirmed(state.starterPack,section,item.id,checkbox.checked)};
+        const updated=state.starterPack.sections[section].find(entry=>entry.id===item.id);
+        badge.textContent=starterBadge(updated);
+        row.dataset.state=updated.state;
+        status.textContent=updated.state===STARTER_STATE.CONFIRMED
+          ? starterMeta[section].title+" item confirmed."
+          : starterMeta[section].title+" item returned to Suggested.";
+      }catch(error){
+        checkbox.checked=false;
+        status.textContent=error.message||"Edit this suggestion before confirming it.";
+      }
+    });
+    remove.addEventListener("click",()=>{
+      state={...state,starterPack:removeStarterItem(state.starterPack,section,item.id)};
+      renderStarterPack();
+      status.textContent=starterMeta[section].title+" item removed.";
+    });
+    return row;
+  }
+
+  function renderStarterPack(){
+    starterSections.replaceChildren();
+    const pack=state.starterPack;
+    if(!pack||!state.roleSelection){
+      starter.hidden=true;
+      return;
+    }
+    for(const section of Object.values(STARTER_SECTION)){
+      const meta=starterMeta[section];
+      const card=el("article",{className:"liv2-starter-section",dataset:{section}});
+      card.append(el("h3",{},meta.title),el("p",{className:"liv2-starter-help"},meta.help));
+      const items=pack.sections[section]||[];
+      if(section===STARTER_SECTION.EXPERIENCE){
+        const targetItems=items.filter(item=>item.group!=="transferable_current_role");
+        const transferItems=items.filter(item=>item.group==="transferable_current_role");
+        const targetWrap=el("div",{className:"liv2-starter-list"});
+        targetItems.forEach(item=>targetWrap.append(renderStarterItem(section,item)));
+        card.append(el("h4",{},"Target-role responsibility ideas"),targetWrap);
+        if(transferItems.length){
+          const transferWrap=el("div",{className:"liv2-starter-list"});
+          transferItems.forEach(item=>transferWrap.append(renderStarterItem(section,item)));
+          card.append(
+            el("h4",{},"Transferable ideas from your current role"),
+            el("p",{className:"liv2-starter-help"},"These come from the current role you entered and stay separate from target-role responsibilities."),
+            transferWrap
+          );
+        }
+      }else{
+        const list=el("div",{className:"liv2-starter-list"});
+        items.forEach(item=>list.append(renderStarterItem(section,item)));
+        card.append(list);
+      }
+      const add=el("button",{type:"button",className:"liv2-starter-add"},"Add your own");
+      add.addEventListener("click",()=>{
+        state={...state,starterPack:addUserStarterItem(state.starterPack,section,"")};
+        renderStarterPack();
+        const cardNow=starterSections.querySelector('[data-section="'+section+'"]');
+        const editors=cardNow?.querySelectorAll(".liv2-starter-item input[type=text],.liv2-starter-item textarea");
+        editors?.[editors.length-1]?.focus();
+      });
+      card.append(add);
+      starterSections.append(card);
+    }
+    starter.hidden=false;
+  }
+
+  function refreshStarterContext(){
+    if(!state.roleSelection)return;
+    state={...state,starterPack:refreshRoleStarterPack(
+      state.starterPack,state.roleSelection,state.input.mode,{currentRole:state.input.currentRole}
+    )};
+    renderStarterPack();
   }
 
   function renderReview(){
@@ -275,13 +435,17 @@ export function mountLinkedInTask3(root,options={}){
     optimize.hidden=false;
   }
 
-  mode.addEventListener("change",()=>{state=updateInput(state,"mode",mode.value)});
+  mode.addEventListener("change",()=>{
+    state=updateInput(state,"mode",mode.value);
+    refreshStarterContext();
+  });
   Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{
     state=updateInput(state,key,node.value);
     if(key==="targetRole"){
       renderSelectedRole();
       renderRoleSuggestions(node.value);
       if(node.value.trim())setTargetRoleError();
+      if(!state.roleSelection)starter.hidden=true;
     }
   }));
   inputs.targetRole.addEventListener("keydown",event=>{
@@ -297,6 +461,7 @@ export function mountLinkedInTask3(root,options={}){
     }
   });
   inputs.targetRole.addEventListener("blur",()=>setTimeout(hideRoleList,0));
+  inputs.currentRole.addEventListener("change",()=>refreshStarterContext());
 
   const targetError=el("small",{id:"liv2-target-role-error",className:"liv2-field-error",role:"alert",hidden:true});
   inputs.targetRole.setAttribute("aria-describedby","liv2-target-role-error");
@@ -356,6 +521,7 @@ export function mountLinkedInTask3(root,options={}){
   });
 
   syncInputControls();
+  renderStarterPack();
 
   return {
     getState:()=>state,
