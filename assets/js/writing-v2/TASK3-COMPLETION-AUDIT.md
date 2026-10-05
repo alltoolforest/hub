@@ -64,15 +64,37 @@ No frozen calculator, document, image or unrelated Work tool was modified.
 
 ## Automated regression
 
-Run:
+Final isolated execution results:
 
-```bash
-node assets/js/writing-v2/task1-regression.js
-node assets/js/writing-v2/task2-regression.js
-node assets/js/writing-v2/task3-regression.js
-```
+- Task 1 regression: **PASS**
+- Task 2 regression: **PASS**
+- Task 3 regression: **PASS**
+  - 6 hostile/script-like plain-text cases
+  - 30,000-character maximum Improve input accepted
+  - over-limit input rejected
+  - measured maximum-input engine pass in the regression harness: 2 ms
+  - scoped draft save/load/clear PASS
+  - no network dependency added
 
-Expected result: all three PASS.
+Static candidate checks: **PASS**
+
+- one H1
+- meaningful meta description
+- pre-release `noindex,nofollow`
+- static guidance/privacy/FAQ content present
+- local-only runtime references
+- bootstrap syntax PASS
+- no unsafe HTML/eval-style sink added
+- mobile CSS present
+- forced-colors handling present
+
+Scope comparison against Task 2: **PASS**
+
+- only Task 3 candidate/hardening files changed
+- `work/writing/index.html` unchanged
+- `assets/js/work.js` unchanged
+- `assets/js/app.js` unchanged
+- Task 2 CSS unchanged
 
 ## Task 4 explicitly not started
 
