@@ -13,12 +13,12 @@ const ALL={
 };
 
 const PROTECTED_PATTERNS=[
-  /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/g,
+  /\p{Lu}\p{L}+(?:\s+\p{Lu}\p{L}+){1,3}/gu,
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?\b/g,
   /\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)(?:\s+\d{4})?\b/g,
   /\b\d{4}-\d{2}-\d{2}\b/g,
   /\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/g,
-  /\b\d+(?:\.\d+)?%\b/g,
+  /\b\d+(?:\.\d+)?%/g,
   /(?:[$€£₹¥]|USD|EUR|GBP|INR|JPY)\s?\d[\d,.]*/gi,
   /\b\d+(?:\.\d+)?\b/g,
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
@@ -277,7 +277,7 @@ function protect(text){
   const tokens=protectedTokens(text).sort((a,b)=>b.length-a.length);
   const map=[];
   tokens.forEach((token,index)=>{
-    const marker="ZXQ"+index+"QXZ";
+    const marker="\uE000"+String.fromCharCode(0xE100+index)+"\uE001";
     output=output.split(token).join(marker);
     map.push([marker,token]);
   });
