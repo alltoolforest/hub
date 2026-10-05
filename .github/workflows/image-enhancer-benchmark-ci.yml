@@ -18,15 +18,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Confirm Task 1 does not alter production
-        run: git diff --exit-code 92d05302002e12924fab766b784cda2ea97d3f37 HEAD -- assets images calculators documents work _headers
+      # Task 1 measures the immutable PR #117 application, even on later-task
+      # branches. Current candidate behavior is audited by image-enhancer-ci.
+      - name: Checkout immutable benchmark application
+        uses: actions/checkout@v4
+        with:
+          ref: 92d05302002e12924fab766b784cda2ea97d3f37
+          path: benchmark-baseline
+      - name: Overlay current benchmark instrumentation only
+        run: |
+          mkdir -p benchmark-baseline/tests/image-enhancer-benchmark
+          cp -R tests/image-enhancer-benchmark/. benchmark-baseline/tests/image-enhancer-benchmark/
+      - name: Confirm benchmark instrumentation does not alter baseline production
+        working-directory: benchmark-baseline
+        run: git diff --exit-code HEAD -- assets images calculators documents work _headers
       - name: Test dataset contract and instrumentation
+        working-directory: benchmark-baseline
         run: |
           node --test tests/image-enhancer-benchmark/core.test.mjs
           node --check tests/image-enhancer-benchmark/run.mjs
       - name: Install pinned test browser dependency
+        working-directory: benchmark-baseline
         run: npm install --no-save --no-package-lock playwright@1.55.0
       - name: Run real-AI capture parity smoke test
+        working-directory: benchmark-baseline
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-benchmark/run.mjs selftest --out "${RUNNER_TEMP}/enhancer-harness"

@@ -92,3 +92,25 @@ records is not a prerequisite for further engineering work.
 Regression risk: application deblur now rejects grossly unstable outputs and
 releases tensors deterministically; browser audits must verify worker transfers
 and inference. No deployment or freeze is implied by a branch commit.
+
+## CI baseline isolation correction
+
+The first Task 1 harness run on 150593f failed its old whole-branch production
+diff assertion: later-task safety changes were being treated as Task 1 baseline
+mutations. The harness now checks out immutable PR #117 separately, overlays only
+benchmark test files, and retains the production-diff assertion there. The current
+candidate still receives the separate full enhancer audit. No quality threshold
+or original baseline changed; baseline and candidate results remain distinct.
+
+## Precision hypothesis tested
+
+The existing graph contains 666 FP16 initializers. A local diagnostic promoted
+those values, corresponding value-info and casts to FP32 and passed ONNX checker.
+Native ORT still produced the same failure (range -114.843 to 278.469, raw error
+133.302). Merely changing arithmetic precision does not repair this case. This
+experiment cannot recover the original full-precision training weights and does
+not rule out damage from earlier weight rounding or another export/model issue.
+Do not replace the 36 MB artifact with the 70 MB promoted graph: it adds size
+without fixing the reproduced failure. No derived weights are committed.
+`precision_probe.py` reproduces this check using the same two captured model inputs;
+`precision-results.json` pins the derived hash and observed values.

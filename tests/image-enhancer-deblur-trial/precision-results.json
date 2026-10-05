@@ -1,0 +1,25 @@
+{
+  "kind": "precision-promotion-diagnostic",
+  "sourceSha256": "05b455663115b19de4577d7d092bcd52f34b51517a83c1679cf28a31f4078204",
+  "derivedSha256": "46fbda39243359c9a0e6c56b13ac9380628d50faab416a5af4b9b65a5bf46829",
+  "bytes": 70264468,
+  "production": false,
+  "originalWeightParity": "NOT_VERIFIED",
+  "runtime": "1.22.1",
+  "rows": [
+    {
+      "route": "deblur",
+      "min": -0.021341267973184586,
+      "max": 1.0102813243865967,
+      "outsideUnitFraction": 0.0003370098039215686,
+      "rawRgbMaeVsReference": 10.879626225490195
+    },
+    {
+      "route": "cleanup-deblur",
+      "min": -114.8431167602539,
+      "max": 278.46875,
+      "outsideUnitFraction": 0.9923713235294118,
+      "rawRgbMaeVsReference": 133.30229779411764
+    }
+  ]
+}
