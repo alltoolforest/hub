@@ -45,3 +45,25 @@
 @media(forced-colors:active){
   .liv2-starter-item[data-state="confirmed"],.liv2-starter-item[data-state="user_entered"]{outline:1px solid CanvasText}
 }
+
+.liv2-existing-details{border:1px solid var(--line);border-radius:10px;background:#fff}
+.liv2-existing-details>summary{cursor:pointer;padding:13px 14px;font-weight:700;min-height:44px;display:flex;align-items:center}
+.liv2-existing-details[open]>summary{border-bottom:1px solid var(--line)}
+.liv2-existing-fields{padding:14px 14px 2px}
+.liv2-action-panel{display:grid;gap:4px}
+.liv2-results{display:grid;gap:14px}
+.liv2-results-title{margin:0;font-size:22px}
+.liv2-results>.liv2-panel{margin:0}
+.liv2-starter-badge{white-space:normal}
+.liv2-starter-item[data-state="confirmed"]{border-style:solid}
+.liv2-starter-item[data-state="user_entered"]{border-style:solid}
+@media(max-width:760px){
+  .liv2-builder{gap:14px}
+  .liv2-panel{border-radius:10px}
+  .liv2-existing-fields{padding:12px 12px 0}
+  .liv2-results-title{font-size:20px}
+}
+@media(max-width:320px){
+  .liv2-panel,.liv2-starter-section,.liv2-starter-item{padding-left:10px;padding-right:10px}
+  .liv2-existing-fields{padding-left:10px;padding-right:10px}
+}
