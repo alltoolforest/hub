@@ -32,7 +32,7 @@ function addEvidence(map,type,value,source){
 }
 
 function detectNumbers(text,source,map){
-  for(const match of String(text||"").matchAll(/\b\d+(?:\.\d+)?%?\b/g))addEvidence(map,"metric",match[0],source);
+  for(const match of String(text||"").matchAll(/\b\d+(?:\.\d+)?(?:%|\b)/g))addEvidence(map,"metric",match[0],source);
 }
 
 function extractCandidatePhrases(text){
