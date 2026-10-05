@@ -94,6 +94,44 @@ export function runProfessionalWritingTask1Regression(){
   const formal=write(MESSAGE_TYPE.PROFESSIONAL_EMAIL,{facts:"the proposal is attached"},{tone:TONE.FORMAL,audience:AUDIENCE.CLIENT});
   assert(warm.text!==formal.text,"Tone should materially change wording.");
 
+
+  const audienceOutputs=new Set();
+  for(const audience of Object.values(AUDIENCE)){
+    const result=write(
+      MESSAGE_TYPE.PROFESSIONAL_EMAIL,
+      {facts:"project is ready for review"},
+      {audience,recipient:"Alex"}
+    );
+    audienceOutputs.add(result.text);
+    assert(/project is ready for review/i.test(result.text),"Audience variant must preserve message facts.");
+  }
+  assert(audienceOutputs.size>=4,"Audience control should produce meaningful wording differences.");
+
+  const toneOutputs=new Set();
+  for(const tone of Object.values(TONE)){
+    const result=write(
+      MESSAGE_TYPE.PROFESSIONAL_EMAIL,
+      {topic:"budget review",facts:"figures are ready"},
+      {tone,audience:AUDIENCE.CLIENT}
+    );
+    toneOutputs.add(result.text);
+    assert(/figures are ready/i.test(result.text),"Tone variant must preserve message facts.");
+  }
+  assert(toneOutputs.size>=4,"Tone control should produce meaningful wording differences.");
+
+  const lengthOutputs=Object.values(LENGTH).map(length=>write(
+    MESSAGE_TYPE.PROFESSIONAL_EMAIL,
+    {
+      topic:"Q4 plan",
+      facts:"draft is complete",
+      requestedAction:"Please review the draft",
+      deadline:"October 15, 2026"
+    },
+    {length,audience:AUDIENCE.CLIENT}
+  ).text);
+  assert(new Set(lengthOutputs).size===3,"Short, standard and detailed outputs should be distinct.");
+  assert(lengthOutputs[0].length<lengthOutputs[2].length,"Short output should be shorter than detailed output.");
+
   const improved=createProfessionalWriting({
     mode:WRITING_MODE.IMPROVE,
     improvement:IMPROVEMENT.PROFESSIONAL,
@@ -153,8 +191,11 @@ export function runProfessionalWritingTask1Regression(){
     improveMode:true,
     sixMessageTypes:true,
     audience:true,
+    audienceMatrix:true,
     sixTones:true,
+    toneMatrix:true,
     threeLengths:true,
+    lengthMatrix:true,
     subjectGeneration:true,
     messageSpecificRequirements:true,
     dateNumberNamePreservation:true,
