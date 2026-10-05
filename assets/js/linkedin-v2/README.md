@@ -22,3 +22,28 @@ Task 1 intentionally does not implement:
 - local draft persistence
 - accessibility/SEO hardening
 - production wiring or deployment
+
+
+## Task 2 — Evidence-Based Profile Optimization Engine
+
+Implemented Task 2 scope:
+
+- three headline alternatives: professional/balanced, concise, evidence/keyword focused
+- headline length guard
+- structured standard and concise About generation
+- evidence-grounded experience rewriting
+- supported skills vs target-role suggestions kept separate
+- deterministic profile review using Strong / Needs attention / Missing states
+- review checks for headline, About, experience, skills, evidence strength, target-role consistency, generic wording and repetition
+- no opaque profile score
+- refinement actions for shorten, stronger opening, concise wording and professional wording
+- grounding guards for unsupported metrics and suggested skills becoming factual claims
+- target-role and candidate-mode variation preserved
+
+Task 2 intentionally does not implement:
+- production UI replacement
+- section-card workflow
+- local draft persistence
+- copy-per-section controls
+- accessibility/SEO hardening
+- production wiring or deployment
