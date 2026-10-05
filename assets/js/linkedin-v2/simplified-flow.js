@@ -7,13 +7,21 @@ function active(item){
 function confirmed(item){
   return item&&(item.state===STARTER_STATE.CONFIRMED||item.state===STARTER_STATE.USER_ENTERED);
 }
+function priority(item){
+  if(item.state===STARTER_STATE.USER_ENTERED)return 0;
+  if(item.state===STARTER_STATE.CONFIRMED)return 1;
+  return 2;
+}
+function prioritize(items){
+  return [...items].sort((a,b)=>priority(a)-priority(b));
+}
 
 export function getSimpleStarterOptions(pack,mode){
-  const skillItems=(pack?.sections?.[STARTER_SECTION.SKILLS]||[])
-    .filter(active)
+  const skillItems=prioritize((pack?.sections?.[STARTER_SECTION.SKILLS]||[])
+    .filter(active))
     .slice(0,8);
 
-  const allExperience=(pack?.sections?.[STARTER_SECTION.EXPERIENCE]||[]).filter(active);
+  const allExperience=prioritize((pack?.sections?.[STARTER_SECTION.EXPERIENCE]||[]).filter(active));
   let experienceItems;
   if(mode===PROFILE_MODE.CAREER_CHANGER){
     const transferable=allExperience.filter(item=>item.group==="transferable_current_role").slice(0,3);
