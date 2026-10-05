@@ -9,7 +9,7 @@ import {
   searchLinkedInTargetRoles,createLinkedInRoleRecord,isCatalogRole
 } from "./rework-task1-role-adapter.js";
 import {
-  STARTER_STATE,STARTER_SECTION,refreshRoleStarterPack,
+  STARTER_STATE,STARTER_SECTION,STARTER_ITEM_MAX,refreshRoleStarterPack,
   editStarterItem,setStarterItemConfirmed,addUserStarterItem,removeStarterItem
 } from "./rework-task2-starter-pack.js";
 import { assessTargetRoleChange } from "./rework-task4-flow.js";
@@ -313,6 +313,8 @@ export function mountLinkedInTask3(root,options={}){
   }
 
   function renderStarterItem(section,item){
+    const safeId=String(item.id).replace(/[^a-zA-Z0-9_-]/g,"-");
+    const statusId="liv2-starter-status-"+safeId;
     const row=el("div",{className:"liv2-starter-item",dataset:{state:item.state}});
     const main=el("div",{className:"liv2-starter-item-main"});
     let checkbox=null;
@@ -320,7 +322,8 @@ export function mountLinkedInTask3(root,options={}){
       checkbox=el("input",{
         type:"checkbox",
         checked:item.state===STARTER_STATE.CONFIRMED,
-        "aria-label":"Confirm "+starterMeta[section].title+" suggestion"
+        "aria-label":"Confirm "+starterMeta[section].title+" suggestion",
+        "aria-describedby":statusId
       });
       main.append(checkbox);
     }else{
@@ -328,9 +331,9 @@ export function mountLinkedInTask3(root,options={}){
     }
 
     const editor=(section===STARTER_SECTION.ABOUT||section===STARTER_SECTION.EXPERIENCE||section===STARTER_SECTION.PROFESSIONAL_FOCUS)
-      ? el("textarea",{rows:2,value:item.text,"aria-label":starterMeta[section].title+" starter text"})
-      : el("input",{type:"text",value:item.text,"aria-label":starterMeta[section].title+" starter text"});
-    const badge=el("span",{className:"liv2-starter-badge"},starterBadge(item));
+      ? el("textarea",{rows:2,value:item.text,maxLength:STARTER_ITEM_MAX,"aria-label":starterMeta[section].title+" starter text","aria-describedby":statusId})
+      : el("input",{type:"text",value:item.text,maxLength:STARTER_ITEM_MAX,"aria-label":starterMeta[section].title+" starter text","aria-describedby":statusId});
+    const badge=el("span",{id:statusId,className:"liv2-starter-badge"},starterBadge(item));
     const remove=el("button",{type:"button",className:"liv2-starter-remove","aria-label":"Remove this "+starterMeta[section].title+" item"},"Remove");
 
     const textWrap=el("div",{className:"liv2-starter-text"});
