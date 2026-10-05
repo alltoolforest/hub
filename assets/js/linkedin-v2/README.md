@@ -72,3 +72,33 @@ Task 3 intentionally does not implement:
 - technical SEO/user-guidance content
 - production wiring
 - deployment or freeze
+
+
+## Task 4 — Accessibility, Security, Performance & Technical SEO Hardening
+
+Implemented Task 4 scope:
+
+- browser-local privacy disclosure covering processing, local draft storage, no LinkedIn login and no profile scraping
+- field-level target-role validation linked with aria-describedby and aria-invalid
+- optimized-section character counters linked programmatically to their textareas
+- explicit textual review states so status is not color-only
+- forced-colors/high-contrast support
+- reduced-motion and mobile reflow retained
+- strict text rendering with no unsafe innerHTML/insertAdjacentHTML path
+- scoped localStorage behavior and unsupported-schema recovery regression
+- maximum practical profile performance fixture and 150 ms deterministic pipeline budget
+- production-ready SEO metadata values, canonical path and OG metadata
+- crawlable static guidance covering headline, About, experience, skills, target-role keywords, freshers, career changers, truthful achievements and privacy
+- focused internal links to Resume Studio, ATS & Job Match Analyzer and Cover Letter Builder
+- FAQ and no forced structured data for launch
+- headline guidance aligned to the current 220-character LinkedIn headline limit
+- About guidance aligned to the current 2,600-character LinkedIn About limit
+
+Task 4 intentionally does not:
+- modify `work/linkedin/index.html`
+- replace the production LinkedIn tool
+- deploy
+- run production audit/manual verification/final regression
+- freeze the tool
+
+Those actions belong only to Task 5.
