@@ -102,3 +102,40 @@ Task 4 intentionally does not:
 - freeze the tool
 
 Those actions belong only to Task 5.
+
+
+## Rework Blueprint — Task 1: Global Target Role Intelligence & Guided Entry
+
+Implemented only the first task of the LinkedIn Profile Helper rework:
+
+- Profile Mode remains the first decision: Fresher / Student, Experienced, Career changer
+- Target Role now uses the frozen Resume Studio role engine through a read-only LinkedIn adapter
+- LinkedIn autocomplete inherits the verified Resume Studio catalog: 393 titles across 39 categories at this checkpoint
+- query threshold starts at 2 characters
+- case-insensitive and conservative typo-tolerant matching is inherited from Resume Studio
+- target-role selection creates a canonical LinkedIn role record with:
+  - title
+  - role family
+  - category
+  - confidence
+  - related titles
+  - common role skills
+  - common responsibilities
+  - internal positioning themes
+  - provenance
+- selected canonical role persists in working state until the user edits the target-role text
+- custom unmatched roles remain allowed as a safe General/fallback record without invented skills or responsibilities
+- accessible combobox/listbox semantics and Arrow Up/Down, Enter and Escape keyboard handling
+- mobile role options retain a 44px practical touch target
+- frozen Resume Studio role-engine source remains unchanged
+
+Task 1 intentionally does not implement:
+
+- role-based starter packs
+- 5–8 suggestions for Headline/About/Experience/Skills/Achievements/Professional Focus
+- Suggested → Confirmed → User-entered evidence-state workflow
+- integration of confirmed suggestions into Review & Optimize
+- reworked full-page UX from later tasks
+- deployment, production audit, or freeze
+
+Production `work/linkedin/index.html` is intentionally unchanged in this task.
