@@ -3,3 +3,11 @@
 @media(max-width:390px){.li-draft-actions,.li-result-actions{grid-template-columns:1fr}.li-simple-card,.li-results,.li-result-card{padding-left:11px;padding-right:11px}}
 @media(forced-colors:active){.li-choice[data-state="confirmed"],.li-role-option[aria-selected="true"]{outline:2px solid CanvasText}.li-simple-privacy{border-left-color:CanvasText}}
 @media(prefers-reduced-motion:reduce){.li-simple *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+.li-review-note{margin:0 0 12px;color:var(--muted);font-size:13px;line-height:1.5}
+.li-review-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.li-review-row{padding:9px 10px;min-width:0}
+.li-review-row strong{font-size:14px}
+.li-review-status{display:inline-block;margin-top:2px;font-size:11px;text-transform:none}
+.li-review-row p{font-size:13px;line-height:1.45}
+@media(max-width:760px){.li-review-list{grid-template-columns:1fr}}
+@media(forced-colors:active){.li-review-row[data-status="needs_attention"]{outline:1px dashed CanvasText}}
