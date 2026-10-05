@@ -14,3 +14,34 @@
 .liv2-selected-role{display:block;margin-top:6px;font-weight:600}
 @media(max-width:760px){#liv2-target-role-list{max-height:260px}.liv2-role-option{min-height:44px;padding:12px}}
 @media(forced-colors:active){.liv2-role-option.is-active,.liv2-role-option[aria-selected="true"]{outline:2px solid CanvasText;background:Canvas}}
+
+.liv2-starter-sections{display:grid;gap:14px}
+.liv2-starter-section{border:1px solid var(--line);border-radius:10px;padding:14px}
+.liv2-starter-section h3{margin:0 0 4px}.liv2-starter-section h4{margin:14px 0 6px;font-size:14px}
+.liv2-starter-help{margin:0 0 10px;color:var(--muted);font-size:13px}
+.liv2-starter-list{display:grid;gap:8px}
+.liv2-starter-item{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}
+.liv2-starter-item-main{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start}
+.liv2-starter-item-main>input[type="checkbox"]{margin-top:9px;width:18px;height:18px}
+.liv2-user-marker{display:grid;place-items:center;width:22px;height:22px;margin-top:5px;border-radius:50%;border:1px solid var(--line);font-weight:700}
+.liv2-starter-text{display:grid;gap:4px;min-width:0}
+.liv2-starter-text input,.liv2-starter-text textarea{width:100%;font-size:14px}
+.liv2-starter-badge{justify-self:start;border:1px solid var(--line);border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700}
+.liv2-starter-item[data-state="confirmed"] .liv2-starter-badge{background:#f1f6f2}
+.liv2-starter-item[data-state="user_entered"] .liv2-starter-badge{background:#f6f4ed}
+.liv2-starter-remove,.liv2-starter-add{min-height:40px}
+.liv2-starter-add{margin-top:10px}
+@media(max-width:760px){
+  .liv2-starter-item-main{grid-template-columns:auto minmax(0,1fr)}
+  .liv2-starter-remove{grid-column:2;width:100%;min-height:44px}
+  .liv2-starter-add{width:100%;min-height:44px}
+  .liv2-starter-text input,.liv2-starter-text textarea{font-size:16px}
+}
+@media(max-width:360px){
+  .liv2-starter-item-main{grid-template-columns:1fr}
+  .liv2-starter-item-main>input[type="checkbox"],.liv2-user-marker{margin-top:0}
+  .liv2-starter-remove{grid-column:1}
+}
+@media(forced-colors:active){
+  .liv2-starter-item[data-state="confirmed"],.liv2-starter-item[data-state="user_entered"]{outline:1px solid CanvasText}
+}
