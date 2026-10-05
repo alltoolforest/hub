@@ -3,3 +3,14 @@
 .liv2-privacy{border-left:3px solid #8caa91;background:#f1f6f2;border-radius:0 8px 8px 0;padding:12px 14px;color:#53695c;font-size:13px}.liv2-field-error{display:block;color:#a33131;font-weight:600;margin:-8px 0 12px}.liv2-builder [aria-invalid="true"]{border-color:#a33131;box-shadow:0 0 0 1px #a33131}.liv2-review-status{font-weight:700}.liv2-review-item[data-status="strong"] .liv2-review-status::before{content:"Strong: "}.liv2-review-item[data-status="needs_attention"] .liv2-review-status::before{content:"Needs attention: "}.liv2-review-item[data-status="missing"] .liv2-review-status::before{content:"Missing: "}
 @media(forced-colors:active){.liv2-builder [aria-invalid="true"]{outline:2px solid CanvasText;outline-offset:2px}.liv2-privacy{border-left-color:CanvasText}.liv2-review-item{border-style:solid!important}}
 @media(max-width:400px){.liv2-panel,.liv2-section-card{min-width:0}.liv2-builder textarea,.liv2-builder input,.liv2-builder select,.liv2-builder button{max-width:100%}}
+
+.liv2-entry-intro{margin:-4px 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+#liv2-target-role-list{position:relative;margin-top:4px;border:1px solid var(--line);border-radius:10px;background:#fff;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(20,45,35,.08);z-index:2}
+.liv2-role-option{display:grid;gap:2px;padding:11px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+.liv2-role-option:last-child{border-bottom:0}
+.liv2-role-option small,.liv2-selected-role{color:var(--muted);font-size:12px}
+.liv2-role-option.is-active,.liv2-role-option:hover{background:#f1f6f2}
+.liv2-role-option[aria-selected="true"]{outline:2px solid #145940;outline-offset:-2px}
+.liv2-selected-role{display:block;margin-top:6px;font-weight:600}
+@media(max-width:760px){#liv2-target-role-list{max-height:260px}.liv2-role-option{min-height:44px;padding:12px}}
+@media(forced-colors:active){.liv2-role-option.is-active,.liv2-role-option[aria-selected="true"]{outline:2px solid CanvasText;background:Canvas}}
