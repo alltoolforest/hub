@@ -79,3 +79,22 @@ Task 2 intentionally does **not**:
 - run the release/freeze sequence
 
 Those remain Tasks 3–4.
+
+
+## Task 3 — Privacy, Security, Performance & Technical SEO Hardening
+
+Completed on `professional-writing-task3-20261005` without replacing production.
+
+Implemented:
+
+- truthful browser-local processing and optional local-draft disclosure
+- explicit saved-draft privacy guidance
+- plain-text security verification for HTML/script-like input
+- bounded-input and scoped-storage hardening regression
+- lightweight local dependency path with no remote writing model/API
+- isolated static candidate page with meaningful title/meta description
+- crawlable professional-writing guidance, privacy explanation and FAQs
+- pre-release `noindex,nofollow` so Task 3 cannot accidentally create duplicate indexed content
+- preservation of Task 2 accessibility/mobile behavior
+
+Task 3 deliberately does **not** replace `work/writing/index.html`, change shared `work.js`/app dispatch, deploy, run production verification or freeze the tool. Those remain Task 4.
