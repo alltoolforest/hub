@@ -65,6 +65,11 @@ function requireValue(value,label){
   if(!text)throw new Error(label+" is required.");
   return text;
 }
+function requireText(value,label){
+  const text=clean(ensureBound(value,label));
+  if(!text)throw new Error(label+" is required.");
+  return text;
+}
 function validateChoice(value,set,label){
   if(!set.has(value))throw new Error("Unsupported "+label+".");
 }
@@ -124,7 +129,7 @@ function subjectFor(type,fields){
   }
 }
 function writeProfessionalEmail(fields,context){
-  const facts=requireValue(fields.facts,"Key information");
+  const facts=requireText(fields.facts,"Key information");
   const purpose=oneLine(fields.topic);
   const request=oneLine(fields.requestedAction);
   const deadline=oneLine(fields.deadline);
@@ -189,7 +194,7 @@ function writeMeetingFollowUp(fields,context){
 }
 function writeProfessionalReply(fields,context){
   const source=oneLine(fields.sourceMessage);
-  const facts=requireValue(fields.responseFacts||fields.facts,"Reply points");
+  const facts=requireText(fields.responseFacts||fields.facts,"Reply points");
   const request=oneLine(fields.requestedAction);
   const blocks=[];
   if(source&&context.length===LENGTH.DETAILED)blocks.push("Thank you for your message regarding "+sentence(source).replace(/[.!?]$/,"")+".");
@@ -343,7 +348,7 @@ export function createProfessionalWriting(input){
       mode:input.mode,
       subject:result.subject,
       text:result.message,
-      preserved:Object.freeze(protectedTokens(JSON.stringify(input.fields||{}))),
+      preserved:Object.freeze(protectedTokens(Object.values(input.fields||{}).map(String).join("\n"))),
     });
   }
   const improved=improveText(input.existingText,input.improvement||IMPROVEMENT.PROFESSIONAL);
