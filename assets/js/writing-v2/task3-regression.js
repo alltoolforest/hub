@@ -58,7 +58,7 @@ assert.ok(improved.text.includes("<script>alert"));
 assert.ok(improved.text.includes("test@example.com"));
 assert.ok(improved.text.includes("October 10, 2026"));
 
-let state=createWritingUiState();
+let state=createWritingUiState({mode:WRITING_MODE.IMPROVE});
 state=updateImproveField(state,"existingText","x".repeat(MAX_INPUT_CHARS));
 assert.equal(validateWritingUiState(state).ok,true);
 const start=performance.now();
@@ -67,7 +67,7 @@ const elapsed=performance.now()-start;
 assert.ok(elapsed<1000,"Maximum supported input should process without a long synchronous stall in Node.");
 assert.equal(textExportContent(state).length>0,true);
 
-let tooLong=createWritingUiState();
+let tooLong=createWritingUiState({mode:WRITING_MODE.IMPROVE});
 tooLong=updateImproveField(tooLong,"existingText","x".repeat(MAX_INPUT_CHARS+1));
 assert.equal(validateWritingUiState(tooLong).ok,false);
 
