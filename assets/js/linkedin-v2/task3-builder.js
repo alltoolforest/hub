@@ -14,6 +14,7 @@ import {
 } from "./rework-task2-starter-pack.js";
 import { assessTargetRoleChange } from "./rework-task4-flow.js";
 import { getSimpleStarterOptions,validateSimpleBuild } from "./simplified-flow.js";
+import { reviewFinalProfile } from "./final-profile-review.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -152,11 +153,11 @@ export function mountLinkedInTask3(root,options={}){
   const resultCards=el("div",{className:"li-result-cards"});
 
   const improve=el("details",{className:"li-improve"});
-  improve.append(el("summary",{},"Improve further"));
+  improve.append(el("summary",{},"Optional profile quality check"));
   const improveBody=el("div",{className:"li-improve-body"});
   const reviewList=el("div",{className:"li-review-list"});
   improveBody.append(
-    el("p",{className:"li-choice-hint"},"Optional profile review and additional headline styles."),
+    el("p",{className:"li-review-note",role:"note"},"Read-only review of your finished profile. You do not need to fill anything here."),
     reviewList
   );
   improve.append(improveBody);
@@ -343,11 +344,21 @@ export function mountLinkedInTask3(root,options={}){
   function reviewCards(){
     reviewList.replaceChildren();
     improveBody.querySelectorAll(".li-alt-headlines").forEach(node=>node.remove());
-    for(const check of state.review?.checks||[]){
+
+    const finalReview=reviewFinalProfile({
+      drafts:state.drafts,
+      targetRole:state.roleSelection?.title||state.input.targetRole,
+      achievementText:state.input.achievementsText,
+    });
+
+    for(const check of finalReview.checks){
       const row=el("div",{className:"li-review-row",dataset:{status:check.status}});
-      row.append(el("strong",{},check.label),el("span",{},check.status.replace("_"," ")),el("p",{},check.message));
+      const label=el("strong",{},check.label);
+      const result=el("span",{className:"li-review-status"},check.status==="strong"?"Strong":"Needs attention");
+      row.append(label,result,el("p",{},check.message));
       reviewList.append(row);
     }
+
     if(state.generated?.headlines?.length>1){
       const alt=el("div",{className:"li-alt-headlines"});
       alt.append(el("strong",{},"Other headline styles"));
@@ -377,7 +388,10 @@ export function mountLinkedInTask3(root,options={}){
     const area=el("textarea",{rows,value:state.drafts[section]||""});
     if(maxLength)area.maxLength=maxLength;
     area.setAttribute("aria-label",title+" draft");
-    area.addEventListener("input",()=>{state=updateDraft(state,section,area.value)});
+    area.addEventListener("input",()=>{
+      state=updateDraft(state,section,area.value);
+      reviewCards();
+    });
     editBtn.addEventListener("click",()=>area.focus());
     copyBtn.addEventListener("click",async()=>{
       const result=await copyText(area.value,options.clipboard);
