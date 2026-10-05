@@ -92,13 +92,13 @@ export function mountLinkedInTask3(root,options={}){
     targetRoleField,
     field("Current role (optional)",inputs.currentRole),
     field("Industry / niche (optional)",inputs.industry),
-    field("Current headline",inputs.currentHeadline),
-    field("Current About section",inputs.currentAbout),
-    field("Experience text",inputs.experienceText,"Use one responsibility or result per line where possible."),
-    field("Current skills",inputs.skillsText,"Enter one skill per line."),
-    field("Achievements / evidence",inputs.achievementsText,"Enter only outcomes you can support."),
-    field("Professional focus / next step",inputs.professionalGoal),
-    field("Resume text (optional)",inputs.resumeText)
+    field("Existing LinkedIn headline (optional)",inputs.currentHeadline),
+    field("Existing About section (optional)",inputs.currentAbout),
+    field("Existing experience text (optional)",inputs.experienceText,"Paste existing LinkedIn experience if you already have it. Otherwise use the starter suggestions below."),
+    field("Existing skills (optional)",inputs.skillsText,"Enter one skill per line if you already have profile skills to preserve."),
+    field("Additional achievements / evidence (optional)",inputs.achievementsText,"Enter only outcomes you can support."),
+    field("Additional professional focus / next step (optional)",inputs.professionalGoal),
+    field("Optional: paste resume text",inputs.resumeText,"Use this only if you want resume information available as supporting evidence.")
   );
 
   const starter=el("section",{className:"liv2-panel liv2-starter-panel",hidden:true,"aria-labelledby":"liv2-starter-heading"});
@@ -486,7 +486,7 @@ export function mountLinkedInTask3(root,options={}){
       state=generateProfileSections(state);
       renderReview();
       renderSections();
-      status.textContent="Profile review and optimization suggestions are ready.";
+      status.textContent="Profile review and optimization suggestions are ready using confirmed and user-entered information.";
     }catch(error){
       const message=error.message||"Unable to optimize this profile.";
       if(/target role/i.test(message))setTargetRoleError(message);
