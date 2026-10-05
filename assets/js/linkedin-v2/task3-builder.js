@@ -4,6 +4,7 @@ import {
   updateDraft,resetDraftToGenerated
 } from "./task3-state.js";
 import { createLinkedInDraftStore } from "./task3-storage.js";
+import { LINKEDIN_PRIVACY_NOTICE } from "./task4-hardening.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -41,6 +42,7 @@ export function mountLinkedInTask3(root,options={}){
   root.classList.add("liv2-builder");
 
   const status=el("p",{className:"liv2-status",role:"status","aria-live":"polite"});
+  const privacy=el("div",{className:"liv2-privacy",role:"note"},LINKEDIN_PRIVACY_NOTICE);
 
   const details=el("section",{className:"liv2-panel","aria-labelledby":"liv2-details-heading"});
   details.append(el("h2",{id:"liv2-details-heading"},"1. Profile details"));
@@ -95,7 +97,7 @@ export function mountLinkedInTask3(root,options={}){
   const sections=el("div",{className:"liv2-sections"});
   optimize.append(sections);
 
-  root.append(details,actions,review,optimize,status);
+  root.append(privacy,details,actions,review,optimize,status);
 
   function syncInputControls(){
     mode.value=state.input.mode;
@@ -120,10 +122,15 @@ export function mountLinkedInTask3(root,options={}){
     head.append(el("h3",{},title));
     const copyBtn=el("button",{type:"button"},"Copy");
     head.append(copyBtn);
-    const textarea=el("textarea",{rows:section==="about"?10:section==="experience"?9:6,value});
+    const textareaId="liv2-draft-"+section;
+    const counterId=textareaId+"-counter";
+    const textarea=el("textarea",{id:textareaId,rows:section==="about"?10:section==="experience"?9:6,value});
     textarea.setAttribute("aria-label",title+" optimized wording");
-    const counter=el("small",{className:"liv2-counter"});
-    if(counterMax)counter.textContent=textarea.value.length+" / "+counterMax+" characters";
+    const counter=el("small",{id:counterId,className:"liv2-counter"});
+    if(counterMax){
+      counter.textContent=textarea.value.length+" / "+counterMax+" characters";
+      textarea.setAttribute("aria-describedby",counterId);
+    }
 
     if(headlineChoices&&state.generated){
       const chooser=el("div",{className:"liv2-headline-choices","aria-label":"Headline alternatives"});
@@ -171,17 +178,36 @@ export function mountLinkedInTask3(root,options={}){
   }
 
   mode.addEventListener("change",()=>{state=updateInput(state,"mode",mode.value)});
-  Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{state=updateInput(state,key,node.value)}));
+  Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{state=updateInput(state,key,node.value);if(key==="targetRole"&&node.value.trim())setTargetRoleError()}));
+
+  const targetError=el("small",{id:"liv2-target-role-error",className:"liv2-field-error",role:"alert",hidden:true});
+  inputs.targetRole.setAttribute("aria-describedby","liv2-target-role-error");
+  details.insertBefore(targetError,inputs.targetRole.closest(".liv2-field")?.nextSibling||null);
+
+  function setTargetRoleError(message=""){
+    if(message){
+      targetError.textContent=message;
+      targetError.hidden=false;
+      inputs.targetRole.setAttribute("aria-invalid","true");
+    }else{
+      targetError.textContent="";
+      targetError.hidden=true;
+      inputs.targetRole.removeAttribute("aria-invalid");
+    }
+  }
 
   generate.addEventListener("click",()=>{
     try{
+      setTargetRoleError();
       syncStateFromControls();
       state=generateProfileSections(state);
       renderReview();
       renderSections();
       status.textContent="Profile review and optimization suggestions are ready.";
     }catch(error){
-      status.textContent=error.message||"Unable to optimize this profile.";
+      const message=error.message||"Unable to optimize this profile.";
+      if(/target role/i.test(message))setTargetRoleError(message);
+      status.textContent=message;
     }
   });
   save.addEventListener("click",()=>{
