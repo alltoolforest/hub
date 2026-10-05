@@ -1,10 +1,13 @@
 import { PROFILE_MODE } from "./contracts.js";
 import {
-  createTask3State,updateInput,generateProfileSections,applyHeadlineAlternative,
+  createTask3State,updateInput,selectTargetRole,generateProfileSections,applyHeadlineAlternative,
   updateDraft,resetDraftToGenerated
 } from "./task3-state.js";
 import { createLinkedInDraftStore } from "./task3-storage.js";
 import { LINKEDIN_PRIVACY_NOTICE } from "./task4-hardening.js";
+import {
+  searchLinkedInTargetRoles,createLinkedInRoleRecord,isCatalogRole
+} from "./rework-task1-role-adapter.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -45,7 +48,10 @@ export function mountLinkedInTask3(root,options={}){
   const privacy=el("div",{className:"liv2-privacy",role:"note"},LINKEDIN_PRIVACY_NOTICE);
 
   const details=el("section",{className:"liv2-panel","aria-labelledby":"liv2-details-heading"});
-  details.append(el("h2",{id:"liv2-details-heading"},"1. Profile details"));
+  details.append(
+    el("h2",{id:"liv2-details-heading"},"1. Choose your profile direction"),
+    el("p",{className:"liv2-entry-intro"},"Select your profile mode, then start typing the role you want to target. Role suggestions use the same verified occupation engine as Resume Studio.")
+  );
 
   const mode=el("select",{id:"liv2-mode"});
   mode.append(
@@ -54,7 +60,10 @@ export function mountLinkedInTask3(root,options={}){
     option(PROFILE_MODE.CAREER_CHANGER,"Career changer")
   );
   const inputs={
-    targetRole:el("input",{id:"liv2-target-role",type:"text",maxLength:160}),
+    targetRole:el("input",{
+      id:"liv2-target-role",type:"text",maxLength:160,autocomplete:"off",spellcheck:false,
+      role:"combobox","aria-autocomplete":"list","aria-expanded":"false","aria-controls":"liv2-target-role-list"
+    }),
     currentRole:el("input",{id:"liv2-current-role",type:"text",maxLength:160}),
     industry:el("input",{id:"liv2-industry",type:"text",maxLength:160}),
     currentHeadline:el("textarea",{id:"liv2-current-headline",rows:3,maxLength:500}),
@@ -65,9 +74,18 @@ export function mountLinkedInTask3(root,options={}){
     professionalGoal:el("textarea",{id:"liv2-goal",rows:3,maxLength:3000}),
     resumeText:el("textarea",{id:"liv2-resume",rows:6,maxLength:50000}),
   };
+  const targetRoleField=field(
+    "Target role",
+    inputs.targetRole,
+    "Type at least 2 characters, then choose the closest role. You can keep custom wording if no catalog role matches."
+  );
+  const roleList=el("div",{id:"liv2-target-role-list",className:"liv2-role-list",role:"listbox",hidden:true});
+  const selectedRoleNote=el("small",{className:"liv2-selected-role",hidden:true});
+  targetRoleField.append(roleList,selectedRoleNote);
+
   details.append(
-    field("Profile mode",mode),
-    field("Target role",inputs.targetRole),
+    field("Profile mode",mode,"Choose the profile situation that best matches you."),
+    targetRoleField,
     field("Current role (optional)",inputs.currentRole),
     field("Industry / niche (optional)",inputs.industry),
     field("Current headline",inputs.currentHeadline),
@@ -102,11 +120,91 @@ export function mountLinkedInTask3(root,options={}){
   function syncInputControls(){
     mode.value=state.input.mode;
     Object.entries(inputs).forEach(([key,node])=>node.value=state.input[key]||"");
+    if(state.input.targetRole&&!state.roleSelection){
+      const restored=createLinkedInRoleRecord(state.input.targetRole);
+      if(isCatalogRole(restored))state=selectTargetRole(state,restored);
+    }
+    renderSelectedRole();
   }
   function syncStateFromControls(){
     state=updateInput(state,"mode",mode.value);
     for(const [key,node] of Object.entries(inputs))state=updateInput(state,key,node.value);
   }
+  let roleOptions=[];
+  let activeRoleIndex=-1;
+
+  function renderSelectedRole(){
+    if(state.roleSelection&&isCatalogRole(state.roleSelection)){
+      selectedRoleNote.hidden=false;
+      selectedRoleNote.textContent="Selected role: "+state.roleSelection.title+" · "+state.roleSelection.category;
+    }else{
+      selectedRoleNote.hidden=true;
+      selectedRoleNote.textContent="";
+    }
+  }
+
+  function hideRoleList(){
+    roleList.hidden=true;
+    roleList.replaceChildren();
+    roleOptions=[];
+    activeRoleIndex=-1;
+    inputs.targetRole.setAttribute("aria-expanded","false");
+    inputs.targetRole.removeAttribute("aria-activedescendant");
+  }
+
+  function setActiveRole(index){
+    if(!roleOptions.length)return;
+    activeRoleIndex=Math.max(0,Math.min(index,roleOptions.length-1));
+    [...roleList.querySelectorAll('[role="option"]')].forEach((node,i)=>{
+      const active=i===activeRoleIndex;
+      node.setAttribute("aria-selected",active?"true":"false");
+      node.classList.toggle("is-active",active);
+    });
+    const active=roleList.querySelector('[data-role-index="'+activeRoleIndex+'"]');
+    if(active)inputs.targetRole.setAttribute("aria-activedescendant",active.id);
+  }
+
+  function chooseRole(record){
+    state=selectTargetRole(state,record);
+    inputs.targetRole.value=record.title;
+    setTargetRoleError();
+    renderSelectedRole();
+    hideRoleList();
+    status.textContent=record.title+" selected as your target role.";
+  }
+
+  function renderRoleSuggestions(query){
+    const value=String(query||"").trim();
+    if(value.length<2){hideRoleList();return}
+    roleOptions=[...searchLinkedInTargetRoles(value,8)];
+    roleList.replaceChildren();
+    activeRoleIndex=-1;
+    if(!roleOptions.length){
+      hideRoleList();
+      return;
+    }
+    roleOptions.forEach((record,index)=>{
+      const item=el("div",{
+        id:"liv2-role-option-"+index,
+        className:"liv2-role-option",
+        role:"option",
+        "aria-selected":"false",
+        dataset:{roleIndex:String(index)}
+      });
+      item.append(
+        el("strong",{},record.title),
+        el("small",{},record.category)
+      );
+      item.addEventListener("pointerdown",event=>{
+        event.preventDefault();
+        chooseRole(record);
+      });
+      roleList.append(item);
+    });
+    roleList.hidden=false;
+    inputs.targetRole.setAttribute("aria-expanded","true");
+  }
+
   function renderReview(){
     reviewList.replaceChildren();
     for(const check of state.review?.checks||[]){
@@ -178,7 +276,27 @@ export function mountLinkedInTask3(root,options={}){
   }
 
   mode.addEventListener("change",()=>{state=updateInput(state,"mode",mode.value)});
-  Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{state=updateInput(state,key,node.value);if(key==="targetRole"&&node.value.trim())setTargetRoleError()}));
+  Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{
+    state=updateInput(state,key,node.value);
+    if(key==="targetRole"){
+      renderSelectedRole();
+      renderRoleSuggestions(node.value);
+      if(node.value.trim())setTargetRoleError();
+    }
+  }));
+  inputs.targetRole.addEventListener("keydown",event=>{
+    if(event.key==="ArrowDown"){
+      if(roleList.hidden)renderRoleSuggestions(inputs.targetRole.value);
+      if(roleOptions.length){event.preventDefault();setActiveRole(activeRoleIndex<0?0:activeRoleIndex+1)}
+    }else if(event.key==="ArrowUp"&&roleOptions.length){
+      event.preventDefault();setActiveRole(activeRoleIndex<=0?roleOptions.length-1:activeRoleIndex-1);
+    }else if(event.key==="Enter"&&activeRoleIndex>=0&&roleOptions[activeRoleIndex]){
+      event.preventDefault();chooseRole(roleOptions[activeRoleIndex]);
+    }else if(event.key==="Escape"){
+      hideRoleList();
+    }
+  });
+  inputs.targetRole.addEventListener("blur",()=>setTimeout(hideRoleList,0));
 
   const targetError=el("small",{id:"liv2-target-role-error",className:"liv2-field-error",role:"alert",hidden:true});
   inputs.targetRole.setAttribute("aria-describedby","liv2-target-role-error");
