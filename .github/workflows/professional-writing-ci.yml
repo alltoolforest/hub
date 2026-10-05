@@ -1,0 +1,57 @@
+name: Professional Writing Assistant CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'work/writing/**'
+      - 'assets/js/writing-v2/**'
+      - 'assets/css/writing-v2-task2.css'
+      - 'assets/css/writing-v2-task3.css'
+      - '.github/workflows/professional-writing-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-writing-assistant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify Task 4 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then BASE="$(git merge-base HEAD origin/main)"; fi
+          git diff --name-only "$BASE"...HEAD > /tmp/changed.txt
+          cat /tmp/changed.txt
+          if grep -Ev '^(work/writing/|assets/js/writing-v2/|assets/css/writing-v2-task2\.css$|assets/css/writing-v2-task3\.css$|\.github/workflows/professional-writing-ci\.yml$)' /tmp/changed.txt | grep -q .; then
+            echo "Unexpected file outside Professional Writing Assistant scope."
+            exit 1
+          fi
+
+      - name: JavaScript syntax checks
+        run: |
+          node --check assets/js/writing-v2/contracts.js
+          node --check assets/js/writing-v2/engine.js
+          node --check assets/js/writing-v2/task2-state.js
+          node --check assets/js/writing-v2/task2-storage.js
+          node --check assets/js/writing-v2/task2-builder.js
+          node --check assets/js/writing-v2/task3-bootstrap.js
+          node --check assets/js/writing-v2/task4-regression.js
+
+      - name: Run Writing Assistant regression
+        run: |
+          node assets/js/writing-v2/task1-regression.js
+          node assets/js/writing-v2/task2-regression.js
+          node assets/js/writing-v2/task3-regression.js
+          node assets/js/writing-v2/task4-regression.js
