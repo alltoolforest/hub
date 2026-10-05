@@ -53,8 +53,8 @@ export function mountLinkedInTask3(root,options={}){
 
   const details=el("section",{className:"liv2-panel","aria-labelledby":"liv2-details-heading"});
   details.append(
-    el("h2",{id:"liv2-details-heading"},"1. Choose your profile direction"),
-    el("p",{className:"liv2-entry-intro"},"Select your profile mode, then start typing the role you want to target. Role suggestions use the same verified occupation engine as Resume Studio.")
+    el("h2",{id:"liv2-details-heading"},"Step 1 — Tell us your direction"),
+    el("p",{className:"liv2-entry-intro"},"Choose your profile mode and target role first. If you are changing careers, add your current role so transferable suggestions can stay separate from target-role ideas.")
   );
 
   const mode=el("select",{id:"liv2-mode"});
@@ -90,25 +90,43 @@ export function mountLinkedInTask3(root,options={}){
   details.append(
     field("Profile mode",mode,"Choose the profile situation that best matches you."),
     targetRoleField,
-    field("Current role (optional)",inputs.currentRole),
-    field("Industry / niche (optional)",inputs.industry),
-    field("Existing LinkedIn headline (optional)",inputs.currentHeadline),
-    field("Existing About section (optional)",inputs.currentAbout),
-    field("Existing experience text (optional)",inputs.experienceText,"Paste existing LinkedIn experience if you already have it. Otherwise use the starter suggestions below."),
-    field("Existing skills (optional)",inputs.skillsText,"Enter one skill per line if you already have profile skills to preserve."),
-    field("Additional achievements / evidence (optional)",inputs.achievementsText,"Enter only outcomes you can support."),
-    field("Additional professional focus / next step (optional)",inputs.professionalGoal),
-    field("Optional: paste resume text",inputs.resumeText,"Use this only if you want resume information available as supporting evidence.")
+    field("Current role (optional)",inputs.currentRole,"Especially useful for career changers so transferable experience can be suggested separately.")
   );
 
   const starter=el("section",{className:"liv2-panel liv2-starter-panel",hidden:true,"aria-labelledby":"liv2-starter-heading"});
   starter.append(
-    el("h2",{id:"liv2-starter-heading"},"Role starter suggestions"),
+    el("h2",{id:"liv2-starter-heading"},"Step 2 — Build your profile content"),
     el("p",{className:"liv2-entry-intro"},"These are ideas, not claims about you. Select only what is true, edit suggestions when needed, or add your own information.")
   );
   const starterSections=el("div",{className:"liv2-starter-sections"});
   starter.append(starterSections);
 
+  const existing=el("section",{className:"liv2-panel","aria-labelledby":"liv2-existing-heading"});
+  existing.append(
+    el("h2",{id:"liv2-existing-heading"},"Step 3 — Optional existing profile"),
+    el("p",{className:"liv2-entry-intro"},"Already have LinkedIn content or a resume? Add it here only if you want it preserved as supporting evidence.")
+  );
+  const existingDetails=el("details",{className:"liv2-existing-details"});
+  const existingSummary=el("summary",{},"Add existing LinkedIn content or resume text");
+  const existingFields=el("div",{className:"liv2-existing-fields"});
+  existingFields.append(
+    field("Industry / niche (optional)",inputs.industry),
+    field("Existing LinkedIn headline (optional)",inputs.currentHeadline),
+    field("Existing About section (optional)",inputs.currentAbout),
+    field("Existing experience text (optional)",inputs.experienceText,"Paste existing LinkedIn experience if you already have it. Otherwise use the starter suggestions above."),
+    field("Existing skills (optional)",inputs.skillsText,"Enter one skill per line if you already have profile skills to preserve."),
+    field("Additional achievements / evidence (optional)",inputs.achievementsText,"Enter only outcomes you can support."),
+    field("Additional professional focus / next step (optional)",inputs.professionalGoal),
+    field("Optional: paste resume text",inputs.resumeText,"Use this only if you want resume information available as supporting evidence.")
+  );
+  existingDetails.append(existingSummary,existingFields);
+  existing.append(existingDetails);
+
+  const actionPanel=el("section",{className:"liv2-panel liv2-action-panel","aria-labelledby":"liv2-action-heading"});
+  actionPanel.append(
+    el("h2",{id:"liv2-action-heading"},"Step 4 — Review & Optimize"),
+    el("p",{className:"liv2-entry-intro"},"Only Confirmed and Added by you information can become factual profile claims. Unconfirmed suggestions stay excluded.")
+  );
   const actions=el("div",{className:"liv2-actions"});
   const generate=el("button",{type:"button"},"Review & optimize");
   const save=el("button",{type:"button"},"Save draft");
@@ -116,18 +134,23 @@ export function mountLinkedInTask3(root,options={}){
   const startNew=el("button",{type:"button"},"Start new");
   const clearSaved=el("button",{type:"button"},"Clear saved data");
   actions.append(generate,save,restore,startNew,clearSaved);
+  actionPanel.append(actions);
 
-  const review=el("section",{className:"liv2-panel",hidden:true,"aria-labelledby":"liv2-review-heading"});
-  review.append(el("h2",{id:"liv2-review-heading"},"2. Profile review"));
+  const results=el("section",{className:"liv2-results",hidden:true,"aria-labelledby":"liv2-results-heading"});
+  results.append(el("h2",{id:"liv2-results-heading",className:"liv2-results-title"},"Step 5 — Final profile"));
+
+  const review=el("section",{className:"liv2-panel","aria-labelledby":"liv2-review-heading"});
+  review.append(el("h3",{id:"liv2-review-heading"},"Profile review"));
   const reviewList=el("div",{className:"liv2-review-list"});
   review.append(reviewList);
 
-  const optimize=el("section",{className:"liv2-panel",hidden:true,"aria-labelledby":"liv2-optimize-heading"});
-  optimize.append(el("h2",{id:"liv2-optimize-heading"},"3. Optimize your profile"));
+  const optimize=el("section",{className:"liv2-panel","aria-labelledby":"liv2-optimize-heading"});
+  optimize.append(el("h3",{id:"liv2-optimize-heading"},"Optimized profile"));
   const sections=el("div",{className:"liv2-sections"});
   optimize.append(sections);
+  results.append(review,optimize);
 
-  root.append(privacy,details,starter,actions,review,optimize,status);
+  root.append(privacy,details,starter,existing,actionPanel,results,status);
 
   function syncInputControls(){
     mode.value=state.input.mode;
@@ -137,6 +160,12 @@ export function mountLinkedInTask3(root,options={}){
       if(isCatalogRole(restored))state=selectTargetRole(state,restored);
     }
     renderSelectedRole();
+    const hasExisting=Boolean(
+      state.input.industry||state.input.currentHeadline||state.input.currentAbout||
+      state.input.experienceText||state.input.skillsText||state.input.achievementsText||
+      state.input.professionalGoal||state.input.resumeText
+    );
+    existingDetails.open=hasExisting;
   }
   function syncStateFromControls(){
     state=updateInput(state,"mode",mode.value);
@@ -176,7 +205,30 @@ export function mountLinkedInTask3(root,options={}){
     if(active)inputs.targetRole.setAttribute("aria-activedescendant",active.id);
   }
 
+  function confirmedTargetRoleItems(){
+    return Object.values(state.starterPack?.sections||{}).flat().filter(item=>
+      item.state===STARTER_STATE.CONFIRMED&&item.source==="target_role"
+    );
+  }
+
+  function confirmRoleChange(record){
+    if(!state.roleSelection||state.roleSelection.id===record.id)return true;
+    const affected=confirmedTargetRoleItems();
+    if(!affected.length)return true;
+    const message="Changing target role will refresh unconfirmed role suggestions. "+affected.length+
+      " confirmed item"+(affected.length===1?"":"s")+" will be kept and marked for review. Continue?";
+    if(typeof options.confirmTargetRoleChange==="function")return options.confirmTargetRoleChange({message,affected,from:state.roleSelection,to:record})!==false;
+    if(typeof window!=="undefined"&&typeof window.confirm==="function")return window.confirm(message);
+    return false;
+  }
+
   function chooseRole(record){
+    if(!confirmRoleChange(record)){
+      status.textContent="Target role change cancelled. Your current confirmed information was kept.";
+      hideRoleList();
+      inputs.targetRole.value=state.roleSelection?.title||state.input.targetRole;
+      return;
+    }
     state=selectTargetRole(state,record);
     state={...state,starterPack:refreshRoleStarterPack(
       state.starterPack,record,state.input.mode,{currentRole:state.input.currentRole}
@@ -372,7 +424,7 @@ export function mountLinkedInTask3(root,options={}){
       card.append(el("strong",{},check.label),el("span",{className:"liv2-review-status"},check.status.replace("_"," ")),el("p",{},check.message));
       reviewList.append(card);
     }
-    review.hidden=false;
+    results.hidden=false;
   }
   function sectionCard(section,title,value,{counterMax=0,headlineChoices=false,skillNotice=""}={}){
     const card=el("article",{className:"liv2-section-card",dataset:{section}});
@@ -432,7 +484,7 @@ export function mountLinkedInTask3(root,options={}){
       sectionCard("experience","Experience",state.drafts.experience),
       sectionCard("skills","Skills",state.drafts.skills,{skillNotice:state.generated?.skills?.disclaimer||""})
     );
-    optimize.hidden=false;
+    results.hidden=false;
   }
 
   mode.addEventListener("change",()=>{
@@ -503,9 +555,15 @@ export function mountLinkedInTask3(root,options={}){
     if(result.ok&&result.state){
       state=result.state;
       syncInputControls();
-      review.hidden=true;
-      optimize.hidden=true;
-      status.textContent="Saved draft restored. Run Review & optimize to refresh suggestions.";
+      renderStarterPack();
+      if(state.generated||state.review){
+        renderReview();
+        renderSections();
+        status.textContent="Saved draft restored with your confirmed suggestions and optimized profile.";
+      }else{
+        results.hidden=true;
+        status.textContent="Saved draft restored.";
+      }
     }else status.textContent=result.ok?"No saved LinkedIn draft was found.":"Saved draft could not be restored.";
   });
   startNew.addEventListener("click",()=>{
@@ -528,6 +586,7 @@ export function mountLinkedInTask3(root,options={}){
     generate:()=>{syncStateFromControls();state=generateProfileSections(state);renderReview();renderSections();return state},
     save:()=>store.save(state),
     restore:()=>store.load(),
-    clearSaved:()=>store.clear()
+    clearSaved:()=>store.clear(),
+    selectRole:record=>{chooseRole(record);return state}
   };
 }
