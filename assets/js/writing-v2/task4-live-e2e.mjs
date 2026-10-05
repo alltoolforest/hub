@@ -54,7 +54,10 @@ async function run(browserName,browserType){
     const download=await downloadPromise;
     assert.equal(download.suggestedFilename(),"professional-writing.txt");
 
-    await page.locator("summary").filter({hasText:"Draft options"}).click().catch(()=>{});
+    const draftDetails=page.locator("details.pwa2-draft");
+    if(!(await draftDetails.evaluate(node=>node.open))){
+      await draftDetails.locator("summary").click();
+    }
     await page.getByRole("button",{name:"Clear saved draft"}).click();
     assert.equal(await page.evaluate(()=>localStorage.getItem("alltoolforest.professional-writing-v2.draft")),null);
 
