@@ -19,6 +19,7 @@ export function createTask3State(seed={}){
   return {
     version:"linkedin-v2-task3",
     input,
+    roleSelection:seed.roleSelection||null,
     generated:null,
     review:null,
     drafts:{
@@ -40,6 +41,7 @@ export function cloneTask3State(state){
   return {
     ...state,
     input:{...state.input},
+    roleSelection:state.roleSelection,
     generated:state.generated,
     review:state.review,
     drafts:{...state.drafts},
@@ -50,7 +52,17 @@ export function cloneTask3State(state){
 export function updateInput(state,field,value){
   if(!(field in state.input))throw new Error("Unsupported profile field.");
   const next=cloneTask3State(state);
-  next.input[field]=String(value??"");
+  const normalized=String(value??"");
+  next.input[field]=normalized;
+  if(field==="targetRole"&&next.roleSelection&&next.roleSelection.title!==normalized.trim())next.roleSelection=null;
+  return next;
+}
+
+export function selectTargetRole(state,roleRecord){
+  if(!roleRecord||typeof roleRecord.title!=="string"||!roleRecord.title.trim())throw new Error("A valid target role selection is required.");
+  const next=cloneTask3State(state);
+  next.input.targetRole=roleRecord.title.trim();
+  next.roleSelection=roleRecord;
   return next;
 }
 
