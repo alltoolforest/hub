@@ -1,6 +1,7 @@
 import { PROFILE_MODE } from "./contracts.js";
 import { generateOptimization } from "./task2-optimizer.js";
 import { reviewProfile } from "./task2-review.js";
+import { generateReworkedOptimization } from "./rework-task3-integration.js";
 
 export function createTask3State(seed={}){
   const input={
@@ -19,6 +20,9 @@ export function createTask3State(seed={}){
   return {
     version:"linkedin-v2-task3",
     input,
+    roleSelection:seed.roleSelection||null,
+    starterPack:seed.starterPack||null,
+    optimizationEvidence:null,
     generated:null,
     review:null,
     drafts:{
@@ -40,6 +44,9 @@ export function cloneTask3State(state){
   return {
     ...state,
     input:{...state.input},
+    roleSelection:state.roleSelection,
+    starterPack:state.starterPack,
+    optimizationEvidence:state.optimizationEvidence,
     generated:state.generated,
     review:state.review,
     drafts:{...state.drafts},
@@ -50,16 +57,39 @@ export function cloneTask3State(state){
 export function updateInput(state,field,value){
   if(!(field in state.input))throw new Error("Unsupported profile field.");
   const next=cloneTask3State(state);
-  next.input[field]=String(value??"");
+  const normalized=String(value??"");
+  next.input[field]=normalized;
+  if(field==="targetRole"&&next.roleSelection&&next.roleSelection.title!==normalized.trim())next.roleSelection=null;
+  return next;
+}
+
+export function selectTargetRole(state,roleRecord){
+  if(!roleRecord||typeof roleRecord.title!=="string"||!roleRecord.title.trim())throw new Error("A valid target role selection is required.");
+  const next=cloneTask3State(state);
+  next.input.targetRole=roleRecord.title.trim();
+  next.roleSelection=roleRecord;
   return next;
 }
 
 export function generateProfileSections(state){
   const next=cloneTask3State(state);
-  const generated=generateOptimization(next.input);
-  const review=reviewProfile(generated.foundation);
+  let generated;
+  let review;
+  let evidenceAudit=null;
+
+  if(next.starterPack&&(next.roleSelection||next.input.targetRole)){
+    const integrated=generateReworkedOptimization(next);
+    generated=integrated.generated;
+    review=integrated.review;
+    evidenceAudit=integrated.evidenceAudit;
+  }else{
+    generated=generateOptimization(next.input);
+    review=reviewProfile(generated.foundation);
+  }
+
   next.generated=generated;
   next.review=review;
+  next.optimizationEvidence=evidenceAudit;
 
   if(!next.dirty.headline)next.drafts.headline=generated.headlines[0]?.text||"";
   if(!next.dirty.about)next.drafts.about=generated.about.text||"";
