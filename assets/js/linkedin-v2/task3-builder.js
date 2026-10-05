@@ -1,7 +1,7 @@
 import { PROFILE_MODE } from "./contracts.js";
 import {
-  createTask3State,updateInput,selectTargetRole,generateProfileSections,applyHeadlineAlternative,
-  updateDraft,resetDraftToGenerated
+  createTask3State,updateInput,selectTargetRole,generateProfileSections,
+  applyHeadlineAlternative,updateDraft,resetDraftToGenerated
 } from "./task3-state.js";
 import { createLinkedInDraftStore } from "./task3-storage.js";
 import { LINKEDIN_PRIVACY_NOTICE } from "./task4-hardening.js";
@@ -9,10 +9,11 @@ import {
   searchLinkedInTargetRoles,createLinkedInRoleRecord,isCatalogRole
 } from "./rework-task1-role-adapter.js";
 import {
-  STARTER_STATE,STARTER_SECTION,STARTER_ITEM_MAX,refreshRoleStarterPack,
-  editStarterItem,setStarterItemConfirmed,addUserStarterItem,removeStarterItem
+  STARTER_STATE,STARTER_SECTION,refreshRoleStarterPack,
+  setStarterItemConfirmed,addUserStarterItem
 } from "./rework-task2-starter-pack.js";
 import { assessTargetRoleChange } from "./rework-task4-flow.js";
+import { getSimpleStarterOptions,validateSimpleBuild } from "./simplified-flow.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -27,9 +28,8 @@ function el(tag,attrs={},text=""){
 }
 function option(value,label){return el("option",{value},label)}
 function field(labelText,input,hint=""){
-  const wrap=el("div",{className:"liv2-field"});
-  const label=el("label",{htmlFor:input.id},labelText);
-  wrap.append(label,input);
+  const wrap=el("div",{className:"li-simple-field"});
+  wrap.append(el("label",{htmlFor:input.id},labelText),input);
   if(hint)wrap.append(el("small",{},hint));
   return wrap;
 }
@@ -47,143 +47,141 @@ export function mountLinkedInTask3(root,options={}){
   const store=createLinkedInDraftStore(browserStorage);
 
   root.replaceChildren();
-  root.classList.add("liv2-builder");
+  root.classList.add("li-simple");
 
-  const status=el("p",{className:"liv2-status",role:"status","aria-live":"polite"});
-  const privacy=el("div",{className:"liv2-privacy",role:"note"},LINKEDIN_PRIVACY_NOTICE);
+  const status=el("p",{className:"li-simple-status",role:"status","aria-live":"polite"});
+  const privacy=el("p",{className:"li-simple-privacy",role:"note"},LINKEDIN_PRIVACY_NOTICE);
 
-  const details=el("section",{className:"liv2-panel","aria-labelledby":"liv2-details-heading"});
-  details.append(
-    el("h2",{id:"liv2-details-heading"},"Step 1 — Tell us your direction"),
-    el("p",{className:"liv2-entry-intro"},"Choose your profile mode and target role first. If you are changing careers, add your current role so transferable suggestions can stay separate from target-role ideas.")
+  const setup=el("section",{className:"li-simple-card","aria-labelledby":"li-setup-heading"});
+  setup.append(
+    el("h2",{id:"li-setup-heading"},"Build your LinkedIn profile"),
+    el("p",{className:"li-simple-intro"},"Choose where you are in your career and the role you want. We’ll suggest what to include; you only select what is true about you.")
   );
 
-  const mode=el("select",{id:"liv2-mode"});
+  const mode=el("select",{id:"li-mode"});
   mode.append(
     option(PROFILE_MODE.FRESHER,"Fresher / Student"),
     option(PROFILE_MODE.EXPERIENCED,"Experienced"),
     option(PROFILE_MODE.CAREER_CHANGER,"Career changer")
   );
-  const inputs={
-    targetRole:el("input",{
-      id:"liv2-target-role",type:"text",maxLength:160,autocomplete:"off",spellcheck:false,
-      role:"combobox","aria-autocomplete":"list","aria-expanded":"false","aria-controls":"liv2-target-role-list"
-    }),
-    currentRole:el("input",{id:"liv2-current-role",type:"text",maxLength:160}),
-    industry:el("input",{id:"liv2-industry",type:"text",maxLength:160}),
-    currentHeadline:el("textarea",{id:"liv2-current-headline",rows:3,maxLength:500}),
-    currentAbout:el("textarea",{id:"liv2-current-about",rows:6,maxLength:12000}),
-    experienceText:el("textarea",{id:"liv2-experience",rows:7,maxLength:30000}),
-    skillsText:el("textarea",{id:"liv2-skills",rows:5,maxLength:12000}),
-    achievementsText:el("textarea",{id:"liv2-achievements",rows:5,maxLength:16000}),
-    professionalGoal:el("textarea",{id:"liv2-goal",rows:3,maxLength:3000}),
-    resumeText:el("textarea",{id:"liv2-resume",rows:6,maxLength:50000}),
+
+  const targetRole=el("input",{
+    id:"li-target-role",type:"text",maxLength:160,autocomplete:"off",spellcheck:false,
+    role:"combobox","aria-autocomplete":"list","aria-expanded":"false","aria-controls":"li-role-list"
+  });
+  const roleList=el("div",{id:"li-role-list",className:"li-role-list",role:"listbox",hidden:true});
+  const roleNote=el("small",{className:"li-role-note",hidden:true});
+  const roleField=field("Target role",targetRole,"Start typing and choose the closest role.");
+  roleField.append(roleList,roleNote);
+
+  const currentRole=el("input",{id:"li-current-role",type:"text",maxLength:160});
+  const currentRoleWrap=field("Current role",currentRole,"Used to find transferable strengths.");
+
+  setup.append(
+    field("Profile mode",mode),
+    roleField,
+    currentRoleWrap
+  );
+
+  const truth=el("section",{className:"li-simple-card",hidden:true,"aria-labelledby":"li-truth-heading"});
+  truth.append(
+    el("h2",{id:"li-truth-heading"},"What is true about you?"),
+    el("p",{className:"li-simple-intro"},"Tap only the skills and responsibilities that genuinely describe you. You can add your own too.")
+  );
+  const skillsBlock=el("div",{className:"li-choice-block"});
+  skillsBlock.append(el("h3",{},"Skills you have"));
+  const skillsChoices=el("div",{className:"li-choice-grid"});
+  const skillAdd=el("div",{className:"li-add-row"});
+  const skillInput=el("input",{type:"text",maxLength:200,placeholder:"Add your own skill","aria-label":"Add your own skill"});
+  const skillAddBtn=el("button",{type:"button"},"Add");
+  skillAdd.append(skillInput,skillAddBtn);
+  skillsBlock.append(skillsChoices,skillAdd);
+
+  const expBlock=el("div",{className:"li-choice-block"});
+  expBlock.append(
+    el("h3",{},"Responsibilities you’ve actually done"),
+    el("p",{className:"li-choice-hint"},"For career changes, some suggestions may come from your current role.")
+  );
+  const expChoices=el("div",{className:"li-choice-grid"});
+  const expAdd=el("div",{className:"li-add-row"});
+  const expInput=el("input",{type:"text",maxLength:500,placeholder:"Add your own responsibility","aria-label":"Add your own responsibility"});
+  const expAddBtn=el("button",{type:"button"},"Add");
+  expAdd.append(expInput,expAddBtn);
+  expBlock.append(expChoices,expAdd);
+
+  const achievement=el("textarea",{id:"li-achievement",rows:2,maxLength:1000,placeholder:"Example: Reduced repeat contacts by 12%"});
+  const achievementWrap=field("One achievement (optional)",achievement,"Only add something you can support with real evidence.");
+
+  truth.append(skillsBlock,expBlock,achievementWrap);
+
+  const more=el("details",{className:"li-more"});
+  const moreSummary=el("summary",{},"Already have a profile or want more control?");
+  const moreBody=el("div",{className:"li-more-body"});
+  const advanced={
+    industry:el("input",{id:"li-industry",type:"text",maxLength:160}),
+    currentHeadline:el("textarea",{id:"li-existing-headline",rows:2,maxLength:500}),
+    currentAbout:el("textarea",{id:"li-existing-about",rows:5,maxLength:12000}),
+    experienceText:el("textarea",{id:"li-existing-experience",rows:5,maxLength:30000}),
+    skillsText:el("textarea",{id:"li-existing-skills",rows:4,maxLength:12000}),
+    resumeText:el("textarea",{id:"li-resume",rows:5,maxLength:50000}),
   };
-  const targetRoleField=field(
-    "Target role",
-    inputs.targetRole,
-    "Type at least 2 characters, then choose the closest role. You can keep custom wording if no catalog role matches."
+  moreBody.append(
+    field("Industry / niche (optional)",advanced.industry),
+    field("Existing headline (optional)",advanced.currentHeadline),
+    field("Existing About section (optional)",advanced.currentAbout),
+    field("Existing experience (optional)",advanced.experienceText),
+    field("Existing skills (optional)",advanced.skillsText,"One skill per line."),
+    field("Resume text (optional)",advanced.resumeText)
   );
-  const roleList=el("div",{id:"liv2-target-role-list",className:"liv2-role-list",role:"listbox",hidden:true});
-  const selectedRoleNote=el("small",{className:"liv2-selected-role",hidden:true});
-  targetRoleField.append(roleList,selectedRoleNote);
-
-  details.append(
-    field("Profile mode",mode,"Choose the profile situation that best matches you."),
-    targetRoleField,
-    field("Current role (optional)",inputs.currentRole,"Especially useful for career changers so transferable experience can be suggested separately.")
-  );
-
-  const starter=el("section",{className:"liv2-panel liv2-starter-panel",hidden:true,"aria-labelledby":"liv2-starter-heading"});
-  starter.append(
-    el("h2",{id:"liv2-starter-heading"},"Step 2 — Build your profile content"),
-    el("p",{className:"liv2-entry-intro"},"These are ideas, not claims about you. Select only what is true, edit suggestions when needed, or add your own information.")
-  );
-  const starterSections=el("div",{className:"liv2-starter-sections"});
-  starter.append(starterSections);
-
-  const existing=el("section",{className:"liv2-panel","aria-labelledby":"liv2-existing-heading"});
-  existing.append(
-    el("h2",{id:"liv2-existing-heading"},"Step 3 — Optional existing profile"),
-    el("p",{className:"liv2-entry-intro"},"Already have LinkedIn content or a resume? Add it here only if you want it preserved as supporting evidence.")
-  );
-  const existingDetails=el("details",{className:"liv2-existing-details"});
-  const existingSummary=el("summary",{},"Add existing LinkedIn content or resume text");
-  const existingFields=el("div",{className:"liv2-existing-fields"});
-  existingFields.append(
-    field("Industry / niche (optional)",inputs.industry),
-    field("Existing LinkedIn headline (optional)",inputs.currentHeadline),
-    field("Existing About section (optional)",inputs.currentAbout),
-    field("Existing experience text (optional)",inputs.experienceText,"Paste existing LinkedIn experience if you already have it. Otherwise use the starter suggestions above."),
-    field("Existing skills (optional)",inputs.skillsText,"Enter one skill per line if you already have profile skills to preserve."),
-    field("Additional achievements / evidence (optional)",inputs.achievementsText,"Enter only outcomes you can support."),
-    field("Additional professional focus / next step (optional)",inputs.professionalGoal),
-    field("Optional: paste resume text",inputs.resumeText,"Use this only if you want resume information available as supporting evidence.")
-  );
-  existingDetails.append(existingSummary,existingFields);
-  existing.append(existingDetails);
-
-  const actionPanel=el("section",{className:"liv2-panel liv2-action-panel","aria-labelledby":"liv2-action-heading"});
-  actionPanel.append(
-    el("h2",{id:"liv2-action-heading"},"Step 4 — Review & Optimize"),
-    el("p",{className:"liv2-entry-intro"},"Only Confirmed and Added by you information can become factual profile claims. Unconfirmed suggestions stay excluded.")
-  );
-  const actions=el("div",{className:"liv2-actions"});
-  const generate=el("button",{type:"button"},"Review & optimize");
+  const draftActions=el("div",{className:"li-draft-actions"});
   const save=el("button",{type:"button"},"Save draft");
   const restore=el("button",{type:"button"},"Restore draft");
-  const startNew=el("button",{type:"button"},"Start new");
+  const startNew=el("button",{type:"button"},"Start over");
   const clearSaved=el("button",{type:"button"},"Clear saved data");
-  actions.append(generate,save,restore,startNew,clearSaved);
-  actionPanel.append(actions);
+  draftActions.append(save,restore,startNew,clearSaved);
+  moreBody.append(draftActions);
+  more.append(moreSummary,moreBody);
 
-  const results=el("section",{className:"liv2-results",hidden:true,"aria-labelledby":"liv2-results-heading"});
-  results.append(el("h2",{id:"liv2-results-heading",className:"liv2-results-title"},"Step 5 — Final profile"));
+  const build=el("button",{type:"button",className:"li-build"},"Build my LinkedIn profile");
 
-  const review=el("section",{className:"liv2-panel","aria-labelledby":"liv2-review-heading"});
-  review.append(el("h3",{id:"liv2-review-heading"},"Profile review"));
-  const reviewList=el("div",{className:"liv2-review-list"});
-  review.append(reviewList);
+  const results=el("section",{className:"li-results",hidden:true,"aria-labelledby":"li-results-heading"});
+  results.append(
+    el("h2",{id:"li-results-heading"},"Your LinkedIn profile"),
+    el("p",{className:"li-simple-intro"},"Edit anything you want, then copy each section into LinkedIn.")
+  );
+  const resultCards=el("div",{className:"li-result-cards"});
 
-  const optimize=el("section",{className:"liv2-panel","aria-labelledby":"liv2-optimize-heading"});
-  optimize.append(el("h3",{id:"liv2-optimize-heading"},"Optimized profile"));
-  const sections=el("div",{className:"liv2-sections"});
-  optimize.append(sections);
-  results.append(review,optimize);
+  const improve=el("details",{className:"li-improve"});
+  improve.append(el("summary",{},"Improve further"));
+  const improveBody=el("div",{className:"li-improve-body"});
+  const reviewList=el("div",{className:"li-review-list"});
+  improveBody.append(
+    el("p",{className:"li-choice-hint"},"Optional profile review and additional headline styles."),
+    reviewList
+  );
+  improve.append(improveBody);
+  results.append(resultCards,improve);
 
-  root.append(privacy,details,starter,existing,actionPanel,results,status);
+  root.append(privacy,setup,truth,more,build,results,status);
 
-  function syncInputControls(){
-    mode.value=state.input.mode;
-    Object.entries(inputs).forEach(([key,node])=>node.value=state.input[key]||"");
-    if(state.input.targetRole&&!state.roleSelection){
-      const restored=createLinkedInRoleRecord(state.input.targetRole);
-      if(isCatalogRole(restored))state=selectTargetRole(state,restored);
-    }
-    renderSelectedRole();
-    const hasExisting=Boolean(
-      state.input.industry||state.input.currentHeadline||state.input.currentAbout||
-      state.input.experienceText||state.input.skillsText||state.input.achievementsText||
-      state.input.professionalGoal||state.input.resumeText
-    );
-    existingDetails.open=hasExisting;
-  }
-  function syncStateFromControls(){
-    state=updateInput(state,"mode",mode.value);
-    for(const [key,node] of Object.entries(inputs))state=updateInput(state,key,node.value);
-  }
   let roleOptions=[];
   let activeRoleIndex=-1;
   let roleSelectionBeforeEdit=null;
+  let headlineCycleIndex=0;
 
-  function renderSelectedRole(){
+  function renderMode(){
+    currentRoleWrap.hidden=mode.value===PROFILE_MODE.FRESHER;
+    currentRole.required=mode.value===PROFILE_MODE.CAREER_CHANGER;
+  }
+
+  function renderRoleNote(){
     if(state.roleSelection){
-      selectedRoleNote.hidden=false;
-      selectedRoleNote.textContent="Selected role: "+state.roleSelection.title+" · "+
-        (isCatalogRole(state.roleSelection)?state.roleSelection.category:"Custom role");
+      roleNote.hidden=false;
+      roleNote.textContent="Selected: "+state.roleSelection.title+
+        (isCatalogRole(state.roleSelection)?" · "+state.roleSelection.category:" · Custom role");
     }else{
-      selectedRoleNote.hidden=true;
-      selectedRoleNote.textContent="";
+      roleNote.hidden=true;
+      roleNote.textContent="";
     }
   }
 
@@ -192,8 +190,8 @@ export function mountLinkedInTask3(root,options={}){
     roleList.replaceChildren();
     roleOptions=[];
     activeRoleIndex=-1;
-    inputs.targetRole.setAttribute("aria-expanded","false");
-    inputs.targetRole.removeAttribute("aria-activedescendant");
+    targetRole.setAttribute("aria-expanded","false");
+    targetRole.removeAttribute("aria-activedescendant");
   }
 
   function setActiveRole(index){
@@ -205,7 +203,13 @@ export function mountLinkedInTask3(root,options={}){
       node.classList.toggle("is-active",active);
     });
     const active=roleList.querySelector('[data-role-index="'+activeRoleIndex+'"]');
-    if(active)inputs.targetRole.setAttribute("aria-activedescendant",active.id);
+    if(active)targetRole.setAttribute("aria-activedescendant",active.id);
+  }
+
+  function confirmedRoleItems(){
+    return Object.values(state.starterPack?.sections||{}).flat().filter(item=>
+      item.state===STARTER_STATE.CONFIRMED&&item.source==="target_role"
+    );
   }
 
   function confirmRoleChange(record){
@@ -213,8 +217,8 @@ export function mountLinkedInTask3(root,options={}){
     if(!previous)return true;
     const impact=assessTargetRoleChange({...state,roleSelection:previous},record);
     if(!impact.requiresConfirmation)return true;
-    const message="Changing target role will refresh unconfirmed role suggestions. "+impact.affected.length+
-      " confirmed item"+(impact.affected.length===1?"":"s")+" will be kept and marked for review. Continue?";
+    const message="Changing target role will refresh suggestions. "+impact.affected.length+
+      " confirmed item"+(impact.affected.length===1?"":"s")+" will be kept for review. Continue?";
     if(typeof options.confirmTargetRoleChange==="function"){
       return options.confirmTargetRoleChange({message,affected:impact.affected,from:previous,to:record})!==false;
     }
@@ -227,12 +231,12 @@ export function mountLinkedInTask3(root,options={}){
       const previous=state.roleSelection||roleSelectionBeforeEdit;
       if(previous){
         state=selectTargetRole(state,previous);
-        inputs.targetRole.value=previous.title;
-        renderSelectedRole();
+        targetRole.value=previous.title;
       }
-      status.textContent="Target role change cancelled. Your current confirmed information was kept.";
-      hideRoleList();
       roleSelectionBeforeEdit=null;
+      renderRoleNote();
+      hideRoleList();
+      status.textContent="Target role change cancelled.";
       return;
     }
     state=selectTargetRole(state,record);
@@ -240,281 +244,201 @@ export function mountLinkedInTask3(root,options={}){
     state={...state,starterPack:refreshRoleStarterPack(
       state.starterPack,record,state.input.mode,{currentRole:state.input.currentRole}
     )};
-    inputs.targetRole.value=record.title;
-    setTargetRoleError();
-    renderSelectedRole();
+    targetRole.value=record.title;
+    renderRoleNote();
     hideRoleList();
-    renderStarterPack();
-    status.textContent=record.title+" selected. Role starter suggestions are ready.";
+    renderSimpleChoices();
+    truth.hidden=false;
+    status.textContent="Great. Now choose what is true about you.";
   }
 
   function renderRoleSuggestions(query){
     const value=String(query||"").trim();
     if(value.length<2){hideRoleList();return}
     roleOptions=[...searchLinkedInTargetRoles(value,8)];
+    if(!roleOptions.length)roleOptions=[createLinkedInRoleRecord(value)];
     roleList.replaceChildren();
-    activeRoleIndex=-1;
-    if(!roleOptions.length){
-      roleOptions=[createLinkedInRoleRecord(value)];
-    }
     roleOptions.forEach((record,index)=>{
       const item=el("div",{
-        id:"liv2-role-option-"+index,
-        className:"liv2-role-option",
-        role:"option",
-        "aria-selected":"false",
-        dataset:{roleIndex:String(index)}
+        id:"li-role-option-"+index,className:"li-role-option",role:"option",
+        "aria-selected":"false",dataset:{roleIndex:String(index)}
       });
       item.append(
         el("strong",{},record.title),
-        el("small",{},isCatalogRole(record)?record.category:"Use as a custom role")
+        el("small",{},isCatalogRole(record)?record.category:"Use as custom role")
       );
-      item.addEventListener("pointerdown",event=>{
-        event.preventDefault();
-        chooseRole(record);
-      });
+      item.addEventListener("pointerdown",event=>{event.preventDefault();chooseRole(record)});
       roleList.append(item);
     });
     roleList.hidden=false;
-    inputs.targetRole.setAttribute("aria-expanded","true");
+    targetRole.setAttribute("aria-expanded","true");
   }
 
-  const starterMeta=Object.freeze({
-    [STARTER_SECTION.HEADLINE]:{
-      title:"Current headline",
-      help:"Choose role or skill points that are genuinely true about you."
-    },
-    [STARTER_SECTION.ABOUT]:{
-      title:"Current About section",
-      help:"Choose the points you want your About section to cover. These prompts are guidance, not factual claims."
-    },
-    [STARTER_SECTION.EXPERIENCE]:{
-      title:"Experience text",
-      help:"Confirm only responsibilities you have actually performed."
-    },
-    [STARTER_SECTION.SKILLS]:{
-      title:"Current skills",
-      help:"Select only skills you genuinely have. Unselected skills remain suggestions."
-    },
-    [STARTER_SECTION.ACHIEVEMENTS]:{
-      title:"Achievements / evidence",
-      help:"Replace blanks with evidence you can support before confirming an achievement."
-    },
-    [STARTER_SECTION.PROFESSIONAL_FOCUS]:{
-      title:"Professional focus / next step",
-      help:"Choose or edit the direction statement that best matches your intent."
-    }
-  });
-
-  function starterBadge(item){
-    if(item.state===STARTER_STATE.USER_ENTERED)return "Added by you";
-    if(item.state===STARTER_STATE.CONFIRMED)return item.staleForTarget?"Confirmed · review for new target":"Confirmed";
-    return "Suggested";
-  }
-
-  function renderStarterItem(section,item){
-    const safeId=String(item.id).replace(/[^a-zA-Z0-9_-]/g,"-");
-    const statusId="liv2-starter-status-"+safeId;
-    const row=el("div",{className:"liv2-starter-item",dataset:{state:item.state}});
-    const main=el("div",{className:"liv2-starter-item-main"});
-    let checkbox=null;
-    if(item.state!==STARTER_STATE.USER_ENTERED){
-      checkbox=el("input",{
-        type:"checkbox",
-        checked:item.state===STARTER_STATE.CONFIRMED,
-        "aria-label":"Confirm "+starterMeta[section].title+" suggestion",
-        "aria-describedby":statusId
-      });
-      main.append(checkbox);
-    }else{
-      main.append(el("span",{className:"liv2-user-marker","aria-hidden":"true"},"+"));
-    }
-
-    const editor=(section===STARTER_SECTION.ABOUT||section===STARTER_SECTION.EXPERIENCE||section===STARTER_SECTION.PROFESSIONAL_FOCUS)
-      ? el("textarea",{rows:2,value:item.text,maxLength:STARTER_ITEM_MAX,"aria-label":starterMeta[section].title+" starter text","aria-describedby":statusId})
-      : el("input",{type:"text",value:item.text,maxLength:STARTER_ITEM_MAX,"aria-label":starterMeta[section].title+" starter text","aria-describedby":statusId});
-    const badge=el("span",{id:statusId,className:"liv2-starter-badge"},starterBadge(item));
-    const remove=el("button",{type:"button",className:"liv2-starter-remove","aria-label":"Remove this "+starterMeta[section].title+" item"},"Remove");
-
-    const textWrap=el("div",{className:"liv2-starter-text"});
-    textWrap.append(editor,badge);
-    if(item.requiresEdit)textWrap.append(el("small",{},"Edit this prompt into truthful information before confirming."));
-    main.append(textWrap,remove);
-    row.append(main);
-
-    editor.addEventListener("input",()=>{
-      state={...state,starterPack:editStarterItem(state.starterPack,section,item.id,editor.value)};
-      const updated=state.starterPack.sections[section].find(entry=>entry.id===item.id);
-      if(updated){
-        badge.textContent=starterBadge(updated);
-        if(checkbox)checkbox.checked=updated.state===STARTER_STATE.CONFIRMED;
-      }
+  function choice(item,section){
+    const label=el("label",{className:"li-choice",dataset:{state:item.state}});
+    const box=el("input",{
+      type:"checkbox",
+      checked:item.state===STARTER_STATE.CONFIRMED,
+      "aria-label":"Select "+item.text
     });
-    if(checkbox)checkbox.addEventListener("change",()=>{
+    const text=el("span",{},item.text);
+    label.append(box,text);
+    box.addEventListener("change",()=>{
       try{
-        state={...state,starterPack:setStarterItemConfirmed(state.starterPack,section,item.id,checkbox.checked)};
-        const updated=state.starterPack.sections[section].find(entry=>entry.id===item.id);
-        badge.textContent=starterBadge(updated);
-        row.dataset.state=updated.state;
-        status.textContent=updated.state===STARTER_STATE.CONFIRMED
-          ? starterMeta[section].title+" item confirmed."
-          : starterMeta[section].title+" item returned to Suggested.";
+        state={...state,starterPack:setStarterItemConfirmed(state.starterPack,section,item.id,box.checked)};
+        label.dataset.state=box.checked?STARTER_STATE.CONFIRMED:STARTER_STATE.SUGGESTED;
+        status.textContent=box.checked?"Added to your profile facts.":"Removed from your profile facts.";
       }catch(error){
-        checkbox.checked=false;
-        status.textContent=error.message||"Edit this suggestion before confirming it.";
+        box.checked=false;
+        status.textContent=error.message||"This item needs editing before it can be selected.";
       }
     });
-    remove.addEventListener("click",()=>{
-      state={...state,starterPack:removeStarterItem(state.starterPack,section,item.id)};
-      renderStarterPack();
-      status.textContent=starterMeta[section].title+" item removed.";
-    });
-    return row;
+    return label;
   }
 
-  function renderStarterPack(){
-    starterSections.replaceChildren();
-    const pack=state.starterPack;
-    if(!pack||!state.roleSelection){
-      starter.hidden=true;
-      return;
+  function renderSimpleChoices(){
+    skillsChoices.replaceChildren();
+    expChoices.replaceChildren();
+    if(!state.starterPack)return;
+    const simple=getSimpleStarterOptions(state.starterPack,state.input.mode);
+    simple.skills.forEach(item=>skillsChoices.append(choice(item,STARTER_SECTION.SKILLS)));
+    simple.experience.forEach(item=>expChoices.append(choice(item,STARTER_SECTION.EXPERIENCE)));
+  }
+
+  function addOwn(section,input){
+    const text=input.value.trim();
+    if(!text)return;
+    state={...state,starterPack:addUserStarterItem(state.starterPack,section,text)};
+    input.value="";
+    renderSimpleChoices();
+    status.textContent="Your information was added.";
+  }
+
+  function syncPrimary(){
+    state=updateInput(state,"mode",mode.value);
+    state=updateInput(state,"currentRole",currentRole.value);
+    state=updateInput(state,"achievementsText",achievement.value);
+  }
+
+  function syncAdvanced(){
+    for(const [key,node] of Object.entries(advanced))state=updateInput(state,key,node.value);
+  }
+
+  function syncControlsFromState(){
+    mode.value=state.input.mode;
+    currentRole.value=state.input.currentRole||"";
+    targetRole.value=state.input.targetRole||"";
+    achievement.value=state.input.achievementsText||"";
+    Object.entries(advanced).forEach(([key,node])=>node.value=state.input[key]||"");
+    if(state.input.targetRole&&!state.roleSelection){
+      const restored=createLinkedInRoleRecord(state.input.targetRole);
+      state=selectTargetRole(state,restored);
     }
-    for(const section of Object.values(STARTER_SECTION)){
-      const meta=starterMeta[section];
-      const card=el("article",{className:"liv2-starter-section",dataset:{section}});
-      card.append(el("h3",{},meta.title),el("p",{className:"liv2-starter-help"},meta.help));
-      const items=pack.sections[section]||[];
-      if(section===STARTER_SECTION.EXPERIENCE){
-        const targetItems=items.filter(item=>item.group!=="transferable_current_role");
-        const transferItems=items.filter(item=>item.group==="transferable_current_role");
-        const targetWrap=el("div",{className:"liv2-starter-list"});
-        targetItems.forEach(item=>targetWrap.append(renderStarterItem(section,item)));
-        card.append(el("h4",{},"Target-role responsibility ideas"),targetWrap);
-        if(transferItems.length){
-          const transferWrap=el("div",{className:"liv2-starter-list"});
-          transferItems.forEach(item=>transferWrap.append(renderStarterItem(section,item)));
-          card.append(
-            el("h4",{},"Transferable ideas from your current role"),
-            el("p",{className:"liv2-starter-help"},"These come from the current role you entered and stay separate from target-role responsibilities."),
-            transferWrap
-          );
-        }
-      }else{
-        const list=el("div",{className:"liv2-starter-list"});
-        items.forEach(item=>list.append(renderStarterItem(section,item)));
-        card.append(list);
-      }
-      const add=el("button",{type:"button",className:"liv2-starter-add"},"Add your own");
-      add.addEventListener("click",()=>{
-        state={...state,starterPack:addUserStarterItem(state.starterPack,section,"")};
-        renderStarterPack();
-        const cardNow=starterSections.querySelector('[data-section="'+section+'"]');
-        const editors=cardNow?.querySelectorAll(".liv2-starter-item input[type=text],.liv2-starter-item textarea");
-        editors?.[editors.length-1]?.focus();
-      });
-      card.append(add);
-      starterSections.append(card);
-    }
-    starter.hidden=false;
+    renderMode();
+    renderRoleNote();
+    renderSimpleChoices();
+    truth.hidden=!state.roleSelection;
   }
 
-  function refreshStarterContext(){
-    if(!state.roleSelection)return;
-    state={...state,starterPack:refreshRoleStarterPack(
-      state.starterPack,state.roleSelection,state.input.mode,{currentRole:state.input.currentRole}
-    )};
-    renderStarterPack();
-  }
-
-  function renderReview(){
+  function reviewCards(){
     reviewList.replaceChildren();
     for(const check of state.review?.checks||[]){
-      const card=el("div",{className:"liv2-review-item",dataset:{status:check.status}});
-      card.append(el("strong",{},check.label),el("span",{className:"liv2-review-status"},check.status.replace("_"," ")),el("p",{},check.message));
-      reviewList.append(card);
+      const row=el("div",{className:"li-review-row",dataset:{status:check.status}});
+      row.append(el("strong",{},check.label),el("span",{},check.status.replace("_"," ")),el("p",{},check.message));
+      reviewList.append(row);
     }
-    results.hidden=false;
-  }
-  function sectionCard(section,title,value,{counterMax=0,headlineChoices=false,skillNotice=""}={}){
-    const card=el("article",{className:"liv2-section-card",dataset:{section}});
-    const head=el("div",{className:"liv2-section-head"});
-    head.append(el("h3",{},title));
-    const copyBtn=el("button",{type:"button"},"Copy");
-    head.append(copyBtn);
-    const textareaId="liv2-draft-"+section;
-    const counterId=textareaId+"-counter";
-    const textarea=el("textarea",{id:textareaId,rows:section==="about"?10:section==="experience"?9:6,value});
-    textarea.setAttribute("aria-label",title+" optimized wording");
-    const counter=el("small",{id:counterId,className:"liv2-counter"});
-    if(counterMax){
-      counter.textContent=textarea.value.length+" / "+counterMax+" characters";
-      textarea.setAttribute("aria-describedby",counterId);
-    }
-
-    if(headlineChoices&&state.generated){
-      const chooser=el("div",{className:"liv2-headline-choices","aria-label":"Headline alternatives"});
+    if(state.generated?.headlines?.length>1){
+      const alt=el("div",{className:"li-alt-headlines"});
+      alt.append(el("strong",{},"Other headline styles"));
       state.generated.headlines.forEach(item=>{
         const btn=el("button",{type:"button"},item.label);
         btn.addEventListener("click",()=>{
           state=applyHeadlineAlternative(state,item.id);
-          renderSections();
+          renderResults();
           status.textContent=item.label+" headline selected.";
         });
-        chooser.append(btn);
+        alt.append(btn);
       });
-      card.append(head,chooser,textarea,counter);
-    }else card.append(head,textarea,counter);
+      improveBody.append(alt);
+    }
+  }
 
-    if(skillNotice)card.append(el("p",{className:"liv2-skill-notice"},skillNotice));
-
-    const reset=el("button",{type:"button",className:"liv2-reset"},"Reset to suggestion");
-    card.append(reset);
-
-    textarea.addEventListener("input",()=>{
-      state=updateDraft(state,section,textarea.value);
-      if(counterMax)counter.textContent=textarea.value.length+" / "+counterMax+" characters";
-    });
+  function resultCard(section,title,rows=6,maxLength=0){
+    const card=el("article",{className:"li-result-card"});
+    const head=el("div",{className:"li-result-head"});
+    head.append(el("h3",{},title));
+    const actions=el("div",{className:"li-result-actions"});
+    const editBtn=el("button",{type:"button"},"Edit");
+    const copyBtn=el("button",{type:"button"},"Copy");
+    const regenBtn=el("button",{type:"button"},"Regenerate");
+    actions.append(editBtn,copyBtn,regenBtn);
+    head.append(actions);
+    const area=el("textarea",{rows,value:state.drafts[section]||""});
+    if(maxLength)area.maxLength=maxLength;
+    area.setAttribute("aria-label",title+" draft");
+    area.addEventListener("input",()=>{state=updateDraft(state,section,area.value)});
+    editBtn.addEventListener("click",()=>area.focus());
     copyBtn.addEventListener("click",async()=>{
-      const result=await copyText(textarea.value,options.clipboard);
+      const result=await copyText(area.value,options.clipboard);
       status.textContent=result.ok?title+" copied.":"Copy is unavailable in this browser.";
     });
-    reset.addEventListener("click",()=>{
-      state=resetDraftToGenerated(state,section);
-      renderSections();
-      status.textContent=title+" reset to generated suggestion.";
+    regenBtn.addEventListener("click",()=>{
+      if(section==="headline"&&state.generated?.headlines?.length){
+        headlineCycleIndex=(headlineCycleIndex+1)%state.generated.headlines.length;
+        state=applyHeadlineAlternative(state,state.generated.headlines[headlineCycleIndex].id);
+      }else{
+        state=resetDraftToGenerated(state,section);
+      }
+      renderResults();
+      status.textContent=title+" regenerated.";
     });
+    card.append(head,area);
     return card;
   }
-  function renderSections(){
-    sections.replaceChildren();
-    sections.append(
-      sectionCard("headline","Headline",state.drafts.headline,{counterMax:220,headlineChoices:true}),
-      sectionCard("about","About",state.drafts.about,{counterMax:2600}),
-      sectionCard("experience","Experience",state.drafts.experience),
-      sectionCard("skills","Skills",state.drafts.skills,{skillNotice:state.generated?.skills?.disclaimer||""})
+
+  function renderResults(){
+    resultCards.replaceChildren();
+    resultCards.append(
+      resultCard("headline","Headline",3,220),
+      resultCard("about","About",9,2600),
+      resultCard("experience","Experience",8),
+      resultCard("skills","Skills",6)
     );
+    reviewCards();
     results.hidden=false;
   }
 
   mode.addEventListener("change",()=>{
     state=updateInput(state,"mode",mode.value);
-    refreshStarterContext();
+    renderMode();
+    if(state.roleSelection){
+      state={...state,starterPack:refreshRoleStarterPack(
+        state.starterPack,state.roleSelection,state.input.mode,{currentRole:currentRole.value}
+      )};
+      renderSimpleChoices();
+    }
   });
-  Object.entries(inputs).forEach(([key,node])=>node.addEventListener("input",()=>{
-    if(key==="targetRole"&&state.roleSelection&&node.value.trim()!==state.roleSelection.title){
-      roleSelectionBeforeEdit=state.roleSelection;
+
+  currentRole.addEventListener("input",()=>{
+    state=updateInput(state,"currentRole",currentRole.value);
+  });
+  currentRole.addEventListener("change",()=>{
+    if(state.roleSelection){
+      state={...state,starterPack:refreshRoleStarterPack(
+        state.starterPack,state.roleSelection,state.input.mode,{currentRole:currentRole.value}
+      )};
+      renderSimpleChoices();
     }
-    state=updateInput(state,key,node.value);
-    if(key==="targetRole"){
-      renderSelectedRole();
-      renderRoleSuggestions(node.value);
-      if(node.value.trim())setTargetRoleError();
-      if(!state.roleSelection)starter.hidden=true;
-    }
-  }));
-  inputs.targetRole.addEventListener("keydown",event=>{
+  });
+
+  targetRole.addEventListener("input",()=>{
+    if(state.roleSelection&&targetRole.value.trim()!==state.roleSelection.title)roleSelectionBeforeEdit=state.roleSelection;
+    state=updateInput(state,"targetRole",targetRole.value);
+    renderRoleSuggestions(targetRole.value);
+  });
+  targetRole.addEventListener("keydown",event=>{
     if(event.key==="ArrowDown"){
-      if(roleList.hidden)renderRoleSuggestions(inputs.targetRole.value);
+      if(roleList.hidden)renderRoleSuggestions(targetRole.value);
       if(roleOptions.length){event.preventDefault();setActiveRole(activeRoleIndex<0?0:activeRoleIndex+1)}
     }else if(event.key==="ArrowUp"&&roleOptions.length){
       event.preventDefault();setActiveRole(activeRoleIndex<=0?roleOptions.length-1:activeRoleIndex-1);
@@ -524,81 +448,69 @@ export function mountLinkedInTask3(root,options={}){
       hideRoleList();
     }
   });
-  inputs.targetRole.addEventListener("blur",()=>setTimeout(hideRoleList,0));
-  inputs.currentRole.addEventListener("change",()=>refreshStarterContext());
+  targetRole.addEventListener("blur",()=>setTimeout(hideRoleList,0));
 
-  const targetError=el("small",{id:"liv2-target-role-error",className:"liv2-field-error",role:"alert",hidden:true});
-  inputs.targetRole.setAttribute("aria-describedby","liv2-target-role-error");
-  details.insertBefore(targetError,inputs.targetRole.closest(".liv2-field")?.nextSibling||null);
+  skillAddBtn.addEventListener("click",()=>addOwn(STARTER_SECTION.SKILLS,skillInput));
+  skillInput.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();addOwn(STARTER_SECTION.SKILLS,skillInput)}});
+  expAddBtn.addEventListener("click",()=>addOwn(STARTER_SECTION.EXPERIENCE,expInput));
+  expInput.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();addOwn(STARTER_SECTION.EXPERIENCE,expInput)}});
 
-  function setTargetRoleError(message=""){
-    if(message){
-      targetError.textContent=message;
-      targetError.hidden=false;
-      inputs.targetRole.setAttribute("aria-invalid","true");
-    }else{
-      targetError.textContent="";
-      targetError.hidden=true;
-      inputs.targetRole.removeAttribute("aria-invalid");
-    }
-  }
-
-  generate.addEventListener("click",()=>{
+  build.addEventListener("click",()=>{
     try{
-      setTargetRoleError();
-      syncStateFromControls();
+      syncPrimary();
+      syncAdvanced();
+      const check=validateSimpleBuild(state);
+      if(!check.ok){status.textContent=check.message;return}
       state=generateProfileSections(state);
-      renderReview();
-      renderSections();
-      status.textContent="Profile review and optimization suggestions are ready using confirmed and user-entered information.";
+      renderResults();
+      results.scrollIntoView?.({behavior:"smooth",block:"start"});
+      status.textContent="Your LinkedIn profile is ready.";
     }catch(error){
-      const message=error.message||"Unable to optimize this profile.";
-      if(/target role/i.test(message))setTargetRoleError(message);
-      status.textContent=message;
+      status.textContent=error.message||"Unable to build your profile.";
     }
   });
+
   save.addEventListener("click",()=>{
-    syncStateFromControls();
+    syncPrimary();syncAdvanced();
     const result=store.save(state);
-    status.textContent=result.ok?"Draft saved in this browser.":"Draft could not be saved in this browser.";
+    status.textContent=result.ok?"Draft saved in this browser.":"Draft could not be saved.";
   });
   restore.addEventListener("click",()=>{
     const result=store.load();
     if(result.ok&&result.state){
       state=result.state;
-      syncInputControls();
-      renderStarterPack();
-      if(state.generated||state.review){
-        renderReview();
-        renderSections();
-        status.textContent="Saved draft restored with your confirmed suggestions and optimized profile.";
-      }else{
-        results.hidden=true;
-        status.textContent="Saved draft restored.";
-      }
-    }else status.textContent=result.ok?"No saved LinkedIn draft was found.":"Saved draft could not be restored.";
+      syncControlsFromState();
+      if(state.generated||state.review)renderResults(); else results.hidden=true;
+      status.textContent="Saved draft restored.";
+    }else status.textContent=result.ok?"No saved draft was found.":"Saved draft could not be restored.";
   });
   startNew.addEventListener("click",()=>{
     state=createTask3State();
-    syncInputControls();
-    review.hidden=true;
-    optimize.hidden=true;
-    status.textContent="Started a new profile draft. Saved browser data was not deleted.";
+    roleSelectionBeforeEdit=null;
+    headlineCycleIndex=0;
+    hideRoleList();
+    syncControlsFromState();
+    results.hidden=true;
+    status.textContent="Started a new profile.";
   });
   clearSaved.addEventListener("click",()=>{
     const result=store.clear();
-    status.textContent=result.ok?"Saved LinkedIn draft cleared from this browser.":"Saved draft could not be cleared.";
+    status.textContent=result.ok?"Saved draft cleared.":"Saved draft could not be cleared.";
   });
 
-  syncInputControls();
-  renderStarterPack();
+  syncControlsFromState();
 
   return {
     getState:()=>state,
-    generate:()=>{syncStateFromControls();state=generateProfileSections(state);renderReview();renderSections();return state},
+    build:()=>{
+      syncPrimary();syncAdvanced();
+      const check=validateSimpleBuild(state);
+      if(!check.ok)throw new Error(check.message);
+      state=generateProfileSections(state);renderResults();return state;
+    },
     save:()=>store.save(state),
     restore:()=>store.load(),
     clearSaved:()=>store.clear(),
-    selectRole:record=>{chooseRole(record);return state}
+    selectRole:record=>{chooseRole(record);return state},
   };
 }
