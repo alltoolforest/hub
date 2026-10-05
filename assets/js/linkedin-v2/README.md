@@ -281,3 +281,23 @@ Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
 The guided LinkedIn Profile Helper rework passed final hardening, P0/P1 pre-deployment audit, production replacement, production source audit and final automated regression.
 
 Manual real-browser/device verification remains required before the tool can be marked **PRODUCTION VERIFIED → FROZEN**.
+
+
+## Simplified guided flow
+
+The production UI was simplified after manual testing showed that the full six-section starter workflow was cognitively heavy.
+
+Primary flow:
+
+1. Profile mode
+2. Target role
+3. Select truthful skills and responsibilities
+4. Optional single achievement
+5. Build my LinkedIn profile
+6. Final output cards: Headline, About, Experience, Skills
+
+Advanced information, existing profile text, resume text, draft controls, profile review, and alternate headline styles remain available through progressive-disclosure sections instead of appearing in the primary path.
+
+The underlying role intelligence, Suggested/Confirmed/User-entered evidence model, truthfulness safeguards, optimizer, persistence, and Resume Studio role engine remain unchanged.
+
+Final Skills output now contains only supported/confirmed skills. Additional unconfirmed role suggestions remain in the selection step rather than being repeated in the final output.
