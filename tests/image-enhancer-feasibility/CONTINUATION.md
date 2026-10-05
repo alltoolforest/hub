@@ -105,3 +105,34 @@ does not establish model feasibility, license rights or physical-device access.
 Regression risk: low for production because changes are isolated diagnostics and
 Task 3 contracts. No production, protected UI, frozen tool or existing test changed.
 Existing completed audits were not rerun. No merge, deployment or freeze.
+
+## Guarded continuation checkpoint — 5 October 2026
+
+Continued from remote PR #120 `190f8cf071c3dae6dd74c8a1bf02eb62e2c2f4be`
+(local equivalent `ea31f67`). See `../image-enhancer-cleanup/README.md` and
+`results.json`: the WDN experiment now runs through the isolated orchestrator,
+existing face protection and final artifact guard. Six photographic cases and
+ten lifecycle/negative cases passed, plus twelve orchestration tests. Four
+noisy/JPEG outputs improved paired-reference error; both clean images bypassed
+all models. Two portrait cases needed final-guard intervention. No human quality,
+identity, phone-editor comparison, full-resolution or physical-device pass.
+
+GFPGAN clean architecture's actual StyleGAN2 import was confirmed at the pinned
+source. Exact third-party/code/weight clearance remains unresolved; it is held,
+not silently treated as cleared by the top-level Apache label. The machine-readable
+scorecard now reflects the previously completed SR export checks and WDN trial.
+
+The private intake contains 93 screened candidates, not 93 approved benchmark
+members. Rights/diversity/recoverability review, required damaged-photo cohorts,
+100 admitted originals, fixed splits and baseline captures are still pending.
+Do not repeat collection or count provisional candidates as an acceptance set.
+
+Tasks 4–12 remain unfinished. Task 4 has an isolated guarded adapter; Tasks 5–10
+still depend on the Task 2 capability/rights/runtime gate and fixed Task 1 corpus.
+Tasks 11–12 cannot pass ahead of their implementation and acceptance dependencies.
+Per Task 2's explicit stop condition, no production capability is selected merely
+to advance the task count. The next dependency work is corpus admission plus
+remaining specialist-model feasibility, then representative device measurements.
+No production file, protected UI, existing safety threshold or unrelated tool was
+modified. Production regression risk is low; the experiment itself is not release
+ready. No merge, deployment or freeze is represented by this checkpoint.

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "checkedAt": "2026-10-04",
+  "checkedAt": "2026-10-05",
   "baseline": "92d05302002e12924fab766b784cda2ea97d3f37",
   "task1Ready": false,
   "architectureDecision": "deferred",
@@ -56,7 +56,7 @@
       },
       "note": "Current compact x4 comparator. Historical browser inference exists; not a winner by default. Tag/hash is not source conversion parity evidence.",
       "weightRights": "unverified",
-      "conversionParity": "not-tested",
+      "conversionParity": "sampled parity passed after reproducing FP16 rounding and output clipping; see existing-export-audit.json",
       "operatorAudit": "executed on ORT1.30 single-thread Node WASM at 64x64; other shapes/backends unverified",
       "deviceRuns": [],
       "diagnosticEvidence": "realesr-probe.json"
@@ -69,12 +69,19 @@
       ],
       "codeLicense": "BSD-3-Clause",
       "status": "hold",
-      "artifact": null,
-      "note": "Small WDN companion shortlist; no exact ONNX artifact admitted. Evaluate both texture preservation and JPEG edges; do not assume denoise training proves deblocking.",
+      "artifact": {
+        "name": "Isolated official WDN ONNX export",
+        "sha256": "2a2ee04b4a6436c8da3bb2b7346f72fbca7ca1aa90e075308f3f1ed9035416a3",
+        "bytes": 4866419,
+        "scale": 4,
+        "redistribution": "not approved; local evaluation only"
+      },
+      "note": "Isolated guarded cleanup trial completed on two public sources; four degraded cases improved pixel error. Text/alpha/grayscale/detector-absence withheld. No category or release acceptance.",
       "weightRights": "unverified",
-      "conversionParity": "not-tested",
-      "operatorAudit": "not-tested",
-      "deviceRuns": []
+      "conversionParity": "three sampled PyTorch/ONNX shape comparisons passed; cleanup-trial-results.json",
+      "operatorAudit": "executed in single-thread ORT1.30 Node WASM; browser/device gate remains open",
+      "deviceRuns": [],
+      "diagnosticEvidence": "../image-enhancer-cleanup/results.json"
     },
     {
       "id": "restormer",
@@ -99,7 +106,7 @@
       "codeLicense": "Apache-2.0 with third-party exceptions",
       "status": "hold",
       "artifact": null,
-      "note": "V1.3 clean-architecture research candidate; upstream LICENSE includes restricted third-party components. Resolve exact dependency path and checkpoint rights before export; identity not verified.",
+      "note": "Pinned clean architecture imports StyleGAN2GeneratorClean. Clean removes custom CUDA extensions, not the unresolved third-party rights issue. Exact implementation/weight applicability and identity gates remain open; no blanket commercial clearance or prohibition asserted.",
       "weightRights": "unverified",
       "conversionParity": "not-tested",
       "operatorAudit": "not-tested",
