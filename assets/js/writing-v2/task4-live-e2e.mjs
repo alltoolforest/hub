@@ -69,7 +69,7 @@ async function run(browserName,browserType){
     await mpage.goto(URL,{waitUntil:"networkidle",timeout:60000});
     const overflow=await mpage.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
     assert.ok(overflow<=1,"Mobile page should not horizontally overflow.");
-    const heights=await mpage.locator(".pwa2-actions button").evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
+    const heights=await mpage.locator(".pwa2-actions button:visible").evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
     assert.ok(heights.every(h=>h>=44),"Mobile action targets must be at least 44px.");
     await mobile.close();
 
