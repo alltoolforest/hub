@@ -12,6 +12,7 @@ import {
   STARTER_STATE,STARTER_SECTION,refreshRoleStarterPack,
   editStarterItem,setStarterItemConfirmed,addUserStarterItem,removeStarterItem
 } from "./rework-task2-starter-pack.js";
+import { assessTargetRoleChange } from "./rework-task4-flow.js";
 
 function el(tag,attrs={},text=""){
   const node=document.createElement(tag);
@@ -207,20 +208,16 @@ export function mountLinkedInTask3(root,options={}){
     if(active)inputs.targetRole.setAttribute("aria-activedescendant",active.id);
   }
 
-  function confirmedTargetRoleItems(){
-    return Object.values(state.starterPack?.sections||{}).flat().filter(item=>
-      item.state===STARTER_STATE.CONFIRMED&&item.source==="target_role"
-    );
-  }
-
   function confirmRoleChange(record){
     const previous=state.roleSelection||roleSelectionBeforeEdit;
-    if(!previous||previous.id===record.id)return true;
-    const affected=confirmedTargetRoleItems();
-    if(!affected.length)return true;
-    const message="Changing target role will refresh unconfirmed role suggestions. "+affected.length+
-      " confirmed item"+(affected.length===1?"":"s")+" will be kept and marked for review. Continue?";
-    if(typeof options.confirmTargetRoleChange==="function")return options.confirmTargetRoleChange({message,affected,from:previous,to:record})!==false;
+    if(!previous)return true;
+    const impact=assessTargetRoleChange({...state,roleSelection:previous},record);
+    if(!impact.requiresConfirmation)return true;
+    const message="Changing target role will refresh unconfirmed role suggestions. "+impact.affected.length+
+      " confirmed item"+(impact.affected.length===1?"":"s")+" will be kept and marked for review. Continue?";
+    if(typeof options.confirmTargetRoleChange==="function"){
+      return options.confirmTargetRoleChange({message,affected:impact.affected,from:previous,to:record})!==false;
+    }
     if(typeof window!=="undefined"&&typeof window.confirm==="function")return window.confirm(message);
     return false;
   }
