@@ -342,6 +342,7 @@ export function mountLinkedInTask3(root,options={}){
 
   function reviewCards(){
     reviewList.replaceChildren();
+    improveBody.querySelectorAll(".li-alt-headlines").forEach(node=>node.remove());
     for(const check of state.review?.checks||[]){
       const row=el("div",{className:"li-review-row",dataset:{status:check.status}});
       row.append(el("strong",{},check.label),el("span",{},check.status.replace("_"," ")),el("p",{},check.message));
