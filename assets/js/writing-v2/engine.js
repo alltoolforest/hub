@@ -290,6 +290,7 @@ function restore(text,map){
 }
 function professionalize(text){
   return text
+    .replace(/^\s*(?:hi|hey)\b/i,"Hello")
     .replace(/\bpls\b/gi,"please")
     .replace(/\bplz\b/gi,"please")
     .replace(/\bthx\b/gi,"thank you")
@@ -330,7 +331,7 @@ function improveText(existingText,objective){
   if(objective===IMPROVEMENT.CONCISE)out=removeFiller(clearer(out));
   if(objective===IMPROVEMENT.WARMER){
     out=clearer(out);
-    if(!/^thank you/i.test(out))out="Thank you for your message.\n\n"+out;
+    if(!/thank you/i.test(out))out+="\n\nThank you for your time.";
   }
   if(objective===IMPROVEMENT.DIPLOMATIC){
     out=clearer(out)
