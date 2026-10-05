@@ -176,8 +176,8 @@ export function mountProfessionalWritingTask2(root,options={}){
   const senderName=el("input",{id:"pwa2-sender-name",type:"text",maxLength:fieldLimit("senderName"),autocomplete:"name"});
   advancedFields.append(
     simpleField("Length",length),
-    simpleField("Recipient name (optional)",recipient),
-    simpleField("Your name (optional)",senderName)
+    createValidatedField("recipient","Recipient name (optional)",recipient),
+    createValidatedField("senderName","Your name (optional)",senderName)
   );
   const dynamicAdvanced=el("div",{className:"pwa2-fields"});
   advancedBody.append(advancedFields,dynamicAdvanced);
@@ -273,11 +273,12 @@ export function mountProfessionalWritingTask2(root,options={}){
   function renderMessageFields(){
     primaryFields.replaceChildren();
     dynamicAdvanced.replaceChildren();
+    const staticKeys=new Set(["existingText","recipient","senderName"]);
     for(const key of [...controls.keys()]){
-      if(key!=="existingText")controls.delete(key);
+      if(!staticKeys.has(key))controls.delete(key);
     }
     for(const key of [...errors.keys()]){
-      if(key!=="existingText")errors.delete(key);
+      if(!staticKeys.has(key))errors.delete(key);
     }
     for(const spec of MESSAGE_FIELDS[state.write.messageType]){
       const wrap=fieldNode(spec);
