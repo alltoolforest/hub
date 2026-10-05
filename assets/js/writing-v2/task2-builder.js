@@ -311,7 +311,11 @@ export function mountProfessionalWritingTask2(root,options={}){
         if(!first)first=node;
       }
     }
-    first?.focus();
+    if(first){
+      const details=first.closest?.("details");
+      if(details)details.open=true;
+      first.focus();
+    }
   }
 
   function syncStaticControls(){
