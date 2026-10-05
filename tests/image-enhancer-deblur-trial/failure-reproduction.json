@@ -1,0 +1,79 @@
+{
+  "tasks": [
+    4,
+    5
+  ],
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "model": "Existing pinned NAFNet GoPro width32 FP16",
+  "scope": "Diagnostic comparison of reconstruction, unchanged PR117 fusion and final guard; not complete production finishing or browser execution",
+  "limitations": [
+    "1 synthetic cases on public development sources; no held-out/human quality gate",
+    "NASA inputs remain private development candidates; no production/marketing usage clearance inferred",
+    "Motion is horizontal box blur, defocus disk radius2; not real camera damage",
+    "Small preview images, manual portrait box, no automated text/detector verification",
+    "WDN evaluated before blur for both isolated and mixed damage; not automatically selected",
+    "No weights distributed, no NAFNet conversion-parity claim"
+  ],
+  "summary": {
+    "comparisons": 1,
+    "cleanupBetter": 0,
+    "cleanupWorse": 1,
+    "cleanupTie": 0
+  },
+  "rows": [
+    {
+      "id": "nasa-088",
+      "condition": "motion",
+      "sourceHash": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputHash": "fb0cfb52ff8f5df785bd789e07d9a0c19fa515db69ab36abba4da5a7615e3604",
+      "inputMae": 11.814399509803922,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 10.879656862745097,
+              "numericalAdmission": "accepted"
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 10.88719362745098
+            },
+            {
+              "name": "final-guard",
+              "mae": 10.88719362745098
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "9d0f326f5600a0c649a1bc1e88a5ae9a800dbb313755592d3051ff35c2715f8f"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 13.000030637254902
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 133.30723039215687,
+              "numericalAdmission": "rejected:Deblur model returned unstable pixel values."
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 110.41979166666667
+            },
+            {
+              "name": "final-guard",
+              "mae": 34.82671568627451
+            }
+          ],
+          "guardStages": 5,
+          "outputHash": "a1951023601fd878adbcc1d6430d4eaea6b5ed81686a1ce667cd652e3e98f734"
+        }
+      ]
+    }
+  ]
+}
