@@ -104,10 +104,10 @@ const ACTION_START=/^(led|managed|built|created|delivered|resolved|supported|han
 function strengthenLine(line){
   let text=clean(line).replace(/^[•-]\s*/,"");
   if(!text)return "";
-  if(ACTION_START.test(text))return sentence(text);
   if(/^responsible for\s+/i.test(text))text=text.replace(/^responsible for\s+/i,"Handled ");
   else if(/^worked on\s+/i.test(text))text=text.replace(/^worked on\s+/i,"Supported ");
   else if(/^helped with\s+/i.test(text))text=text.replace(/^helped with\s+/i,"Supported ");
+  else if(ACTION_START.test(text))return sentence(text);
   else text="Handled "+text.charAt(0).toLowerCase()+text.slice(1);
   return sentence(text);
 }
