@@ -187,3 +187,42 @@ Task 2 intentionally does not:
 Those belong to Tasks 3–5.
 
 Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
+
+
+## Rework Blueprint — Task 3: Guided Profile Draft Creation & Review/Optimize Integration
+
+Implemented only Task 3 of the LinkedIn Profile Helper rework:
+
+- Review & Optimize now builds its factual evidence set from:
+  - Confirmed starter-pack items
+  - User-entered starter-pack items
+  - optional existing LinkedIn profile text
+  - optional resume text
+- Suggested starter-pack items are explicitly excluded from factual generated outputs
+- evidence audit metadata records which starter items were included and which Suggested items were excluded
+- starter sections are mapped safely:
+  - confirmed/user-entered Experience → experience evidence
+  - confirmed/user-entered Skills → supported skills evidence
+  - completed confirmed/user-entered Achievements → achievement evidence
+  - confirmed/user-entered Professional Focus → career-direction evidence
+  - confirmed/user-entered Headline points → final headline alternatives
+  - About prompts remain guidance and are not treated as factual claims
+- experienced users without a current role are no longer described as already holding the selected target role
+- Fresher, Experienced and Career Changer positioning remains distinct
+- optional existing LinkedIn content is preserved as user-provided evidence
+- optional resume text remains an additional evidence source
+- previously confirmed facts remain usable after a target-role change while their stale-target review flag is preserved
+- final manual edits continue to survive re-optimization
+- the existing deterministic review, copy-ready drafts and section outputs remain intact
+
+Task 3 intentionally does not:
+
+- redesign the full page into the final guided flow
+- persist the new starter-pack/confirmation state in the saved-draft schema
+- implement Task 4 UX/state migration work
+- deploy to production
+- run final hardening/release/freeze
+
+Those actions remain Tasks 4–5.
+
+Production `work/linkedin/index.html` and frozen Resume Studio remain unchanged.
