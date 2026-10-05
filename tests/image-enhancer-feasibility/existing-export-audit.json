@@ -1,0 +1,43 @@
+{
+  "kind": "existing-export-parity",
+  "hashes": {
+    "weights": "8dc7edb9ac80ccdc30c3a5dca6616509367f05fbc184ad95b731f05bece96292",
+    "export": "09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4"
+  },
+  "transformations": [
+    "Parameters rounded float32 \u2192 float16 \u2192 float32",
+    "Output clipped to [0,1]"
+  ],
+  "checks": [
+    {
+      "shape": [
+        16,
+        16
+      ],
+      "maxAbs": 2.1457672119140625e-06,
+      "meanAbs": 3.323420969536528e-07,
+      "pass": true
+    },
+    {
+      "shape": [
+        31,
+        47
+      ],
+      "maxAbs": 7.748603820800781e-07,
+      "meanAbs": 1.050230267196639e-07,
+      "pass": true
+    },
+    {
+      "shape": [
+        64,
+        64
+      ],
+      "maxAbs": 8.344650268554688e-07,
+      "meanAbs": 1.038052559465541e-07,
+      "pass": true
+    }
+  ],
+  "pass": true,
+  "qualityAcceptance": "NOT_EVALUATED",
+  "limits": "Synthetic CPU shapes only; not rights clearance or universal numerical equivalence."
+}
