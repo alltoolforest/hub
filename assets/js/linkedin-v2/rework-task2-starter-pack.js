@@ -59,7 +59,7 @@ function makeItem(section,text,index,{
   return Object.freeze({
     id:itemId(section,text,index,sourceRoleId),
     section,
-    text:safeText,
+    text:clean(text),
     state,
     kind,
     source,
@@ -341,7 +341,7 @@ export function addUserStarterItem(pack,section,text=""){
   const item=Object.freeze({
     id:"user--"+section+"--"+userSequence,
     section,
-    text:clean(text),
+    text:safeText,
     state:STARTER_STATE.USER_ENTERED,
     kind:"user_fact",
     source:"user",
