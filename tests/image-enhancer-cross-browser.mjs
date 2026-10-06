@@ -99,7 +99,7 @@ async function runEngine(name, launcher, pageOptions = { viewport: { width: 900,
     await page.locator('input[type=file]').setInputFiles({ name: `${name}-ai.png`, mimeType: 'image/png', buffer: png(12, 8) });
     await page.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('12 × 8'));
     await page.locator('#enhancer-mode-enhance').click();
-    await page.locator('#enhancer-content').selectOption('high-fidelity');
+    await page.locator('#enhancer-content').selectOption('general');
     await page.locator('#enhancer-restoration').selectOption('fidelity');
     await page.locator('#enhancer-sharpen').selectOption('off');
     await page.locator('#enhancer-run').click();

@@ -361,9 +361,9 @@ try {
   assert.match(summary || '', /Analysis: .* profile recommended/);
 
   const originalHash = await sourcePreviewHash();
-  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /Enhanced · original size .*background AI/);
-  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /Enhanced · original size .*background AI/);
-  assert.notEqual(sharpOff.info?.[4], originalHash, '1× AI restoration must materially change the encoded pixels from the source.');
+  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /Enhanced · original size .*background-safe local processing/);
+  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /Enhanced · original size .*background-safe local processing/);
+  assert.notEqual(sharpOff.info?.[4], originalHash, '1× local refinement must materially change the encoded pixels from the source.');
   assert.notEqual(sharpOff.info?.[4], sharpMedium.info?.[4], 'Medium sharpening must materially change the encoded pixels compared with Off.');
 
   await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Upscaled 2× .*background AI/);
