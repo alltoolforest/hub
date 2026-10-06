@@ -124,3 +124,13 @@ export function contentRouteOptions() {
     ['old-photo', 'Old / Damaged Photo']
   ];
 }
+
+// A user-selected label is not evidence that a source is undamaged.
+export function canRefineLocally(requested, analysis, scale = 1) {
+  return requested === 'high-fidelity' && Number(scale) === 1 &&
+    !!analysis?.diagnosis && !analysis.likelyBlurred &&
+    ['blur', 'noise', 'compression', 'underexposure', 'overexposure', 'lowResolution', 'falseResolution', 'badLighting'].every(key =>
+      Number.isFinite(analysis.diagnosis.confidence?.[key])) &&
+    Object.values(analysis.diagnosis.confidence || {}).every(value => Number.isFinite(value) && value < 0.30) &&
+    autoRoute(analysis, scale).id === 'high-fidelity';
+}

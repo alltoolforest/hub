@@ -13,6 +13,7 @@ import {
 import {
   resolveContentRoute,
   resolveRouteControls,
+  canRefineLocally,
   contentRouteOptions
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
@@ -24,6 +25,7 @@ import {
   fallbackPortraitSafetyRegion
 } from './image-enhancer-face-safety.js';
 import { applyArtifactFidelityGuard } from './image-enhancer-artifact-guard.js';
+import { createRestorationBudget, RestorationBudgetError } from './image-enhancer-budget.js';
 import { validateDeblurOutput } from './image-enhancer-deblur-validation.js';
 
 const MB = 1024 * 1024;
@@ -526,7 +528,11 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
   }
 
   async process({ image, scale, width, height, signal, onProgress }) {
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+    const plannedCore = tileCorePlan({ ...this.caps, webgpu: false })[0];
+    if (scale === 1) createRestorationBudget(this.caps).check(estimateTileCount(image.width, image.height, plannedCore));
     await this.initialize(signal, onProgress);
+    const budget = scale === 1 ? createRestorationBudget(this.caps) : null;
     if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
 
     const plans = tileCorePlan({ ...this.caps, webgpu: false });
@@ -540,7 +546,7 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
       const tileCore = plans[attempt];
       try {
         if (attempt > 0) onProgress?.(`Retrying AI with smaller ${tileCore}px tiles…`);
-        return await this.processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount: attempt });
+        return await this.processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount: attempt, budget });
       } catch (error) {
         if (error?.name === 'AbortError' || signal?.aborted) throw error;
         lastError = error;
@@ -553,7 +559,8 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
     throw lastError || new Error('AI tiling failed.');
   }
 
-  async processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount }) {
+  async processTiled({ image, scale, width, height, signal, onProgress, tileCore, retryCount, budget = scale === 1 ? createRestorationBudget(this.caps) : null }) {
+    budget?.check(estimateTileCount(image.width, image.height, tileCore));
     const outputCanvas = el('canvas', { width, height });
     const outputCtx = outputCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
     if (!outputCtx) throw new RangeError('Output canvas allocation failed.');
@@ -603,6 +610,7 @@ class OnnxSuperResolutionEngine extends EnhancementEngine {
           if ('width' in tile) {
             try { tile.width = tile.height = 0; } catch {}
           }
+          budget?.check(total, index);
           await sleepFrame();
         }
       }
@@ -678,12 +686,15 @@ class OnnxDeblurEngine extends EnhancementEngine {
   }
 
   async process({ image, signal, onProgress }) {
-    await this.initialize(signal, onProgress);
+    if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
     const plans = this.caps.isMobile ? [128, 96, 64] : [192, 144, 96, 64];
+    createRestorationBudget(this.caps).check(estimateTileCount(image.width, image.height, plans[0]));
+    await this.initialize(signal, onProgress);
+    const budget = createRestorationBudget(this.caps);
     let lastError = null;
     for (let attempt = 0; attempt < plans.length; attempt++) {
       try {
-        return await this.processTiled(image, plans[attempt], signal, onProgress, attempt);
+        return await this.processTiled(image, plans[attempt], signal, onProgress, attempt, budget);
       } catch (error) {
         if (error?.name === 'AbortError' || signal?.aborted) throw error;
         lastError = error;
@@ -695,7 +706,8 @@ class OnnxDeblurEngine extends EnhancementEngine {
     throw lastError || new Error('Deblur processing failed.');
   }
 
-  async processTiled(image, tileCore, signal, onProgress, retryCount) {
+  async processTiled(image, tileCore, signal, onProgress, retryCount, budget = createRestorationBudget(this.caps)) {
+    budget.check(estimateTileCount(image.width, image.height, tileCore));
     const outputCanvas = el('canvas', { width: image.width, height: image.height });
     const ctx = outputCanvas.getContext('2d', { alpha: false });
     if (!ctx) throw new RangeError('Deblur output canvas allocation failed.');
@@ -727,6 +739,7 @@ class OnnxDeblurEngine extends EnhancementEngine {
           const tile = await this.inferTile(image, sx, sy, tileW, tileH, signal);
           ctx.drawImage(tile, padLeft, padTop, coreW, coreH, x, y, coreW, coreH);
           tile.close?.();
+          budget.check(total, index);
           await sleepFrame();
         }
       }
@@ -1501,7 +1514,7 @@ export async function mount(root, slug) {
     let temporaryAiInput = null;
 
     try {
-      const shouldUseAi = contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
+      const shouldUseAi = !canRefineLocally(requestedContent, analysis, scale) && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
       if (!shouldUseAi) {
         result = await browserEnhanceEngine.process({
           image, width, height, signal,
@@ -1660,8 +1673,9 @@ export async function mount(root, slug) {
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       if (error?.name === 'AbortError' || signal.aborted) throw error;
 
+      const budgetLimited = error instanceof RestorationBudgetError;
       console.warn('AI enhance path unavailable; using fast local enhancement.', error);
-      status('AI enhancement unavailable. Using fast local enhancement…');
+      status(budgetLimited ? 'AI restoration would take too long. Applying limited local adjustments…' : 'AI enhancement unavailable. Using fast local enhancement…');
       result = await browserEnhanceEngine.process({
         image, width, height, signal,
         onProgress: message => status(message)
@@ -1673,7 +1687,9 @@ export async function mount(root, slug) {
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
       output(blob, safeName(file.name, '-enhanced', 'png'));
       const detailLabel = detail.protected ? ' · source detail protected' : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely${detailLabel}.`);
+      status(budgetLimited
+        ? `Limited enhancement · original size ${width.toLocaleString()} × ${height.toLocaleString()} · AI restoration skipped for processing time; blur may remain${detailLabel}.`
+        : `Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely${detailLabel}.`);
       return result;
     }
   }
