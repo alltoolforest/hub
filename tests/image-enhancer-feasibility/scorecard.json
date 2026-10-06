@@ -92,11 +92,20 @@
       "codeLicense": "MIT",
       "status": "hold",
       "artifact": null,
-      "note": "Use task-specific motion, single-image defocus and denoise weights as separate experiments. No exact converted artifact admitted; deblocking not established.",
+      "note": "Official single-image defocus checkpoint tested on six exact synthetic development inputs: raw MAE improved vs input 4/6 and vs raw NAFNet 5/6; foliage regressed severely. No category acceptance or model selection. Motion and denoise checkpoints remain untested.",
       "weightRights": "unverified",
       "conversionParity": "not-tested",
       "operatorAudit": "not-tested",
-      "deviceRuns": []
+      "deviceRuns": [],
+      "diagnosticEvidence": "../image-enhancer-deblur-trial/restormer-results.json",
+      "observedArtifact": {
+        "name": "single_image_defocus_deblurring.pth",
+        "sourceDriveId": "10v8BH3Gktl34TYzPy0x-pAKoRSYKnNZp",
+        "bytes": 104700429,
+        "sha256": "7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e",
+        "parameters": 26126644,
+        "use": "local evaluation only"
+      }
     },
     {
       "id": "gfpgan",

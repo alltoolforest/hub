@@ -50,8 +50,13 @@ Latest corrected comparison: 18 cases, two numerically rejected paths; among 16
 fully admitted pairs, cleanup reduces final error in 9 and increases it in 7.
 Original-weight evidence is recorded; it does not select a reliable route.
 
-First unfinished engineering item: evaluate a task-specific alternative blur route
-and close model/corpus feasibility before production integration.
+Alternative tested: official Restormer single-image defocus on six exact inputs;
+raw error improved vs input 4/6, with a substantial foliage regression. No model
+selection or category pass. The 104.7 MB checkpoint still needs browser feasibility
+and exact weight-rights closure.
+
+First unfinished engineering item: close candidate model/corpus feasibility and
+broad photographic quality evidence before production integration.
 Do not repeat successful tests without a changed dependency or concrete risk.
 The assistant owns engineering, source/provenance research and automated testing.
 Human acceptance and inaccessible physical-device observations remain explicit.

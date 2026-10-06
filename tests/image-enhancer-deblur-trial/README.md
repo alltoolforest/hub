@@ -40,6 +40,46 @@ Both CI workflows passed at 45bb09b: full enhancer audit run 37325223878 and
 immutable-baseline benchmark run 37325223853. This checkpoint changes diagnostic
 code and evidence only; it does not modify the verified application.
 
+## Alternative single-image defocus check
+
+`restormer-results.json` records the official Restormer single-image defocus
+checkpoint on the six exact defocus inputs from the corrected comparison.
+`capture-defocus.mjs` verifies source-file and input-pixel hashes before capture.
+`restormer_probe.py` verifies the upstream architecture Git blob and weight hash,
+loads the state dictionary strictly with `weights_only=True`, and records raw
+output range, error and native CPU time. No production routing changed.
+
+Raw error improved against the degraded input in 4/6 cases and against the raw
+NAFNet comparator in 5/6. NASA 097 foliage worsened from input MAE 13.274 to
+19.316 (NAFNet raw 17.164). NASA 081 also worsened against input. All six outputs
+were finite with modest overshoot. This is mixed preliminary evidence, not the
+>=80% visible-usefulness gate or proof of natural texture/identity preservation.
+No model is selected; do not infer motion recovery from a defocus checkpoint.
+
+The checkpoint has 26,126,644 parameters and is 104,700,429 bytes. Local native
+CPU time was 0.72–1.51 seconds on these tiny inputs; this is not a browser or
+physical-device budget. Export/operator/parity, download/memory/tile/cancellation,
+exact weight-rights and broad photographic quality gates remain open.
+
+Pinned source: `swz30/Restormer` commit
+`68dc6ac472db26f16361150cb7a96a1bc87da93f`,
+`basicsr/models/archs/restormer_arch.py`, blob
+`a41221ecf90294be5951b3019e6d0d600bd4a49a`.
+The source repository declares MIT; its license must accompany any distributed
+copy. Architecture and weights are external inputs to this probe, not bundled.
+The authors’ `Defocus_Deblurring/README.md` links the Drive folder containing
+`single_image_defocus_deblurring.pth`, file ID
+`10v8BH3Gktl34TYzPy0x-pAKoRSYKnNZp`.
+SHA-256: `7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e`.
+Candidate adapter uses explicit reflect padding to multiples of eight and crops
+to native dimensions; do not confuse this with NAFNet’s internal zero padding.
+
+```sh
+node tests/image-enhancer-deblur-trial/capture-defocus.mjs /private/trial /private/nasa-intake /private/defocus-inputs
+# Python dependencies: torch 2.8.0+cpu, numpy, Pillow, einops 0.8.1
+python tests/image-enhancer-deblur-trial/restormer_probe.py /private/restormer_arch.py /private/single_image_defocus_deblurring.pth /private/defocus-inputs /private/restormer-results.json
+```
+
 ## Historical 5 October padded-input investigation
 
 The following records describe the prior runner and must not be interpreted as
