@@ -62,3 +62,16 @@ test('existing upscale keeps its path; 1x enhancement receives a budget', async 
     assert.equal(await engine.process({image:{width:256,height:256},scale,width:256*scale,height:256*scale}), 'ai');
   }
 });
+
+const {canRefineLocally} = await import('../assets/js/image-enhancer-routing.js');
+test('clear-photo shortcut requires clean diagnosis, not the selected label alone', () => {
+  const clean = {diagnosis:{confidence:{blur:0.1,noise:0.1,compression:0.1,underexposure:0,overexposure:0,lowResolution:0,falseResolution:0,badLighting:0}}, softness:0.1, recoveryScore:0.1};
+  assert.equal(canRefineLocally('high-fidelity', clean), true);
+  for (const damage of ['noise','compression','underexposure','overexposure','lowResolution']) {
+    assert.equal(canRefineLocally('high-fidelity',{...clean,diagnosis:{confidence:{...clean.diagnosis.confidence,[damage]:0.8}}}),false);
+  }
+  assert.equal(canRefineLocally('high-fidelity',null),false);
+  assert.equal(canRefineLocally('high-fidelity',{...clean,likelyBlurred:true}),false);
+  assert.equal(canRefineLocally('high-fidelity',clean,2),false);
+  assert.equal(canRefineLocally('portrait',clean),false);
+});

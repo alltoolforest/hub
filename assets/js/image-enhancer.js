@@ -13,6 +13,7 @@ import {
 import {
   resolveContentRoute,
   resolveRouteControls,
+  canRefineLocally,
   contentRouteOptions
 } from './image-enhancer-routing.js';
 import { aiInferenceDimensions, tileCorePlan, estimateTileCount, isMemoryPressureError } from './image-enhancer-tiles.js';
@@ -1513,7 +1514,7 @@ export async function mount(root, slug) {
     let temporaryAiInput = null;
 
     try {
-      const shouldUseAi = requestedContent !== 'high-fidelity' && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
+      const shouldUseAi = !canRefineLocally(requestedContent, analysis, scale) && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
       if (!shouldUseAi) {
         result = await browserEnhanceEngine.process({
           image, width, height, signal,

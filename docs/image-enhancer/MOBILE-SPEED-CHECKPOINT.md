@@ -7,7 +7,7 @@ Attached photo copies differ from the dimensions implied by those tile plans.
 Private photographs are not committed or sent to CI.
 
 Implemented containment:
-- Explicit Clear photo at 1x uses existing local refinement/finishing and detail
+- Explicit Clear photo at 1x with a clean diagnosis uses existing local refinement/finishing and detail
   protection; no reconstruction model is loaded for that route.
 - Enhancement and deblur check 64 mobile / 256 desktop tile ceilings before model
   initialization. Oversized workloads do not start hundreds of inference calls.
@@ -22,7 +22,10 @@ Implemented containment:
 
 Tests: budget boundaries, 612/624 preflight rejection before initialization,
 actual engine entry points, projection, completed-result retention, upscale
-isolation, existing inference lifecycle and fusion. Browser audit queued in CI.
+isolation, existing inference lifecycle and fusion. First browser audit caught a noise regression from trusting the Clear photo label
+without diagnosis (output MAE 16.797 vs input 12.025). Shortcut now requires
+existing clean routing and all diagnosis confidences below 0.30. Thresholds in
+the photographic benchmark remain unchanged. Affected audits must be rerun.
 
 Open: faster useful full-size deblurring is NOT delivered by this containment.
 A lighter/accelerated model or validated multiscale reconstruction needs quality,
