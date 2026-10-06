@@ -24,6 +24,7 @@ import {
   fallbackPortraitSafetyRegion
 } from './image-enhancer-face-safety.js';
 import { applyArtifactFidelityGuard } from './image-enhancer-artifact-guard.js';
+import { validateDeblurOutput } from './image-enhancer-deblur-validation.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -750,15 +751,17 @@ class OnnxDeblurEngine extends EnhancementEngine {
     const tensor = new this.ort.Tensor('float32', data, [1, 3, height, width]);
     const inputName = this.session.inputNames[0];
     const outputName = this.session.outputNames[0];
-    const results = await this.session.run({ [inputName]: tensor });
-    const output = results[outputName];
-    if (!output?.data || output.dims?.length !== 4) throw new Error('Deblur model returned an unexpected output.');
-    const outH = Number(output.dims[2]);
-    const outW = Number(output.dims[3]);
-    if (outW !== width || outH !== height) {
-      throw new Error(`Deblur model returned ${outW} × ${outH}; expected ${width} × ${height}.`);
+    let results;
+    try {
+      results = await this.session.run({ [inputName]: tensor });
+      const output = results[outputName];
+      validateDeblurOutput(output, width, height);
+      if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+      return await this.processor.tensorToBitmap(output.data, width, height, signal);
+    } finally {
+      tensor.dispose();
+      for (const output of Object.values(results || {})) output.dispose();
     }
-    return this.processor.tensorToBitmap(output.data, outW, outH, signal);
   }
 
   async dispose() {
@@ -1578,6 +1581,7 @@ export async function mount(root, slug) {
           console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
         }
 
+        const faceSafetyFused = !!blended;
         if (!blended) {
           const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
           blended = el('canvas', { width, height });
@@ -1591,8 +1595,12 @@ export async function mount(root, slug) {
 
         result.canvas.width = result.canvas.height = 0;
         result.canvas = blended;
-        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
-        result.canvas = faceGuard.canvas;
+        // The worker already enforced both face ceilings against the original
+        // candidate. Keep the legacy overlay for the global-blend fallback only.
+        if (!faceSafetyFused) {
+          const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
+          result.canvas = faceGuard.canvas;
+        }
         const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
         result.canvas = fidelityGuard.canvas;
 

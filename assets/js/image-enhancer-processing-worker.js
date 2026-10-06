@@ -1,4 +1,4 @@
-import { faceSafetyAiLimitAt } from './image-enhancer-face-safety.js';
+import { faceSafetyAiLimitAt, createFaceRetentionMasks, faceRetentionLimitAt } from './image-enhancer-face-safety.js';
 import {
   resolveRegionRestorationPlan,
   resolveRegionProcessedWeight,
@@ -93,6 +93,9 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
   const deblurCtx = deblurScratch.getContext('2d', { willReadFrequently: true, alpha: false });
   if (!sourceCtx || !deblurCtx) throw new Error('Deblur fidelity workspace is unavailable.');
 
+  const deblurPlan = resolveRegionRestorationPlan(analysis, 'deblur');
+  const retentionMasks = createFaceRetentionMasks(faces, width, height, analysis, 'deblur');
+
   for (let y = 0; y < height; y += TILE) {
     for (let x = 0; x < width; x += TILE) {
       if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
@@ -153,7 +156,6 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
           // areas, allow stronger reconstruction where source structure supports
           // it, and keep the face-safety ceiling as the final authority.
           const faceLimit = faceSafetyAiLimitAt(x + cx, y + cy, faces);
-          const deblurPlan = resolveRegionRestorationPlan(analysis, 'deblur');
           let weight = resolveRegionProcessedWeight({
             sourceEdge,
             sourceResidual: Math.abs(sourceY - (
@@ -170,7 +172,11 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
             weight += recoveredDetail * 0.05 * deblurPlan.detailDemand;
             weight -= lostDetail * 0.10;
           }
-          weight = clamp(weight, 0.54, Math.min(0.98, faceLimit));
+          // Both pre-existing face limits apply to the ORIGINAL reconstruction.
+          // Do not multiply them: that repeatedly reintroduces source blur.
+          weight = clamp(weight, 0.54, Math.min(
+            0.98, faceLimit, faceRetentionLimitAt(x + cx, y + cy, retentionMasks)
+          ));
 
           for (let channel = 0; channel < 3; channel++) {
             dst[out + channel] = byte(
