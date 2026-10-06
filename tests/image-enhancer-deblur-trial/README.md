@@ -1,4 +1,51 @@
-# Tasks 4/5 dependency and deblur investigation — 5 October 2026
+# Deblur investigation — current checkpoint 6 October 2026
+
+## Current result (supersedes the historical padding experiment)
+
+The runner now sends native image dimensions, matching the application. The model
+performs its own zero padding. The earlier runner added replicated-edge padding;
+its aircraft-grid failure is not evidence of that failure on the normal application
+input. Historical reports below are retained for traceability, not acceptance.
+
+`native-ordering-results.json` records 18 corrected comparisons on six sources.
+Two paths failed the existing numerical validator: mixed astronaut after cleanup,
+and mixed NASA 081 with direct deblur. Their post-guard outputs are retained only
+as diagnostic failure evidence, and excluded from comparative success counts.
+Of 16 pairs with both paths numerically admitted, cleanup gave lower final RGB MAE
+in 9 and higher in 7; all six motion-only cases worsened. Numerical admission and
+lower MAE are neither visual acceptance nor evidence of identity preservation.
+
+`original-checkpoint-results.json` compares the authors’ original GoPro width32
+checkpoint with the current ONNX on the two exact mixed-portrait inputs. The
+original also becomes unstable after cleanup (range -42.574 to 55.278; clipped
+raw RGB MAE 124.967). The converted range is -42.0 to 56.313. Strict elementwise
+comparison fails on both inputs; FP16 differences are present, but conversion
+precision alone cannot explain this failure. No replacement artifact is selected.
+The paired original/converted direct outputs also have poor raw error (~53).
+The numerical safety check remains justified; unconditional stacking is rejected.
+
+Reproduce the original-weight check with Python torch, numpy, Pillow and ORT:
+
+```sh
+python tests/image-enhancer-deblur-trial/original_checkpoint_probe.py /private/NAFNet-GoPro-width32.pth /private/nafnet.onnx /private/native-astronaut-mixed /private/original-parity.json
+node --test tests/image-enhancer-deblur-trial/summarize.test.mjs
+```
+
+Capture the inputs using the corrected runner with final argument `astronaut:mixed`.
+See `nafnet_ref/README.md` for pinned source, license and local modifications.
+No photos or weights are committed. Full held-out quality, model rights closure,
+real-device budgets and route selection remain open.
+
+Both CI workflows passed at 45bb09b: full enhancer audit run 37325223878 and
+immutable-baseline benchmark run 37325223853. This checkpoint changes diagnostic
+code and evidence only; it does not modify the verified application.
+
+## Historical 5 October padded-input investigation
+
+The following records describe the prior runner and must not be interpreted as
+current native-input results or the current authorization scope. All remaining
+blueprint work is now one combined launch-readiness task.
+
 
 Continued from PR #120 81eb3221efaa65fc7ac27b1339a5e99203ec9549, with user
 approval to take ownership of Tasks 4/5 and dependencies. No later task work.

@@ -21,9 +21,9 @@
         "upstream": "https://github.com/megvii-research/NAFNet",
         "modelCard": "https://huggingface.co/bihanikeshav/selects-onnx"
       },
-      "note": "Current GoPro FP16 comparator. Manifest hash is recorded; conversion provenance, exact weight rights and immutable mirror revision need verification. Do not assume GoPro motion training covers defocus.",
+      "note": "Current GoPro FP16 comparator. Manifest hash is recorded; conversion provenance, exact weight rights and immutable mirror revision need verification. Do not assume GoPro motion training covers defocus. Original checkpoint SHA and source are now pinned in deblur trial; no new weight distribution or model admission.",
       "weightRights": "unverified",
-      "conversionParity": "not-tested",
+      "conversionParity": "Original checkpoint tested on two native-size mixed-portrait inputs; strict elementwise parity fails. Both original and converted outputs unstable after cleanup; see ../image-enhancer-deblur-trial/original-checkpoint-results.json",
       "operatorAudit": "executed on ORT1.30 single-thread Node WASM at 64x64; other shapes/backends unverified",
       "deviceRuns": [],
       "observedArtifact": {

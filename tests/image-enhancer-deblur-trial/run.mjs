@@ -3,6 +3,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
+import {summarize} from './summarize.mjs';
 import {createCanvas,loadImage} from '@napi-rs/canvas';
 import {hash,canvasOf,frameOf,installCanvasHarness,registryForTrial} from '../image-enhancer-cleanup/adapter.mjs';
 import {validateDeblurOutput} from '../../assets/js/image-enhancer-deblur-validation.js';
@@ -29,7 +30,7 @@ function blur(f,kind){const output={...f,data:f.data.slice()};const taps=[];for(
  for(let y=0;y<f.height;y++)for(let x=0;x<f.width;x++)for(let k=0;k<3;k++){let s=0;for(const [dx,dy] of taps)s+=f.data[(Math.max(0,Math.min(f.height-1,y+dy))*f.width+Math.max(0,Math.min(f.width-1,x+dx)))*4+k];output.data[(y*f.width+x)*4+k]=Math.round(s/taps.length);}return output;}
 function noise(f){const g={...f,data:f.data.slice()};let seed=941;for(let i=0;i<g.data.length;i++)if(i%4!==3){seed=(Math.imul(seed,1664525)+1013904223)>>>0;g.data[i]+=Math.round((seed/4294967296-.5)*36);}return g;}
 function mae(a,b){let s=0;for(let i=0;i<a.data.length;i++)if(i%4!==3)s+=Math.abs(a.data[i]-b.data[i]);return s/(a.width*a.height*3);}
-async function infer(f){const w=Math.ceil(f.width/16)*16,h=Math.ceil(f.height/16)*16,input=new Float32Array(w*h*3);for(let y=0;y<h;y++)for(let x=0;x<w;x++)for(let k=0;k<3;k++)input[k*w*h+y*w+x]=f.data[(Math.min(y,f.height-1)*f.width+Math.min(x,f.width-1))*4+k]/255;
+async function infer(f){const w=f.width,h=f.height,input=new Float32Array(w*h*3);for(let y=0;y<h;y++)for(let x=0;x<w;x++)for(let k=0;k<3;k++)input[k*w*h+y*w+x]=f.data[(Math.min(y,f.height-1)*f.width+Math.min(x,f.width-1))*4+k]/255;
  const tensor=new ort.Tensor('float32',input,[1,3,h,w]);let outputs;
  try{outputs=await session.run({[session.inputNames[0]]:tensor});const o=outputs[session.outputNames[0]];assert.deepEqual(o.dims,[1,3,h,w]);let admission;try{validateDeblurOutput(o,w,h);admission='accepted';}catch(error){admission='rejected:'+error.message;}
  const g={...f,data:f.data.slice(),admission};for(let y=0;y<f.height;y++)for(let x=0;x<f.width;x++)for(let k=0;k<3;k++){const v=o.data[k*w*h+y*w+x];assert.ok(Number.isFinite(v));g.data[(y*f.width+x)*4+k]=Math.round(Math.max(0,Math.min(1,v))*255);}return g;}
@@ -63,7 +64,6 @@ try{
  }
  }
 }finally{await session.release();}
-const final=p=>p.stages.at(-1).mae;
-const summary={comparisons:rows.length,cleanupBetter:rows.filter(r=>final(r.paths[1])<final(r.paths[0])).length,cleanupWorse:rows.filter(r=>final(r.paths[1])>final(r.paths[0])).length,cleanupTie:rows.filter(r=>final(r.paths[1])===final(r.paths[0])).length};
-const report={tasks:[4,5],production:false,acceptance:'NOT_EVALUATED',model:'Existing pinned NAFNet GoPro width32 FP16',scope:'Diagnostic comparison of reconstruction, unchanged PR117 fusion and final guard; not complete production finishing or browser execution',limitations:[`${rows.length} synthetic cases on public development sources; no held-out/human quality gate`,'NASA inputs remain private development candidates; no production/marketing usage clearance inferred','Motion is horizontal box blur, defocus disk radius2; not real camera damage','Small preview images, manual portrait box, no automated text/detector verification','WDN evaluated before blur for both isolated and mixed damage; not automatically selected','No weights distributed, no NAFNet conversion-parity claim'],summary,rows};
+const summary=summarize(rows);
+const report={tasks:[4,5],production:false,acceptance:'NOT_EVALUATED',model:'Existing pinned NAFNet GoPro width32 FP16',inputContract:'Native dimensions; model performs internal zero padding. Earlier replicated-edge-padding trial retained separately.',scope:'Diagnostic comparison of reconstruction, unchanged PR117 fusion and final guard; not complete production finishing or browser execution',limitations:[`${rows.length} synthetic cases on public development sources; no held-out/human quality gate`,'NASA inputs remain private development candidates; no production/marketing usage clearance inferred','Motion is horizontal box blur, defocus disk radius2; not real camera damage','Small preview images, manual portrait box, no automated text/detector verification','WDN evaluated before blur for both isolated and mixed damage; not automatically selected','No weights distributed, no NAFNet conversion-parity claim'],summary,rows};
 await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(summary);
