@@ -376,7 +376,7 @@ try {
   await page.locator('#enhancer-run').click();
   const textStatus = await waitForTerminal(1);
   console.log(`DIAGNOSTIC text/logo terminal status=${textStatus}`);
-  assert.match(textStatus, /Enhanced · original size .*background AI/);
+  assert.match(textStatus, /Enhanced · original size .*background-safe local processing/);
   assert.doesNotMatch(textStatus, /background AI/);
   const textInfo = await latestOutputInfo();
   assert.deepEqual(textInfo?.slice(0, 3), [24, 16, 'core-test-enhanced.png']);
