@@ -1,0 +1,230 @@
+{
+  "kind": "isolated-guarded-cleanup",
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "backend": "Node ORT1.30 WASM + napi canvas; NOT browser/device",
+  "limitations": [
+    "Two public development sources, six cases",
+    "Portrait box manually annotated, not detector-verified",
+    "Text/alpha/grayscale/detector absence deliberately withheld",
+    "Diagnostic text=false overrides for raw comparisons; not verified text-safe",
+    "Uses existing face and final guards, not full production finishing pipeline",
+    "Pixel/error observations do not certify identity or usefulness"
+  ],
+  "rows": [
+    {
+      "name": "coffee",
+      "condition": "clean",
+      "status": "unchanged",
+      "aiExecuted": false,
+      "inputMae": 0,
+      "outputMae": 0,
+      "stages": [],
+      "stats": {
+        "loads": 0,
+        "runs": 0,
+        "releases": 0,
+        "guardStages": 0
+      },
+      "elapsedMs": 6.61108200000001
+    },
+    {
+      "name": "coffee",
+      "condition": "noise",
+      "status": "success",
+      "aiExecuted": true,
+      "inputMae": 9.201501225490196,
+      "outputMae": 7.0080575980392155,
+      "stages": [
+        {
+          "stage": "model",
+          "mae": 7.0080575980392155
+        },
+        {
+          "stage": "face",
+          "mae": 7.0080575980392155
+        },
+        {
+          "stage": "guard",
+          "mae": 7.0080575980392155
+        }
+      ],
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "elapsedMs": 1187.908212
+    },
+    {
+      "name": "coffee",
+      "condition": "jpeg",
+      "status": "success",
+      "aiExecuted": true,
+      "inputMae": 9.645955882352942,
+      "outputMae": 8.203155637254902,
+      "stages": [
+        {
+          "stage": "model",
+          "mae": 8.203155637254902
+        },
+        {
+          "stage": "face",
+          "mae": 8.203155637254902
+        },
+        {
+          "stage": "guard",
+          "mae": 8.203155637254902
+        }
+      ],
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "elapsedMs": 1183.471196
+    },
+    {
+      "name": "astronaut",
+      "condition": "clean",
+      "status": "unchanged",
+      "aiExecuted": false,
+      "inputMae": 0,
+      "outputMae": 0,
+      "stages": [],
+      "stats": {
+        "loads": 0,
+        "runs": 0,
+        "releases": 0,
+        "guardStages": 0
+      },
+      "elapsedMs": 4.526699000000008
+    },
+    {
+      "name": "astronaut",
+      "condition": "noise",
+      "status": "limited",
+      "aiExecuted": true,
+      "inputMae": 8.80828857421875,
+      "outputMae": 6.747416178385417,
+      "stages": [
+        {
+          "stage": "model",
+          "mae": 8.675150553385416
+        },
+        {
+          "stage": "face",
+          "mae": 8.573750813802084
+        },
+        {
+          "stage": "guard",
+          "mae": 6.747416178385417
+        }
+      ],
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 1
+      },
+      "elapsedMs": 1514.815737
+    },
+    {
+      "name": "astronaut",
+      "condition": "jpeg",
+      "status": "limited",
+      "aiExecuted": true,
+      "inputMae": 10.498514811197916,
+      "outputMae": 9.597615559895834,
+      "stages": [
+        {
+          "stage": "model",
+          "mae": 10.676961263020834
+        },
+        {
+          "stage": "face",
+          "mae": 10.592041015625
+        },
+        {
+          "stage": "guard",
+          "mae": 9.597615559895834
+        }
+      ],
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 1
+      },
+      "elapsedMs": 1467.1395160000002
+    }
+  ],
+  "failures": [
+    {
+      "case": "text",
+      "pass": true
+    },
+    {
+      "case": "alpha",
+      "pass": true
+    },
+    {
+      "case": "detector-unavailable",
+      "pass": true
+    },
+    {
+      "case": "grayscale",
+      "pass": true
+    },
+    {
+      "case": "bad-hash",
+      "pass": true
+    },
+    {
+      "case": "cancel-before-load",
+      "pass": true,
+      "stats": {
+        "loads": 0,
+        "runs": 0,
+        "releases": 0,
+        "guardStages": 0
+      }
+    },
+    {
+      "case": "cancel-after-load",
+      "pass": true,
+      "stats": {
+        "loads": 1,
+        "runs": 0,
+        "releases": 1,
+        "guardStages": 0
+      }
+    },
+    {
+      "case": "cancel-after-inference",
+      "pass": true,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      }
+    },
+    {
+      "case": "undeclared-alpha",
+      "pass": true,
+      "stats": {
+        "loads": 1,
+        "runs": 0,
+        "releases": 1,
+        "guardStages": 0
+      }
+    },
+    {
+      "case": "pixel-budget",
+      "pass": true
+    }
+  ]
+}

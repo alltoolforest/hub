@@ -2,10 +2,12 @@ name: Image Enhancer pre-deployment audit
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, task2/image-enhancer-feasibility]
     paths:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-deblur-validation.js'
+      - 'tests/image-enhancer-deblur-trial/validation.test.mjs'
       - 'assets/js/image-enhancer-bootstrap.js'
       - 'assets/js/image-enhancer-capabilities.js'
       - 'assets/js/image-enhancer-artifact-guard.js'
@@ -74,6 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check assets/js/image-enhancer.js
+          node --test tests/image-enhancer-deblur-trial/validation.test.mjs
           node --check assets/js/image-enhancer-artifact-guard.js
           node --check assets/js/image-enhancer-bootstrap.js
           node --check assets/js/image-enhancer-capabilities.js

@@ -1,0 +1,415 @@
+{
+  "kind": "512px-development-raw-model-comparison",
+  "maxSide": 512,
+  "recipe": "radius4-disk-edge-pad-rounded-rgb-v1",
+  "torch": "2.8.0+cpu",
+  "ort": "1.22.1",
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "rows": [
+    {
+      "id": "coffee",
+      "condition": "clean",
+      "sourceSha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "inputSha256": "07c4ef89b02986fda11e44f7b832d43b9b482ad022a1f78d924cae33e7a25407",
+      "width": 512,
+      "height": 341,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.0847811379999257,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -5.390625,
+            9.015625
+          ],
+          "rawMae": 36.709564208984375
+        },
+        {
+          "model": "restormer",
+          "seconds": 20.84415077499989,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.03231896460056305,
+            1.0516974925994873
+          ],
+          "rawMae": 4.866217613220215
+        }
+      ]
+    },
+    {
+      "id": "coffee",
+      "condition": "defocus",
+      "sourceSha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "inputSha256": "3e1746fb2e488c2761ab0ca27c898bc7bd76fe7ef3dec16b5849cc9cdb036cc6",
+      "width": 512,
+      "height": 341,
+      "inputMae": 7.846350193023682,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.2020814780003093,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.036041259765625,
+            1.01953125
+          ],
+          "rawMae": 7.079318046569824
+        },
+        {
+          "model": "restormer",
+          "seconds": 19.792724386999907,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.00016903504729270935,
+            1.0021816492080688
+          ],
+          "rawMae": 6.141027927398682
+        }
+      ]
+    },
+    {
+      "id": "astronaut",
+      "condition": "clean",
+      "sourceSha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "inputSha256": "a8c429c18afa7b0fd5673e598d73a21225d94c864a71bbb3885126fdecb41071",
+      "width": 512,
+      "height": 512,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 2.03670913499991,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.10882568359375,
+            1.12890625
+          ],
+          "rawMae": 3.7504475116729736
+        },
+        {
+          "model": "restormer",
+          "seconds": 29.96942233200025,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.01096242293715477,
+            1.015853762626648
+          ],
+          "rawMae": 3.241558074951172
+        }
+      ]
+    },
+    {
+      "id": "astronaut",
+      "condition": "defocus",
+      "sourceSha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "inputSha256": "1784f95adfc2a416d6cc2bbac247087d767f109baa77afba528c2a9394adcdb4",
+      "width": 512,
+      "height": 512,
+      "inputMae": 8.305712699890137,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.7946807480002462,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.03521728515625,
+            1.0087890625
+          ],
+          "rawMae": 8.466525077819824
+        },
+        {
+          "model": "restormer",
+          "seconds": 29.532052206000117,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.003367993514984846,
+            1.0053001642227173
+          ],
+          "rawMae": 7.7522711753845215
+        }
+      ]
+    },
+    {
+      "id": "nasa-081",
+      "condition": "clean",
+      "sourceSha256": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputSha256": "0b2757fcc472ede7a0ad54735018bb7efb20938e954e128c9457fd0ccc145487",
+      "width": 512,
+      "height": 384,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.3921410620000643,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.022308349609375,
+            1.0361328125
+          ],
+          "rawMae": 0.1675957590341568
+        },
+        {
+          "model": "restormer",
+          "seconds": 21.840225483999802,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.0018891131039708853,
+            1.0158791542053223
+          ],
+          "rawMae": 5.481414794921875
+        }
+      ]
+    },
+    {
+      "id": "nasa-081",
+      "condition": "defocus",
+      "sourceSha256": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputSha256": "fce51deb0839a853a3c79d22b6d35717d82a529c0a1912fe924d41d77e499c3c",
+      "width": 512,
+      "height": 384,
+      "inputMae": 4.084806442260742,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.3519727050002075,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.05706787109375,
+            0.96240234375
+          ],
+          "rawMae": 3.6551055908203125
+        },
+        {
+          "model": "restormer",
+          "seconds": 22.271884996000153,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.016498491168022156,
+            0.9759823679924011
+          ],
+          "rawMae": 7.125008583068848
+        }
+      ]
+    },
+    {
+      "id": "nasa-084",
+      "condition": "clean",
+      "sourceSha256": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputSha256": "061d3999b4c84cf8909fe3951c5a833482a7e3f0f817860e579fa2a7a854868c",
+      "width": 410,
+      "height": 512,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.33184283699984,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.04119873046875,
+            1.0380859375
+          ],
+          "rawMae": 0.2355595827102661
+        },
+        {
+          "model": "restormer",
+          "seconds": 23.9249504899999,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.019573930650949478,
+            1.0056626796722412
+          ],
+          "rawMae": 5.597468852996826
+        }
+      ]
+    },
+    {
+      "id": "nasa-084",
+      "condition": "defocus",
+      "sourceSha256": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputSha256": "c6a8f095f69eeb838f4bd5b67628c3c44921cf0e778e2bbbb929cf5419af7906",
+      "width": 410,
+      "height": 512,
+      "inputMae": 3.632896661758423,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.1241920180000307,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.019287109375,
+            0.9853515625
+          ],
+          "rawMae": 2.8485231399536133
+        },
+        {
+          "model": "restormer",
+          "seconds": 23.30366956099988,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.003950485959649086,
+            0.9813346266746521
+          ],
+          "rawMae": 3.0582761764526367
+        }
+      ]
+    },
+    {
+      "id": "nasa-088",
+      "condition": "clean",
+      "sourceSha256": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputSha256": "cd3bf6b16e19ecc44b6c5bcace556cd8ca54c90aa6a41160c0e7b235e611a257",
+      "width": 512,
+      "height": 341,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.129207877999761,
+          "finite": true,
+          "numericallyAdmitted": false,
+          "range": [
+            -31.953125,
+            41.3125
+          ],
+          "rawMae": null
+        },
+        {
+          "model": "restormer",
+          "seconds": 19.59772055900021,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.0034166816622018814,
+            1.0252031087875366
+          ],
+          "rawMae": 7.52734375
+        }
+      ]
+    },
+    {
+      "id": "nasa-088",
+      "condition": "defocus",
+      "sourceSha256": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputSha256": "ce22c30629b18abea1558348625a3237ce610e1933275756d7a2f4247268593f",
+      "width": 512,
+      "height": 341,
+      "inputMae": 11.628108024597168,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.1596029769998495,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.0360107421875,
+            0.9775390625
+          ],
+          "rawMae": 10.440094947814941
+        },
+        {
+          "model": "restormer",
+          "seconds": 19.39642800499996,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.01920381188392639,
+            0.9854394793510437
+          ],
+          "rawMae": 7.9722819328308105
+        }
+      ]
+    },
+    {
+      "id": "nasa-097",
+      "condition": "clean",
+      "sourceSha256": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputSha256": "2f4ce41689fe2420641d214040702103f873ddfe02eef1e2c02462e3ee480750",
+      "width": 512,
+      "height": 383,
+      "inputMae": 0.0,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.4117212699998163,
+          "finite": true,
+          "numericallyAdmitted": false,
+          "range": [
+            -96.875,
+            200.5
+          ],
+          "rawMae": null
+        },
+        {
+          "model": "restormer",
+          "seconds": 22.435531404999892,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            -0.0046123964712023735,
+            1.0120116472244263
+          ],
+          "rawMae": 7.848120212554932
+        }
+      ]
+    },
+    {
+      "id": "nasa-097",
+      "condition": "defocus",
+      "sourceSha256": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputSha256": "2da4542dc4db6f1f7a466c5e28371f6b6270e522a7e2ab7657ee277bd2a5306c",
+      "width": 512,
+      "height": 383,
+      "inputMae": 11.058663368225098,
+      "paths": [
+        {
+          "model": "nafnet",
+          "seconds": 1.3134462019997954,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.020172119140625,
+            1.0048828125
+          ],
+          "rawMae": 11.900684356689453
+        },
+        {
+          "model": "restormer",
+          "seconds": 22.170589975999974,
+          "finite": true,
+          "numericallyAdmitted": true,
+          "range": [
+            0.019319362938404083,
+            1.0050626993179321
+          ],
+          "rawMae": 8.298819541931152
+        }
+      ]
+    }
+  ],
+  "complete": true,
+  "processMaxRssKiB": 3505964,
+  "limitations": [
+    "Six existing development sources, not held-out or genuinely damaged examples",
+    "Raw model outputs, without routing, face processing, fusion or final guard",
+    "Clean inputs deliberately forced through specialists to test routing hazards",
+    "Native host CPU timings are not browser/device budgets; no identity acceptance"
+  ]
+}

@@ -1,0 +1,944 @@
+{
+  "tasks": [
+    4,
+    5
+  ],
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "model": "Existing pinned NAFNet GoPro width32 FP16",
+  "scope": "Diagnostic comparison of reconstruction, unchanged PR117 fusion and final guard; not complete production finishing or browser execution",
+  "limitations": [
+    "Six public development sources, 18 synthetic cases; no held-out/human quality gate",
+    "NASA inputs remain private development candidates; no production/marketing usage clearance inferred",
+    "Motion is horizontal box blur, defocus disk radius2; not real camera damage",
+    "Small preview images, manual portrait box, no automated text/detector verification",
+    "WDN evaluated before blur for both isolated and mixed damage; not automatically selected",
+    "No weights distributed, no NAFNet conversion-parity claim"
+  ],
+  "summary": {
+    "comparisons": 18,
+    "cleanupBetter": 11,
+    "cleanupWorse": 6,
+    "cleanupTie": 1
+  },
+  "rows": [
+    {
+      "id": "coffee",
+      "condition": "motion",
+      "sourceHash": "22ca38c5f146af1dbc68f9b4c9c39e9ad04441bbf59766c722d3a5699d7efbbd",
+      "inputHash": "fe85c95e7e09720a1013e271b46012bd148f8d12745ad646eac6999b3d29d543",
+      "inputMae": 6.919761029411765,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 5.187438725490196
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 5.200582107843137
+            },
+            {
+              "name": "final-guard",
+              "mae": 5.200582107843137
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "1a72d28f900b85fe16026bc855a283a0cae1cc16bf30bce0c3da803abf97467a"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 7.598866421568627
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 6.705392156862745
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 6.6100183823529415
+            },
+            {
+              "name": "final-guard",
+              "mae": 6.220741421568627
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "ad2ae8d79c85ffc532f221a1172302fb1ee2b36499008a15fc3a74410663d143"
+        }
+      ]
+    },
+    {
+      "id": "coffee",
+      "condition": "defocus",
+      "sourceHash": "22ca38c5f146af1dbc68f9b4c9c39e9ad04441bbf59766c722d3a5699d7efbbd",
+      "inputHash": "f1795c4eb9672ee1c913011be6328a08a6d263b097b204f70bcc06550ec1c429",
+      "inputMae": 7.991145833333333,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 9.069607843137256
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 8.839399509803922
+            },
+            {
+              "name": "final-guard",
+              "mae": 8.839399509803922
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "94a1341da5bd3865200853f3db055f0a2acb7077dc1bdc9f042b638556a5f1e6"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 7.369332107843137
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 8.125459558823529
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 7.9212622549019605
+            },
+            {
+              "name": "final-guard",
+              "mae": 7.6542892156862745
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "f1817d6a499351b013bc4e2bf59b8241173b1f9d513a3719d2002464de7cd6d1"
+        }
+      ]
+    },
+    {
+      "id": "coffee",
+      "condition": "mixed",
+      "sourceHash": "22ca38c5f146af1dbc68f9b4c9c39e9ad04441bbf59766c722d3a5699d7efbbd",
+      "inputHash": "97a662509eb966961386e87e2734e04b15519e18afc52ee821853c860f3dcbce",
+      "inputMae": 12.77781862745098,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 125.16265318627451
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 94.04025735294118
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.567892156862746
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "4020075091cede14848d26ba3a8fdb0c7f409acc0e62787d92b53df777ad00e5"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 10.50064338235294
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 124.90287990196079
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 93.57270220588235
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.567892156862746
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "4020075091cede14848d26ba3a8fdb0c7f409acc0e62787d92b53df777ad00e5"
+        }
+      ]
+    },
+    {
+      "id": "astronaut",
+      "condition": "motion",
+      "sourceHash": "519d86e102cf88b1f58c37af549551995e1aa3c4b847ede92e2f254fe571fdc9",
+      "inputHash": "648fe790f098e06c270b05722c21d250d68ce0a08a1e0f58eba5e9f02fdc28e3",
+      "inputMae": 12.050984700520834,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 7.144856770833333
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 7.36669921875
+            },
+            {
+              "name": "final-guard",
+              "mae": 7.36669921875
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "91ad34453a5895786bf5a3b874844ecaaa75b5f3b06eaa6109a0477c6939d3cf"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 12.895853678385416
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 10.7801513671875
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 10.706990559895834
+            },
+            {
+              "name": "final-guard",
+              "mae": 10.309895833333334
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "c6362e045aaf39ba8b7ada011045686ef254d267466ee64260cdcd1e2f81e2a7"
+        }
+      ]
+    },
+    {
+      "id": "astronaut",
+      "condition": "defocus",
+      "sourceHash": "519d86e102cf88b1f58c37af549551995e1aa3c4b847ede92e2f254fe571fdc9",
+      "inputHash": "786c8856a8e59d332dddb7b6e4934dd983b20761b0c06c1aca800b2cefb80346",
+      "inputMae": 11.536580403645834,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 11.55157470703125
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 11.392354329427084
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.392354329427084
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "6fa07ee213ce4715100668083d9b09e9808e89497f1a08e9db5cbf35f0e93797"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 9.677083333333334
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 10.355855305989584
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 10.1123046875
+            },
+            {
+              "name": "final-guard",
+              "mae": 10.050374348958334
+            }
+          ],
+          "guardStages": 3,
+          "outputHash": "8aefe8c373e202b3d434165c41a2e0700ae52081f2c6e47da988e149e9e70bb7"
+        }
+      ]
+    },
+    {
+      "id": "astronaut",
+      "condition": "mixed",
+      "sourceHash": "519d86e102cf88b1f58c37af549551995e1aa3c4b847ede92e2f254fe571fdc9",
+      "inputHash": "1a62398f23eebe5d5ea99084d71ed6d4da0a41d036763a7309dd0479644aa869",
+      "inputMae": 15.316426595052084,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 52.993509928385414
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 42.447896321614586
+            },
+            {
+              "name": "final-guard",
+              "mae": 19.497884114583332
+            }
+          ],
+          "guardStages": 5,
+          "outputHash": "7250b57c526e2e7622c52814ce64f0cd207eff9fe4f98bac10c20d2b54106e8c"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 13.02716064453125
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 124.99619547526042
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 94.1033935546875
+            },
+            {
+              "name": "final-guard",
+              "mae": 14.6170654296875
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "13ae4a5d0123a5369fcad4e91e2ff1bc970f9959f517e1adc0af37a9b0639876"
+        }
+      ]
+    },
+    {
+      "id": "nasa-081",
+      "condition": "motion",
+      "sourceHash": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputHash": "5595ce42637593b19d8f4e93f6aefa912aecd7d06862ceb07ed166a709f4d084",
+      "inputMae": 3.9190809461805554,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 3.3397352430555554
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 3.3374565972222223
+            },
+            {
+              "name": "final-guard",
+              "mae": 3.3374565972222223
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "0e604e8896a4fce96cfe032d21279538f35ac186e7f9ea9fd8600a08d15782f6"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 5.174994574652778
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 5.092149522569445
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 5.028103298611111
+            },
+            {
+              "name": "final-guard",
+              "mae": 5.028103298611111
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "4a1ef5f206409f0c68e79254c89d1c7d06eabca7509e784fee887692ce9ad932"
+        }
+      ]
+    },
+    {
+      "id": "nasa-081",
+      "condition": "defocus",
+      "sourceHash": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputHash": "27b71fb649cab4d121a0964b22c7da6d0abbaf5169d479ecc40ad6f849220ac6",
+      "inputMae": 6.330891927083333,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 8.218126085069445
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 8.02121310763889
+            },
+            {
+              "name": "final-guard",
+              "mae": 8.02121310763889
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "c30e120dee7eac0786747b26a84e68101a27e042ff7c72e758da30fbf1b19133"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 5.934027777777778
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 5.975260416666667
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 5.960883246527778
+            },
+            {
+              "name": "final-guard",
+              "mae": 6.015218098958333
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "663a5fd090c199eb18e8e06619094a3b7dd254dd6808c378f99a90832c1deef2"
+        }
+      ]
+    },
+    {
+      "id": "nasa-081",
+      "condition": "mixed",
+      "sourceHash": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputHash": "bde33760e2673ac9b8bd37c8b9094ffd2f6e895638fe42c7fbd326a146310ed8",
+      "inputMae": 12.865614149305555,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 117.08704969618056
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 86.00623914930556
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.400227864583334
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "e3660dc992e541ef9a2350b04dcf3491568013aa09b22dbd93c42a9f3179d499"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 8.838297526041666
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 8.536024305555555
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 8.537679036458334
+            },
+            {
+              "name": "final-guard",
+              "mae": 9.532769097222221
+            }
+          ],
+          "guardStages": 4,
+          "outputHash": "44097f630418389857274e812aeae0ed73cc0c1d8061443fb414956a5117260b"
+        }
+      ]
+    },
+    {
+      "id": "nasa-084",
+      "condition": "motion",
+      "sourceHash": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputHash": "210b7c84044c30086d3bab05a61d6dfb84536082b4566ab96345cd3d1192f15b",
+      "inputMae": 4.6101664624183005,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 4.881280637254902
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 4.783828635620915
+            },
+            {
+              "name": "final-guard",
+              "mae": 4.783828635620915
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "2c6c7c5c9d56fd2637c4aea390663f6ab0fecdefc86423f1a2c4fdb3cb9d775d"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 5.327154820261438
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 5.991830065359477
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 5.799453635620915
+            },
+            {
+              "name": "final-guard",
+              "mae": 5.799453635620915
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "ad948ddccbc09e5eb6b21796b0bb4c4b41b9cc1d43461e2b15dd96382ed7bc06"
+        }
+      ]
+    },
+    {
+      "id": "nasa-084",
+      "condition": "defocus",
+      "sourceHash": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputHash": "2b48f3064eb2431e5ba526b74483a6b48b6af7e4fc4a9a7315351f05bd03cace",
+      "inputMae": 5.581367442810458,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 8.921364379084967
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 8.486621732026144
+            },
+            {
+              "name": "final-guard",
+              "mae": 8.486621732026144
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "3999761ff17f2e5f9c8f5f45a534f69a01502312a65cf38a9efd1f47d2e57912"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 4.98547283496732
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 6.100694444444445
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 5.924760008169935
+            },
+            {
+              "name": "final-guard",
+              "mae": 5.924760008169935
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "1ab8eca708bb252f1ac63603bc8072275f1eed6a138187ca8d52e59f376f7bc5"
+        }
+      ]
+    },
+    {
+      "id": "nasa-084",
+      "condition": "mixed",
+      "sourceHash": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputHash": "92463ec023bee1b03b1f4369c8f7a7529b917a7075ab9fda013a1ad0a66232b9",
+      "inputMae": 11.832465277777779,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 12.066176470588236
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 11.892080269607844
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.892080269607844
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "78a326c84f93fbc74d98a75d42ef22ce347eb94dd0c7d61f85a14120dffc8a42"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 8.154616013071895
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 8.239404616013072
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 8.059972426470589
+            },
+            {
+              "name": "final-guard",
+              "mae": 8.059972426470589
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "31246c8c5e6334ed9e332589c6524477542fdbe36b7248fae840dc5660e1e283"
+        }
+      ]
+    },
+    {
+      "id": "nasa-088",
+      "condition": "motion",
+      "sourceHash": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputHash": "fb0cfb52ff8f5df785bd789e07d9a0c19fa515db69ab36abba4da5a7615e3604",
+      "inputMae": 11.814399509803922,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 10.879656862745097
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 10.88719362745098
+            },
+            {
+              "name": "final-guard",
+              "mae": 10.88719362745098
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "9d0f326f5600a0c649a1bc1e88a5ae9a800dbb313755592d3051ff35c2715f8f"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 13.000030637254902
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 133.30723039215687
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 110.41979166666667
+            },
+            {
+              "name": "final-guard",
+              "mae": 34.82671568627451
+            }
+          ],
+          "guardStages": 5,
+          "outputHash": "a1951023601fd878adbcc1d6430d4eaea6b5ed81686a1ce667cd652e3e98f734"
+        }
+      ]
+    },
+    {
+      "id": "nasa-088",
+      "condition": "defocus",
+      "sourceHash": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputHash": "7bb74c10a42656418d1adb1ccc7541adb7f546b025cdac9e3f49ef4a15e504fd",
+      "inputMae": 14.951041666666667,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 18.71813725490196
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 18.083486519607842
+            },
+            {
+              "name": "final-guard",
+              "mae": 17.301531862745097
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "bffda67fb7fec9717f255a4d86285a37970a40809a52756da1240fb888a076f9"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 14.807720588235295
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 13.847549019607843
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 13.835845588235294
+            },
+            {
+              "name": "final-guard",
+              "mae": 13.877083333333333
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "023c84cdd8e8045bfe560cbad39ac1e745a540bce4ad679e7a94ebb3dfa90042"
+        }
+      ]
+    },
+    {
+      "id": "nasa-088",
+      "condition": "mixed",
+      "sourceHash": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputHash": "6dc78902cf8266e64c373907148eb33cdfd21c1fc8db05cee65c2302aaddf895",
+      "inputMae": 18.23189338235294,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 18.47610294117647
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 18.29886642156863
+            },
+            {
+              "name": "final-guard",
+              "mae": 18.29886642156863
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "74391b5be904ab56e5c52feba0005e49e31fc731bc53dc9011b6d057975eae99"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 16.86326593137255
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 106.0188112745098
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 81.6359375
+            },
+            {
+              "name": "final-guard",
+              "mae": 17.383547794117646
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "e9c4c90e34c01dd624cf2d43df00a5e18a09f2a879ccdb3f472917e573f0784d"
+        }
+      ]
+    },
+    {
+      "id": "nasa-097",
+      "condition": "motion",
+      "sourceHash": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputHash": "f9075dba767cf2ae039ed7ef3090f7de7f195196242b058ee6a912c820c61999",
+      "inputMae": 11.52316623263889,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 10.912272135416666
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 10.920301649305555
+            },
+            {
+              "name": "final-guard",
+              "mae": 10.920301649305555
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "d50e3bb52d761636dfd13fe9a7f4545e7400ccad8d2858685d934759d60a67fe"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 12.784532335069445
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 79.64491102430556
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 68.38717990451389
+            },
+            {
+              "name": "final-guard",
+              "mae": 11.65823025173611
+            }
+          ],
+          "guardStages": 6,
+          "outputHash": "c0537c36fa9248041bd1148708d648d510326ce214e748d2511bd9f6d4ee1f86"
+        }
+      ]
+    },
+    {
+      "id": "nasa-097",
+      "condition": "defocus",
+      "sourceHash": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputHash": "c08f1e99554307dc6573976a795f5e0bec70f5a145f726d90dc5dc5d1e6f4a1d",
+      "inputMae": 13.27365451388889,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 17.16425238715278
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 16.392333984375
+            },
+            {
+              "name": "final-guard",
+              "mae": 15.53933376736111
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "b239a6527bd031aaf5959afb0a4b9a0fd397ea0c1da43e4716d715b3da5e49e1"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 13.574381510416666
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 13.326063368055555
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 13.223334418402779
+            },
+            {
+              "name": "final-guard",
+              "mae": 12.940049913194445
+            }
+          ],
+          "guardStages": 1,
+          "outputHash": "7deae90c96f7001291cedda26fd1dd4515cfa84c35241d4168058cbd609caf95"
+        }
+      ]
+    },
+    {
+      "id": "nasa-097",
+      "condition": "mixed",
+      "sourceHash": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputHash": "fec21d33bcb92020c9b59b295f722627d5ebd5db330ad33c8f722e57d2c3eca9",
+      "inputMae": 16.356092664930557,
+      "paths": [
+        {
+          "route": "deblur",
+          "stages": [
+            {
+              "name": "raw-deblur",
+              "mae": 15.964436848958334
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 15.927435980902779
+            },
+            {
+              "name": "final-guard",
+              "mae": 15.927435980902779
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "0e436309c02da1933d9ddb31a5e8837e37004beac8cc2a18c5f01067374c1a2b"
+        },
+        {
+          "route": "cleanup-deblur",
+          "stages": [
+            {
+              "name": "cleanup-face-protected",
+              "mae": 15.289957682291666
+            },
+            {
+              "name": "raw-deblur",
+              "mae": 14.875379774305555
+            },
+            {
+              "name": "pr117-fusion",
+              "mae": 14.692979600694445
+            },
+            {
+              "name": "final-guard",
+              "mae": 14.692979600694445
+            }
+          ],
+          "guardStages": 0,
+          "outputHash": "ced15dfc3d1044cce9242d5cdffd6a1ab8d3b8f403b3098de1e635b78c5026a9"
+        }
+      ]
+    }
+  ]
+}

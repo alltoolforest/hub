@@ -1,0 +1,42 @@
+{
+  "kind": "original-checkpoint-photographic-parity",
+  "sourceCommit": "2b4af71ebe098a92a75910c233a3965a3e93ede4",
+  "checkpointSha256": "19394e6155d12ef6371d1d57496f87f0ec88f92bdffa27c0792690722d5d1a5c",
+  "torch": "2.8.0+cpu",
+  "ort": "1.22.1",
+  "inputContract": "Native dimensions, official internal zero padding, RGB 0..1",
+  "rows": [
+    {
+      "route": "deblur",
+      "inputSha256": "736d172a5a8e73028495f381f5fb76a209e555a9612f9dc99cd6f3296320488d",
+      "originalRange": [
+        -1.214800477027893,
+        3.896657705307007
+      ],
+      "convertedRange": [
+        -1.2216796875,
+        3.888671875
+      ],
+      "maxAbsDifference": 0.042450666427612305,
+      "originalRawRgbMae": 53.35011672973633,
+      "convertedRawRgbMae": 52.99351119995117,
+      "parityRtol1e4Atol1e5": false
+    },
+    {
+      "route": "cleanup-deblur",
+      "inputSha256": "0ea1db33f1a22e1cf900e364f3543a41e198a1948d6673623fb12bb82de72f54",
+      "originalRange": [
+        -42.573699951171875,
+        55.278072357177734
+      ],
+      "convertedRange": [
+        -42.0,
+        56.3125
+      ],
+      "maxAbsDifference": 2.9027481079101562,
+      "originalRawRgbMae": 124.966796875,
+      "convertedRawRgbMae": 124.9961166381836,
+      "parityRtol1e4Atol1e5": false
+    }
+  ]
+}

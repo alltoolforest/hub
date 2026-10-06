@@ -1,0 +1,146 @@
+{
+  "task": 4,
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "cases": [
+    {
+      "name": "coffee",
+      "condition": "color-noise",
+      "status": "success",
+      "inputHash": "deaea016c6aacfe323226a7d671682df0fadcdc1810f38be25d46a9bcf7601f8",
+      "outputHash": "f529aa0243432082d6982398419588fec5a2d114044f23d9b240918f4a85489b",
+      "inputMae": 15.054258578431373,
+      "outputMae": 10.970435049019608,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "coffee",
+      "condition": "heavy-jpeg",
+      "status": "success",
+      "inputHash": "35962aa7a099efabd2b2fd070bbea1832165fd43674402d4efa4ae3df197d553",
+      "outputHash": "a4739f6199bc1b4541eefc20336641275ebb01260372eb5b0690642269e2760d",
+      "inputMae": 10.225428921568627,
+      "outputMae": 8.689705882352941,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "coffee",
+      "condition": "repeated-jpeg",
+      "status": "success",
+      "inputHash": "c68127d23c86e88234de6bb77f1a93fa966400a8b15a010e3a8983e613462c49",
+      "outputHash": "80103f5888dd26182009363ffe96c57082d4a547a6046f2745dbecc1bb481be6",
+      "inputMae": 14.56078431372549,
+      "outputMae": 11.811397058823529,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "coffee",
+      "condition": "mixed-cleanup-only",
+      "status": "limited",
+      "inputHash": "3ebe9e9e6ab9267dfe94f6ef592b9508075ef18e028e3b3752d69c3b2c26c647",
+      "outputHash": "07e0c7cfddbf490ef0e24b026666e069bc5b1b3ac314c2c73daef33fec43ccd6",
+      "inputMae": 6.673069852941176,
+      "outputMae": 5.834497549019608,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 2
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "astronaut",
+      "condition": "color-noise",
+      "status": "success",
+      "inputHash": "6e1ceb08b593cb6e40b966e03b4560324d2f060e9535f425e7c0e1d2cfdc6f8c",
+      "outputHash": "5614bc5453cf734f1943284527f47a06df81ed34c4963b0b7829b3ecfce7c1f6",
+      "inputMae": 14.503255208333334,
+      "outputMae": 10.908447265625,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "astronaut",
+      "condition": "heavy-jpeg",
+      "status": "limited",
+      "inputHash": "ddb052b0d922a43c7611fecf55c13e69944d07f9643f2342230c3ff9fcf3eae8",
+      "outputHash": "4523a7600e191202d3aa7d618c2d4e063ff03b526b630d593dcc77d9c4974107",
+      "inputMae": 11.221415201822916,
+      "outputMae": 10.375020345052084,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 1
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "astronaut",
+      "condition": "repeated-jpeg",
+      "status": "success",
+      "inputHash": "140c4064799a7fcf2d33830e52a34e7579941f355c64bcb0bd41a8b651e1a53f",
+      "outputHash": "e17a5b42bf884fffc467ffaed70ea42897a82765f819e2a4ca9442ada1d01a73",
+      "inputMae": 16.123779296875,
+      "outputMae": 15.0985107421875,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 0
+      },
+      "boundedRepeatPass": true
+    },
+    {
+      "name": "astronaut",
+      "condition": "mixed-cleanup-only",
+      "status": "limited",
+      "inputHash": "58b9f1727d4d941b643c908f836ebba8d7e90b2ba41e7d9662371ff100f6685f",
+      "outputHash": "9eaa7da135007badda938d68d848e3def46bb32770f01b8ad680e2ee40397282",
+      "inputMae": 8.507649739583334,
+      "outputMae": 7.744649251302083,
+      "stats": {
+        "loads": 1,
+        "runs": 1,
+        "releases": 1,
+        "guardStages": 5
+      },
+      "boundedRepeatPass": true
+    }
+  ],
+  "checks": {
+    "mixedRouteHonestFallback": true
+  },
+  "limitations": [
+    "Two development sources; no held-out acceptance",
+    "Synthetic color noise and JPEG qualities 15 / 35-20-15",
+    "Mixed case isolates cleanup; complete mixed route falls back without deblur",
+    "Manual face box and diagnostic text=false; no detector or text-safety certification",
+    "Bound applies within one job; re-upload/new job not recognized",
+    "Node WASM/native canvas; no physical device or human quality acceptance"
+  ]
+}

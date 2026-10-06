@@ -1,0 +1,105 @@
+{
+  "kind": "restormer-defocus-export-parity",
+  "sourceCommit": "68dc6ac472db26f16361150cb7a96a1bc87da93f",
+  "checkpointSha256": "7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e",
+  "onnxSha256": "3aae021fb8914cd5806d6129fd22d7d0a47869a073477397bde1409f20f937c7",
+  "bytes": 107114302,
+  "torch": "2.8.0+cpu",
+  "onnx": "1.18.0",
+  "ort": "1.22.1",
+  "opset": 17,
+  "operators": {
+    "Conv": 274,
+    "Shape": 1408,
+    "Constant": 4711,
+    "Gather": 1320,
+    "Mul": 1044,
+    "Transpose": 223,
+    "Unsqueeze": 1895,
+    "Concat": 531,
+    "Reshape": 537,
+    "ReduceMean": 264,
+    "Sub": 176,
+    "Add": 397,
+    "Sqrt": 88,
+    "Div": 440,
+    "Slice": 220,
+    "Cast": 264,
+    "ReduceL2": 88,
+    "Clip": 88,
+    "Expand": 88,
+    "MatMul": 88,
+    "Softmax": 44,
+    "Erf": 44,
+    "Squeeze": 3,
+    "DepthToSpace": 3
+  },
+  "tolerance": {
+    "rtol": 0.0001,
+    "atol": 1e-05
+  },
+  "rows": [
+    {
+      "id": "synthetic-32x32",
+      "shape": [
+        1,
+        3,
+        32,
+        32
+      ],
+      "finite": true,
+      "sameShape": true,
+      "maxAbsDifference": 4.172325134277344e-07,
+      "meanAbsDifference": 5.2087369084574675e-08,
+      "pass": true
+    },
+    {
+      "id": "synthetic-64x80",
+      "shape": [
+        1,
+        3,
+        64,
+        80
+      ],
+      "finite": true,
+      "sameShape": true,
+      "maxAbsDifference": 3.2782554626464844e-07,
+      "meanAbsDifference": 5.850949236219094e-08,
+      "pass": true
+    },
+    {
+      "id": "coffee",
+      "shape": [
+        1,
+        3,
+        88,
+        128
+      ],
+      "finite": true,
+      "sameShape": true,
+      "maxAbsDifference": 1.0728836059570312e-06,
+      "meanAbsDifference": 3.766454526044072e-08,
+      "pass": true
+    },
+    {
+      "id": "astronaut",
+      "shape": [
+        1,
+        3,
+        128,
+        128
+      ],
+      "finite": true,
+      "sameShape": true,
+      "maxAbsDifference": 8.940696716308594e-07,
+      "meanAbsDifference": 4.5465281317547124e-08,
+      "pass": true
+    }
+  ],
+  "pass": true,
+  "production": false,
+  "limitations": [
+    "Sampled parity only; does not establish all shapes or perceptual quality",
+    "No browser/device, tile, cancellation or rights acceptance"
+  ]
+}

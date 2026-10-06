@@ -1,0 +1,115 @@
+{
+  "kind": "isolated-restormer-single-image-defocus",
+  "sourceCommit": "68dc6ac472db26f16361150cb7a96a1bc87da93f",
+  "checkpointSha256": "7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e",
+  "checkpointBytes": 104700429,
+  "parameters": 26126644,
+  "torch": "2.8.0+cpu",
+  "inputContract": "RGB 0..1, reflect pad right/bottom to multiple of 8, crop to native dimensions",
+  "production": false,
+  "acceptance": "NOT_EVALUATED",
+  "rows": [
+    {
+      "id": "coffee",
+      "sourceHash": "22ca38c5f146af1dbc68f9b4c9c39e9ad04441bbf59766c722d3a5699d7efbbd",
+      "inputHash": "f1795c4eb9672ee1c913011be6328a08a6d263b097b204f70bcc06550ec1c429",
+      "inputMae": 7.991145833333333,
+      "nafRawMae": 8.206433823529412,
+      "width": 128,
+      "height": 85,
+      "finite": true,
+      "range": [
+        0.002549270633608103,
+        0.9860537052154541
+      ],
+      "rawMae": 6.3963541984558105,
+      "nativeCpuSeconds": 1.513638963999938
+    },
+    {
+      "id": "astronaut",
+      "sourceHash": "519d86e102cf88b1f58c37af549551995e1aa3c4b847ede92e2f254fe571fdc9",
+      "inputHash": "786c8856a8e59d332dddb7b6e4934dd983b20761b0c06c1aca800b2cefb80346",
+      "inputMae": 11.536580403645834,
+      "nafRawMae": 11.55157470703125,
+      "width": 128,
+      "height": 128,
+      "finite": true,
+      "range": [
+        -0.00047941884258762,
+        1.003244400024414
+      ],
+      "rawMae": 10.567626953125,
+      "nativeCpuSeconds": 1.2449696190000168
+    },
+    {
+      "id": "nasa-081",
+      "sourceHash": "04b3eba2527483f3cd98e34f34282e8399675b1562c57532b0f6317e261360d7",
+      "inputHash": "27b71fb649cab4d121a0964b22c7da6d0abbaf5169d479ecc40ad6f849220ac6",
+      "inputMae": 6.330891927083333,
+      "nafRawMae": 8.218126085069445,
+      "width": 128,
+      "height": 96,
+      "finite": true,
+      "range": [
+        0.08451151847839355,
+        0.9663904905319214
+      ],
+      "rawMae": 7.19737434387207,
+      "nativeCpuSeconds": 0.8071763079999528
+    },
+    {
+      "id": "nasa-084",
+      "sourceHash": "25a16ff56bfcbe2082af94e59f0ae225e6aa4a1e6aa551fa5601dbd8eb10e470",
+      "inputHash": "2b48f3064eb2431e5ba526b74483a6b48b6af7e4fc4a9a7315351f05bd03cace",
+      "inputMae": 5.581367442810458,
+      "nafRawMae": 6.026296977124183,
+      "width": 102,
+      "height": 128,
+      "finite": true,
+      "range": [
+        0.018287377431988716,
+        0.9872687458992004
+      ],
+      "rawMae": 5.004263877868652,
+      "nativeCpuSeconds": 0.8239062019999892
+    },
+    {
+      "id": "nasa-088",
+      "sourceHash": "0c8550add632b678d793941b55777b82448494ff6eb48455e79defde1d1bee04",
+      "inputHash": "7bb74c10a42656418d1adb1ccc7541adb7f546b025cdac9e3f49ef4a15e504fd",
+      "inputMae": 14.951041666666667,
+      "nafRawMae": 15.62077205882353,
+      "width": 128,
+      "height": 85,
+      "finite": true,
+      "range": [
+        0.10197679698467255,
+        0.9617615938186646
+      ],
+      "rawMae": 14.385478019714355,
+      "nativeCpuSeconds": 0.7239929999999504
+    },
+    {
+      "id": "nasa-097",
+      "sourceHash": "c552ed3c897cf9773b83f2dfd4bec011199cac4ef22de4d9b4bfb97d24626aac",
+      "inputHash": "c08f1e99554307dc6573976a795f5e0bec70f5a145f726d90dc5dc5d1e6f4a1d",
+      "inputMae": 13.27365451388889,
+      "nafRawMae": 17.16425238715278,
+      "width": 128,
+      "height": 96,
+      "finite": true,
+      "range": [
+        0.04976975917816162,
+        1.010656476020813
+      ],
+      "rawMae": 19.31553840637207,
+      "nativeCpuSeconds": 0.7489072249999253
+    }
+  ],
+  "limitations": [
+    "Six synthetic development examples; no held-out or real-damage acceptance",
+    "Raw outputs only; no production fusion, face protection, or final guard",
+    "Native workspace CPU timings are not physical-device or browser budgets",
+    "No ONNX conversion, browser execution, rights closure or model admission"
+  ]
+}

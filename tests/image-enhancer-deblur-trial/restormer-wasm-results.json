@@ -1,0 +1,46 @@
+{
+  "kind": "restormer-photographic-node-wasm-parity",
+  "production": false,
+  "modelSha256": "3aae021fb8914cd5806d6129fd22d7d0a47869a073477397bde1409f20f937c7",
+  "bytes": 107114302,
+  "shape": [
+    1,
+    3,
+    88,
+    128
+  ],
+  "inputSha256": "5da44958df3fb72193bab60840232137a42713f8a43a9e4e10978d8356ef7c45",
+  "nativeOutputSha256": "7aa982404f1d9fc00fe680cc4d7cb7881573a75bf73c80721eca5b745750abea",
+  "runtime": "1.30.0",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "node": "v24.19.0"
+  },
+  "threads": 1,
+  "runs": [
+    {
+      "elapsedMs": 2801.6967799999998,
+      "maxAbsDifference": 6.258487701416016e-7,
+      "meanAbsDifference": 3.332524322490137e-8,
+      "pass": true,
+      "outputSha256": "683bab07e9038bd5138bc242ae280b615f6a516bcc6da2d976be05e89af384c3"
+    },
+    {
+      "elapsedMs": 2701.011697000001,
+      "maxAbsDifference": 6.258487701416016e-7,
+      "meanAbsDifference": 3.332524322490137e-8,
+      "pass": true,
+      "outputSha256": "683bab07e9038bd5138bc242ae280b615f6a516bcc6da2d976be05e89af384c3"
+    }
+  ],
+  "limitations": [
+    "Node WASM is not physical-device or browser acceptance",
+    "One small photographic input; no full-size/tiled/cancellation/quality acceptance"
+  ],
+  "sessionMs": 3811.928294,
+  "repeatEqual": true,
+  "pass": true,
+  "processMaxRssKiB": 534108
+}

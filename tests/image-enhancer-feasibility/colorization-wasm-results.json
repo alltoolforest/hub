@@ -1,0 +1,40 @@
+{
+  "kind": "colorization-node-wasm-parity",
+  "modelSha256": "45762c9be2b23f31fc976e7b030659a944c03dc0c9dedcb97dc2276dff515c7f",
+  "bytes": 128964651,
+  "runtime": "1.30.0",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "node": "v24.19.0"
+  },
+  "threads": 1,
+  "inputSha256": "7b51a1dd6c6c8fb32886390e09324a1ced33085f66d2deb02d45ad76c8eb0ab3",
+  "nativeOutputSha256": "b9caa7d5818867939c37d79d1c22a2fee989a4c73f5f0d402c0903925a8ba96e",
+  "runs": [
+    {
+      "elapsedMs": 2647.720718,
+      "maxAbsChromaDifference": 0.0000362396240234375,
+      "meanAbsChromaDifference": 0.00000347998651317738,
+      "pass": true,
+      "outputSha256": "6a7f5d32450f20157b86a2e24f64cf945a690d52c54b568c6a5343e2cd6a0a20"
+    },
+    {
+      "elapsedMs": 2650.8427119999997,
+      "maxAbsChromaDifference": 0.0000362396240234375,
+      "meanAbsChromaDifference": 0.00000347998651317738,
+      "pass": true,
+      "outputSha256": "6a7f5d32450f20157b86a2e24f64cf945a690d52c54b568c6a5343e2cd6a0a20"
+    }
+  ],
+  "production": false,
+  "limitations": [
+    "One photographic luminance input; no full quality or browser/device acceptance",
+    "No application integration or default colorization"
+  ],
+  "sessionMs": 367.81762299999997,
+  "repeatEqual": true,
+  "pass": true,
+  "processMaxRssKiB": 537176
+}

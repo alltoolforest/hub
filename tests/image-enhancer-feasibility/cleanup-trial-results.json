@@ -1,0 +1,388 @@
+{
+  "kind": "isolated-cleanup-feasibility",
+  "acceptance": "NOT_EVALUATED",
+  "productionIntegration": false,
+  "host": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "versions": {
+    "torch": "2.8.0+cpu",
+    "onnx": "1.18.0",
+    "onnxruntime": "1.22.1"
+  },
+  "models": {
+    "general": {
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
+      "sha256": "8dc7edb9ac80ccdc30c3a5dca6616509367f05fbc184ad95b731f05bece96292",
+      "bytes": 4885111,
+      "expectedHashVerified": false,
+      "exportSha256": "7538e98803922c7836e407e6b49e1ff422b63c5f9a18d2146d752f83e5bee2c8",
+      "exportBytes": 4866419,
+      "parity": [
+        {
+          "shape": [
+            16,
+            16
+          ],
+          "maxAbs": 2.562999725341797e-06,
+          "meanAbs": 3.4282629712834023e-07,
+          "pass": true
+        },
+        {
+          "shape": [
+            31,
+            47
+          ],
+          "maxAbs": 8.642673492431641e-07,
+          "meanAbs": 1.1828081625253617e-07,
+          "pass": true
+        },
+        {
+          "shape": [
+            64,
+            64
+          ],
+          "maxAbs": 8.344650268554688e-07,
+          "meanAbs": 1.1388444676185827e-07,
+          "pass": true
+        }
+      ]
+    },
+    "wdn": {
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth",
+      "sha256": "1641f8c4464b9f097c9fdda5589273713f67cf59f3d909e0bd688f0cee269dca",
+      "bytes": 4885111,
+      "expectedHashVerified": false,
+      "exportSha256": "2a2ee04b4a6436c8da3bb2b7346f72fbca7ca1aa90e075308f3f1ed9035416a3",
+      "exportBytes": 4866419,
+      "parity": [
+        {
+          "shape": [
+            16,
+            16
+          ],
+          "maxAbs": 5.424022674560547e-06,
+          "meanAbs": 6.451517151617736e-07,
+          "pass": true
+        },
+        {
+          "shape": [
+            31,
+            47
+          ],
+          "maxAbs": 6.4373016357421875e-06,
+          "meanAbs": 4.064715710683231e-07,
+          "pass": true
+        },
+        {
+          "shape": [
+            64,
+            64
+          ],
+          "maxAbs": 5.602836608886719e-06,
+          "meanAbs": 4.204823653708445e-07,
+          "pass": true
+        }
+      ]
+    },
+    "existing": {
+      "url": "https://cdn.jsdelivr.net/gh/NovareOrbis/nova-ai-models@v3/realesr-general-x4v3.onnx",
+      "sha256": "09b757accd747d7e423c1d352b3e8f23e77cc5742d04bae958d4eb8082b76fa4",
+      "bytes": 4871181,
+      "expectedHashVerified": true
+    }
+  },
+  "photos": [
+    {
+      "source": "astronaut",
+      "credit": "NASA, public domain; no endorsement. scikit-image data documentation",
+      "degradation": "clean",
+      "input": {
+        "mae": 0.0,
+        "rmse": 0.0
+      },
+      "outputs": {
+        "general": {
+          "mae": 6.74188232421875,
+          "rmse": 11.499905350889941,
+          "inferenceMs": 230.10887800001
+        },
+        "wdn": {
+          "mae": 5.6939697265625,
+          "rmse": 9.999904377798028,
+          "inferenceMs": 205.89339200000722
+        },
+        "existing": {
+          "mae": 6.738240559895833,
+          "rmse": 11.489817658724144,
+          "inferenceMs": 217.9710340001293
+        }
+      }
+    },
+    {
+      "source": "astronaut",
+      "credit": "NASA, public domain; no endorsement. scikit-image data documentation",
+      "degradation": "noise",
+      "input": {
+        "mae": 8.80828857421875,
+        "rmse": 11.417977881952671
+      },
+      "outputs": {
+        "general": {
+          "mae": 7.199137369791667,
+          "rmse": 11.031854917314073,
+          "inferenceMs": 208.49422000014783
+        },
+        "wdn": {
+          "mae": 6.7337646484375,
+          "rmse": 9.981611511142628,
+          "inferenceMs": 229.2615300000307
+        },
+        "existing": {
+          "mae": 7.196512858072917,
+          "rmse": 11.025725828514553,
+          "inferenceMs": 211.52487499989547
+        }
+      }
+    },
+    {
+      "source": "astronaut",
+      "credit": "NASA, public domain; no endorsement. scikit-image data documentation",
+      "degradation": "jpeg",
+      "input": {
+        "mae": 10.498514811197916,
+        "rmse": 15.312564439702845
+      },
+      "outputs": {
+        "general": {
+          "mae": 10.833719889322916,
+          "rmse": 17.023219986754796,
+          "inferenceMs": 266.84681500000806
+        },
+        "wdn": {
+          "mae": 9.61578369140625,
+          "rmse": 14.787472125704568,
+          "inferenceMs": 233.5333940000055
+        },
+        "existing": {
+          "mae": 10.830586751302084,
+          "rmse": 17.015900599428626,
+          "inferenceMs": 207.002459000023
+        }
+      }
+    },
+    {
+      "source": "astronaut",
+      "credit": "NASA, public domain; no endorsement. scikit-image data documentation",
+      "degradation": "low-resolution",
+      "input": {
+        "mae": 9.385965983072916,
+        "rmse": 15.702134478502902
+      },
+      "outputs": {
+        "general": {
+          "mae": 9.874532063802084,
+          "rmse": 16.67675618270363,
+          "inferenceMs": 257.2230789999139
+        },
+        "wdn": {
+          "mae": 8.632914225260416,
+          "rmse": 14.764753474059077,
+          "inferenceMs": 255.53690500009907
+        },
+        "existing": {
+          "mae": 9.87017822265625,
+          "rmse": 16.668745191030116,
+          "inferenceMs": 203.18533699992258
+        }
+      }
+    },
+    {
+      "source": "astronaut",
+      "credit": "NASA, public domain; no endorsement. scikit-image data documentation",
+      "degradation": "mixed",
+      "input": {
+        "mae": 8.507649739583334,
+        "rmse": 12.018491273324583
+      },
+      "outputs": {
+        "general": {
+          "mae": 6.516255696614583,
+          "rmse": 10.007950737400718,
+          "inferenceMs": 257.52472399994986
+        },
+        "wdn": {
+          "mae": 6.887064615885417,
+          "rmse": 10.368539537559139,
+          "inferenceMs": 256.18912900017676
+        },
+        "existing": {
+          "mae": 6.51324462890625,
+          "rmse": 10.00012715576709,
+          "inferenceMs": 200.594246999799
+        }
+      }
+    },
+    {
+      "source": "coffee",
+      "credit": "Rachel Michetti / Pikolo Espresso Bar, CC0; scikit-image data documentation",
+      "degradation": "clean",
+      "input": {
+        "mae": 0.0,
+        "rmse": 0.0
+      },
+      "outputs": {
+        "general": {
+          "mae": 4.646354166666667,
+          "rmse": 7.742819649678726,
+          "inferenceMs": 141.97661200000766
+        },
+        "wdn": {
+          "mae": 3.969332107843137,
+          "rmse": 6.116833791861186,
+          "inferenceMs": 145.45772599990414
+        },
+        "existing": {
+          "mae": 4.641145833333334,
+          "rmse": 7.735187061251268,
+          "inferenceMs": 124.6869260000949
+        }
+      }
+    },
+    {
+      "source": "coffee",
+      "credit": "Rachel Michetti / Pikolo Espresso Bar, CC0; scikit-image data documentation",
+      "degradation": "noise",
+      "input": {
+        "mae": 9.201501225490196,
+        "rmse": 11.59854279006381
+      },
+      "outputs": {
+        "general": {
+          "mae": 5.752205882352941,
+          "rmse": 8.389335112358486,
+          "inferenceMs": 175.44774200018765
+        },
+        "wdn": {
+          "mae": 5.751746323529412,
+          "rmse": 7.840226290376683,
+          "inferenceMs": 124.96883200014963
+        },
+        "existing": {
+          "mae": 5.7506127450980395,
+          "rmse": 8.386182905559012,
+          "inferenceMs": 130.8897579999666
+        }
+      }
+    },
+    {
+      "source": "coffee",
+      "credit": "Rachel Michetti / Pikolo Espresso Bar, CC0; scikit-image data documentation",
+      "degradation": "jpeg",
+      "input": {
+        "mae": 9.645955882352942,
+        "rmse": 13.658817539180596
+      },
+      "outputs": {
+        "general": {
+          "mae": 8.204748774509804,
+          "rmse": 12.23188812121023,
+          "inferenceMs": 139.20778800002154
+        },
+        "wdn": {
+          "mae": 7.86421568627451,
+          "rmse": 11.39962052171982,
+          "inferenceMs": 151.76386999996794
+        },
+        "existing": {
+          "mae": 8.202297794117648,
+          "rmse": 12.225805188207442,
+          "inferenceMs": 132.01552800001082
+        }
+      }
+    },
+    {
+      "source": "coffee",
+      "credit": "Rachel Michetti / Pikolo Espresso Bar, CC0; scikit-image data documentation",
+      "degradation": "low-resolution",
+      "input": {
+        "mae": 6.358363970588235,
+        "rmse": 11.223581453228507
+      },
+      "outputs": {
+        "general": {
+          "mae": 6.506648284313726,
+          "rmse": 10.452376535750043,
+          "inferenceMs": 196.16003500004808
+        },
+        "wdn": {
+          "mae": 5.853768382352941,
+          "rmse": 9.643950976709519,
+          "inferenceMs": 137.1204930001113
+        },
+        "existing": {
+          "mae": 6.504105392156863,
+          "rmse": 10.447892413417787,
+          "inferenceMs": 136.596081000107
+        }
+      }
+    },
+    {
+      "source": "coffee",
+      "credit": "Rachel Michetti / Pikolo Espresso Bar, CC0; scikit-image data documentation",
+      "degradation": "mixed",
+      "input": {
+        "mae": 6.673069852941176,
+        "rmse": 9.493565609937926
+      },
+      "outputs": {
+        "general": {
+          "mae": 5.345189950980392,
+          "rmse": 7.6736893720316415,
+          "inferenceMs": 131.68902500001423
+        },
+        "wdn": {
+          "mae": 5.712561274509804,
+          "rmse": 7.893310489914613,
+          "inferenceMs": 133.4436029999324
+        },
+        "existing": {
+          "mae": 5.344607843137255,
+          "rmse": 7.6711037884605195,
+          "inferenceMs": 124.77695100005803
+        }
+      }
+    }
+  ],
+  "independentSourceCount": 2,
+  "limitations": [
+    "Two public development sources only; not the locked 100-photo benchmark",
+    "No human identity or naturalness review",
+    "CPU diagnostics are not browser or physical-device verification",
+    "Official checkpoint hashes observed on first intake, not independently publisher-attested",
+    "No weight redistribution or commercial rights approval implied"
+  ],
+  "existingVsOfficialGeneral": {
+    "maxAbs": 0.09618525207042694,
+    "meanAbs": 0.00027642512577585876,
+    "withinTolerance": false
+  },
+  "tiling": [
+    {
+      "model": "general",
+      "padding": 40,
+      "maxAbs": 0.0,
+      "pass": true
+    },
+    {
+      "model": "wdn",
+      "padding": 40,
+      "maxAbs": 0.0,
+      "pass": true
+    },
+    {
+      "model": "existing",
+      "padding": 40,
+      "maxAbs": 0.0,
+      "pass": true
+    }
+  ]
+}

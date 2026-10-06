@@ -1,0 +1,24 @@
+{
+  "kind": "application-tile-arithmetic-native-canvas",
+  "inputSha256": "e704e43210b520c727bb66435c5db607f25314f0bd2730168c126f78d00b5bf0",
+  "applicationModuleSha256": "4d6822f73340a0f135c3d88fa01e7728bfbd76eac33096636198852e6f655fd8",
+  "width": 512,
+  "height": 341,
+  "rows": [
+    {
+      "tileCore": 192,
+      "status": "rejected",
+      "reason": "Deblur model returned unstable pixel values."
+    },
+    {
+      "tileCore": 128,
+      "status": "rejected",
+      "reason": "Deblur model returned unstable pixel values."
+    }
+  ],
+  "limitations": [
+    "Forced clean image into deblur; no automatic-route claim",
+    "Serial native canvas, not browser transfer/device verification",
+    "Not a category quality or identity acceptance result"
+  ]
+}
