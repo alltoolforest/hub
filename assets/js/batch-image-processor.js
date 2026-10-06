@@ -1,20 +1,54 @@
-import {$,el,field,read,num,format,notice,setupStatus,status,fileInput,checkFile,decodeImage,canvasBlob,output,downloads,clearOutputs,safeName,mobile,errorMessage} from './core.js';
+import {$,el,field,read,num,format,notice,setupStatus,status,fileInput,canvasBlob,output,downloads,clearOutputs,safeName,mobile,errorMessage} from './core.js';
 
-const SOURCE_PIXEL_CAP_DESKTOP=60e6;
-const SOURCE_PIXEL_CAP_MOBILE=32e6;
 const ZIP_OUTPUT_CAP_DESKTOP=96*1024*1024;
 const ZIP_OUTPUT_CAP_MOBILE=32*1024*1024;
 const TARGET_SEARCH_STEPS=10;
+const HARD_CANVAS_SIDE=16384;
+const ABSURD_SOURCE_SIDE=200000;
+const ABSURD_SOURCE_PIXELS=5e9;
+const SIZE_PRESETS={small:1280,medium:1920,large:2560,xlarge:3840};
 
-function pixelLimit(w,h){
-  if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1)throw Error('Dimensions must be positive whole pixels.');
-  const limit=mobile()?8e6:24e6;
-  if(w*h>limit||w>16384||h>16384)throw Error(`Reduce the output dimensions to at most ${limit/1e6} million pixels and 16,384 pixels per side.`);
+function safeProcessingPixelCap(){
+  const memory=Number(navigator.deviceMemory)||0;
+  if(memory>0&&memory<=2)return 8e6;
+  if(memory>0&&memory<=4)return 12e6;
+  if(memory>0&&memory<=8)return 20e6;
+  if(memory>8)return 32e6;
+  const cores=Number(navigator.hardwareConcurrency)||0;
+  return cores>=8?24e6:16e6;
 }
 
-function sourcePixelLimit(width,height){
-  const cap=mobile()?SOURCE_PIXEL_CAP_MOBILE:SOURCE_PIXEL_CAP_DESKTOP;
-  if(width*height>cap)throw Error(`Decoded image is too large for safe processing on this device. Use an image below ${Math.round(cap/1e6)} million pixels.`);
+function validateCanvasSize(w,h){
+  if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1)throw Error('Image dimensions are invalid.');
+  if(w>HARD_CANVAS_SIDE||h>HARD_CANVAS_SIDE)throw Error('This image needs a smaller working size on this browser.');
+}
+
+function validateSourceDimensions(width,height){
+  if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1)throw Error('Image dimensions are invalid or corrupted.');
+  if(width>ABSURD_SOURCE_SIDE||height>ABSURD_SOURCE_SIDE||width*height>ABSURD_SOURCE_PIXELS)throw Error('This image reports unusually large dimensions and may be corrupted.');
+}
+
+function fitWithinBox(width,height,maxWidth,maxHeight){
+  const scale=Math.min(1,maxWidth/width,maxHeight/height);
+  return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
+}
+
+function fitWithinSafePixels(width,height,cap){
+  const sideScale=Math.min(1,HARD_CANVAS_SIDE/width,HARD_CANVAS_SIDE/height);
+  const pixelScale=width*height>cap?Math.sqrt(cap/(width*height)):1;
+  const scale=Math.min(sideScale,pixelScale);
+  return {width:Math.max(1,Math.floor(width*scale)),height:Math.max(1,Math.floor(height*scale))};
+}
+
+function requestedDimensions(width,height,sizeMode,customWidth,customHeight){
+  if(sizeMode==='original')return {width,height};
+  if(sizeMode==='custom')return fitWithinBox(width,height,customWidth,customHeight);
+  const maxSide=SIZE_PRESETS[sizeMode]||SIZE_PRESETS.medium;
+  return fitWithinBox(width,height,maxSide,maxSide);
+}
+
+function formatFileSize(bytes){
+  return bytes>=1024*1024?format(bytes/1024/1024,1)+' MB':format(bytes/1024,0)+' KB';
 }
 
 function watermark(ctx,text,w,h){
@@ -133,7 +167,7 @@ async function encodeTarget(canvas,type,quality,targetKB){
 }
 
 async function inspectSource(file){
-  const bytes=new Uint8Array(await file.slice(0,262144).arrayBuffer());
+  const bytes=new Uint8Array(await file.slice(0,1048576).arrayBuffer());
   let type=null,width=null,height=null;
   if(bytes.length>=24&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47){
     type='image/png';
@@ -175,11 +209,56 @@ async function inspectSource(file){
     }
   }
   if(!type)throw Error('File contents do not match a supported JPG, PNG, or WebP image.');
-  if(width!==null&&height!==null){
-    if(width<1||height<1)throw Error('Image dimensions are invalid or corrupted.');
-    sourcePixelLimit(width,height);
-  }
+  if(width!==null&&height!==null)validateSourceDimensions(width,height);
   return {type,width,height};
+}
+
+function validateImageFile(file){
+  if(!file)throw Error('Choose an image first.');
+  if(file.size<1)throw Error('This image is empty.');
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!['jpg','jpeg','png','webp'].includes(ext))throw Error('Unsupported format. Choose JPG, PNG, or WebP.');
+}
+
+async function decodeForProcessing(file,type,width,height,sourcePixels,safeCap){
+  if(typeof createImageBitmap==='function'){
+    try{
+      return await createImageBitmap(file,{resizeWidth:width,resizeHeight:height,resizeQuality:'high',imageOrientation:'from-image'});
+    }catch{}
+  }
+
+  if(typeof ImageDecoder==='function'){
+    let decoder=null,frame=null;
+    try{
+      decoder=new ImageDecoder({data:await file.arrayBuffer(),type,desiredWidth:width,desiredHeight:height,preferAnimation:false});
+      const decoded=await decoder.decode({frameIndex:0,completeFramesOnly:true});
+      frame=decoded.image;
+      if(typeof createImageBitmap==='function'){
+        const bitmap=await createImageBitmap(frame);
+        frame.close?.();
+        return bitmap;
+      }
+      return frame;
+    }catch{
+      frame?.close?.();
+    }finally{
+      decoder?.close?.();
+    }
+  }
+
+  if(sourcePixels>safeCap*1.5)throw Error('This browser could not open this very large image safely. Try the latest Chrome, Edge, or Safari and retry.');
+
+  const url=URL.createObjectURL(file);
+  try{
+    return await new Promise((resolve,reject)=>{
+      const image=new Image();
+      image.onload=()=>resolve(image);
+      image.onerror=()=>reject(Error('Could not decode this image. Try resaving it as JPG, PNG, or WebP.'));
+      image.src=url;
+    });
+  }finally{
+    URL.revokeObjectURL(url);
+  }
 }
 
 function outputExt(type){
@@ -250,16 +329,51 @@ export async function mount(root){
   const summary=el('p',{text:'No images selected.'});
   root.append(summary);
 
+  const sizeField=field('size','Image size','select','original',{options:[
+    ['original','Original size'],
+    ['small','Small — sharing'],
+    ['medium','Medium — websites and documents'],
+    ['large','Large — high detail'],
+    ['xlarge','Extra large — maximum detail'],
+    ['custom','Custom size']
+  ]});
+  const customWidthField=field('custom-width','Width','number',1920,{min:1,max:HARD_CANVAS_SIDE,step:1});
+  const customHeightField=field('custom-height','Height','number',1080,{min:1,max:HARD_CANVAS_SIDE,step:1});
+  customWidthField.hidden=true;customHeightField.hidden=true;
+
+  const formatField=field('format','Output format','select','keep',{options:[
+    ['keep','Same as original'],['image/jpeg','JPG'],['image/png','PNG'],['image/webp','WebP']
+  ]});
+  const qualityField=field('quality','Image quality','select','0.8',{options:[
+    ['0.95','Best quality'],['0.88','High'],['0.8','Balanced — Recommended'],['0.68','Smaller file'],['0.5','Maximum compression']
+  ]});
+  const targetModeField=field('target-mode','Compressed file size','select','auto',{options:[
+    ['auto','Automatic — Recommended'],['manual','Set maximum size']
+  ]});
+  const targetValueField=field('target-value','Maximum file size','number',1,{min:0.01,max:500000,step:0.01});
+  const targetUnitField=field('target-unit','Size unit','select','mb',{options:[['kb','KB'],['mb','MB']]});
+  targetValueField.hidden=true;targetUnitField.hidden=true;
+  const watermarkField=field('watermark','Text watermark (optional)','text','',{full:true});
+
   const form=el('div',{class:'fields'},[
-    field('width','Maximum width (0 = original)','number',0,{min:0,max:16384,step:1}),
-    field('height','Maximum height (0 = original)','number',0,{min:0,max:16384,step:1}),
-    field('format','Output format','select','keep',{options:[['keep','Keep source format'],['image/jpeg','JPG'],['image/png','PNG'],['image/webp','WebP']]}),
-    field('quality','JPG/WebP quality (1–100)','number',85,{min:1,max:100}),
-    field('target','Target maximum size in KB (0 = no target)','number',0,{min:0,max:50000}),
-    field('watermark','Text watermark (optional)','text','',{full:true})
+    sizeField,customWidthField,customHeightField,formatField,qualityField,targetModeField,targetValueField,targetUnitField,watermarkField
   ]);
-  root.append(form,el('label',{class:'check-row'},[el('input',{type:'checkbox',id:'upscale'}),'Allow upscaling when maximum dimensions are larger than the source']));
-  notice(root,'Compress one image or many. JPG and WebP use quality optimization first; PNG stays PNG and preserves transparency. If a requested KB target cannot be reached at the current dimensions, the compressor can reduce dimensions progressively instead of silently changing format.');
+  root.append(form);
+
+  const syncSizeFields=()=>{
+    const custom=read('size')==='custom';
+    customWidthField.hidden=!custom;
+    customHeightField.hidden=!custom;
+  };
+  const syncTargetFields=()=>{
+    const manual=read('target-mode')==='manual';
+    targetValueField.hidden=!manual;
+    targetUnitField.hidden=!manual;
+  };
+  $('#size').addEventListener('change',syncSizeFields);
+  $('#target-mode').addEventListener('change',syncTargetFields);
+
+  notice(root,'Choose a size or keep the original. Large phone and camera photos are handled automatically with a memory-safe working size when needed. Automatic file size is recommended, or you can set your own maximum.');
 
   const controls=()=>[...root.querySelectorAll('input,select,button')];
   const setProcessing=on=>{
@@ -280,12 +394,12 @@ export async function mount(root){
     try{
       let total=0;
       for(const file of selected){
-        checkFile(file,['jpg','jpeg','png','webp'],mobile()?20:60);
+        validateImageFile(file);
         await inspectSource(file);
         total+=file.size;
       }
       files=selected;results=[];clearOutputs();
-      summary.textContent=`${files.length} image${files.length===1?'':'s'} selected · ${format(total/1024/1024,1)} MB total.`;
+      summary.textContent=files.length+' image'+(files.length===1?'':'s')+' selected · '+format(total/1024/1024,1)+' MB total.';
       status('Ready to compress.');
     }catch(e){
       files=[];results=[];summary.textContent='No images selected.';status(errorMessage(e),true);
@@ -316,7 +430,10 @@ export async function mount(root){
     files=[];results=[];cancelRequested=false;
     clearOutputs();
     summary.textContent='No images selected.';
-    $('#width').value='0';$('#height').value='0';$('#format').value='keep';$('#quality').value='85';$('#target').value='0';$('#watermark').value='';$('#upscale').checked=false;
+    $('#size').value='original';$('#custom-width').value='1920';$('#custom-height').value='1080';
+    $('#format').value='keep';$('#quality').value='0.8';$('#target-mode').value='auto';
+    $('#target-value').value='1';$('#target-unit').value='mb';$('#watermark').value='';
+    syncSizeFields();syncTargetFields();
     zipButton.disabled=true;
     status('Compressor reset.');
   });
@@ -325,7 +442,7 @@ export async function mount(root){
     if(processing||!results.length)return;
     const cap=mobile()?ZIP_OUTPUT_CAP_MOBILE:ZIP_OUTPUT_CAP_DESKTOP;
     const total=results.reduce((n,r)=>n+r.blob.size,0);
-    if(total>cap){status(`Download all is unavailable because the combined outputs are ${format(total/1024/1024,1)} MB. Download the files individually to avoid a large memory spike on this device.`,true);return}
+    if(total>cap){status('Download all is unavailable because the combined outputs are '+format(total/1024/1024,1)+' MB. Download the files individually to avoid a large memory spike on this device.',true);return}
     zipButton.disabled=true;
     try{
       status('Preparing ZIP download…');
@@ -340,7 +457,7 @@ export async function mount(root){
       trigger.remove();
       const fallback=[...$('#downloads').querySelectorAll('a[download]')].find(a=>a.download===zipName);
       fallback?.scrollIntoView?.({block:'nearest'});
-      status(`ZIP ready · ${results.length} files · ${format(zip.size/1024/1024,1)} MB. If your browser blocks the automatic download, use the ZIP download link below.`);
+      status('ZIP ready · '+results.length+' files · '+format(zip.size/1024/1024,1)+' MB. If your browser blocks the automatic download, use the ZIP download link below.');
     }catch(e){status(errorMessage(e),true)}finally{zipButton.disabled=false}
   });
 
@@ -348,14 +465,28 @@ export async function mount(root){
     if(processing)return;
     if(!files.length){status('Choose one or more images first.',true);return}
     clearOutputs();results=[];cancelRequested=false;zipButton.disabled=true;
-    let failures=0,missed=0,created=0;
-    const w=(()=>{try{return num('width',{min:0,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
-    const h=(()=>{try{return num('height',{min:0,max:16384})}catch(e){status(errorMessage(e),true);return null}})();
-    const q=(()=>{try{return num('quality',{min:1,max:100})/100}catch(e){status(errorMessage(e),true);return null}})();
-    const target=(()=>{try{return num('target',{min:0,max:50000})}catch(e){status(errorMessage(e),true);return null}})();
-    if([w,h,q,target].some(v=>v===null))return;
+
+    const sizeMode=read('size');
+    let customWidth=0,customHeight=0;
+    if(sizeMode==='custom'){
+      try{
+        customWidth=num('custom-width',{min:1,max:HARD_CANVAS_SIDE});
+        customHeight=num('custom-height',{min:1,max:HARD_CANVAS_SIDE});
+      }catch(e){status(errorMessage(e),true);return}
+    }
+
+    const quality=Number(read('quality'));
+    if(!Number.isFinite(quality)||quality<=0||quality>1){status('Choose an image quality.',true);return}
+
+    let targetKB=0;
+    if(read('target-mode')==='manual'){
+      let targetValue;
+      try{targetValue=num('target-value',{min:0.01,max:500000})}catch(e){status(errorMessage(e),true);return}
+      targetKB=read('target-unit')==='mb'?targetValue*1024:targetValue;
+    }
 
     setProcessing(true);
+    let failures=0,missed=0,created=0;
     try{
       const resultRows=[];
       for(const file of files){const item=resultRow(file);$('#downloads').append(item.row);resultRows.push(item)}
@@ -364,47 +495,54 @@ export async function mount(root){
         const file=files[i],row=resultRows[i];
         let image=null,c=null;
         try{
-          status(`Compressing ${i+1} of ${files.length}: ${file.name}`);
-          row.text.textContent=`${file.name} · Opening…`;
+          status('Compressing '+(i+1)+' of '+files.length+': '+file.name);
+          row.text.textContent=file.name+' · Opening…';
           const inspected=await inspectSource(file);
-          image=await decodeImage(file);
-          sourcePixelLimit(image.width,image.height);
+          if(!inspected.width||!inspected.height)throw Error('Could not read this image size safely. Try resaving the image and retry.');
 
-          const widthRatio=w>0?w/image.width:Infinity;
-          const heightRatio=h>0?h/image.height:Infinity;
-          let scale=Math.min(widthRatio,heightRatio);
-          if(!Number.isFinite(scale))scale=1;
-          if(!$('#upscale').checked)scale=Math.min(scale,1);
-          const ow=Math.max(1,Math.round(image.width*scale)),oh=Math.max(1,Math.round(image.height*scale));
-          pixelLimit(ow,oh);
+          const requested=requestedDimensions(inspected.width,inspected.height,sizeMode,customWidth,customHeight);
+          const safeCap=safeProcessingPixelCap();
+          const planned=fitWithinSafePixels(requested.width,requested.height,safeCap);
+          const largeImageSafeMode=planned.width<requested.width||planned.height<requested.height;
+          if(largeImageSafeMode)row.text.textContent=file.name+' · Preparing large image safely…';
+
+          image=await decodeForProcessing(file,inspected.type,planned.width,planned.height,inspected.width*inspected.height,safeCap);
+          const decodedWidth=Number(image.width||image.displayWidth||planned.width);
+          const decodedHeight=Number(image.height||image.displayHeight||planned.height);
+          const drawSize=fitWithinBox(decodedWidth,decodedHeight,planned.width,planned.height);
+          const ow=drawSize.width,oh=drawSize.height;
+          validateCanvasSize(ow,oh);
 
           c=el('canvas',{width:ow,height:oh});
           const ctx=c.getContext('2d',{alpha:true});
           if(!ctx)throw Error('Image compression workspace is unavailable.');
-          const requested=read('format')==='keep'?inspected.type:read('format');
-          if(requested==='image/jpeg'){ctx.fillStyle='white';ctx.fillRect(0,0,ow,oh)}
+          const requestedType=read('format')==='keep'?inspected.type:read('format');
+          if(requestedType==='image/jpeg'){ctx.fillStyle='white';ctx.fillRect(0,0,ow,oh)}
           else ctx.clearRect(0,0,ow,oh);
           ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
           ctx.drawImage(image,0,0,ow,oh);
           watermark(ctx,read('watermark'),ow,oh);
 
-          const encoded=await encodeTarget(c,requested,q,target);
+          const encoded=await encodeTarget(c,requestedType,quality,targetKB);
           const blob=encoded.blob,met=encoded.met;
-          const actualType=encoded.actualType||blob.type||requested;
+          const actualType=encoded.actualType||blob.type||requestedType;
           const ext=outputExt(actualType);
-          const name=safeName(file.name,met?'-compressed':'-target-not-met',ext);
+          const name=safeName(file.name,met?'-compressed':'-closest-result',ext);
           if(!met)missed++;
           output(blob,name);
           if(processing)for(const control of controls())if(control!==cancelButton)control.disabled=true;
           results.push({name,blob});created++;
 
-          const reduced=encoded.width!==ow||encoded.height!==oh;
-          const targetLabel=target>0?(met?` · target ≤ ${target} KB met`:` · target ${target} KB not met`):'';
-          const resizeLabel=reduced?' · dimensions reduced for target':'';
-          row.text.textContent=`${file.name} · ${encoded.width} × ${encoded.height} · ${format(blob.size/1024)} KB · Ready${targetLabel}${resizeLabel}${actualType!==requested?` · Browser returned ${actualType}`:''}`;
+          const targetAdjusted=encoded.width!==ow||encoded.height!==oh;
+          const notes=[];
+          if(largeImageSafeMode)notes.push('large image processed safely');
+          if(targetKB>0)notes.push(met?'maximum file size met':'closest possible result');
+          if(targetAdjusted)notes.push('size adjusted for your maximum');
+          if(actualType!==requestedType)notes.push('saved as '+outputExt(actualType).toUpperCase());
+          row.text.textContent=file.name+' · '+encoded.width+' × '+encoded.height+' · '+formatFileSize(blob.size)+' · Ready'+(notes.length?' · '+notes.join(' · '):'');
         }catch(e){
           failures++;
-          row.text.textContent=`${file.name} · Failed: ${errorMessage(e)}`;
+          row.text.textContent=file.name+' · Failed: '+errorMessage(e);
           row.row.classList.add('status','error');
         }finally{
           image?.close?.();
@@ -414,10 +552,10 @@ export async function mount(root){
 
       if(cancelRequested){
         const processed=created+failures,remaining=files.length-processed;
-        for(let j=processed;j<resultRows.length;j++)resultRows[j].text.textContent=`${files[j].name} · Not processed (cancelled)`;
-        status(`Compression cancelled. ${created} created, ${failures} failed, ${Math.max(0,remaining)} not processed.`);
+        for(let j=processed;j<resultRows.length;j++)resultRows[j].text.textContent=files[j].name+' · Not processed (cancelled)';
+        status('Compression cancelled. '+created+' created, '+failures+' failed, '+Math.max(0,remaining)+' not processed.');
       }else{
-        status(`Compression complete. ${created} created, ${failures} failed, ${missed} above the requested KB target.`);
+        status('Compression complete. '+created+' created, '+failures+' failed, '+missed+' above your maximum file size.');
       }
       zipButton.disabled=!results.length;
     }finally{

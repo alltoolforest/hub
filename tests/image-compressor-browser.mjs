@@ -30,7 +30,8 @@ await new Promise(r=>server.listen(4196,'127.0.0.1',r));
 const launchOptions={headless:true};
 if(process.env.CHROME_PATH)launchOptions.executablePath=process.env.CHROME_PATH;
 const browser=await chromium.launch(launchOptions);
-const page=await browser.newPage();
+const context=await browser.newContext({viewport:{width:390,height:844}});
+const page=await context.newPage();
 
 function bufferFromDataUrl(dataUrl){
   return Buffer.from(dataUrl.split(',')[1],'base64');
@@ -40,6 +41,26 @@ try{
   await page.goto('http://127.0.0.1:4196/images/batch/',{waitUntil:'networkidle',timeout:60000});
   assert.equal(await page.locator('h1').textContent(),'Image Compressor');
   assert.ok((await page.title()).startsWith('Image Compressor'));
+
+  assert.equal(await page.locator('#size').inputValue(),'original');
+  assert.equal(await page.locator('#size option:checked').textContent(),'Original size');
+  assert.equal(await page.locator('#format option:checked').textContent(),'Same as original');
+  assert.equal(await page.locator('#quality option:checked').textContent(),'Balanced — Recommended');
+  assert.equal(await page.locator('#target-mode option:checked').textContent(),'Automatic — Recommended');
+  assert.equal(await page.evaluate(()=>document.querySelector('#custom-width').parentElement.hidden),true);
+  assert.equal(await page.evaluate(()=>document.querySelector('#target-value').parentElement.hidden),true);
+  assert.ok(!(await page.locator('#workspace').innerText()).includes('Maximum width'));
+  assert.ok(!(await page.locator('#workspace').innerText()).includes('Target maximum size in KB'));
+
+  await page.locator('#size').selectOption('custom');
+  assert.equal(await page.evaluate(()=>document.querySelector('#custom-width').parentElement.hidden),false);
+  assert.equal(await page.evaluate(()=>document.querySelector('#custom-height').parentElement.hidden),false);
+  await page.locator('#size').selectOption('original');
+
+  await page.locator('#target-mode').selectOption('manual');
+  assert.equal(await page.evaluate(()=>document.querySelector('#target-value').parentElement.hidden),false);
+  assert.equal(await page.evaluate(()=>document.querySelector('#target-unit').parentElement.hidden),false);
+  await page.locator('#target-mode').selectOption('auto');
 
   const fixtures=await page.evaluate(()=>{
     const c=document.createElement('canvas');
@@ -64,21 +85,33 @@ try{
     };
   });
 
-  async function runSingle(name,mime,dataUrl,targetKB=24){
+  async function runSingle(name,mime,dataUrl,options={}){
+    const {
+      size='original',
+      format='keep',
+      quality='0.8',
+      targetMode='manual',
+      targetValue='24',
+      targetUnit='kb'
+    }=options;
+
     await page.locator('input[type=file]').setInputFiles({
       name,
       mimeType:mime,
       buffer:bufferFromDataUrl(dataUrl)
     });
     await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Ready to compress.'),null,{timeout:20000});
-    await page.locator('#width').fill('0');
-    await page.locator('#height').fill('0');
-    await page.locator('#format').selectOption('keep');
-    await page.locator('#quality').fill('82');
-    await page.locator('#target').fill(String(targetKB));
+    await page.locator('#size').selectOption(size);
+    await page.locator('#format').selectOption(format);
+    await page.locator('#quality').selectOption(quality);
+    await page.locator('#target-mode').selectOption(targetMode);
+    if(targetMode==='manual'){
+      await page.locator('#target-value').fill(String(targetValue));
+      await page.locator('#target-unit').selectOption(targetUnit);
+    }
 
     await page.getByRole('button',{name:'Compress images'}).click();
-    await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Compression complete.'),null,{timeout:60000});
+    await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Compression complete.'),null,{timeout:90000});
 
     const result=await page.evaluate(async()=>{
       const links=[...document.querySelectorAll('#downloads a[download]')];
@@ -94,19 +127,19 @@ try{
     return result;
   }
 
-  const png=await runSingle('single.png','image/png',fixtures.png,24);
+  const png=await runSingle('single.png','image/png',fixtures.png);
   assert.equal(png.type,'image/png');
-  assert.ok(png.size<=24*1024,`PNG target not met: ${png.size}`);
-  assert.ok(png.width<640||png.height<480,'PNG target should reduce dimensions when lossless size alone cannot meet target.');
-  assert.match(png.row,/target ≤ 24 KB met/);
+  assert.ok(png.size<=24*1024,'PNG maximum size not met: '+png.size);
+  assert.ok(png.width<640||png.height<480,'PNG should reduce dimensions when lossless output cannot meet the selected maximum.');
+  assert.match(png.row,/maximum file size met/);
 
-  const jpg=await runSingle('single.jpg','image/jpeg',fixtures.jpg,24);
+  const jpg=await runSingle('single.jpg','image/jpeg',fixtures.jpg);
   assert.equal(jpg.type,'image/jpeg');
-  assert.ok(jpg.size<=24*1024,`JPG target not met: ${jpg.size}`);
+  assert.ok(jpg.size<=24*1024,'JPG maximum size not met: '+jpg.size);
 
-  const webp=await runSingle('single.webp','image/webp',fixtures.webp,24);
+  const webp=await runSingle('single.webp','image/webp',fixtures.webp);
   assert.equal(webp.type,'image/webp');
-  assert.ok(webp.size<=24*1024,`WebP target not met: ${webp.size}`);
+  assert.ok(webp.size<=24*1024,'WebP maximum size not met: '+webp.size);
 
   await page.locator('input[type=file]').setInputFiles([
     {name:'one.png',mimeType:'image/png',buffer:bufferFromDataUrl(fixtures.png)},
@@ -115,15 +148,44 @@ try{
   await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Ready to compress.'),null,{timeout:20000});
   const batchSummary=(await page.locator('#workspace p').filter({hasText:'images selected'}).last().textContent())||'';
   assert.match(batchSummary,/2 images selected/);
-  await page.locator('#target').fill('0');
+  await page.locator('#target-mode').selectOption('auto');
   await page.getByRole('button',{name:'Compress images'}).click();
-  await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Compression complete.'),null,{timeout:60000});
+  await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Compression complete.'),null,{timeout:90000});
   assert.equal(await page.locator('[data-compressor-result]').count(),2);
   assert.equal(await page.getByRole('button',{name:'Download all (.zip)'}).isEnabled(),true);
 
-  console.log('Image Compressor JPG/PNG/WebP single and multi-image audit passed.');
-  console.log(JSON.stringify({png,jpg,webp},null,2));
+  const phoneJpg=await page.evaluate(()=>{
+    const c=document.createElement('canvas');
+    c.width=4032;c.height=3024;
+    const ctx=c.getContext('2d');
+    const gradient=ctx.createLinearGradient(0,0,c.width,c.height);
+    gradient.addColorStop(0,'#194d33');
+    gradient.addColorStop(0.5,'#d8e8df');
+    gradient.addColorStop(1,'#7a4b2a');
+    ctx.fillStyle=gradient;
+    ctx.fillRect(0,0,c.width,c.height);
+    for(let y=0;y<c.height;y+=336){
+      ctx.fillStyle='rgba(255,255,255,0.08)';
+      ctx.fillRect(0,y,c.width,84);
+    }
+    return c.toDataURL('image/jpeg',0.9);
+  });
+
+  const phone=await runSingle('modern-phone-12mp.jpg','image/jpeg',phoneJpg,{
+    targetMode:'auto',
+    size:'original',
+    quality:'0.8'
+  });
+  assert.equal(phone.type,'image/jpeg');
+  assert.equal(phone.width,4032);
+  assert.equal(phone.height,3024);
+  assert.ok(!/Failed|8 million pixels/i.test(phone.row),'Modern phone image hit the former mobile pixel-limit failure.');
+  assert.match(phone.row,/Ready/);
+
+  console.log('Image Compressor UI, JPG/PNG/WebP, batch, and 12 MP mobile regression passed.');
+  console.log(JSON.stringify({png,jpg,webp,phone},null,2));
 }finally{
+  await context.close();
   await browser.close();
   await new Promise(r=>server.close(r));
 }
