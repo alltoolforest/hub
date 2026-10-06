@@ -1,0 +1,94 @@
+{
+  "kind": "isolated-opt-in-colorization-feasibility",
+  "sourceCommit": "4f6009ed1495b1300231ebeb41cc4015557ddef7",
+  "checkpointSha256": "9b330a0bae53f4ded77b1e23defbf78beaa09c10ebc4c4999e8e4f4a160b93f9",
+  "checkpointBytes": 128976165,
+  "onnxSha256": "45762c9be2b23f31fc976e7b030659a944c03dc0c9dedcb97dc2276dff515c7f",
+  "onnxBytes": 128964651,
+  "torch": "2.8.0+cpu",
+  "ort": "1.22.1",
+  "parameters": 32236011,
+  "opset": 17,
+  "operators": [
+    "BatchNormalization",
+    "Constant",
+    "Conv",
+    "ConvTranspose",
+    "Div",
+    "Identity",
+    "Mul",
+    "Relu",
+    "Resize",
+    "Softmax",
+    "Sub"
+  ],
+  "parityTolerance": {
+    "rtol": 0.0001,
+    "atol": 0.0001
+  },
+  "rows": [
+    {
+      "id": "astronaut",
+      "sourceSha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "shape": [
+        1,
+        1,
+        256,
+        256
+      ],
+      "finite": true,
+      "nativeCpuSeconds": 0.274951541000064,
+      "maxAbsChromaDifference": 6.866455078125e-05,
+      "parity": true,
+      "chromaRange": [
+        -14.088079452514648,
+        42.133602142333984
+      ],
+      "preGamutLuminancePreserved": true,
+      "postGamutMeanAbsLuminanceChange": 0.06979477405548096,
+      "postGamutMaxAbsLuminanceChange": 8.263442993164062,
+      "chromaMapping": {
+        "affectedPixelFraction": 0.16196823120117188,
+        "meanAbsLuminanceChange": 7.800023866933616e-06,
+        "maxAbsLuminanceChange": 0.000287903388596078,
+        "maxAbsLuminanceChangeAfter8Bit": 0.2360307230802441
+      }
+    },
+    {
+      "id": "coffee",
+      "sourceSha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "shape": [
+        1,
+        1,
+        256,
+        256
+      ],
+      "finite": true,
+      "nativeCpuSeconds": 0.26027424500000507,
+      "maxAbsChromaDifference": 8.0108642578125e-05,
+      "parity": true,
+      "chromaRange": [
+        -20.90387535095215,
+        49.87791061401367
+      ],
+      "preGamutLuminancePreserved": true,
+      "postGamutMeanAbsLuminanceChange": 0.02459263801574707,
+      "postGamutMaxAbsLuminanceChange": 8.429618835449219,
+      "chromaMapping": {
+        "affectedPixelFraction": 0.027404166666666667,
+        "meanAbsLuminanceChange": 3.4103111535945807e-07,
+        "maxAbsLuminanceChange": 0.000287903388596078,
+        "maxAbsLuminanceChangeAfter8Bit": 0.23698684370406653
+      }
+    }
+  ],
+  "pass": true,
+  "processMaxRssKiB": 1056556,
+  "production": false,
+  "limitations": [
+    "Two synthetic-grayscale development photos; no real old-photo or held-out review",
+    "Colors are plausible predictions, not recovered historical facts",
+    "No skin plausibility/bleeding/identity, browser/device or weight redistribution acceptance",
+    "No application integration, default colorization, or protected-control changes"
+  ]
+}

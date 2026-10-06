@@ -80,3 +80,17 @@ Frozen tools, unrelated categories, navigation/shared components and the existin
 protected interface remain untouched. Preserve completed work unless a confirmed
 dependency or defect requires a minimal change. Do not count rejected experiments
 as shipped features. Keep checkpoints recoverable and report unresolved blockers.
+
+## Optional colorization feasibility checkpoint
+
+ECCV16 original checkpoint and source are now pinned. Two original/ONNX Lab
+comparisons and two Node WASM repeats pass; 129 MB graph and ~2.65 second host
+inference at 256×256 luminance. These do not establish a phone budget. An isolated
+chroma-reduction mapper fixes measured gamut-clipping luminance drift; four targeted
+tests pass. The prototype requires explicit opt-in before model access and preserves
+separate grayscale output. No live controls, models or defaults were changed.
+
+Skin/color-bleed/real-old-photo acceptance, exact weight-rights closure, browser/
+physical-device and opt-in interface approval gates remain open. Proposed exact
+controls are documented in COLORIZATION-OPT-IN-SPEC.md for later review, not approved
+or implemented. Latest confirmed full CI checkpoint: 0ca6867, both workflows pass.
