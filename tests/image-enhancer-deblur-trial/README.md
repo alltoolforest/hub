@@ -233,3 +233,46 @@ Reports: `restormer-export-results.json`, `restormer-wasm-results.json`.
 Python dependencies additionally include onnx 1.18.0 and onnxruntime 1.22.1.
 The legacy torch exporter is explicitly selected for reproducibility; its
 upstream deprecation warning is not an inference or parity failure.
+
+## Larger-input and clean-control checkpoint — 6 October 2026
+
+`resolution_probe.py` evaluates the same six development sources at maximum side
+512, using original public sample files for coffee/astronaut and the previously
+screened NASA files. It creates a fixed radius-four disk degradation and retains
+clean controls. Different resolution/recipe means these are new diagnostic cases,
+not directly interchangeable with the earlier 128px scores. No held-out images
+were used. All 12 cases / 24 raw model runs finished; their source/input hashes,
+output ranges, elapsed times and MAE appear in `resolution-results.json`.
+
+On the six defocus cases, raw Restormer error is lower than input on 5/6 and lower
+than raw NAFNet on 4/6. NAFNet is lower than input on 4/6. These metric counts are
+not the 80% visible-usefulness gate. Both specialists alter clean controls; forced
+NAFNet on clean coffee exhibits a visible colored grid despite passing the loose
+numeric bound, while two other clean NAFNet outputs fail that bound and are not
+scored. Restormer clean-source MAE spans 3.24–7.85. No clean-cohort acceptance or
+manual identity result is claimed. Default clean bypass remains necessary.
+
+Restormer native CPU inference took 19.4–30.0 seconds at these sizes. Whole-process
+peak RSS was 3,505,964 KiB (~3.34 GiB), including both loaded models, Python, runtime
+and intermediate allocations. This is not model-only or browser memory, nor a
+measured phone budget. Full browser-only architecture remains unselected.
+
+The raw full-frame NAFNet failure is NOT a production-path result. To resolve that
+specific risk, `tiled_probe.mjs` executes the actual application class and worker
+arithmetic with a serial native-canvas shim. Both 192px desktop and 128px mobile
+core sizes reject the clean coffee input via the existing numeric validator before
+bitmap conversion. `tiled-coffee-results.json` records the exact application hash.
+It does not test automatic diagnosis, browser transfers or physical devices. No
+production threshold was changed from this evidence.
+
+```sh
+python tests/image-enhancer-deblur-trial/resolution_probe.py /private/restormer_arch.py /private/single_image_defocus_deblurring.pth /private/nafnet.onnx /absolute/skimage/data /private/nasa-intake /private/resolution-trial
+node tests/image-enhancer-deblur-trial/tiled_probe.mjs /private/resolution-trial/coffee-reference.png /private/nafnet.onnx /absolute/onnxruntime-web /private/tiled-coffee.json
+```
+
+The separate isolated orchestrator now withholds unvalidated cleanup+deblur
+composition before loading models. This closes a confirmed dependency gap in the
+prototype; it does not implement successful mixed restoration in production.
+27 related orchestration, lifecycle, bounded-cleanup and fusion tests pass.
+At preceding published checkpoint 7b9eae3 both full CI workflows passed (enhancer
+audit 37410953740, benchmark harness 37410953796). The application is unchanged.

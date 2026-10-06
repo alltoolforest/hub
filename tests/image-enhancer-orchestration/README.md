@@ -22,7 +22,7 @@ A production evidence adapter and thresholds require the pending photographic ba
 | Pixelation / low resolution | Upscale; portrait first if detected |
 | Scratches / creases | Repair |
 | Low light / overexposure / faded color | Tone |
-| Mixed noise, blur, portrait, lighting | Cleanup → deblur → portrait → tone |
+| Mixed noise/compression + blur | Evidence plan retained; execution withheld before loading, independent original returned |
 | Grayscale alone | None |
 | Explicit colorization request + grayscale | Colorize contract only; no UI or implementation |
 | Severe evidence | Skip reconstruction; allow evidenced tone; limitation diagnostic |
@@ -31,7 +31,13 @@ A production evidence adapter and thresholds require the pending photographic ba
 
 Selected operations are ordered repair, cleanup, deblur, portrait, upscale, tone,
 colorize, followed by a required safety guard. This is a provisional contract,
-not an evidence-backed model stacking decision. No photo runs every stage by default.
+not an evidence-backed model stacking decision. Photographic trials rejected
+unconditional cleanup/deblur stacking; the executor now withholds that combination
+even if both individual adapters declare approval. It reports
+`unvalidated-composition:cleanup-deblur` and returns an independent original before
+loading any model. This is a dependency safety restriction, not successful mixed
+restoration or a substitute for selecting a validated composition. No photo runs
+every stage by default.
 Scale defaults to 1; low-resolution 1× restoration and requested enlargement use
 one upscale contract. Exact custom dimensions remain an integration dependency.
 
@@ -81,3 +87,19 @@ release, physical-device cancellation and controls/output integration remain blo
 Do not claim Task 3 complete from these tests. Resume at evidence-backed adapter
 mapping once those dependencies are resolved; preserve this verified contract work.
 Tasks 4–12 unstarted in this checkpoint. No merge, deployment or freeze authorized.
+
+## Confirmed dependency correction — 6 October 2026
+
+The corrected native-input photographic experiment found all six motion-only
+examples worsened after cleanup and two mixed-damage numerical failures. The
+original checkpoint also failed on the mixed portrait. Therefore the prototype
+must not treat individually approved stages as a validated cleanup/deblur chain.
+The previous permissive ordering test now exercises cleanup/tone instead; a new
+negative test covers both noise+blur and JPEG+blur with portrait/lighting present,
+source ownership, zero loads, zero AI execution and an explicit fallback reason.
+
+PASS: 13 orchestration tests and 14 directly related bounded-cleanup, numerical
+validation/lifecycle and PR #117 fusion tests (27 total). Application imports,
+protected controls and production behavior remain unchanged. Re-enabling this
+composition requires a selected model/sequence and corresponding photographic
+validation; do not remove the restriction solely to complete a task count.

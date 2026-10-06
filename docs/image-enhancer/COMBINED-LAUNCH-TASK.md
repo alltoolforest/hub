@@ -39,6 +39,8 @@ colorization opt-in) must be made concrete before their approval is sought.
   evidence used diagnostic external padding; corrected native-input report
   supersedes that application-path inference.
 - Routing: isolated contract and bounded cleanup tests pass; full integration open.
+  Unvalidated cleanup+deblur composition is now withheld before model loads,
+  based on the recorded photographic failures. 27 related tests pass.
 - Safety: grossly unstable deblur tensors rejected before conversion; resource
   cleanup verified. Full candidate regression passed at 150593f; 45bb09b has the
   same application source and baseline-harness isolation correction.
@@ -57,6 +59,13 @@ inputs; Node WASM matches native output twice. The FP32 graph is 107.1 MB, tiny
 128×88 inference takes 2.7–2.8 seconds, and peak host-process RSS is ~522 MiB.
 These are host diagnostics, not physical-device acceptance. Browser/full-output
 feasibility, exact weight-rights and photographic acceptance remain unresolved.
+
+Larger-input follow-up: 12 cases / 24 raw-model runs at max side 512 completed.
+Restormer improves defocus error vs input 5/6 but changes clean controls; native
+CPU inference takes 19–30 seconds. This is not per-category visual acceptance.
+Actual desktop/mobile tiling rejects the problematic clean coffee input via the
+existing numerical check. Both CI workflows passed at 7b9eae3; production remains
+unchanged. See resolution-results.json and tiled-coffee-results.json.
 
 First unfinished engineering item: close candidate model/corpus feasibility and
 broad photographic quality evidence before production integration.

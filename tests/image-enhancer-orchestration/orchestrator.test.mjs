@@ -25,10 +25,23 @@ test('clean input loads nothing and returns independent unchanged output',async(
 });
 test('selected stages execute in order, dispose, and exclude unrelated models',async()=>{
  const events=[]; const registry={};
- for(const id of ['cleanup','deblur','guard','upscale']) registry[id]=adapter(null,{load:async()=>{events.push('load:'+id);return {run:async({image})=>{image.data[0]++;return {image,status:'processed',aiExecuted:true};},dispose:async()=>events.push('dispose:'+id)};}});
- const r=await run({evidence:{...clean,noise:'present',blur:'present'},registry});
+ for(const id of ['cleanup','tone','guard','upscale']) registry[id]=adapter(null,{load:async()=>{events.push('load:'+id);return {run:async({image})=>{image.data[0]++;return {image,status:'processed',aiExecuted:true};},dispose:async()=>events.push('dispose:'+id)};}});
+ const r=await run({evidence:{...clean,noise:'present',lighting:'present'},registry});
  assert.equal(r.status,'success');assert.equal(r.aiExecuted,true);
- assert.deepEqual(events,['load:cleanup','dispose:cleanup','load:deblur','dispose:deblur','load:guard','dispose:guard']);
+ assert.deepEqual(events,['load:cleanup','dispose:cleanup','load:tone','dispose:tone','load:guard','dispose:guard']);
+});
+test('unvalidated cleanup/deblur composition returns original before any model loads',async()=>{
+ let loads=0;const registry={};
+ for(const id of ['cleanup','deblur','portrait','tone','guard']) registry[id]=adapter(null,{load:async()=>{loads++;throw Error('must not load');}});
+ for(const key of ['noise','compression']) {
+  const source=frame(),expected=frame();
+  const result=await run({source,evidence:{...clean,[key]:'present',blur:'present',portrait:'present',lighting:'present'},registry});
+  assert.equal(result.status,'fallback');assert.equal(result.aiExecuted,false);
+  assert.deepEqual(result.completed,[]);assert.deepEqual(result.image,expected);
+  assert.notEqual(result.image.data,source.data);assert.deepEqual(source,expected);
+  assert.ok(result.diagnostics.includes('unvalidated-composition:cleanup-deblur'));
+ }
+ assert.equal(loads,0);
 });
 test('mutating stage failure cannot overwrite caller or fallback original',async()=>{
  const source=frame(), expected=frame();let disposed=0;

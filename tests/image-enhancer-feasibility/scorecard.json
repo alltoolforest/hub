@@ -92,7 +92,7 @@
       "codeLicense": "MIT",
       "status": "hold",
       "artifact": null,
-      "note": "Official single-image defocus checkpoint tested on six exact synthetic development inputs: raw MAE improved vs input 4/6 and vs raw NAFNet 5/6; foliage regressed severely. No category acceptance or model selection. Motion and denoise checkpoints remain untested.",
+      "note": "Official single-image defocus checkpoint tested on six exact synthetic development inputs: raw MAE improved vs input 4/6 and vs raw NAFNet 5/6; foliage regressed severely. No category acceptance or model selection. Motion and denoise checkpoints remain untested. At max side512, raw error improves vs input5/6 but all clean controls change, CPU inference19-30s; no visual or device pass.",
       "weightRights": "unverified",
       "conversionParity": "PASS sampled original FP32 vs opset17 ONNX on four inputs; maximum absolute difference 1.073e-6. Native/WASM photo parity passed twice. Not all-shape/backend acceptance.",
       "operatorAudit": "Executed exported FP32 graph in ORT Web1.30 single-thread Node WASM at 88x128: 2.80/2.70 seconds, session 3.81 seconds, peak whole-process RSS 534108 KiB. Browser/physical-device/cancellation/tile gates open.",
@@ -107,7 +107,8 @@
         "use": "local evaluation only"
       },
       "exportEvidence": "../image-enhancer-deblur-trial/restormer-export-results.json",
-      "runtimeEvidence": "../image-enhancer-deblur-trial/restormer-wasm-results.json"
+      "runtimeEvidence": "../image-enhancer-deblur-trial/restormer-wasm-results.json",
+      "largerInputEvidence": "../image-enhancer-deblur-trial/resolution-results.json"
     },
     {
       "id": "gfpgan",

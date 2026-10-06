@@ -128,6 +128,13 @@ export async function restore({source, evidence, controls, registry = {}, maxPix
 
   try {
     abort(signal);
+    // The photographic dependency trial rejected unconditional cleanup/deblur
+    // stacking. Neither individual adapter approval nor a final guard proves
+    // their composition safe. Withhold this unresolved route before loading.
+    if (plan.stages.includes('cleanup') && plan.stages.includes('deblur')) {
+      diagnostics.push('unvalidated-composition:cleanup-deblur');
+      return finish('fallback', original);
+    }
     if (plan.stages.length && !eligible(registry.guard, 'guard')) {
       diagnostics.push('unavailable:guard');
       return finish('fallback', original);
