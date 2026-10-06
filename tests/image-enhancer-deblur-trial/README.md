@@ -201,3 +201,35 @@ Do not replace the 36 MB artifact with the 70 MB promoted graph: it adds size
 without fixing the reproduced failure. No derived weights are committed.
 `precision_probe.py` reproduces this check using the same two captured model inputs;
 `precision-results.json` pins the derived hash and observed values.
+
+## Restormer conversion and WASM checkpoint — 6 October 2026
+
+The isolated FP32 export passes ONNX checker and all four sampled comparisons
+against original PyTorch: 32×32 and 64×80 synthetic inputs, padded coffee 128×88,
+and astronaut 128×128. Maximum absolute difference is 1.073e-6, within the fixed
+rtol 1e-4 / atol 1e-5 tolerance. The graph is 107,114,302 bytes, SHA-256
+`3aae021fb8914cd5806d6129fd22d7d0a47869a073477397bde1409f20f937c7`.
+The exporter/source/checkpoint are pinned; weights remain outside this repository.
+
+ORT Web 1.30 single-thread Node WASM ran the same coffee tensor twice and matched
+the native ONNX result within 6.259e-7; repeated outputs were byte-identical.
+Session creation took 3.81 seconds; inference took 2.80 and 2.70 seconds. Peak
+whole-process RSS was 534,108 KiB (~522 MiB) on Linux/AMD EPYC. These are tiny-image
+host measurements, not mobile/browser budgets or model-only memory. Do not
+extrapolate them into a full-image latency promise or claim a device-budget pass.
+
+This closes sampled conversion and Node-WASM operator uncertainty for this exact
+artifact. It does not remedy the earlier photographic regressions. Status remains
+HOLD: no production integration, default download, paid server or upload flow.
+Full-size, tile consistency, cancellation, physical-device budgets, weight-rights
+closure, genuine defocus and held-out/manual photographic acceptance remain open.
+
+```sh
+python tests/image-enhancer-deblur-trial/restormer_export.py /private/restormer_arch.py /private/single_image_defocus_deblurring.pth /private/defocus-inputs /private/export
+node tests/image-enhancer-deblur-trial/restormer_wasm.cjs /private/export /absolute/onnxruntime-web /private/wasm-results.json
+```
+
+Reports: `restormer-export-results.json`, `restormer-wasm-results.json`.
+Python dependencies additionally include onnx 1.18.0 and onnxruntime 1.22.1.
+The legacy torch exporter is explicitly selected for reproducibility; its
+upstream deprecation warning is not an inference or parity failure.

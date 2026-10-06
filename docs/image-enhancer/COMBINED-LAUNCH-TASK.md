@@ -52,8 +52,11 @@ Original-weight evidence is recorded; it does not select a reliable route.
 
 Alternative tested: official Restormer single-image defocus on six exact inputs;
 raw error improved vs input 4/6, with a substantial foliage regression. No model
-selection or category pass. The 104.7 MB checkpoint still needs browser feasibility
-and exact weight-rights closure.
+selection or category pass. Sampled original/ONNX parity now passes on four
+inputs; Node WASM matches native output twice. The FP32 graph is 107.1 MB, tiny
+128×88 inference takes 2.7–2.8 seconds, and peak host-process RSS is ~522 MiB.
+These are host diagnostics, not physical-device acceptance. Browser/full-output
+feasibility, exact weight-rights and photographic acceptance remain unresolved.
 
 First unfinished engineering item: close candidate model/corpus feasibility and
 broad photographic quality evidence before production integration.
