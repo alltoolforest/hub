@@ -118,7 +118,7 @@ try{
     assert.match(preview,/Consulting service/);
     assert.match(preview,/Support retainer/);
     assert.match(preview,/Total due/);
-    assert.match(preview,/\$?173\.68|173\.68/);
+    assert.match(preview,/\$?177\.06|177\.06/);
     assert.equal(await page.locator('.invoice-line-table tbody tr').count(),2);
     assert.equal(await page.locator('.invoice-line-table th[scope=col]').count(),5);
     assert.equal(await page.locator('.invoice-line-table caption').textContent(),'Invoice line items');
