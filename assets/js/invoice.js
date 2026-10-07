@@ -9,6 +9,8 @@ import {
   formatMoney,
   formatUnitRate
 } from './invoice-engine.js';
+import {createInvoicePdf,downloadBlob,invoicePdfFilename} from './invoice-pdf.js';
+import {saveInvoiceDraft,loadInvoiceDraft,clearInvoiceDraft} from './invoice-draft-store.js';
 
 let sequence=0;
 const uid=prefix=>prefix+'-'+(++sequence);
@@ -164,7 +166,8 @@ export async function mount(root){
   const currencies=supportedCurrencyCodes();
   const defaultCurrency=currencies.includes('INR')?'INR':currencies.includes('USD')?'USD':currencies[0];
   const currency=makeField({id:'invoice-currency',label:'Currency',type:'select',value:defaultCurrency,required:true,options:currencies.map(code=>[code,code])});
-  detailsGrid.append(invoiceNumber.wrap,invoiceDate.wrap,dueDate.wrap,reference.wrap,currency.wrap);
+  const pageSize=makeField({id:'invoice-page-size',label:'PDF page size',type:'select',value:'A4',options:[['A4','A4'],['LETTER','US Letter']],hint:'Used for the downloaded PDF. Printing can still use your browser print settings.'});
+  detailsGrid.append(invoiceNumber.wrap,invoiceDate.wrap,dueDate.wrap,reference.wrap,currency.wrap,pageSize.wrap);
   detailsSection.append(detailsGrid);
 
   const itemsSection=formSection('Items','Add each product or service separately. Taxes can be set per item.');
@@ -215,6 +218,7 @@ export async function mount(root){
       const index=entry.taxes.indexOf(taxEntry);
       if(index>=0)entry.taxes.splice(index,1);
       row.remove();
+      autosaveDraft();
       entry.addTaxButton.focus();
     });
     entry.taxList.append(row);
@@ -242,7 +246,7 @@ export async function mount(root){
     const removeButton=el('button',{type:'button',class:'invoice-remove-item',text:'Remove item'});
     const entry={fieldset,legend,description,quantity,unit,rate,taxes:[],taxList,addTaxButton,removeButton};
     itemEntries.push(entry);
-    addTaxButton.addEventListener('click',()=>{const taxEntry=addTax(entry);taxEntry.name.input.focus()});
+    addTaxButton.addEventListener('click',()=>{const taxEntry=addTax(entry);autosaveDraft();taxEntry.name.input.focus()});
     removeButton.addEventListener('click',()=>{
       if(itemEntries.length===1)return;
       const index=itemEntries.indexOf(entry);
@@ -250,6 +254,7 @@ export async function mount(root){
       itemEntries.splice(index,1);
       fieldset.remove();
       reindexItems();
+      autosaveDraft();
       nextFocus.focus();
     });
     for(const tax of initial.taxes||[{name:'Tax',ratePercent:'0'}])addTax(entry,tax);
@@ -260,7 +265,7 @@ export async function mount(root){
   }
 
   addItem();
-  addItemButton.addEventListener('click',()=>{const entry=addItem({taxes:[{name:'Tax',ratePercent:'0'}]});entry.description.input.focus()});
+  addItemButton.addEventListener('click',()=>{const entry=addItem({taxes:[{name:'Tax',ratePercent:'0'}]});autosaveDraft();entry.description.input.focus()});
 
   const previewHeadingId='invoice-preview-heading';
   const invoice=el('article',{class:'invoice invoice-preview',hidden:true,tabindex:'-1','aria-labelledby':previewHeadingId});
@@ -269,7 +274,7 @@ export async function mount(root){
   const allStaticFields=[
     businessName,businessAddress,businessEmail,businessPhone,businessTaxLabel,businessTaxId,
     customerName,customerAddress,customerEmail,customerPhone,customerTaxLabel,customerTaxId,
-    invoiceNumber,invoiceDate,dueDate,reference,currency,discount,paymentTerms,paymentInstructions,notes
+    invoiceNumber,invoiceDate,dueDate,reference,currency,pageSize,discount,paymentTerms,paymentInstructions,notes
   ];
 
   function clearErrors(){
@@ -435,18 +440,106 @@ export async function mount(root){
     invoice.focus();
   }
 
+  let latestState=null,latestTotals=null;
   const createButton=action('Create / update invoice',()=>{
     const state=collectInvoice();
     const totals=calculateInvoice(state);
+    latestState=state;latestTotals=totals;
     renderInvoice(state,totals);
   },true);
+
+  const downloadButton=action('Download PDF',async()=>{
+    if(!latestState||!latestTotals)throw Error('Create or update the invoice before downloading the PDF.');
+    status('Preparing PDF locally…');
+    try{
+      const blob=await createInvoicePdf(latestState,latestTotals,{pageSize:pageSize.input.value});
+      if(!blob||blob.size<100)throw Error('empty_pdf');
+      downloadBlob(blob,invoicePdfFilename(latestState.invoiceNumber));
+      status('PDF download started.');
+    }catch(error){
+      console.error('Invoice PDF export failed',error);
+      throw Error('PDF export failed in this browser. Your invoice is still available; use Print / Save PDF as a fallback.');
+    }
+  });
 
   const printButton=action('Print / Save PDF',()=>{
     if(invoice.hidden)throw Error('Create the invoice first.');
     window.print();
   });
 
-  root.insertBefore(el('div',{class:'actions invoice-main-actions'},[createButton,printButton]),invoice);
-  notice(root,'Your invoice is prepared locally in this browser. Optional tax ID fields are provided for flexibility; this tool does not claim compliance with any specific jurisdiction. Review the invoice before issuing it.');
+  function draftSnapshot(){
+    const values={};
+    for(const field of allStaticFields)values[field.id]=field.input.value;
+    return {
+      values,
+      items:itemEntries.map(item=>({
+        description:item.description.input.value,
+        quantity:item.quantity.input.value,
+        unit:item.unit.input.value,
+        rate:item.rate.input.value,
+        taxes:item.taxes.map(tax=>({name:tax.name.input.value,ratePercent:tax.rate.input.value}))
+      }))
+    };
+  }
+  function restoreSnapshot(draft){
+    if(!draft||typeof draft!=='object')return false;
+    const values=draft.values&&typeof draft.values==='object'?draft.values:{};
+    for(const field of allStaticFields){
+      if(Object.prototype.hasOwnProperty.call(values,field.id))field.input.value=String(values[field.id]??'');
+    }
+    if(Array.isArray(draft.items)&&draft.items.length){
+      for(const item of [...itemEntries])item.fieldset.remove();
+      itemEntries.splice(0,itemEntries.length);
+      for(const saved of draft.items.slice(0,100)){
+        addItem({
+          description:String(saved?.description??'').slice(0,2000),
+          quantity:String(saved?.quantity??'1'),
+          unit:String(saved?.unit??'').slice(0,40),
+          rate:String(saved?.rate??'0'),
+          taxes:Array.isArray(saved?.taxes)?saved.taxes.slice(0,10).map(tax=>({name:String(tax?.name??'Tax').slice(0,40),ratePercent:String(tax?.ratePercent??'0')})):[]
+        });
+      }
+    }
+    clearErrors();latestState=null;latestTotals=null;invoice.hidden=true;totalsOutput.replaceChildren(el('p',{class:'invoice-empty-total',text:'Create or update the invoice to calculate totals.'}));
+    return true;
+  }
+
+  let draftTimer=0,draftNoticeShown=false;
+  function autosaveDraft(){
+    latestState=null;latestTotals=null;
+    clearTimeout(draftTimer);
+    draftTimer=setTimeout(()=>{
+      const result=saveInvoiceDraft(draftSnapshot());
+      if(result.ok&&!draftNoticeShown){draftNoticeShown=true;status('Draft saved locally in this browser.')}
+    },500);
+  }
+  form.addEventListener('input',autosaveDraft);
+  form.addEventListener('change',autosaveDraft);
+
+  const saveDraftButton=action('Save draft',()=>{
+    const result=saveInvoiceDraft(draftSnapshot());
+    if(!result.ok)throw Error('Draft could not be saved in this browser.');
+    status('Draft saved locally.');
+  });
+  const restoreDraftButton=action('Restore draft',()=>{
+    const result=loadInvoiceDraft();
+    if(!result.ok)throw Error('The saved draft could not be read.');
+    if(!result.draft)throw Error('No saved invoice draft was found.');
+    restoreSnapshot(result.draft);status('Saved draft restored.');
+  });
+  const clearDraftButton=action('Clear saved draft',()=>{
+    if(!window.confirm('Clear the saved invoice draft from this browser? Your current form will stay on screen.'))return;
+    clearTimeout(draftTimer);
+    const result=clearInvoiceDraft();
+    if(!result.ok)throw Error('The saved draft could not be cleared.');
+    status('Saved draft cleared. Current form was not changed.');
+  });
+
+  root.insertBefore(el('div',{class:'actions invoice-main-actions'},[createButton,downloadButton,printButton]),invoice);
+  root.insertBefore(el('div',{class:'actions invoice-draft-actions','aria-label':'Draft controls'},[saveDraftButton,restoreDraftButton,clearDraftButton]),invoice);
+  notice(root,'Your invoice and optional draft are processed locally in this browser. A saved draft stays on this device until you clear browser storage or explicitly clear the saved draft. Optional tax ID fields are provided for flexibility; this tool does not claim compliance with any specific jurisdiction. Review the invoice before issuing it.');
   setupStatus(root);
+
+  const saved=loadInvoiceDraft();
+  if(saved.ok&&saved.draft&&restoreSnapshot(saved.draft))status('Saved invoice draft restored from this browser.');
 }
