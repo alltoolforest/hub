@@ -51,6 +51,9 @@
 .invoice-party p{margin:7px 0;overflow-wrap:anywhere}
 .invoice-party pre,.invoice-preview-notes pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
 .invoice-table-wrap{max-width:100%}
+.invoice-line-table{table-layout:fixed}
+.invoice-line-table th:first-child{width:36%}
+.invoice-line-table th,.invoice-line-table td{overflow-wrap:anywhere}
 .invoice-line-table caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .invoice-line-table td small{display:block;color:var(--muted);margin-top:4px}
 .invoice-preview-summary{margin:18px 0 0 auto;max-width:520px}
