@@ -1,0 +1,170 @@
+name: Invoice Builder release audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/work.js'
+      - 'assets/js/invoice-engine.js'
+      - 'assets/js/invoice.js'
+      - 'assets/js/invoice-pdf.js'
+      - 'assets/js/invoice-draft-store.js'
+      - 'assets/css/main.css'
+      - 'tests/invoice-engine.test.mjs'
+      - 'tests/invoice-browser.mjs'
+      - 'tests/invoice-cross-browser.mjs'
+      - 'tests/invoice-production-smoke.mjs'
+      - '.github/workflows/invoice-builder-ci.yml'
+  workflow_dispatch:
+    inputs:
+      audit_target:
+        description: 'Audit target'
+        required: true
+        default: 'local'
+        type: choice
+        options:
+          - local
+          - production
+
+concurrency:
+  group: invoice-builder-${{ github.event.pull_request.number || github.ref }}-${{ inputs.audit_target || 'pr' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  invoice-audit:
+    if: github.event_name == 'pull_request' || inputs.audit_target == 'local'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Protect release scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}"
+            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            echo "$changed"
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              case "$file" in
+                assets/js/app.js|assets/js/work.js|assets/js/invoice-engine.js|assets/js/invoice.js|assets/js/invoice-pdf.js|assets/js/invoice-draft-store.js|assets/css/main.css|tests/invoice-engine.test.mjs|tests/invoice-browser.mjs|tests/invoice-cross-browser.mjs|tests/invoice-production-smoke.mjs|.github/workflows/invoice-builder-ci.yml) ;;
+                *) echo "Out-of-scope file changed: $file"; exit 1 ;;
+              esac
+            done <<< "$changed"
+
+            git show "origin/${{ github.base_ref }}:assets/css/main.css" > /tmp/base-main.css
+            python - <<'PY'
+from pathlib import Path
+base=Path('/tmp/base-main.css').read_text()
+current=Path('assets/css/main.css').read_text()
+marker='/* Invoice Builder authoring and responsive preview */'
+if marker not in current:
+    raise SystemExit('Invoice-specific CSS marker missing')
+prefix=current.split(marker,1)[0]
+if prefix!=base:
+    raise SystemExit('Shared CSS changed outside the Invoice Builder scoped block')
+print('Invoice CSS scope verified.')
+PY
+          fi
+          echo 'Invoice Builder release scope verified.'
+
+      - name: Static and financial checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/js/app.js
+          node --check assets/js/work.js
+          node --check assets/js/invoice-engine.js
+          node --check assets/js/invoice.js
+          node --check assets/js/invoice-pdf.js
+          node --check assets/js/invoice-draft-store.js
+          node --check tests/invoice-engine.test.mjs
+          node --check tests/invoice-browser.mjs
+          node --check tests/invoice-cross-browser.mjs
+          node --check tests/invoice-production-smoke.mjs
+          node --test tests/invoice-engine.test.mjs
+          grep -q "slug==='invoice'.*invoice.js" assets/js/app.js
+          ! grep -q "slug==='invoice'" assets/js/work.js
+          grep -q "Download PDF" assets/js/invoice.js
+          grep -q "Print / Save PDF" assets/js/invoice.js
+          grep -q "invoice-page-size" assets/js/invoice.js
+          grep -q "saveInvoiceDraft" assets/js/invoice.js
+          grep -q "formatMoney" assets/js/invoice-pdf.js
+          ! grep -q "minor/100" assets/js/invoice-pdf.js
+          ! grep -q "innerHTML" assets/js/invoice.js
+          ! grep -q "fetch(" assets/js/invoice-pdf.js
+          ! grep -q "fetch(" assets/js/invoice-draft-store.js
+          echo 'Invoice static, security, currency and financial checks passed.'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Run Chromium release audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/invoice-browser.mjs
+
+  browser-compatibility:
+    if: github.event_name == 'pull_request' || inputs.audit_target == 'local'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Run Firefox and WebKit compatibility audit
+        run: node tests/invoice-cross-browser.mjs
+
+  production-audit:
+    if: github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Audit deployed Invoice Builder
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          INVOICE_BASE_URL: https://alltoolforest.github.io/hub
+        run: node tests/invoice-production-smoke.mjs
