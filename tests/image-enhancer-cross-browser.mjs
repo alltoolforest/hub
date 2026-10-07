@@ -105,14 +105,20 @@ async function runEngine(name, launcher, pageOptions = { viewport: { width: 900,
     await page.locator('#enhancer-run').click();
     await page.waitForFunction(() => {
       const status = document.querySelector('#status')?.textContent || '';
-      return !!document.querySelector('#downloads a[download]') && (status.includes('background AI') || status.includes('background-safe local processing'));
+      return !!document.querySelector('#downloads a[download]') && (status.includes('photographic tone'));
     }, null, { timeout: 180000 });
     const status = (await page.locator('#status').textContent()) || '';
-    assert.match(status, /background AI/, `${name} must execute the real background AI path, not standard fallback. Status: ${status}\nWarnings: ${warnings.join('\n')}\nErrors: ${errors.join('\n')}`);
-    assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true, `${name} must keep worker-backed WASM enabled.`);
+    assert.match(status, /photographic tone/, `${name} must execute the photographic worker. Status: ${status}\nWarnings: ${warnings.join('\n')}\nErrors: ${errors.join('\n')}`);
+
     assert.deepEqual((await pngDimensionsFromDownload(page))?.slice(0, 3), [12, 8, 'image/png']);
     assert.equal(errors.length, 0, `${name} console errors:\n${errors.join('\n')}`);
-    console.log(`PASS ${name}: real Real-ESRGAN/WASM 1x enhancement under production CSP.`);
+    await page.locator('#enhancer-mode-upscale').click();
+    await page.locator('#enhancer-scale').selectOption('2');
+    await page.locator('#enhancer-run').click();
+    await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('background AI') && !!document.querySelector('#downloads a[download]'), null, {timeout:180000});
+    assert.deepEqual((await pngDimensionsFromDownload(page))?.slice(0, 3), [24, 16, 'image/png']);
+    assert.equal(await page.evaluate(() => window.ort?.env?.wasm?.proxy), true);
+    console.log(`PASS ${name}: independent photographic 1x and real Real-ESRGAN/WASM 2x under production CSP.`);
   } finally {
     await browser.close();
   }

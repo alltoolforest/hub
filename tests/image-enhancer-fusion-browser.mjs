@@ -86,7 +86,7 @@ try {
       return { violations, mildViolations, regained, width: guarded.canvas.width, height: guarded.canvas.height, safe: guarded.analysis.safe };
     } finally { worker.terminate(); }
   });
-  assert.equal(result.mildViolations, 0, 'Enhance must reduce reconstruction contribution without violating face ceilings');
+  assert.equal(result.mildViolations, 0, 'Optional fusion weight must remain bounded; Enhance does not call this helper');
   assert.equal(result.violations, 0, 'fusion exceeded a pre-existing face ceiling');
   assert.ok(result.regained > 100, 'the duplicate face blend is still erasing candidate detail');
   assert.equal(result.width, 300); assert.equal(result.height, 180);

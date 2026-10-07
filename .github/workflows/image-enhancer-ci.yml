@@ -6,6 +6,8 @@ on:
     paths:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-photo*.js'
+      - 'tests/image-enhancer-photo*.mjs'
       - 'assets/js/image-enhancer-budget.js'
       - 'tests/image-enhancer-budget.test.mjs'
       - 'assets/js/image-enhancer-deblur-validation.js'
@@ -79,6 +81,9 @@ jobs:
         run: |
           set -euo pipefail
           node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-photo.js
+          node --check assets/js/image-enhancer-photo-worker.js
+          node --check assets/js/image-enhancer-photo-engine.js
           node --test tests/image-enhancer-budget.test.mjs
           node --test tests/image-enhancer-deblur-trial/validation.test.mjs
           node --check assets/js/image-enhancer-artifact-guard.js
@@ -150,6 +155,9 @@ jobs:
 
       - name: Verify hosted Chrome
         run: google-chrome --version
+
+      - name: Check independent photographic engine
+        run: node --test tests/image-enhancer-photo.test.mjs tests/image-enhancer-photo-lifecycle.test.mjs
 
       - name: Run CSP + real AI browser smoke test
         env:

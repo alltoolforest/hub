@@ -160,7 +160,7 @@ try {
   const enhanced = await outputInfo();
   assert.deepEqual([enhanced?.width, enhanced?.height, enhanced?.type], [452, 678, 'image/png']);
   assert.match(enhanced?.name || '', /-enhanced\.png$/);
-  assert.match(enhanceStatus, /background AI|background-safe local processing/);
+  assert.match(enhanceStatus, /photographic tone/);
   assert.ok(enhancePulse.count >= 5, `Enhance heartbeat too low: ${JSON.stringify(enhancePulse)}`);
   assert.ok(enhancePulse.maxGap < 3000, `Enhance blocked the page too long: ${JSON.stringify(enhancePulse)}`);
 

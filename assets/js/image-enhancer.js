@@ -1,3 +1,4 @@
+import { enhancePhotograph } from './image-enhancer-photo-engine.js';
 import {
   $, el, field, read, format, notice, setupStatus, status,
   fileInput, bindFile, checkFile, decodeImage, canvasBlob, output,
@@ -1218,13 +1219,13 @@ export async function mount(root, slug) {
   const enhanceModeButton = el('button', {
     id: 'enhancer-mode-enhance',
     type: 'button',
-    text: 'Enhance quality',
+    text: 'Enhance Quality',
     'aria-pressed': 'false'
   });
   const upscaleModeButton = el('button', {
     id: 'enhancer-mode-upscale',
     type: 'button',
-    text: 'Upscale resolution',
+    text: 'Upscale Resolution',
     'aria-pressed': 'false'
   });
   modeActions.append(deblurModeButton, enhanceModeButton, upscaleModeButton);
@@ -1276,7 +1277,7 @@ export async function mount(root, slug) {
   restorationWrap.hidden = true;
   sharpenWrap.hidden = true;
 
-  notice(root, 'Processing happens in your browser. Deblur focuses on blur reduction. Enhance refines tone and detail with gentle blur reduction, without changing image size. Upscale resolution increases the pixel dimensions. Large images can take longer, and the tool uses background processing to keep the page responsive.');
+  notice(root, 'Processing happens in your browser. Deblur focuses on blur reduction. Enhance Quality corrects tone, color and texture without reconstructing content or changing image size. Upscale resolution increases the pixel dimensions. Large images can take longer, and the tool uses background processing to keep the page responsive.');
 
   function drawSource() {
     if (!image) return;
@@ -1386,7 +1387,7 @@ export async function mount(root, slug) {
       $('#enhancer-content', root).disabled = processing;
       $('#enhancer-restoration', root).disabled = processing;
       $('#enhancer-sharpen', root).disabled = processing;
-      $('#enhancer-mode-help', root).textContent = 'Refine tone and detail with gentle blur reduction where supported, without changing image size or identity. Choose the photo type, strength and sharpness below.';
+      $('#enhancer-mode-help', root).textContent = 'Improve tone, color and texture without reconstructing content or changing image size. Significant blur needs the separate Deblur mode. Choose the photo type, strength and sharpness below.';
     } else {
       form.hidden = false;
       if ($('#enhancer-scale', root).value === '1') $('#enhancer-scale', root).value = '2';
@@ -1523,220 +1524,92 @@ export async function mount(root, slug) {
     }
   }
 
-  async function runEnhancePipeline(signal, deblurOnly = false) {
-    const scale = 1;
-    const requestedContent = deblurOnly ? 'auto' : read('enhancer-content');
-    const contentRoute = resolveContentRoute(requestedContent, analysis, scale, caps);
-    const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
-    const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
-    const sharpening = resolveSharpening(routeControls.sharpen, analysis, restoration);
+  async function runEnhancePipeline(signal) {
+    const { width, height } = safeOutputFor(image, 1, caps);
+    if (width !== image.width || height !== image.height) {
+      throw new Error('Enhance Quality cannot preserve this image’s dimensions on this device. Choose a smaller source.');
+    }
+    status('Analyzing native-resolution tone, color and noise…');
+    // Non-generative processing never loads a reconstruction model. Skin-color
+    // and edge masks are heuristics, not a semantic face/hair/text detector.
+    const result = await enhancePhotograph(image, {
+      strength: read('enhancer-restoration'), sharpness: read('enhancer-sharpen'),
+      content: read('enhancer-content')
+    }, signal, message => status(message));
+    output(result.blob, safeName(file.name, '-enhanced', 'png'));
+    status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(result.blob.size / 1024)} KB · photographic tone, color and texture processing. Significant blur requires Deblur.`);
+    return { aiUsed: false, backend: 'photographic-worker' };
+  }
+
+  async function runDeblurPipeline(signal) {
     const { width, height } = safeOutputFor(image, 1, caps);
     let result = null;
-    let temporaryInput = null;
-    let temporaryAiInput = null;
-
     try {
-      if (deblurOnly && (!caps.wasm || !caps.workers || !processor.available || hasTransparency || Math.min(image.width, image.height) < 96)) {
-        throw new Error('Deblur is unavailable for this image or browser. The original has not been changed.');
+      if (!caps.wasm || !caps.workers || !processor.available || hasTransparency || Math.min(image.width, image.height) < 96) {
+        throw new Error('Deblur is unavailable for this image or browser');
       }
-      if (deblurOnly) {
-        if (width !== image.width || height !== image.height) throw new Error('Deblur cannot preserve this image’s dimensions on this device.');
-        createRestorationBudget(caps).check(estimateTileCount(image.width, image.height, caps.isMobile ? 128 : 192));
-      }
-      const shouldUseAi = deblurOnly || !canRefineLocally(requestedContent, analysis, scale) && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
-      if (!shouldUseAi) {
-        result = await browserEnhanceEngine.process({
-          image, width, height, signal,
-          onProgress: message => status(message)
-        });
-        const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
-        result.canvas = finished.canvas;
-        const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
-        result.canvas = detail.canvas;
-        const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, '-enhanced', 'png'));
-        const detailLabel = detail.protected ? ' · source detail protected' : '';
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background-safe local processing${detailLabel}.`);
-        return result;
-      }
-
-      const faceRegions = await resolveFaceSafety(signal, requestedContent);
-
-      const diagnosisConfidence = analysis?.diagnosis?.confidence || {};
-      const compressionConfidence = Math.max(
-        Number(diagnosisConfidence.compression) || 0,
-        Number(analysis?.jpegArtifacts) || 0
-      );
-      const blurConfidence = Math.max(
-        Number(diagnosisConfidence.blur) || 0,
-        Number(analysis?.blurScore) || 0
-      );
-
-      // Trust-first JPEG handling. The general restoration model can turn block
-      // boundaries into false texture when compression is the dominant problem.
-      // Until a dedicated deblocking model is verified, preserve the photographed
-      // pixels rather than knowingly make a compressed image less faithful.
-      if (!deblurOnly && compressionConfidence >= 0.72 && blurConfidence < 0.34 && !analysis?.likelyBlurred) {
-        status('Compression damage detected. Preserving source fidelity…');
-        const safeCanvas = el('canvas', { width, height });
-        const safeCtx = safeCanvas.getContext('2d', { alpha: false });
-        if (!safeCtx) throw new Error('Compression fidelity canvas is unavailable.');
-        safeCtx.imageSmoothingEnabled = true;
-        safeCtx.imageSmoothingQuality = 'high';
-        safeCtx.drawImage(image, 0, 0, width, height);
-        result = {
-          canvas: safeCanvas,
-          aiUsed: false,
-          backend: 'compression-fidelity'
-        };
-
-        const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'enhance', signal);
-        result.canvas = fidelityGuard.canvas;
-        const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, '-enhanced', 'png'));
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · compression-safe source fidelity.`);
-        return result;
-      }
-
-      const blurEligible = deblurOnly || (
-        analysis?.likelyBlurred &&
-        Math.min(image.width, image.height) >= 96 &&
-        ['auto', 'low-resolution', 'portrait', 'old-photo'].includes(requestedContent) &&
-        contentRoute.engine !== 'standard');
-
-      if (blurEligible) {
-        status(deblurOnly ? 'Running dedicated blur restoration…' : 'Applying gentle blur restoration…');
-        result = await deblurEngine.process({
-          image,
-          signal,
-          onProgress: message => status(message)
-        });
-
-        // Preserve photographed texture/identity instead of applying one global
-        // AI blend strength. Smooth regions retain more source pixels while
-        // recoverable edges can use more of the NAFNet reconstruction.
-        let blended = null;
-        try {
-          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal, deblurOnly ? 1 : 0.6);
-        } catch (error) {
-          if (error?.name === 'AbortError') throw error;
-          console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
-        }
-
-        const faceSafetyFused = !!blended;
-        if (!blended) {
-          const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
-          blended = el('canvas', { width, height });
-          const blendCtx = blended.getContext('2d', { alpha: false });
-          if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
-          blendCtx.drawImage(image, 0, 0, width, height);
-          blendCtx.globalAlpha = deblurBlend * (deblurOnly ? 1 : 0.6);
-          blendCtx.drawImage(result.canvas, 0, 0, width, height);
-          blendCtx.globalAlpha = 1;
-        }
-
-        result.canvas.width = result.canvas.height = 0;
-        result.canvas = blended;
-        // The worker already enforced both face ceilings against the original
-        // candidate. Keep the legacy overlay for the global-blend fallback only.
-        if (!faceSafetyFused) {
-          const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
-          result.canvas = faceGuard.canvas;
-        }
-        if (!deblurOnly) {
-          result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
-          const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
-          result.canvas = finished.canvas;
-        }
-        const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
-        result.canvas = fidelityGuard.canvas;
-        if (deblurOnly && (!fidelityGuard.analysis?.safe || !(fidelityGuard.analysis.globalMae > 0))) {
-          throw new Error('The safety check found no usable blur restoration');
-        }
-
-        const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, deblurOnly ? '-deblurred' : '-enhanced', 'png'));
-        const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
-        const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
-        status(`${deblurOnly ? 'Deblur completed' : 'Enhanced'} · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · ${deblurOnly ? 'dedicated deblur AI' : 'gentle deblur and refinement'}${retryLabel}${fidelityLabel}.`);
-        return result;
-      }
-
-      status('Preparing quality enhancement…');
-      const aiPrepared = await prepareAiInferenceInput(image, width, height, aiEngine.nativeScale, signal, caps);
-      temporaryAiInput = aiPrepared.temporary;
-      const prepared = await prepareRestorationInput(aiPrepared.image, restoration, signal);
-      temporaryInput = prepared.temporary;
-      if (temporaryAiInput && temporaryInput) {
-        temporaryAiInput.width = temporaryAiInput.height = 0;
-        temporaryAiInput = null;
-      }
-
-      result = await aiEngine.process({
-        image: prepared.image,
-        scale: 1,
-        width,
-        height,
+      if (width !== image.width || height !== image.height) throw new Error('Deblur cannot preserve this image’s dimensions on this device');
+      createRestorationBudget(caps).check(estimateTileCount(image.width, image.height, caps.isMobile ? 128 : 192));
+      // The current diagnostic estimates blur evidence, not a reliable blur kernel.
+      // Do not describe the GoPro motion model as validated defocus restoration.
+      status(analysis?.likelyBlurred ? 'Blur evidence detected. Preparing restoration…' : 'Blur diagnosis is uncertain. Preparing a conservative restoration attempt…');
+      const faceRegions = await resolveFaceSafety(signal, 'auto');
+      status('Running dedicated blur restoration…');
+      result = await deblurEngine.process({
+        image,
         signal,
         onProgress: message => status(message)
       });
 
-      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
-      temporaryInput = null;
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryAiInput = null;
+      // Preserve photographed texture/identity instead of applying one global
+      // AI blend strength. Smooth regions retain more source pixels while
+      // recoverable edges can use more of the NAFNet reconstruction.
+      let blended = null;
+      try {
+        blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal, 1);
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
+      }
 
-      result.canvas = blendForFidelity(result.canvas, image, 1, restoration);
-      result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
-      const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
-      result.canvas = finished.canvas;
-      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
-      result.canvas = detail.canvas;
-      const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'enhance');
-      result.canvas = faceGuard.canvas;
-      const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'enhance', signal);
+      const faceSafetyFused = !!blended;
+      if (!blended) {
+        const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
+        blended = el('canvas', { width, height });
+        const blendCtx = blended.getContext('2d', { alpha: false });
+        if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
+        blendCtx.drawImage(image, 0, 0, width, height);
+        blendCtx.globalAlpha = deblurBlend;
+        blendCtx.drawImage(result.canvas, 0, 0, width, height);
+        blendCtx.globalAlpha = 1;
+      }
+
+      result.canvas.width = result.canvas.height = 0;
+      result.canvas = blended;
+      // The worker already enforced both face ceilings against the original
+      // candidate. Keep the legacy overlay for the global-blend fallback only.
+      if (!faceSafetyFused) {
+        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
+        result.canvas = faceGuard.canvas;
+      }
+      const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
       result.canvas = fidelityGuard.canvas;
+      if (!fidelityGuard.analysis?.safe || !(fidelityGuard.analysis.globalMae > 0)) {
+        throw new Error('The safety check found no usable blur restoration');
+      }
 
-      status('Creating enhanced image…');
       const blob = await canvasBlob(result.canvas, 'image/png', 1);
-      output(blob, safeName(file.name, '-enhanced', 'png'));
-      const retryLabel = result.retryCount ? ` · memory retry ×${result.retryCount}` : '';
-      const detailLabel = detail.protected ? ' · source detail protected' : '';
+      output(blob, safeName(file.name, '-deblurred', 'png'));
+      const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
       const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
-      status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · background AI${retryLabel}${detailLabel}${fidelityLabel}.`);
+      status(`Deblur processed · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${fidelityLabel}. Compare with the original; blur recovery is not guaranteed.`);
       return result;
     } catch (error) {
-      temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
-      temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
-      if (error?.name === 'AbortError' || signal.aborted) {
-        if (result?.canvas) result.canvas.width = result.canvas.height = 0;
-        throw error;
-      }
-
-      if (deblurOnly) {
-        if (result?.canvas) result.canvas.width = result.canvas.height = 0;
-        throw new Error(error instanceof RestorationBudgetError
-          ? 'Deblur could not complete within this device’s processing budget. No restored image was produced; the original is unchanged.'
-          : `Deblur could not complete: ${error.message}. The original is unchanged.`);
-      }
-      const budgetLimited = error instanceof RestorationBudgetError;
-      console.warn('AI enhance path unavailable; using fast local enhancement.', error);
-      status(budgetLimited ? 'AI restoration would take too long. Applying limited local adjustments…' : 'AI enhancement unavailable. Using fast local enhancement…');
-      result = await browserEnhanceEngine.process({
-        image, width, height, signal,
-        onProgress: message => status(message)
-      });
-      const finished = await finishInBackground(result.canvas, { local: true, sharpening }, signal);
-      result.canvas = finished.canvas;
-      const detail = await enforceEnhanceDetailFloor(result.canvas, image, restoration, signal);
-      result.canvas = detail.canvas;
-      const blob = await canvasBlob(result.canvas, 'image/png', 1);
-      output(blob, safeName(file.name, '-enhanced', 'png'));
-      const detailLabel = detail.protected ? ' · source detail protected' : '';
-      status(budgetLimited
-        ? `Limited enhancement · original size ${width.toLocaleString()} × ${height.toLocaleString()} · AI restoration skipped for processing time; blur may remain${detailLabel}.`
-        : `Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · local fallback used safely${detailLabel}.`);
-      return result;
+      if (result?.canvas) result.canvas.width = result.canvas.height = 0;
+      if (error?.name === 'AbortError' || signal.aborted) throw error;
+      throw new Error(error instanceof RestorationBudgetError
+        ? 'Deblur could not complete within this device’s processing budget. No restored image was produced; the original is unchanged.'
+        : `Deblur could not complete: ${error.message}. The original is unchanged.`);
     }
   }
 
@@ -1840,7 +1713,7 @@ export async function mount(root, slug) {
 
     try {
       result = taskMode === 'deblur'
-        ? await runEnhancePipeline(signal, true)
+        ? await runDeblurPipeline(signal)
         : taskMode === 'enhance'
         ? await runEnhancePipeline(signal)
         : await runUpscalePipeline(signal);

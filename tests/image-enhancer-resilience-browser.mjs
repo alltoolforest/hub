@@ -213,7 +213,7 @@ async function testCancellationDuringModelLoad() {
   }
 }
 
-async function testEnhanceFallbackIsNotNoop() {
+async function testEnhanceIndependentOfOnnx() {
   const context = await browser.newContext();
   const page = await context.newPage();
   const errors = [];
@@ -240,7 +240,7 @@ async function testEnhanceFallbackIsNotNoop() {
 
     try {
       await page.locator('#enhancer-run').click();
-      const status = await waitResult(page, /Enhanced · original size .*local fallback used safely/);
+      const status = await waitResult(page, /Enhanced · original size .*photographic tone/);
       assert.doesNotMatch(status, /background AI/);
       assert.deepEqual(await outputDimensions(page), [140, 100, 'local-fallback-enhanced.png']);
 
@@ -281,8 +281,8 @@ async function testEnhanceFallbackIsNotNoop() {
 try {
   await testDeepMemoryRetries();
   await testCancellationDuringModelLoad();
-  await testEnhanceFallbackIsNotNoop();
-  console.log('PASS: two-stage memory retry, exhausted-memory upscale fallback, model-download cancellation and non-no-op local Enhance fallback verified.');
+  await testEnhanceIndependentOfOnnx();
+  console.log('PASS: two-stage memory retry, exhausted-memory upscale fallback, model-download cancellation and independent photographic Enhance with ONNX unavailable verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

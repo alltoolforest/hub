@@ -95,7 +95,25 @@ try {
   assert.equal(await page.locator('#enhancer-content').isVisible(), false);
   await page.getByRole('button',{name:'Reset',exact:true}).click();
   for(const mode of ['deblur','enhance','upscale']) assert.equal(await page.locator('#enhancer-mode-'+mode).getAttribute('aria-pressed'),'false');
-  console.log('Three modes: strict Deblur failure, no model download or false export, switching/reset PASS');
+  await page.locator('input[type=file]').setInputFiles({name:'independent.png',mimeType:'image/png',buffer:png(512,384)});
+  await page.waitForFunction(() => document.querySelector('#enhancer-source-info')?.textContent?.includes('512 × 384'));
+  await page.locator('#enhancer-mode-enhance').click();
+  await page.locator('#enhancer-run').click();
+  await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('photographic tone') && !!document.querySelector('#downloads a[download]'));
+  assert.equal(modelRequests.length,0,'Enhance must never load SR, face reconstruction or deblur models');
+  const dimensions=await page.evaluate(async()=>{const a=document.querySelector('#downloads a[download]'),b=await createImageBitmap(await(await fetch(a.href)).blob());const dims=[b.width,b.height];b.close();return dims;});
+  assert.deepEqual(dimensions,[512,384]);
+  const cancellation=await page.evaluate(async()=>{
+    const {enhancePhotograph}=await import('/assets/js/image-enhancer-photo-engine.js');
+    const canvas=document.createElement('canvas');canvas.width=4096;canvas.height=3072;
+    canvas.getContext('2d').fillRect(0,0,canvas.width,canvas.height);
+    const control=new AbortController();const begin=performance.now();
+    const job=enhancePhotograph(canvas,{},control.signal);setTimeout(()=>control.abort(),20);
+    try{await job;return {aborted:false};}catch(error){return {aborted:error.name==='AbortError',ms:performance.now()-begin};}
+    finally{canvas.width=canvas.height=0;}
+  });
+  assert.equal(cancellation.aborted,true);assert.ok(cancellation.ms<1500);
+  console.log('Independent Enhance/no models/original dimensions, worker cancellation, strict Deblur failure, mode switching/reset PASS');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));
