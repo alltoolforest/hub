@@ -1,3 +1,4 @@
+// Invoice Builder release-candidate browser regression. Keep this file product-scope only.
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
