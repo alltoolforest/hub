@@ -16,6 +16,21 @@ on:
       - 'tests/invoice-cross-browser.mjs'
       - 'tests/invoice-production-smoke.mjs'
       - '.github/workflows/invoice-builder-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/work.js'
+      - 'assets/js/invoice-engine.js'
+      - 'assets/js/invoice.js'
+      - 'assets/js/invoice-pdf.js'
+      - 'assets/js/invoice-draft-store.js'
+      - 'assets/css/main.css'
+      - 'tests/invoice-engine.test.mjs'
+      - 'tests/invoice-browser.mjs'
+      - 'tests/invoice-cross-browser.mjs'
+      - 'tests/invoice-production-smoke.mjs'
+      - '.github/workflows/invoice-builder-ci.yml'
   workflow_dispatch:
     inputs:
       audit_target:
@@ -70,7 +85,8 @@ jobs:
           if marker not in current:
               raise SystemExit('Invoice-specific CSS marker missing')
           prefix=current.split(marker,1)[0]
-          if prefix.rstrip()!=base.rstrip():
+          base_prefix=base.split(marker,1)[0] if marker in base else base
+          if prefix.rstrip()!=base_prefix.rstrip():
               raise SystemExit('Shared CSS changed outside the Invoice Builder scoped block')
           print('Invoice CSS scope verified.')
           PY
@@ -145,7 +161,7 @@ jobs:
         run: node tests/invoice-cross-browser.mjs
 
   production-audit:
-    if: github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
