@@ -201,8 +201,10 @@ const [appSource,moduleSource]=await Promise.all([
 const isolatedRoute="else if(slug==='freelance-rate')mod=await import('./freelance-rate.js');";
 assert.ok(appSource.includes(isolatedRoute),'Freelance Rate must route to its isolated module.');
 assert.ok(moduleSource.includes("from './freelance-rate-engine.js'"),'Standalone module must use the dedicated engine.');
-assert.ok(moduleSource.includes('Desired monthly income'),'Task 1 must preserve the current visible workflow until Task 2.');
-assert.ok(!moduleSource.includes('Tax reserve'),'Task 2 UX must not be pre-implemented.');
-assert.ok(!moduleSource.includes('Currency'),'Task 2 UX must not be pre-implemented.');
+assert.ok(moduleSource.includes('Desired personal income'),'Approved Task 2 income-goal workflow must remain present.');
+assert.ok(moduleSource.includes('Tax planning reserve (%)'),'Approved Task 2 tax-planning input must remain present.');
+assert.ok(moduleSource.includes("supportedCurrencyCodes()"),'Approved Task 2 ISO currency selector must remain present.');
+assert.ok(moduleSource.includes('Minimum sustainable hourly rate'),'Approved Task 2 minimum-rate output must remain present.');
+assert.ok(moduleSource.includes('Recommended hourly rate'),'Approved Task 2 recommended-rate output must remain present.');
 
-console.log('PASS: Freelance Rate Task 1 engine, isolation and legacy-UI regression passed.');
+console.log('PASS: Freelance Rate engine, isolation and approved-UX regression passed.');
