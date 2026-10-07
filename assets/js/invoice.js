@@ -218,6 +218,7 @@ export async function mount(root){
       const index=entry.taxes.indexOf(taxEntry);
       if(index>=0)entry.taxes.splice(index,1);
       row.remove();
+      autosaveDraft();
       entry.addTaxButton.focus();
     });
     entry.taxList.append(row);
@@ -245,7 +246,7 @@ export async function mount(root){
     const removeButton=el('button',{type:'button',class:'invoice-remove-item',text:'Remove item'});
     const entry={fieldset,legend,description,quantity,unit,rate,taxes:[],taxList,addTaxButton,removeButton};
     itemEntries.push(entry);
-    addTaxButton.addEventListener('click',()=>{const taxEntry=addTax(entry);taxEntry.name.input.focus()});
+    addTaxButton.addEventListener('click',()=>{const taxEntry=addTax(entry);autosaveDraft();taxEntry.name.input.focus()});
     removeButton.addEventListener('click',()=>{
       if(itemEntries.length===1)return;
       const index=itemEntries.indexOf(entry);
@@ -253,6 +254,7 @@ export async function mount(root){
       itemEntries.splice(index,1);
       fieldset.remove();
       reindexItems();
+      autosaveDraft();
       nextFocus.focus();
     });
     for(const tax of initial.taxes||[{name:'Tax',ratePercent:'0'}])addTax(entry,tax);
@@ -263,7 +265,7 @@ export async function mount(root){
   }
 
   addItem();
-  addItemButton.addEventListener('click',()=>{const entry=addItem({taxes:[{name:'Tax',ratePercent:'0'}]});entry.description.input.focus()});
+  addItemButton.addEventListener('click',()=>{const entry=addItem({taxes:[{name:'Tax',ratePercent:'0'}]});autosaveDraft();entry.description.input.focus()});
 
   const previewHeadingId='invoice-preview-heading';
   const invoice=el('article',{class:'invoice invoice-preview',hidden:true,tabindex:'-1','aria-labelledby':previewHeadingId});
@@ -504,6 +506,7 @@ export async function mount(root){
 
   let draftTimer=0,draftNoticeShown=false;
   function autosaveDraft(){
+    latestState=null;latestTotals=null;
     clearTimeout(draftTimer);
     draftTimer=setTimeout(()=>{
       const result=saveInvoiceDraft(draftSnapshot());
@@ -526,6 +529,7 @@ export async function mount(root){
   });
   const clearDraftButton=action('Clear saved draft',()=>{
     if(!window.confirm('Clear the saved invoice draft from this browser? Your current form will stay on screen.'))return;
+    clearTimeout(draftTimer);
     const result=clearInvoiceDraft();
     if(!result.ok)throw Error('The saved draft could not be cleared.');
     status('Saved draft cleared. Current form was not changed.');
