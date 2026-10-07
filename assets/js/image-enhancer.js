@@ -1650,6 +1650,9 @@ export async function mount(root, slug) {
         }
         const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
         result.canvas = fidelityGuard.canvas;
+        if (deblurOnly && (!fidelityGuard.analysis?.safe || !(fidelityGuard.analysis.globalMae > 0))) {
+          throw new Error('The safety check found no usable blur restoration');
+        }
 
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
         output(blob, safeName(file.name, deblurOnly ? '-deblurred' : '-enhanced', 'png'));
@@ -1705,7 +1708,10 @@ export async function mount(root, slug) {
     } catch (error) {
       temporaryAiInput && (temporaryAiInput.width = temporaryAiInput.height = 0);
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
-      if (error?.name === 'AbortError' || signal.aborted) throw error;
+      if (error?.name === 'AbortError' || signal.aborted) {
+        if (result?.canvas) result.canvas.width = result.canvas.height = 0;
+        throw error;
+      }
 
       if (deblurOnly) {
         if (result?.canvas) result.canvas.width = result.canvas.height = 0;

@@ -9,7 +9,8 @@ Candidate behavior:
 - Deblur explicitly invokes NAFNet at original size, even if automatic diagnosis
   is uncertain; no SR, color/tone finishing or general enhancement fallback.
   Existing face fusion, numerical validation and final artifact guard remain.
-  Unsupported input or exceeded runtime budget produces no restored download.
+  Unsupported input, exceeded runtime budget, missing/failed final safety verification
+  or a final result unchanged in the fidelity measurement produces no restored download.
 - Enhance retains restoration routing. Where blur reconstruction is eligible,
   it uses 60% of the existing bounded contribution in the SAME fusion pass, then
   existing region refinement and sharpening without extra global tone contrast.
