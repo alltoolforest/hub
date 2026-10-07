@@ -91,6 +91,25 @@ export function formatMoney(minorUnits,currency,locale){
   return parts.map(part=>part.type==='fraction'?fraction:part.value).join('');
 }
 
+export function formatUnitRate(rate,currency,locale){
+  const code=normalizeCurrency(currency);
+  const value=decimal(rate,{name:'Unit rate',nonNegative:true});
+  const currencyDigits=currencyFractionDigits(code);
+  const displayDigits=Math.max(currencyDigits,value.scale);
+  const scale=pow10(value.scale);
+  const major=value.int/scale;
+  const rawFraction=(value.int%scale).toString().padStart(value.scale,'0');
+  const fraction=rawFraction.padEnd(displayDigits,'0');
+  const formatter=new Intl.NumberFormat(locale||undefined,{
+    style:'currency',
+    currency:code,
+    minimumFractionDigits:displayDigits,
+    maximumFractionDigits:displayDigits
+  });
+  const parts=formatter.formatToParts(major);
+  return parts.map(part=>part.type==='fraction'?fraction:part.value).join('');
+}
+
 export function localDateISO(date=new Date()){
   if(!(date instanceof Date)||Number.isNaN(date.getTime()))throw Error('Invalid date.');
   const y=String(date.getFullYear()).padStart(4,'0');
