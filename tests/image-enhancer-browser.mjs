@@ -344,12 +344,18 @@ async function testUnsafeWebGpuIsNotSelected() {
 
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+  await page.waitForSelector('#enhancer-mode-deblur');
   await page.waitForSelector('#enhancer-mode-enhance');
   await page.waitForSelector('#enhancer-mode-upscale');
   await page.waitForSelector('#enhancer-scale', { state: 'attached' });
   await page.waitForSelector('#enhancer-content', { state: 'attached' });
   assert.equal(await page.locator('.fields').first().isHidden(), true, 'Task controls must stay hidden until Enhance or Upscale is chosen.');
+  await page.locator('#enhancer-mode-deblur').click();
+  assert.equal(await page.locator('#enhancer-mode-deblur').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('.fields').first().isHidden(), true);
+  assert.equal(await page.locator('#enhancer-run').textContent(), 'Deblur photo');
   await page.locator('#enhancer-mode-enhance').click();
+  assert.equal(await page.locator('#enhancer-mode-deblur').getAttribute('aria-pressed'), 'false');
   assert.equal(await page.locator('#enhancer-content').isVisible(), true, 'Enhance mode must show enhancement controls.');
   assert.equal(await page.locator('#enhancer-scale').isVisible(), false, 'Enhance mode must hide upscale controls.');
   await page.locator('#enhancer-mode-upscale').click();

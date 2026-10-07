@@ -179,12 +179,14 @@ try {
     }, spec.name, { timeout: 30000 });
 
     const beforeHref = await page.locator('#downloads a[download]').last().getAttribute('href').catch(() => '');
-    await page.locator('#enhancer-mode-enhance').click();
+    await page.locator(name === 'blur' ? '#enhancer-mode-deblur' : '#enhancer-mode-enhance').click();
+    if (name !== 'blur') {
     await page.locator('#enhancer-content').selectOption(
-      name === 'blur' || name === 'mixed' ? 'auto' : 'high-fidelity'
+      name === 'blur' || name === 'mild-blur' || name === 'mixed' ? 'auto' : 'high-fidelity'
     );
     await page.locator('#enhancer-restoration').selectOption('auto');
     await page.locator('#enhancer-sharpen').selectOption('auto');
+    }
     await page.locator('#enhancer-run').click();
 
     try {
@@ -323,6 +325,10 @@ try {
   assert.equal(catastrophic.length, 0,
     `Catastrophic benchmark regressions: ${catastrophic.map(r => r.name).join(', ')}`);
 
+  const mild = await runCase('mild-blur', {...fixtures.cases.blur, name:'benchmark-mild-blur.png'});
+  assert.match(mild.status, /gentle deblur and refinement/);
+  assert.ok(mild.improvement > 0, `Gentle Enhance blur refinement must improve toward the sharp reference: ${JSON.stringify(mild)}`);
+  assert.equal(mild.fidelity.safe, true);
   console.log('Image Enhancer Task 5 real-world benchmark passed.');
   console.log(JSON.stringify({
     meaningfulImprovement,

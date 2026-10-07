@@ -117,7 +117,7 @@ class ProcessingWorkerBridge {
     return result.bitmap;
   }
 
-  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, faces, signal) {
+  async adaptiveDeblurBlend(sourceImage, deblurCanvas, analysis, faces, signal, strength = 1) {
     if (!this.available) return null;
     const sourceBitmap = await createImageBitmap(sourceImage);
     const deblurBitmap = await createImageBitmap(deblurCanvas);
@@ -127,6 +127,7 @@ class ProcessingWorkerBridge {
         sourceBitmap,
         deblurBitmap,
         analysis: analysis || null,
+        strength,
         faces: faces || []
       }, [sourceBitmap, deblurBitmap], signal);
     } catch (error) {
@@ -1211,6 +1212,9 @@ export async function mount(root, slug) {
     })
   );
   const modeActions = el('div', { class: 'actions' });
+  const deblurModeButton = el('button', {
+    id: 'enhancer-mode-deblur', type: 'button', text: 'Deblur', 'aria-pressed': 'false'
+  });
   const enhanceModeButton = el('button', {
     id: 'enhancer-mode-enhance',
     type: 'button',
@@ -1223,7 +1227,7 @@ export async function mount(root, slug) {
     text: 'Upscale resolution',
     'aria-pressed': 'false'
   });
-  modeActions.append(enhanceModeButton, upscaleModeButton);
+  modeActions.append(deblurModeButton, enhanceModeButton, upscaleModeButton);
   modeSection.append(modeActions);
   root.append(modeSection);
 
@@ -1272,7 +1276,7 @@ export async function mount(root, slug) {
   restorationWrap.hidden = true;
   sharpenWrap.hidden = true;
 
-  notice(root, 'Processing happens in your browser. Enhance quality improves the image without changing its size. Upscale resolution increases the pixel dimensions. Large images can take longer, and the tool uses background processing to keep the page responsive.');
+  notice(root, 'Processing happens in your browser. Deblur focuses on blur reduction. Enhance refines tone and detail with gentle blur reduction, without changing image size. Upscale resolution increases the pixel dimensions. Large images can take longer, and the tool uses background processing to keep the page responsive.');
 
   function drawSource() {
     if (!image) return;
@@ -1313,14 +1317,16 @@ export async function mount(root, slug) {
     }, 0);
   });
 
-  const enhanceButton = el('button', { id: 'enhancer-run', type: 'button', class: 'primary', text: 'Choose Enhance or Upscale', disabled: true });
+  const enhanceButton = el('button', { id: 'enhancer-run', type: 'button', class: 'primary', text: 'Choose Deblur, Enhance or Upscale', disabled: true });
   const cancelButton = el('button', { type: 'button', text: 'Cancel', disabled: true });
   const resetButton = el('button', { type: 'button', text: 'Reset' });
   const actions = el('div', { class: 'actions' }, [enhanceButton, cancelButton, resetButton]);
   root.append(actions);
 
   function setTaskMode(mode, silent = false) {
-    taskMode = mode === 'enhance' || mode === 'upscale' ? mode : null;
+    taskMode = ['deblur', 'enhance', 'upscale'].includes(mode) ? mode : null;
+    deblurModeButton.setAttribute('aria-pressed', String(taskMode === 'deblur'));
+    deblurModeButton.classList.toggle('primary', taskMode === 'deblur');
     root.dataset.enhancerMode = taskMode || '';
     const oneX = [...$('#enhancer-scale', root).options].find(option => option.value === '1');
 
@@ -1338,13 +1344,27 @@ export async function mount(root, slug) {
       upscaleModeButton.setAttribute('aria-pressed', 'false');
       enhanceModeButton.classList.remove('primary');
       upscaleModeButton.classList.remove('primary');
-      enhanceButton.textContent = 'Choose Enhance or Upscale';
+      enhanceButton.textContent = 'Choose Deblur, Enhance or Upscale';
       enhanceButton.disabled = true;
       $('#enhancer-scale', root).disabled = true;
       $('#enhancer-content', root).disabled = true;
       $('#enhancer-restoration', root).disabled = true;
       $('#enhancer-sharpen', root).disabled = true;
       $('#enhancer-mode-help', root).textContent = 'Choose one task first. You will only see controls for that task.';
+    } else if (taskMode === 'deblur') {
+      form.hidden = true;
+      scaleWrap.hidden = contentWrap.hidden = restorationWrap.hidden = sharpenWrap.hidden = true;
+      $('#enhancer-scale', root).value = '1';
+      for (const id of ['enhancer-scale', 'enhancer-content', 'enhancer-restoration', 'enhancer-sharpen']) {
+        $('#' + id, root).disabled = true;
+      }
+      enhanceModeButton.setAttribute('aria-pressed', 'false');
+      upscaleModeButton.setAttribute('aria-pressed', 'false');
+      enhanceModeButton.classList.remove('primary');
+      upscaleModeButton.classList.remove('primary');
+      enhanceButton.textContent = 'Deblur photo';
+      enhanceButton.disabled = processing;
+      $('#enhancer-mode-help', root).textContent = 'Reduce blur at the original size. No extra color or tone adjustments are applied. If restoration cannot run safely, no substitute enhanced image is returned.';
     } else if (taskMode === 'enhance') {
       form.hidden = false;
       $('#enhancer-scale', root).value = '1';
@@ -1366,7 +1386,7 @@ export async function mount(root, slug) {
       $('#enhancer-content', root).disabled = processing;
       $('#enhancer-restoration', root).disabled = processing;
       $('#enhancer-sharpen', root).disabled = processing;
-      $('#enhancer-mode-help', root).textContent = 'Enhance improves quality without changing the image size. Choose the photo type, strength and sharpness below.';
+      $('#enhancer-mode-help', root).textContent = 'Refine tone and detail with gentle blur reduction where supported, without changing image size or identity. Choose the photo type, strength and sharpness below.';
     } else {
       form.hidden = false;
       if ($('#enhancer-scale', root).value === '1') $('#enhancer-scale', root).value = '2';
@@ -1396,9 +1416,10 @@ export async function mount(root, slug) {
 
     clearOutputs();
     root.dispatchEvent(new CustomEvent('enhancer-modechange', { detail: { mode: taskMode } }));
-    if (!silent && taskMode) status(taskMode === 'enhance' ? 'Enhance mode selected.' : 'Upscale mode selected.');
+    if (!silent && taskMode) status(taskMode === 'deblur' ? 'Deblur mode selected.' : taskMode === 'enhance' ? 'Enhance mode selected.' : 'Upscale mode selected.');
   }
 
+  deblurModeButton.addEventListener('click', () => setTaskMode('deblur'));
   enhanceModeButton.addEventListener('click', () => setTaskMode('enhance'));
   upscaleModeButton.addEventListener('click', () => setTaskMode('upscale'));
 
@@ -1407,6 +1428,7 @@ export async function mount(root, slug) {
     enhanceButton.disabled = active || !taskMode;
     resetButton.disabled = active;
     input.disabled = active;
+    deblurModeButton.disabled = active;
     enhanceModeButton.disabled = active;
     upscaleModeButton.disabled = active;
     $('#enhancer-scale').disabled = active || taskMode !== 'upscale';
@@ -1435,7 +1457,7 @@ export async function mount(root, slug) {
     setTaskMode(null, true);
     if (image && file) summary.textContent = sourceSummary(file, image, caps, analysis) + (hasTransparency ? ' · transparency detected' : '');
     drawSource();
-    status('Reset complete. Choose Enhance or Upscale.');
+    status('Reset complete. Choose Deblur, Enhance or Upscale.');
   });
 
   async function finishInBackground(canvas, { local, sharpening }, signal) {
@@ -1501,9 +1523,9 @@ export async function mount(root, slug) {
     }
   }
 
-  async function runEnhancePipeline(signal) {
+  async function runEnhancePipeline(signal, deblurOnly = false) {
     const scale = 1;
-    const requestedContent = read('enhancer-content');
+    const requestedContent = deblurOnly ? 'auto' : read('enhancer-content');
     const contentRoute = resolveContentRoute(requestedContent, analysis, scale, caps);
     const routeControls = resolveRouteControls(contentRoute, read('enhancer-restoration'), read('enhancer-sharpen'));
     const restoration = resolveRestorationProfile(routeControls.restoration, analysis, scale);
@@ -1514,7 +1536,14 @@ export async function mount(root, slug) {
     let temporaryAiInput = null;
 
     try {
-      const shouldUseAi = !canRefineLocally(requestedContent, analysis, scale) && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
+      if (deblurOnly && (!caps.wasm || !caps.workers || !processor.available || hasTransparency || Math.min(image.width, image.height) < 96)) {
+        throw new Error('Deblur is unavailable for this image or browser. The original has not been changed.');
+      }
+      if (deblurOnly) {
+        if (width !== image.width || height !== image.height) throw new Error('Deblur cannot preserve this image’s dimensions on this device.');
+        createRestorationBudget(caps).check(estimateTileCount(image.width, image.height, caps.isMobile ? 128 : 192));
+      }
+      const shouldUseAi = deblurOnly || !canRefineLocally(requestedContent, analysis, scale) && contentRoute.engine !== 'standard' && caps.wasm && caps.workers && processor.available && !hasTransparency;
       if (!shouldUseAi) {
         result = await browserEnhanceEngine.process({
           image, width, height, signal,
@@ -1547,7 +1576,7 @@ export async function mount(root, slug) {
       // boundaries into false texture when compression is the dominant problem.
       // Until a dedicated deblocking model is verified, preserve the photographed
       // pixels rather than knowingly make a compressed image less faithful.
-      if (compressionConfidence >= 0.72 && blurConfidence < 0.34 && !analysis?.likelyBlurred) {
+      if (!deblurOnly && compressionConfidence >= 0.72 && blurConfidence < 0.34 && !analysis?.likelyBlurred) {
         status('Compression damage detected. Preserving source fidelity…');
         const safeCanvas = el('canvas', { width, height });
         const safeCtx = safeCanvas.getContext('2d', { alpha: false });
@@ -1569,14 +1598,14 @@ export async function mount(root, slug) {
         return result;
       }
 
-      const blurEligible =
+      const blurEligible = deblurOnly || (
         analysis?.likelyBlurred &&
         Math.min(image.width, image.height) >= 96 &&
         ['auto', 'low-resolution', 'portrait', 'old-photo'].includes(requestedContent) &&
-        contentRoute.engine !== 'standard';
+        contentRoute.engine !== 'standard');
 
       if (blurEligible) {
-        status('Blur detected. Running dedicated deblur reconstruction…');
+        status(deblurOnly ? 'Running dedicated blur restoration…' : 'Applying gentle blur restoration…');
         result = await deblurEngine.process({
           image,
           signal,
@@ -1588,7 +1617,7 @@ export async function mount(root, slug) {
         // recoverable edges can use more of the NAFNet reconstruction.
         let blended = null;
         try {
-          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal);
+          blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal, deblurOnly ? 1 : 0.6);
         } catch (error) {
           if (error?.name === 'AbortError') throw error;
           console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
@@ -1601,7 +1630,7 @@ export async function mount(root, slug) {
           const blendCtx = blended.getContext('2d', { alpha: false });
           if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
           blendCtx.drawImage(image, 0, 0, width, height);
-          blendCtx.globalAlpha = deblurBlend;
+          blendCtx.globalAlpha = deblurBlend * (deblurOnly ? 1 : 0.6);
           blendCtx.drawImage(result.canvas, 0, 0, width, height);
           blendCtx.globalAlpha = 1;
         }
@@ -1614,14 +1643,19 @@ export async function mount(root, slug) {
           const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
           result.canvas = faceGuard.canvas;
         }
+        if (!deblurOnly) {
+          result.canvas = await applyRegionAwarePass(result.canvas, faceRegions, 'enhance', signal);
+          const finished = await finishInBackground(result.canvas, { local: false, sharpening }, signal);
+          result.canvas = finished.canvas;
+        }
         const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
         result.canvas = fidelityGuard.canvas;
 
         const blob = await canvasBlob(result.canvas, 'image/png', 1);
-        output(blob, safeName(file.name, '-enhanced', 'png'));
+        output(blob, safeName(file.name, deblurOnly ? '-deblurred' : '-enhanced', 'png'));
         const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
         const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
-        status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${fidelityLabel}.`);
+        status(`${deblurOnly ? 'Deblur completed' : 'Enhanced'} · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · ${deblurOnly ? 'dedicated deblur AI' : 'gentle deblur and refinement'}${retryLabel}${fidelityLabel}.`);
         return result;
       }
 
@@ -1673,6 +1707,12 @@ export async function mount(root, slug) {
       temporaryInput && (temporaryInput.width = temporaryInput.height = 0);
       if (error?.name === 'AbortError' || signal.aborted) throw error;
 
+      if (deblurOnly) {
+        if (result?.canvas) result.canvas.width = result.canvas.height = 0;
+        throw new Error(error instanceof RestorationBudgetError
+          ? 'Deblur could not complete within this device’s processing budget. No restored image was produced; the original is unchanged.'
+          : `Deblur could not complete: ${error.message}. The original is unchanged.`);
+      }
       const budgetLimited = error instanceof RestorationBudgetError;
       console.warn('AI enhance path unavailable; using fast local enhancement.', error);
       status(budgetLimited ? 'AI restoration would take too long. Applying limited local adjustments…' : 'AI enhancement unavailable. Using fast local enhancement…');
@@ -1777,7 +1817,7 @@ export async function mount(root, slug) {
   enhanceButton.addEventListener('click', async () => {
     if (processing) return;
     if (!taskMode) {
-      status('Choose Enhance or Upscale first.', true);
+      status('Choose Deblur, Enhance or Upscale first.', true);
       return;
     }
     if (!image || !file) {
@@ -1793,7 +1833,9 @@ export async function mount(root, slug) {
     setProcessing(true);
 
     try {
-      result = taskMode === 'enhance'
+      result = taskMode === 'deblur'
+        ? await runEnhancePipeline(signal, true)
+        : taskMode === 'enhance'
         ? await runEnhancePipeline(signal)
         : await runUpscalePipeline(signal);
     } catch (error) {

@@ -72,7 +72,8 @@ async function tensorToBitmap(buffer, width, height, id) {
   return canvas.transferToImageBitmap();
 }
 
-async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, id) {
+async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, id, strength = 1) {
+  const contribution = Number.isFinite(strength) ? clamp(strength, 0, 1) : 1;
   if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
   const width = sourceBitmap.width;
   const height = sourceBitmap.height;
@@ -181,7 +182,7 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
           for (let channel = 0; channel < 3; channel++) {
             dst[out + channel] = byte(
               source[center + channel] +
-              (deblurred[center + channel] - source[center + channel]) * weight
+              (deblurred[center + channel] - source[center + channel]) * weight * contribution
             );
           }
           dst[out + 3] = 255;
@@ -473,7 +474,7 @@ self.onmessage = async event => {
       const bitmap = await tensorToBitmap(message.buffer, message.width, message.height, id);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'adaptive-deblur-blend') {
-      const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, message.faces || [], id);
+      const bitmap = await adaptiveDeblurBlend(message.sourceBitmap, message.deblurBitmap, message.analysis, message.faces || [], id, message.strength);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'region-aware-restore') {
       const bitmap = await regionAwareRestore(

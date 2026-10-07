@@ -273,10 +273,7 @@ try{
   console.log(`DIAGNOSTIC blur-detector ${JSON.stringify(detector)}`);
   assert.match(summary,/likely motion \/ defocus blur/, `Blur detector did not route the known blurred fixture: ${summary}; metrics=${JSON.stringify(detector)}`);
 
-  await page.locator('#enhancer-mode-enhance').click();
-  await page.locator('#enhancer-content').selectOption('low-resolution');
-  await page.locator('#enhancer-restoration').selectOption('auto');
-  await page.locator('#enhancer-sharpen').selectOption('auto');
+  await page.locator('#enhancer-mode-deblur').click();
 
   await page.evaluate(()=>{
     window.__deblurHeartbeat=0;

@@ -69,8 +69,7 @@ async function run(name,launcher){
     await page.waitForFunction(()=>document.querySelector('#enhancer-source-info')?.textContent?.includes('Analysis:'));
     const summary=(await page.locator('#enhancer-source-info').textContent())||'';
     assert.match(summary,/likely motion \/ defocus blur/, `${name} blur detector did not trigger: ${summary}`);
-    await page.locator('#enhancer-mode-enhance').click();
-    await page.locator('#enhancer-content').selectOption('low-resolution');
+    await page.locator('#enhancer-mode-deblur').click();
     await page.locator('#enhancer-run').click();
     try {
       await page.waitForFunction(()=>{

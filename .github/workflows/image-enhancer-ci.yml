@@ -25,6 +25,7 @@ on:
       - 'assets/models/image-enhancer/**'
       - 'docs/image-enhancer-model-benchmark.md'
       - 'tests/image-enhancer-browser.mjs'
+      - 'tests/image-enhancer-modes-browser.mjs'
       - 'tests/image-enhancer-fusion.test.mjs'
       - 'tests/image-enhancer-fusion-browser.mjs'
       - 'tests/image-enhancer-artifact-guard-browser.mjs'
@@ -154,6 +155,11 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-browser.mjs
+
+      - name: Run three-mode strict deblur audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-modes-browser.mjs
 
       - name: Run single-pass face fusion audit
         env:
