@@ -1534,7 +1534,7 @@ export async function mount(root, slug) {
     // and edge masks are heuristics, not a semantic face/hair/text detector.
     const result = await enhancePhotograph(image, {
       strength: read('enhancer-restoration'), sharpness: read('enhancer-sharpen'),
-      content: read('enhancer-content')
+      content: read('enhancer-content'), sourceMime: file.type
     }, signal, message => status(message));
     output(result.blob, safeName(file.name, '-enhanced', 'png'));
     status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(result.blob.size / 1024)} KB · photographic tone, color and texture processing. Significant blur requires Deblur.`);

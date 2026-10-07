@@ -3,11 +3,29 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const Y = (d, p) => d[p] * .2126 + d[p + 1] * .7152 + d[p + 2] * .0722;
 export const PHOTO_HALO = 10;
+const blockAxis = () => ({ sum: new Float64Array(8), count: new Uint32Array(8) });
 export function photoStatistics() {
-  return { histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, residuals: [] };
+  return { blocks: [blockAxis(), blockAxis()], histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, neutralBands: Array.from({length:3}, () => ({count:0, rgb:[0,0,0]})), residuals: [] };
 }
 // Sample native pixels, not a resized preview: resizing conceals sensor noise.
-export function collectPhotoStatistics(data, width, height, stats, step = 4) {
+export function collectPhotoStatistics(data, width, height, stats, step = 4, offsetY = 0) {
+  // Odd strides sample every 8px phase instead of assuming the JPEG grid survived
+  // cropping/orientation. Only weak boundaries with flat neighbors are evidence.
+  const stride = (step * step) | 1;
+  for (let i = width * 2 + 2; i < width * (height - 2) - 2; i += stride) {
+    const x = i % width, y = Math.floor(i / width), p = i * 4;
+    if (x < 2 || x >= width - 2 || data[p + 3] !== 255) continue;
+    for (let axis = 0; axis < 2; axis++) {
+      const d = axis ? width * 4 : 4;
+      if ([p-d*2,p-d,p+d].some(q => data[q+3] !== 255)) continue;
+      const jump = Math.abs(Y(data,p) - Y(data,p-d));
+      const sides = Math.abs(Y(data,p-d)-Y(data,p-d*2)) + Math.abs(Y(data,p+d)-Y(data,p));
+      if (jump < 18 && sides < 6) {
+        const phase = (axis ? y + offsetY : x) % 8;
+        stats.blocks[axis].sum[phase] += jump; stats.blocks[axis].count[phase]++;
+      }
+    }
+  }
   for (let y = 1; y < height - 1; y += step) {
     for (let x = 1 + (y % step); x < width - 1; x += step) {
       const p = (y * width + x) * 4;
@@ -20,6 +38,9 @@ export function collectPhotoStatistics(data, width, height, stats, step = 4) {
       if (l > 45 && l < 220 && high - low < l * .20) {
         for (let c = 0; c < 3; c++) stats.neutral[c] += data[p + c];
         stats.neutrals++;
+        const band = stats.neutralBands[Math.min(2, Math.floor((l - 45) / 60))];
+        band.count++;
+        for (let c = 0; c < 3; c++) band.rgb[c] += data[p + c];
       }
       const left = Y(data, p - 4), right = Y(data, p + 4);
       const up = Y(data, p - width * 4), down = Y(data, p + width * 4);
@@ -42,14 +63,28 @@ export function makePhotoPlan(stats, options = {}) {
   const mean = stats.count ? stats.sum / stats.count : 128;
   const p05 = percentile(.05), p95 = percentile(.95);
   const range = p95 - p05;
+  const blocks = stats.blocks.map(axis => {
+    const means = Array.from(axis.sum, (v,i) => v / Math.max(1, axis.count[i]));
+    const phase = means.indexOf(Math.max(...means));
+    const floor = [...means].sort((a,b)=>a-b)[4];
+    const ratio = means[phase] / Math.max(.15, floor);
+    const strength = options.sourceMime === 'image/jpeg' && axis.count[phase] >= 40 && means[phase] >= .8 ? clamp((ratio - 1.8) / 3, 0, .75) : 0;
+    return { phase, strength };
+  });
+  const blockStrength = Math.max(...blocks.map(b => b.strength));
   const wb = [1, 1, 1];
-  if (!graphic && stats.neutrals > 64 && stats.neutrals > stats.count * .035) {
+  // A neutral-looking midtone is not evidence of an illuminant. Require
+  // consistent casts in midtones AND highlights before automatic correction.
+  const bands = stats.neutralBands.slice(1);
+  const gains = bands.map(b => b.rgb.map(v => b.rgb.reduce((a,c) => a+c, 0) / (3 * Math.max(1,v))));
+  const consistentCast = bands.every(b => b.count >= 32) && gains[0].every((g,c) => Math.abs(g - gains[1][c]) < .025);
+  if (!graphic && consistentCast && stats.neutrals > stats.count * .035) {
     const target = stats.neutral.reduce((a, b) => a + b, 0) / 3;
     for (let c = 0; c < 3; c++) wb[c] = 1 + (clamp(target / stats.neutral[c], .92, 1.08) - 1) * strength * .75;
   }
   // Conservative scene-adaptive tone curve. Never promise clipped detail recovery.
   const gamma = graphic ? 1 : mean < 100 ? clamp(Math.log(100 / 255) / Math.log(Math.max(mean, 20) / 255), .68, 1) : mean > 150 ? clamp(Math.log(150 / 255) / Math.log(Math.min(mean, 235) / 255), 1, 1.16) : 1;
-  const contrast = graphic || range < Math.max(12, noise * 6) ? 0 : clamp((180 - range) / 130, 0, .65) * strength;
+  const contrast = graphic || range < Math.max(12, noise * 6) ? 0 : clamp((180 - range) / 130, 0, .65) * clamp((range - 50) / 50, 0, 1) * strength;
   const black = Math.min(45, p05 * .65) * contrast;
   const white = 255 - Math.min(35, (255 - p95) * .5) * contrast;
   const tone = new Float32Array(256);
@@ -60,7 +95,7 @@ export function makePhotoPlan(stats, options = {}) {
     tone[i] = clamp(i + (mapped - i) * Math.min(1, strength), 0, 255);
   }
   const sharp = ({ off: 0, low: .14, medium: .28, auto: .18 })[options.sharpness || 'auto'] ?? .18;
-  return { noise, wb, tone, strength, graphic, sharp: graphic ? 0 : sharp, local: graphic ? 0 : .10 * strength, mean, range };
+  return { noise, wb, tone, strength, graphic, blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
 }
 
 // Strip input includes a 10px halo; returns RGBA for only the requested rows.
@@ -89,6 +124,26 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
         sr += data[q] * weight; sg += data[q + 1] * weight; sb += data[q + 2] * weight; total += weight;
       }
       r += (sr / total - r) * cleanup; g += (sg / total - g) * cleanup; b += (sb / total - b) * cleanup;
+    }
+    if (!plan.graphic && plan.blockStrength > 0 && data[p + 3] === 255) {
+      let dr=0,dg=0,db=0,axes=0;
+      for (let axis = 0; axis < 2; axis++) {
+        const block = plan.blocks[axis], coordinate = axis ? y + offsetY : x;
+        const phase = ((coordinate - block.phase) % 8 + 8) % 8;
+        if (!block.strength || (phase !== 0 && phase !== 7)) continue;
+        const direction = phase === 0 ? -1 : 1, d = axis ? width * 4 : 4;
+        if (x < 2 || x >= width-2 || y < 2 || y >= height-2) continue;
+        const other = p + direction*d, inner = p - direction*d, far = p + direction*d*2;
+        if (data[other+3]!==255 || data[inner+3]!==255 || data[far+3]!==255) continue;
+        const jump = Math.abs(Y(data,p)-Y(data,other));
+        const sides = Math.abs(Y(data,p)-Y(data,inner)) + Math.abs(Y(data,other)-Y(data,far));
+        if (jump >= 18 || sides >= 6) continue;
+        dr += clamp((data[other]-data[p])*.35,-4,4)*block.strength;
+        dg += clamp((data[other+1]-data[p+1])*.35,-4,4)*block.strength;
+        db += clamp((data[other+2]-data[p+2])*.35,-4,4)*block.strength;
+        axes++;
+      }
+      if (axes) {r+=dr/axes;g+=dg/axes;b+=db/axes;}
     }
     r *= plan.wb[0]; g *= plan.wb[1]; b *= plan.wb[2];
     const cleanedY = .2126 * r + .7152 * g + .0722 * b;
@@ -122,7 +177,7 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
       const sharpen = Math.abs(high) > Math.max(2, plan.noise * 1.8) ? clamp(high * plan.sharp, -3, 3) : 0;
       const local = Math.abs(detail) > plan.noise * 1.5 ? clamp(detail * plan.local * boundary, -3, 3) : 0;
       const target = clamp(l + (local + sharpen) * protection, 0, 255);
-      const saturation = plan.graphic ? 1 : 1 + .035 * plan.strength * protection * Math.max(0, 1 - Math.abs(detail) / 60);
+      const saturation = plan.graphic ? 1 : 1 + .035 * plan.strength * (1 - plan.blockStrength) * protection * Math.max(0, 1 - Math.abs(detail) / 60);
       let chromaScale = saturation;
       // Compress chroma only as needed to stay in gamut, avoiding per-channel clipping.
       for (let c = 0; c < 3; c++) {

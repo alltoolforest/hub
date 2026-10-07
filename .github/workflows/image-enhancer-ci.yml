@@ -8,6 +8,7 @@ on:
       - 'assets/js/image-enhancer.js'
       - 'assets/js/image-enhancer-photo*.js'
       - 'tests/image-enhancer-photo*.mjs'
+      - 'tests/image-enhancer-reference-quality*.mjs'
       - 'assets/js/image-enhancer-budget.js'
       - 'tests/image-enhancer-budget.test.mjs'
       - 'assets/js/image-enhancer-deblur-validation.js'
@@ -157,7 +158,7 @@ jobs:
         run: google-chrome --version
 
       - name: Check independent photographic engine
-        run: node --test tests/image-enhancer-photo.test.mjs tests/image-enhancer-photo-lifecycle.test.mjs
+        run: node --test tests/image-enhancer-photo.test.mjs tests/image-enhancer-photo-lifecycle.test.mjs tests/image-enhancer-reference-quality.test.mjs
 
       - name: Run CSP + real AI browser smoke test
         if: ${{ !cancelled() }}

@@ -63,3 +63,28 @@ test('Enhance, Deblur and Upscale dispatch are separate; Upscale stays byte-iden
   assert.doesNotMatch(deblur,/aiEngine\.process|enhancePhotograph|applyRegionAwarePass|finishInBackground/);
   assert.match(current,/await runDeblurPipeline\(signal\)/);
 });
+
+test('white balance requires agreement across midtones and highlights',()=>{
+ const w=128,h=96;
+ const mid=rgba(w,h,()=>[131,120,116,255]);
+ assert.deepEqual(plan(mid,w,h).wb,[1,1,1]);
+ const cast=rgba(w,h,(x)=>{const v=70+x;return[v*1.06,v,v*.96,255];});
+ const p=plan(cast,w,h);assert.ok(p.wb[0]<1&&p.wb[2]>1);
+});
+test('narrow-range usable images retain their tone rather than being stretched',()=>{
+ const w=128,h=96,data=rgba(w,h,(x,y)=>{const v=110+x*.2+Math.sin(y)*2;return[v+5,v,v-3,255];});
+ assert.ok(mae(process(data,w,h),data)<1);
+});
+test('JPEG boundary cleanup reduces weak block error without altering strong edges or non-JPEG grids',()=>{
+ const w=128,h=128,ref=rgba(w,h,()=>[128,128,128,255]);
+ const blocks=rgba(w,h,(x,y)=>{const v=128+(((x>>3)+(y>>3))%2?3:-3);return[v,v,v,255];});
+ const opts={sourceMime:'image/jpeg',sharpness:'off'};
+ const p=plan(blocks,w,h,opts);assert.ok(p.blockStrength>0);
+ const out=enhancePhotoStrip(blocks,w,h,0,h,p);assert.ok(mae(out,ref)<mae(blocks,ref));
+ assert.equal(plan(blocks,w,h).blockStrength,0,'PNG grid alone is not JPEG evidence');
+ const edges=rgba(w,h,(x,y)=>{const v=(((x>>3)+(y>>3))%2)?200:50;return[v,v,v,255];});
+ assert.equal(plan(edges,w,h,opts).blockStrength,0,'Strong photographed edges are not block evidence');
+ const assembled=new Uint8ClampedArray(blocks.length);
+ for(let y=0;y<h;y+=33){const top=Math.max(0,y-PHOTO_HALO),n=Math.min(33,h-y),bottom=Math.min(h,y+n+PHOTO_HALO);assembled.set(enhancePhotoStrip(blocks.slice(top*w*4,bottom*w*4),w,bottom-top,y-top,n,p,{offsetY:top}),y*w*4);}
+ assert.deepEqual(assembled,out,'block correction must preserve global phase across strips');
+});

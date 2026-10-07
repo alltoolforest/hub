@@ -22,7 +22,7 @@ for(const path of inputs){
     if(kind==='jpeg'){const jpeg=await loadImage(canvas.toBuffer('image/jpeg',65));const c=createCanvas(w,h),cx=c.getContext('2d');cx.drawImage(jpeg,0,0);data=cx.getImageData(0,0,w,h).data;}
     const start=performance.now(),stats=photoStatistics(),step=Math.max(2,Math.ceil(Math.sqrt(w*h/90000)));
     for(let y=0;y<h;y+=96){const rows=Math.min(96,h-y);collectPhotoStatistics(data.subarray(y*w*4,(y+rows)*w*4),w,rows,stats,step);}
-    const plan=makePhotoPlan(stats),output=new Uint8ClampedArray(data.length);
+    const plan=makePhotoPlan(stats,{sourceMime:kind==='jpeg'||/\.jpe?g$/i.test(path)?'image/jpeg':'image/png'}),output=new Uint8ClampedArray(data.length);
     for(let y=0;y<h;y+=96){const top=Math.max(0,y-PHOTO_HALO),rows=Math.min(96,h-y),bottom=Math.min(h,y+rows+PHOTO_HALO);output.set(enhancePhotoStrip(data.subarray(top*w*4,bottom*w*4),w,bottom-top,y-top,rows,plan,{offsetY:top}),y*w*4);}
     const ms=Math.round(performance.now()-start);
     const entry={image:basename(path),kind,width:w,height:h,ms,inputMae:mae(data,reference),outputMae:mae(output,reference),changeMae:mae(output,data),noiseEstimate:plan.noise};

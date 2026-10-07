@@ -21,7 +21,7 @@ self.onmessage = async ({ data: { bitmap, options } }) => {
     }
     for (let y = 0; y < height; y += rows) {
       const count = Math.min(rows, height - y);
-      collectPhotoStatistics(read(y, count), width, count, stats, step);
+      collectPhotoStatistics(read(y, count), width, count, stats, step, y);
     }
     const plan = makePhotoPlan(stats, options);
     self.postMessage({ progress: 'Correcting tone, color and native-resolution texture…' });
