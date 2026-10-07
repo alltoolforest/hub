@@ -28,15 +28,15 @@ function chunk(type, data) {
   out.writeUInt32BE(crc32(Buffer.concat([name, data])), 8 + data.length);
   return out;
 }
-function png(width, height) {
+function png(width, height, exposure = 1) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) {
     const row = y * (width * 4 + 1); raw[row] = 0;
     for (let x = 0; x < width; x++) {
       const p = row + 1 + x * 4;
-      raw[p] = (x * 13 + y * 5) & 255;
-      raw[p + 1] = (x * 7 + y * 17) & 255;
-      raw[p + 2] = (x * 19 + y * 3) & 255;
+      raw[p] = ((x * 13 + y * 5) & 255) * exposure;
+      raw[p + 1] = ((x * 7 + y * 17) & 255) * exposure;
+      raw[p + 2] = ((x * 19 + y * 3) & 255) * exposure;
       raw[p + 3] = 255;
     }
   }
@@ -74,8 +74,8 @@ const launchOptions = { headless: true };
 if (process.env.CHROME_PATH) launchOptions.executablePath = process.env.CHROME_PATH;
 const browser = await chromium.launch(launchOptions);
 
-async function upload(page, name, width = 110, height = 70) {
-  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'image/png', buffer: png(width, height) });
+async function upload(page, name, width = 110, height = 70, exposure = 1) {
+  await page.locator('input[type=file]').setInputFiles({ name, mimeType: 'image/png', buffer: png(width, height, exposure) });
   await page.waitForFunction(([w, h]) => (document.querySelector('#enhancer-source-info')?.textContent || '').includes(`${w} × ${h}`), [width, height]);
 }
 
@@ -221,7 +221,7 @@ async function testEnhanceIndependentOfOnnx() {
   page.on('pageerror', err => errors.push(err.message));
   try {
     await page.goto('http://127.0.0.1:4178/images/enhance/', { waitUntil: 'networkidle' });
-    await upload(page, 'local-fallback.png', 140, 100);
+    await upload(page, 'local-fallback.png', 140, 100, .6);
     await page.locator('#enhancer-mode-enhance').click();
     await page.locator('#enhancer-content').selectOption('general');
     await page.locator('#enhancer-restoration').selectOption('recovery');
@@ -259,20 +259,24 @@ async function testEnhanceIndependentOfOnnx() {
         const before = sample(source);
         const after = sample(bitmap);
         bitmap.close();
-        let delta = 0;
+        let delta = 0, inputError = 0, outputError = 0;
         for (let i = 0; i < before.length; i += 4) {
           const y0 = before[i] * 0.2126 + before[i + 1] * 0.7152 + before[i + 2] * 0.0722;
           const y1 = after[i] * 0.2126 + after[i + 1] * 0.7152 + after[i + 2] * 0.0722;
           delta += Math.abs(y1 - y0);
+          const referenceY = y0 / .6;
+          inputError += Math.abs(y0 - referenceY);
+          outputError += Math.abs(y1 - referenceY);
         }
-        return { lumaMae: delta / (before.length / 4) };
+        return { lumaMae: delta / (before.length / 4), inputError, outputError };
       });
-      assert.ok(metrics.lumaMae >= 1.0, `Local Enhance fallback must be visibly non-no-op: ${JSON.stringify(metrics)}`);
+      assert.ok(metrics.outputError < metrics.inputError, `Independent Enhance must improve the known exposure reference: ${JSON.stringify(metrics)}`);
+      assert.ok(metrics.lumaMae >= 1.0, `Photographic Enhance must visibly correct underexposure without ONNX: ${JSON.stringify(metrics)}`);
     } finally {
       await page.evaluate(() => window.__restoreEnhancerCreate?.());
     }
 
-    assert.equal(errors.length, 0, `Local fallback console errors:\n${errors.join('\n')}`);
+    assert.equal(errors.length, 0, `Photographic engine console errors:\n${errors.join('\n')}`);
   } finally {
     await context.close();
   }

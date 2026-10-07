@@ -19,6 +19,12 @@ test('recoverable low exposure improves against known tonal reference', () => {
   const out = process(dark,w,h);
   assert.ok(mae(out,ref) < mae(dark,ref)*.75);
 });
+test('unclipped overexposure moves toward a known reference without a threshold jump', () => {
+  const w=160,h=100,ref=rgba(w,h,(x,y)=>{const v=70+x*.65+y*.1;return[v,v,v,255];});
+  const bright=Uint8ClampedArray.from(ref,(v,i)=>i%4===3?v:v*1.34);
+  const out=process(bright,w,h);
+  assert.ok(mae(out,ref)<mae(bright,ref)*.9);
+});
 test('native-pixel noise cleanup improves flat neutral reference without color cast', () => {
   let state=42; const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/2**32;};
   const w=160,h=100,ref=rgba(w,h,()=>[128,128,128,255]);

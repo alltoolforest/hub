@@ -48,7 +48,7 @@ export function makePhotoPlan(stats, options = {}) {
     for (let c = 0; c < 3; c++) wb[c] = 1 + (clamp(target / stats.neutral[c], .92, 1.08) - 1) * strength * .75;
   }
   // Conservative scene-adaptive tone curve. Never promise clipped detail recovery.
-  const gamma = graphic ? 1 : mean < 100 ? clamp(Math.log(100 / 255) / Math.log(Math.max(mean, 20) / 255), .68, 1) : mean > 175 ? 1 + Math.min(.10, (mean - 175) / 400) : 1;
+  const gamma = graphic ? 1 : mean < 100 ? clamp(Math.log(100 / 255) / Math.log(Math.max(mean, 20) / 255), .68, 1) : mean > 150 ? clamp(Math.log(150 / 255) / Math.log(Math.min(mean, 235) / 255), 1, 1.16) : 1;
   const contrast = graphic || range < Math.max(12, noise * 6) ? 0 : clamp((180 - range) / 130, 0, .65) * strength;
   const black = Math.min(45, p05 * .65) * contrast;
   const white = 255 - Math.min(35, (255 - p95) * .5) * contrast;
