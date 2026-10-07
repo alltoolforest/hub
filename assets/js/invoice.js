@@ -6,7 +6,8 @@ import {
   createInvoiceState,
   createLineItem,
   calculateInvoice,
-  formatMoney
+  formatMoney,
+  formatUnitRate
 } from './invoice-engine.js';
 
 export async function mount(root){
@@ -76,7 +77,7 @@ export async function mount(root){
       el('tbody',{},el('tr',{},[
         line.description,
         line.quantity,
-        money(line.rateMinor),
+        formatUnitRate(line.rate,totals.currency),
         money(line.grossMinor)
       ].map(text=>el('td',{text}))))
     );
