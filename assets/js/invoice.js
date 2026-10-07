@@ -47,9 +47,9 @@ export async function mount(root){
       items:[createLineItem({
         id:'visible-line-1',
         description:required('description'),
-        quantity:String(num('quantity',{min:.001})),
-        rate:String(num('rate',{min:0})),
-        taxes:[{name:'Tax',ratePercent:String(num('tax',{min:0,max:100}))}]
+        quantity:(num('quantity',{min:.001}),read('quantity')),
+        rate:(num('rate',{min:0}),read('rate')),
+        taxes:[{name:'Tax',ratePercent:(num('tax',{min:0,max:100}),read('tax'))}]
       })]
     });
     const totals=calculateInvoice(state);
@@ -76,7 +76,7 @@ export async function mount(root){
       el('tbody',{},el('tr',{},[
         line.description,
         format(Number(line.quantity)),
-        money(line.grossMinor===0?0:Math.round(line.grossMinor/Number(line.quantity))),
+        money(line.rateMinor),
         money(line.grossMinor)
       ].map(text=>el('td',{text}))))
     );
