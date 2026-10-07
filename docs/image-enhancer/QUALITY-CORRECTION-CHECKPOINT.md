@@ -33,3 +33,20 @@ Noise local SSIM0.399→0.651, strong-edge response0.903, gradient correlation0.
 The mode UI, dedicated Deblur engine, Upscale function, production safety guard and all unrelated/frozen tool code are preserved. Main enhancer changes only pass input MIME type into the photographic engine. New code/tests are restricted to photographic correction and its validation.
 
 Full CI, integration with current main and broader visual/device acceptance must be recorded after this candidate is published. Physical Android/iOS, phone Auto Enhance comparisons, broad motion/defocus/blurred-face restoration and large mobile deblur remain unverified. This checkpoint fixes reproducible regressions; it does not by itself certify the requested launch quality.
+
+## Verified audit completion
+
+Code candidate **df1f9a92188909b33092a8a30430eb7504a7f672**, tree **c64834bb56b4b8cdebb6f76b32db4482d14d0af5**.
+
+- Pre-deployment workflow37633073437: **PASS**, both Chrome and Firefox/WebKit jobs.
+- HEIC/HEIF workflow37633073354: **PASS**, both jobs.
+- The formerly failing full quality benchmark now passes with the documented reference-based noise test. Unlike the local photographic-only run, CI also executes the retained dedicated Deblur tests.
+- Functional checks passed for mode isolation, no restoration-model requests during Enhance, cancellation, original dimensions, exports, inspection, safety guards, responsiveness, memory retries and compatibility.42 numerical/lifecycle/quality tests passed. Upscale source-function equality and frozen-file hashes passed.
+- A12MP synthetic JPEG-grid workload measured2436ms and188MiB host RSS for arithmetic/strip processing. It excludes browser decode, canvas allocation and PNG export; it is not a physical mobile result.
+- The user's two photo copies were processed privately for visual review. The night photo shows brighter shadows; the group photo has stronger contrast. Neither observation proves phone-editor parity or recovery of blurred facial detail. No private image was committed or uploaded to CI.
+
+### Deployment assessment
+
+The reproducible enhancement regressions are resolved on the tested benchmark. The image-processing algorithms have not acquired advanced facial reconstruction or verified defocus restoration. The JPEG and low-resolution reference gains are modest. Full product acceptance still requires the requested held-out photo cohorts, a phone Auto Enhance comparison, physical Android/iOS validation and a viable strategy for large mobile Deblur. The existing64-tile mobile Deblur ceiling is unchanged and rejects some ordinary full-resolution phone photos; this is a known limitation, not merely an unrun test.
+
+**Automated pre-deployment audit: PASS. Full launch readiness: NOT YET CERTIFIED.** PR131 remains a draft. No merge, deployment, production audit or freeze was performed. The next work must target those remaining acceptance gaps, not rebuild the completed modes or rerun unchanged UI work without reason.

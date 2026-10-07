@@ -1,5 +1,7 @@
 # Independent engines — pre-deployment assessment, 2026-10-07
 
+**Follow-up:** The quality regressions documented below were corrected in candidate df1f9a9. Its automated audits pass; see [QUALITY-CORRECTION-CHECKPOINT.md](QUALITY-CORRECTION-CHECKPOINT.md) for current results and remaining launch gates. The earlier results below are retained as audit history. No deployment has occurred.
+
 Status: DRAFT, NOT APPROVED FOR DEPLOYMENT. Supersedes the earlier three-mode draft's automatic gentle deblur in Enhance. The deployed enhancer was based on e06c849; its main-branch JavaScript still matches blob 2c1dbaaaefc915bc329784f749d2c85c21b3d355 at the final checkpoint. The repository main branch has since advanced for other work. Base of this change: ad91869 (PR130); no changes to production, frozen tools, site navigation or other categories.
 
 ## Findings and cause
