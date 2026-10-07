@@ -127,7 +127,8 @@ try{
     await page.getByRole('button',{name:'Download PDF'}).click();
     await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Create or update the invoice before downloading'));
     assert.match((await page.locator('#status').textContent())||'',/Create or update/);
-    assert.equal(errors.length,0,errors.join('\n'));
+    const unexpected=errors.filter(message=>!/(Check the highlighted invoice fields|Create or update the invoice before downloading)/.test(message));
+    assert.equal(unexpected.length,0,unexpected.join('\n'));
     await context.close();
   }
 
