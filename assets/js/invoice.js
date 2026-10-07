@@ -282,7 +282,7 @@ export async function mount(root){
 
   function focusFirstInvalid(){
     const invalid=root.querySelector('[aria-invalid="true"]');
-    invalid?.focus();
+    if(invalid)setTimeout(()=>invalid.focus(),0);
   }
 
   function collectInvoice(){
