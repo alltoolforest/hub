@@ -63,17 +63,17 @@ jobs:
 
             git show "origin/${{ github.base_ref }}:assets/css/main.css" > /tmp/base-main.css
             python - <<'PY'
-from pathlib import Path
-base=Path('/tmp/base-main.css').read_text()
-current=Path('assets/css/main.css').read_text()
-marker='/* Invoice Builder authoring and responsive preview */'
-if marker not in current:
-    raise SystemExit('Invoice-specific CSS marker missing')
-prefix=current.split(marker,1)[0]
-if prefix!=base:
-    raise SystemExit('Shared CSS changed outside the Invoice Builder scoped block')
-print('Invoice CSS scope verified.')
-PY
+          from pathlib import Path
+          base=Path('/tmp/base-main.css').read_text()
+          current=Path('assets/css/main.css').read_text()
+          marker='/* Invoice Builder authoring and responsive preview */'
+          if marker not in current:
+              raise SystemExit('Invoice-specific CSS marker missing')
+          prefix=current.split(marker,1)[0]
+          if prefix!=base:
+              raise SystemExit('Shared CSS changed outside the Invoice Builder scoped block')
+          print('Invoice CSS scope verified.')
+          PY
           fi
           echo 'Invoice Builder release scope verified.'
 
