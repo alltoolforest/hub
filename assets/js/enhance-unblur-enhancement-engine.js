@@ -486,33 +486,29 @@ export class IdentityPreservingEnhancementEngine {
     if (this.faceGuard) faces = await this.faceGuard.detect(image, signal, onProgress);
     abortIfNeeded(signal);
 
-    let restorationUsed = false;
     let workingCanvas = null;
 
     try {
       const candidate = await this.buildRestorationCandidate(image, signal, onProgress);
-      if (candidate) {
-        workingCanvas = await this.blendRestorationWithSource(
-          image,
-          candidate,
-          faces,
-          !!this.faceGuard?.available,
-          settings,
-          stats,
-          signal,
-          onProgress
-        );
-        restorationUsed = true;
+      if (!candidate) {
+        throw new Error('The detail-restoration model is unavailable in this browser.');
       }
+      workingCanvas = await this.blendRestorationWithSource(
+        image,
+        candidate,
+        faces,
+        !!this.faceGuard?.available,
+        settings,
+        stats,
+        signal,
+        onProgress
+      );
     } catch (error) {
       if (error?.name === 'AbortError' || signal?.aborted) throw error;
-      console.warn('Learned enhancement restoration was unavailable; using conservative local enhancement fallback.', error);
-      workingCanvas = null;
-    }
-
-    if (!workingCanvas) {
-      workingCanvas = sourceCanvas(image, true);
-      onProgress?.('Using conservative local enhancement fallback…');
+      console.error('Enhancement detail-restoration stage failed.', error);
+      throw new Error(
+        `Detail restoration could not run safely. No low-quality fallback was returned. ${error?.message || ''}`.trim()
+      );
     }
 
     const output = await this.applyProfessionalFinish(
@@ -533,8 +529,8 @@ export class IdentityPreservingEnhancementEngine {
       resolutionChanged: false,
       generativeProcessing: false,
       reconstructionUsed: false,
-      learnedRestorationUsed: restorationUsed,
-      restorationModel: restorationUsed ? 'Real-ESRGAN general x4v3 (same-resolution restoration candidate)' : null,
+      learnedRestorationUsed: true,
+      restorationModel: 'Real-ESRGAN general x4v3 (same-resolution restoration candidate)',
       settings: { retouch }
     };
   }
