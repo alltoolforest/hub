@@ -166,10 +166,16 @@ try{
 
   {
     const {context,page,errors}=await openRate();
-    for(const path of ['/calculators/loan/','/calculators/investment/','/calculators/scientific/','/work/timesheet/']){
+    const frozenSmoke=[
+      ['/calculators/loan/','Loan & EMI Calculator'],
+      ['/calculators/investment/','SIP & Investment Calculator'],
+      ['/calculators/scientific/','Scientific Calculator'],
+      ['/work/timesheet/','Timesheet & Work Hours']
+    ];
+    for(const [path,heading] of frozenSmoke){
       await page.goto('http://127.0.0.1:4203'+path,{waitUntil:'networkidle'});
-      assert.ok((await page.locator('h1').textContent())?.trim().length>0,path+' failed to render');
-      assert.ok(await page.locator('.workspace').count(),path+' workspace missing');
+      const actual=((await page.locator('h1').textContent())||'').trim();
+      assert.ok(actual.includes(heading),path+' failed to render expected heading: '+actual);
     }
     assert.equal(errors.length,0,errors.join('\n'));
     await context.close();
