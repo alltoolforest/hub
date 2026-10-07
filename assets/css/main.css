@@ -41,13 +41,13 @@
 .invoice-preview{margin-top:30px;border:1px solid var(--line);border-radius:12px}
 .invoice-preview:focus{outline:3px solid #8caa91;outline-offset:3px}
 .invoice-preview-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-.invoice-preview-header h2{margin:0}
+.invoice-preview-header h2{margin:0}\n.invoice-preview-header p{overflow-wrap:anywhere}
 .invoice-meta{margin:0;min-width:240px}
 .invoice-meta>div{display:flex;justify-content:space-between;gap:20px;padding:4px 0}
-.invoice-meta dt{font-weight:600}.invoice-meta dd{margin:0;text-align:right}
+.invoice-meta dt{font-weight:600}.invoice-meta dd{margin:0;text-align:right;overflow-wrap:anywhere;min-width:0}
 .invoice-parties{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin:28px 0}
 .invoice-party h3{font-size:14px;margin:0 0 8px;color:var(--muted)}
-.invoice-party strong{display:block;margin-bottom:6px}
+.invoice-party strong{display:block;margin-bottom:6px;overflow-wrap:anywhere}
 .invoice-party p{margin:7px 0;overflow-wrap:anywhere}
 .invoice-party pre,.invoice-preview-notes pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
 .invoice-table-wrap{max-width:100%}
