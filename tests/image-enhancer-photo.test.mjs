@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { photoStatistics, collectPhotoStatistics, makePhotoPlan, enhancePhotoStrip, PHOTO_HALO } from '../assets/js/image-enhancer-photo.js';
 const rgba = (w, h, fn) => {
   const data = new Uint8ClampedArray(w * h * 4);
@@ -47,10 +47,10 @@ test('small images, transparent source and invalid input are handled',()=>{
 });
 test('Enhance, Deblur and Upscale dispatch are separate; Upscale stays byte-identical',()=>{
   const file='assets/js/image-enhancer.js', current=readFileSync(file,'utf8');
-  const prior=execFileSync('git',['show',`ad91869f55e2c672a1fadf934151ac3a373e4a89:${file}`],{encoding:'utf8'});
   const section=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
   const up='  async function runUpscalePipeline(',end="  enhanceButton.addEventListener('click'";
-  assert.equal(section(current,up,end),section(prior,up,end));
+  // SHA256 of the full Upscale function at ad91869; works in shallow CI checkouts.
+  assert.equal(createHash('sha256').update(section(current,up,end)).digest('hex'), '5c07b1af1a73181252c7c5a575b36eab591f6aa548abb5fb48b8aa5a66250c60');
   const enhance=section(current,'  async function runEnhancePipeline(','  async function runDeblurPipeline(');
   assert.doesNotMatch(enhance,/aiEngine\.process|deblurEngine|prepareAiInferenceInput|finishInBackground/);
   const deblur=section(current,'  async function runDeblurPipeline(',up);
