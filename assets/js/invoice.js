@@ -37,6 +37,9 @@ export async function mount(root){
 
   const invoice=el('article',{class:'invoice',hidden:true});
   const createButton=action('Create invoice',()=>{
+    num('quantity',{min:.001});
+    num('rate',{min:0});
+    num('tax',{min:0,max:100});
     const state=createInvoiceState({
       seller:{displayText:required('seller')},
       customer:{displayText:required('buyer')},
@@ -48,9 +51,9 @@ export async function mount(root){
       items:[createLineItem({
         id:'visible-line-1',
         description:required('description'),
-        quantity:(num('quantity',{min:.001}),read('quantity')),
-        rate:(num('rate',{min:0}),read('rate')),
-        taxes:[{name:'Tax',ratePercent:(num('tax',{min:0,max:100}),read('tax'))}]
+        quantity:read('quantity'),
+        rate:read('rate'),
+        taxes:[{name:'Tax',ratePercent:read('tax')}]
       })]
     });
     const totals=calculateInvoice(state);
