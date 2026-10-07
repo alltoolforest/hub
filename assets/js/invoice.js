@@ -112,7 +112,7 @@ function renderTotals(container,totals){
   const list=el('dl',{class:'invoice-totals-list'});
   const add=(label,value,strong=false)=>{
     const row=el('div',{class:'invoice-total-row'+(strong?' invoice-total-final':'')});
-    row.append(el('dt',{text:label}),el('dd',{text:formatMoney(value,totals.currency)}));
+    row.append(el('dt',{text:label}),el('dd',{text:moneyWithSign(value,totals.currency)}));
     list.append(row);
   };
   add('Subtotal',totals.subtotalMinor);
