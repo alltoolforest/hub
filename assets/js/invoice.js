@@ -1,4 +1,4 @@
-import {$,el,field,read,num,format,action,notice,setupStatus} from './core.js';
+import {$,el,field,read,num,action,notice,setupStatus} from './core.js';
 import {
   supportedCurrencyCodes,
   localDateISO,
