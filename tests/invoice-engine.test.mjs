@@ -7,6 +7,7 @@ import {
   supportedCurrencyCodes,
   currencyFractionDigits,
   formatMoney,
+  formatUnitRate,
   localDateISO,
   createInvoiceNumber,
   createInvoiceState,
@@ -33,6 +34,8 @@ assert.equal(currencyFractionDigits('JPY'),0);
 assert.equal(currencyFractionDigits('KWD'),3);
 assert.match(formatMoney(123456,'USD','en-US'),/1,234\.56/);
 assert.match(formatMoney(123456,'JPY','en-US'),/123,456/);
+assert.match(formatUnitRate('0.335','USD','en-US'),/0\.335/);
+assert.match(formatUnitRate('1.2345','KWD','en-US'),/1\.2345/);
 
 const local=new Date(2026,9,7,23,59,58);
 assert.equal(localDateISO(local),'2026-10-07');
@@ -87,6 +90,7 @@ const rounding=calculateInvoice(invoice({
   items:[createLineItem({id:'round',description:'Rounded',quantity:'3',rate:'0.335',taxes:[]})]
 }));
 assert.equal(rounding.subtotalMinor,101,'0.335 × 3 must deterministically round half-up to $1.01.');
+assert.equal(rounding.lines[0].rate,'0.335','Precise unit-rate input must be preserved for invoice display.');
 
 const jpy=calculateInvoice(invoice({
   currency:'JPY',
