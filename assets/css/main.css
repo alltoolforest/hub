@@ -93,3 +93,42 @@
   .invoice-line-table td::before{display:none!important}
   .invoice-preview{border:0!important}
 }
+
+
+/* Freelance Rate Calculator task 2 */
+.freelance-rate-builder .freelance-rate-form{display:flex;flex-direction:column;gap:28px}
+.freelance-rate-builder .freelance-rate-section{border-bottom:1px solid var(--line);padding-bottom:26px}
+.freelance-rate-builder .freelance-rate-section:last-child{border-bottom:0;padding-bottom:0}
+.freelance-rate-builder .freelance-rate-section>h2{font-size:20px;margin:0 0 6px}
+.freelance-rate-builder .freelance-rate-section-help{margin:0 0 18px;color:var(--muted);font-size:13px;max-width:760px}
+.freelance-rate-builder .freelance-rate-field-hint{font-size:12px;color:var(--muted)}
+.freelance-rate-builder .freelance-rate-field-error{font-size:12px;font-weight:600;color:#a33131}
+.freelance-rate-builder .freelance-rate-field input[aria-invalid="true"],
+.freelance-rate-builder .freelance-rate-field select[aria-invalid="true"]{border-color:#a33131;box-shadow:0 0 0 2px #a3313115}
+.freelance-rate-builder .freelance-rate-result{margin-top:22px;outline:none}
+.freelance-rate-builder .freelance-rate-result:focus{outline:3px solid #8caa91;outline-offset:3px}
+.freelance-rate-builder .freelance-rate-result-intro{margin:0 0 18px;color:var(--muted);max-width:780px}
+.freelance-rate-builder .freelance-rate-results-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.freelance-rate-builder .freelance-rate-result-card{border:1px solid var(--line);border-radius:10px;background:white;padding:16px;min-width:0}
+.freelance-rate-builder .freelance-rate-result-card.emphasis{border-width:2px}
+.freelance-rate-builder .freelance-rate-result-card small{display:block;color:var(--muted);font-size:12px;line-height:1.4}
+.freelance-rate-builder .freelance-rate-result-card strong{display:block;margin-top:6px;font-size:26px;line-height:1.15;overflow-wrap:anywhere}
+.freelance-rate-builder .freelance-rate-breakdown{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.freelance-rate-builder .freelance-rate-breakdown h3{font-size:16px;margin:0 0 10px}
+.freelance-rate-builder .freelance-rate-breakdown dl{margin:0}
+.freelance-rate-builder .freelance-rate-breakdown-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;padding:9px 0;border-bottom:1px solid var(--line)}
+.freelance-rate-builder .freelance-rate-breakdown-row dt{color:var(--muted)}
+.freelance-rate-builder .freelance-rate-breakdown-row dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+.freelance-rate-builder .freelance-rate-disclaimer{margin:18px 0 0;color:var(--muted);font-size:12px;line-height:1.6}
+.freelance-rate-methodology{margin-top:34px}
+.freelance-rate-methodology strong{color:var(--ink)}
+@media(max-width:700px){
+  .freelance-rate-builder .freelance-rate-results-grid{grid-template-columns:1fr}
+  .freelance-rate-builder .freelance-rate-result-card strong{font-size:23px}
+  .freelance-rate-builder .freelance-rate-breakdown-row{grid-template-columns:1fr;gap:3px}
+  .freelance-rate-builder .freelance-rate-breakdown-row dd{text-align:left}
+}
+@media(max-width:360px){
+  .freelance-rate-builder .freelance-rate-result-card{padding:14px}
+  .freelance-rate-builder .freelance-rate-result-card strong{font-size:21px}
+}
