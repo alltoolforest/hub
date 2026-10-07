@@ -196,6 +196,7 @@ export function calculateInvoice(state){
       quantity:item.quantity,
       unit:item.unit,
       rate:item.rate,
+      rateMinor:safeMinor(multiplyToMinor('1',item.rate,fractionDigits)),
       grossMinor:safeMinor(gross),
       discountMinor:safeMinor(lineDiscount),
       netMinor:safeMinor(taxable),
