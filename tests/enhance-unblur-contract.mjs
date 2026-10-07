@@ -13,6 +13,7 @@ assert.match(PROCESSING_SPECS.deblur.sourceOfTruth, /leave that area slightly so
 assert.match(enhancement, /general-x4/);
 assert.match(enhancement, /identity-preserving restoration guard/i);
 assert.match(enhancement, /learnedRestorationUsed/);
+assert.match(enhancement, /No low-quality fallback was returned/);
 assert.doesNotMatch(enhancement, /deblur-nafnet/);
 
 assert.match(deblur, /deblur-nafnet/);
