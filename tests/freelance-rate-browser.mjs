@@ -83,6 +83,7 @@ try{
     await page.getByRole('button',{name:'Calculate freelance rate'}).click();
     await page.waitForFunction(()=>document.querySelector('#freelance-working-weeks')?.getAttribute('aria-invalid')==='true');
     assert.match((await page.locator('#freelance-working-weeks-error').textContent())||'',/at most 52/);
+    await page.waitForFunction(()=>document.activeElement?.id==='freelance-working-weeks');
     assert.equal(await page.evaluate(()=>document.activeElement?.id),'freelance-working-weeks');
 
     await page.locator('#freelance-working-weeks').fill('48');
