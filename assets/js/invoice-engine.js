@@ -48,24 +48,24 @@ function percentOfMinor(amountMinor,percent,name='Percentage'){
   return roundDivide(amountMinor*p.int,hundred);
 }
 
-export function normalizeCurrency(currency){
-  const code=String(currency||'').trim().toUpperCase();
-  if(!/^[A-Z]{3}$/.test(code))throw Error('Choose a valid ISO currency.');
-  try{
-    new Intl.NumberFormat('en',{style:'currency',currency:code}).format(0);
-  }catch{
-    throw Error('Choose a supported ISO currency.');
-  }
-  return code;
-}
-
-export function supportedCurrencyCodes(){
+function availableCurrencyCodes(){
   let codes=[];
   try{
     if(typeof Intl.supportedValuesOf==='function')codes=Intl.supportedValuesOf('currency');
   }catch{}
   if(!codes.length)codes=FALLBACK_CURRENCIES;
-  return [...new Set(codes.map(normalizeCurrency))].sort();
+  return [...new Set(codes.map(code=>String(code).trim().toUpperCase()).filter(code=>/^[A-Z]{3}$/.test(code)))].sort();
+}
+
+export function normalizeCurrency(currency){
+  const code=String(currency||'').trim().toUpperCase();
+  if(!/^[A-Z]{3}$/.test(code))throw Error('Choose a valid ISO currency.');
+  if(!availableCurrencyCodes().includes(code))throw Error('Choose a supported ISO currency.');
+  return code;
+}
+
+export function supportedCurrencyCodes(){
+  return availableCurrencyCodes();
 }
 
 export function currencyFractionDigits(currency){
