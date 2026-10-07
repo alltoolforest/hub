@@ -13,6 +13,7 @@ const TYPES=new Map([
 const server=createServer(async(req,res)=>{
   try{
     const pathname=decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname);
+    if(pathname==='/favicon.ico'){res.writeHead(204);res.end();return}
     let filePath=resolve(ROOT,'.'+pathname);
     if(!(filePath===ROOT||filePath.startsWith(ROOT+sep)))throw Error('bad path');
     let info;try{info=await stat(filePath)}catch{info=null}
