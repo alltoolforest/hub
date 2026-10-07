@@ -75,10 +75,20 @@ export function currencyFractionDigits(currency){
 
 export function formatMoney(minorUnits,currency,locale){
   const code=normalizeCurrency(currency);
-  if(!Number.isSafeInteger(minorUnits))throw Error('Money value is outside the supported range.');
+  if(!Number.isSafeInteger(minorUnits)||minorUnits<0)throw Error('Money value is outside the supported range.');
   const digits=currencyFractionDigits(code);
-  const amount=minorUnits/(10**digits);
-  return new Intl.NumberFormat(locale||undefined,{style:'currency',currency:code}).format(amount);
+  const scale=pow10(digits);
+  const minor=BigInt(minorUnits);
+  const major=minor/scale;
+  const fraction=(minor%scale).toString().padStart(digits,'0');
+  const formatter=new Intl.NumberFormat(locale||undefined,{
+    style:'currency',
+    currency:code,
+    minimumFractionDigits:digits,
+    maximumFractionDigits:digits
+  });
+  const parts=formatter.formatToParts(major);
+  return parts.map(part=>part.type==='fraction'?fraction:part.value).join('');
 }
 
 export function localDateISO(date=new Date()){
