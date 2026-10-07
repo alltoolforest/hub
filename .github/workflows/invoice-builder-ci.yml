@@ -85,7 +85,8 @@ jobs:
           if marker not in current:
               raise SystemExit('Invoice-specific CSS marker missing')
           prefix=current.split(marker,1)[0]
-          if prefix.rstrip()!=base.rstrip():
+          base_prefix=base.split(marker,1)[0] if marker in base else base
+          if prefix.rstrip()!=base_prefix.rstrip():
               raise SystemExit('Shared CSS changed outside the Invoice Builder scoped block')
           print('Invoice CSS scope verified.')
           PY
