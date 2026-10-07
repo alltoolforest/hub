@@ -1,3 +1,4 @@
+import {formatMoney,formatUnitRate} from './invoice-engine.js';
 function concatBytes(parts){
   const length=parts.reduce((sum,part)=>sum+part.length,0);
   const out=new Uint8Array(length);
@@ -175,14 +176,13 @@ export async function createInvoicePdf(state,totals,{pageSize='A4'}={}){
   if(!['A4','LETTER'].includes(pageSize))throw Error('unsupported_page_size');
   if(typeof Blob==='undefined'||typeof document==='undefined')throw Error('browser_pdf_unavailable');
   const currency=totals.currency;
-  const formatMinor=minor=>new Intl.NumberFormat(undefined,{style:'currency',currency}).format(minor/100);
   const printable={
     ...totals,
-    subtotalFormatted:formatMinor(totals.subtotalMinor),
-    discountFormatted:formatMinor(totals.discountMinor),
-    totalFormatted:formatMinor(totals.totalMinor),
-    lines:totals.lines.map(line=>({...line,rateFormatted:new Intl.NumberFormat(undefined,{style:'currency',currency,maximumFractionDigits:6}).format(Number(line.rate)),totalFormatted:formatMinor(line.totalMinor)})),
-    taxSummary:totals.taxSummary.map(tax=>({...tax,formatted:formatMinor(tax.amountMinor)}))
+    subtotalFormatted:formatMoney(totals.subtotalMinor,currency),
+    discountFormatted:formatMoney(totals.discountMinor,currency),
+    totalFormatted:formatMoney(totals.totalMinor,currency),
+    lines:totals.lines.map(line=>({...line,rateFormatted:formatUnitRate(line.rate,currency),totalFormatted:formatMoney(line.totalMinor,currency)})),
+    taxSummary:totals.taxSummary.map(tax=>({...tax,formatted:formatMoney(tax.amountMinor,currency)}))
   };
   const pages=drawInvoicePages(state,printable,pageSize);
   const bytes=buildPdfFromJpegs(pages,pageSize);
