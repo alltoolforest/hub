@@ -1,0 +1,184 @@
+name: Freelance Rate release audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/freelance-rate-engine.js'
+      - 'assets/js/freelance-rate.js'
+      - 'assets/css/main.css'
+      - 'work/freelance-rate/index.html'
+      - 'tests/freelance-rate-engine.test.mjs'
+      - 'tests/freelance-rate-browser.mjs'
+      - 'tests/freelance-rate-cross-browser.mjs'
+      - 'tests/freelance-rate-production-smoke.mjs'
+      - '.github/workflows/freelance-rate-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/freelance-rate-engine.js'
+      - 'assets/js/freelance-rate.js'
+      - 'assets/css/main.css'
+      - 'work/freelance-rate/index.html'
+      - 'tests/freelance-rate-engine.test.mjs'
+      - 'tests/freelance-rate-browser.mjs'
+      - 'tests/freelance-rate-cross-browser.mjs'
+      - 'tests/freelance-rate-production-smoke.mjs'
+      - '.github/workflows/freelance-rate-ci.yml'
+  workflow_dispatch:
+    inputs:
+      audit_target:
+        description: 'Audit target'
+        required: true
+        default: 'local'
+        type: choice
+        options:
+          - local
+          - production
+
+concurrency:
+  group: freelance-rate-${{ github.event.pull_request.number || github.ref }}-${{ inputs.audit_target || 'pr' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  freelance-rate-audit:
+    if: github.event_name == 'pull_request' || inputs.audit_target == 'local'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Protect release scope and frozen calculators
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}"
+            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            echo "$changed"
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              case "$file" in
+                assets/js/app.js|assets/js/freelance-rate-engine.js|assets/js/freelance-rate.js|assets/css/main.css|work/freelance-rate/index.html|tests/freelance-rate-engine.test.mjs|tests/freelance-rate-browser.mjs|tests/freelance-rate-cross-browser.mjs|tests/freelance-rate-production-smoke.mjs|.github/workflows/freelance-rate-ci.yml) ;;
+                *) echo "Out-of-scope file changed: $file"; exit 1 ;;
+              esac
+            done <<< "$changed"
+
+            if ! git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- assets/js/calculators.js; then
+              echo 'Frozen shared calculators.js was modified.'
+              exit 1
+            fi
+
+            git show "origin/${{ github.base_ref }}:assets/css/main.css" > /tmp/base-main.css
+            python - <<'PY'
+          from pathlib import Path
+          base=Path('/tmp/base-main.css').read_text()
+          current=Path('assets/css/main.css').read_text()
+          marker='/* Freelance Rate Calculator task 2 */'
+          if marker not in current:
+              raise SystemExit('Freelance Rate scoped CSS marker missing')
+          prefix=current.split(marker,1)[0]
+          base_prefix=base.split(marker,1)[0] if marker in base else base
+          if prefix.rstrip()!=base_prefix.rstrip():
+              raise SystemExit('Shared CSS changed outside the Freelance Rate scoped block')
+          print('Freelance Rate CSS scope verified.')
+          PY
+          fi
+          echo 'Freelance Rate release scope and frozen calculator protection verified.'
+
+      - name: Static, financial, security and SEO checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/js/app.js
+          node --check assets/js/freelance-rate-engine.js
+          node --check assets/js/freelance-rate.js
+          node --check tests/freelance-rate-engine.test.mjs
+          node --check tests/freelance-rate-browser.mjs
+          node --check tests/freelance-rate-cross-browser.mjs
+          node --check tests/freelance-rate-production-smoke.mjs
+          node --test tests/freelance-rate-engine.test.mjs
+          grep -q "slug==='freelance-rate'.*freelance-rate.js" assets/js/app.js
+          grep -q "calculateFreelanceRate" assets/js/freelance-rate.js
+          grep -q "supportedCurrencyCodes" assets/js/freelance-rate.js
+          grep -q "Tax planning reserve" assets/js/freelance-rate.js
+          grep -q "Minimum sustainable hourly rate" assets/js/freelance-rate.js
+          grep -q "Recommended hourly rate" assets/js/freelance-rate.js
+          grep -q "How the freelance rate estimate works" work/freelance-rate/index.html
+          grep -q "Your financial inputs are not uploaded" work/freelance-rate/index.html
+          ! grep -q "fetch(" assets/js/freelance-rate.js
+          ! grep -q "XMLHttpRequest" assets/js/freelance-rate.js
+          ! grep -q "innerHTML" assets/js/freelance-rate.js
+          echo 'Freelance Rate static, financial, security and SEO checks passed.'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Run Chromium release audit
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/freelance-rate-browser.mjs
+
+  browser-compatibility:
+    if: github.event_name == 'pull_request' || inputs.audit_target == 'local'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    env:
+      HOME: /root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Run Firefox and WebKit compatibility audit
+        run: node tests/freelance-rate-cross-browser.mjs
+
+  production-audit:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned browser test dependency
+        run: npm install --no-save --no-package-lock playwright@1.55.0
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Audit deployed Freelance Rate Calculator
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          FREELANCE_RATE_BASE_URL: https://alltoolforest.github.io/hub
+        run: node tests/freelance-rate-production-smoke.mjs
