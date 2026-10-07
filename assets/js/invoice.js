@@ -75,7 +75,7 @@ export async function mount(root){
       el('thead',{},el('tr',{},['Description','Quantity','Rate','Amount'].map(text=>el('th',{text})))),
       el('tbody',{},el('tr',{},[
         line.description,
-        format(Number(line.quantity)),
+        line.quantity,
         money(line.rateMinor),
         money(line.grossMinor)
       ].map(text=>el('td',{text}))))
