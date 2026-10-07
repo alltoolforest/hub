@@ -16,6 +16,21 @@ on:
       - 'tests/invoice-cross-browser.mjs'
       - 'tests/invoice-production-smoke.mjs'
       - '.github/workflows/invoice-builder-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/js/app.js'
+      - 'assets/js/work.js'
+      - 'assets/js/invoice-engine.js'
+      - 'assets/js/invoice.js'
+      - 'assets/js/invoice-pdf.js'
+      - 'assets/js/invoice-draft-store.js'
+      - 'assets/css/main.css'
+      - 'tests/invoice-engine.test.mjs'
+      - 'tests/invoice-browser.mjs'
+      - 'tests/invoice-cross-browser.mjs'
+      - 'tests/invoice-production-smoke.mjs'
+      - '.github/workflows/invoice-builder-ci.yml'
   workflow_dispatch:
     inputs:
       audit_target:
@@ -145,7 +160,7 @@ jobs:
         run: node tests/invoice-cross-browser.mjs
 
   production-audit:
-    if: github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.audit_target == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
