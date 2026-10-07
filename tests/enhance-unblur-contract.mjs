@@ -9,9 +9,16 @@ const controller = await readFile(new URL('../assets/js/enhance-unblur.js', impo
 assert.notEqual(PROCESSING_SPECS.enhancement.sourceOfTruth, PROCESSING_SPECS.deblur.sourceOfTruth);
 assert.match(PROCESSING_SPECS.enhancement.sourceOfTruth, /This is retouching, not face generation/);
 assert.match(PROCESSING_SPECS.deblur.sourceOfTruth, /leave that area slightly soft instead/);
-assert.doesNotMatch(enhancement, /deblur-nafnet|general-x4|InferenceSession\.create/);
+
+assert.match(enhancement, /general-x4/);
+assert.match(enhancement, /identity-preserving restoration guard/i);
+assert.match(enhancement, /learnedRestorationUsed/);
+assert.match(enhancement, /No low-quality fallback was returned/);
+assert.doesNotMatch(enhancement, /deblur-nafnet/);
+
 assert.match(deblur, /deblur-nafnet/);
 assert.doesNotMatch(deblur, /general-x4/);
+
 assert.match(controller, /if \(mode === 'enhancement'\)/);
 assert.match(controller, /enhancementEngine\.process/);
 assert.match(controller, /deblurEngine\.process/);
