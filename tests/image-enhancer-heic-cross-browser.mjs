@@ -62,7 +62,7 @@ async function auditEngine(name, engine) {
       const status = document.querySelector('#status')?.textContent || '';
       return !!document.querySelector('#downloads a[download]') &&
         (status.includes('1,440 × 960') || status.includes('1440 × 960')) &&
-        status.includes('background-safe local processing');
+        status.includes('photographic tone');
     }, null, { timeout: 60000 });
 
     const filename = await page.locator('#downloads a[download]').getAttribute('download');
