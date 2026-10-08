@@ -143,10 +143,33 @@ function mobileProfile() {
   const memory = Number(navigator.deviceMemory) || 0;
   const cores = Math.max(1, Number(navigator.hardwareConcurrency) || 2);
 
-  if (!mobile) return { mobile: false, tileCore: memory >= 8 || cores >= 8 ? 176 : 144 };
-  if (memory >= 6 || cores >= 8) return { mobile: true, tileCore: 176 };
-  if (memory >= 4 || cores >= 6) return { mobile: true, tileCore: 144 };
-  return { mobile: true, tileCore: 112 };
+  if (!mobile) {
+    return {
+      mobile: false,
+      tilePlan: memory >= 8 || cores >= 8 ? [256, 224, 192, 160] : [224, 192, 160, 144]
+    };
+  }
+
+  // V4 proved that 112px mobile tiles are reliable but create hundreds of
+  // sequential Real-ESRGAN calls. Prefer substantially larger tiles first and
+  // fall back only if the browser actually reports memory pressure.
+  if (memory >= 6 || cores >= 8) {
+    return { mobile: true, tilePlan: [256, 224, 192, 160, 144] };
+  }
+  if (memory >= 4 || cores >= 6) {
+    return { mobile: true, tilePlan: [224, 192, 176, 160, 144] };
+  }
+  return { mobile: true, tilePlan: [192, 176, 160, 144, 128] };
+}
+
+function isMemoryPressureError(error) {
+  if (!error) return false;
+  if (error instanceof RangeError) return true;
+  const name = String(error.name || '').toLowerCase();
+  const message = String(error.message || error).toLowerCase();
+  return name.includes('memory') ||
+    name.includes('quota') ||
+    /out of memory|memory pressure|allocat(?:e|ion)|array buffer|resource exhausted|insufficient memory/.test(message);
 }
 
 function luma(data, offset) {
@@ -329,8 +352,37 @@ export class IdentityPreservingEnhancementEngine {
     if (!available) return null;
 
     const profile = mobileProfile();
-    const tileCore = profile.tileCore;
-    const padding = 14;
+    const plans = profile.tilePlan;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < plans.length; attempt++) {
+      const tileCore = plans[attempt];
+      try {
+        if (attempt > 0) {
+          onProgress?.(`Retrying detail restoration with ${tileCore}px tiles…`);
+        }
+        return await this.buildRestorationCandidateWithTile(
+          image,
+          tileCore,
+          signal,
+          onProgress
+        );
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw error;
+        lastError = error;
+        if (!isMemoryPressureError(error) || attempt === plans.length - 1) {
+          throw error;
+        }
+        onProgress?.(`Memory pressure detected. Retrying with smaller tiles…`);
+        await nextFrame();
+      }
+    }
+
+    throw lastError || new Error('Detail restoration could not create a safe tile plan.');
+  }
+
+  async buildRestorationCandidateWithTile(image, tileCore, signal, onProgress) {
+    const padding = 12;
     const cols = Math.ceil(image.width / tileCore);
     const rows = Math.ceil(image.height / tileCore);
     const total = cols * rows;
@@ -344,40 +396,44 @@ export class IdentityPreservingEnhancementEngine {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    for (let y = 0; y < image.height; y += tileCore) {
-      for (let x = 0; x < image.width; x += tileCore) {
-        abortIfNeeded(signal);
-        const coreW = Math.min(tileCore, image.width - x);
-        const coreH = Math.min(tileCore, image.height - y);
-        const sx = Math.max(0, x - padding);
-        const sy = Math.max(0, y - padding);
-        const ex = Math.min(image.width, x + coreW + padding);
-        const ey = Math.min(image.height, y + coreH + padding);
-        const tileW = ex - sx;
-        const tileH = ey - sy;
-        const padLeft = x - sx;
-        const padTop = y - sy;
+    try {
+      for (let y = 0; y < image.height; y += tileCore) {
+        for (let x = 0; x < image.width; x += tileCore) {
+          abortIfNeeded(signal);
+          const coreW = Math.min(tileCore, image.width - x);
+          const coreH = Math.min(tileCore, image.height - y);
+          const sx = Math.max(0, x - padding);
+          const sy = Math.max(0, y - padding);
+          const ex = Math.min(image.width, x + coreW + padding);
+          const ey = Math.min(image.height, y + coreH + padding);
+          const tileW = ex - sx;
+          const tileH = ey - sy;
+          const padLeft = x - sx;
+          const padTop = y - sy;
 
-        index++;
-        onProgress?.(`Restoring supported detail… ${index} of ${total}`);
-        const tile = await this.inferRestorationTile(image, sx, sy, tileW, tileH, signal);
-        ctx.drawImage(
-          tile,
-          padLeft * this.nativeScale,
-          padTop * this.nativeScale,
-          coreW * this.nativeScale,
-          coreH * this.nativeScale,
-          x,
-          y,
-          coreW,
-          coreH
-        );
-        tile.width = tile.height = 0;
-        await nextFrame();
+          index++;
+          onProgress?.(`Restoring supported detail… ${index} of ${total}`);
+          const tile = await this.inferRestorationTile(image, sx, sy, tileW, tileH, signal);
+          ctx.drawImage(
+            tile,
+            padLeft * this.nativeScale,
+            padTop * this.nativeScale,
+            coreW * this.nativeScale,
+            coreH * this.nativeScale,
+            x,
+            y,
+            coreW,
+            coreH
+          );
+          tile.width = tile.height = 0;
+          await nextFrame();
+        }
       }
+      return candidate;
+    } catch (error) {
+      candidate.width = candidate.height = 0;
+      throw error;
     }
-
-    return candidate;
   }
 
   async blendRestorationWithSource(image, candidate, faces, guardAvailable, settings, stats, signal, onProgress) {
