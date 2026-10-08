@@ -31,6 +31,8 @@ assert.doesNotMatch(deblur, /general-x4/);
 
 assert.match(controller, /if \(mode === 'enhancement'\)/);
 assert.match(controller, /enhancementEngine\.process/);
+assert.match(controller, /enhance-unblur-enhancement-engine\.js\?v=5/);
+assert.match(controller, /EXPERIMENT_BUILD = 'V5'/);
 assert.match(controller, /deblurEngine\.process/);
 assert.match(controller, /result\.canvas\.width !== sourceImage\.width/);
 assert.doesNotMatch(controller, /images\/enhance\//);
