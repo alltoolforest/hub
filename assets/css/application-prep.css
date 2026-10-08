@@ -1,0 +1,43 @@
+/* Application Document Prep Task 2 — only this page; shared styles remain untouched. */
+body[data-tool="application-document-prep"] .workspace{min-width:0;overflow-wrap:anywhere}
+body[data-tool="application-document-prep"] .app-workflow-fields{margin:16px 0 8px}
+body[data-tool="application-document-prep"] .app-guidance,
+body[data-tool="application-document-prep"] .app-requirements,
+body[data-tool="application-document-prep"] .app-output-status{
+ margin:12px 0;padding:12px 14px;background:#f3f8f4;border-left:3px solid #145940;
+ border-radius:6px;line-height:1.55;font-size:14px;
+}
+body[data-tool="application-document-prep"] .app-requirements{background:#f6f8fa;border-color:#97a8b3}
+body[data-tool="application-document-prep"] .app-advanced-settings{
+ border:1px solid #dce6e0;border-radius:10px;margin:16px 0;padding:0 12px;
+}
+body[data-tool="application-document-prep"] .app-advanced-settings summary{
+ cursor:pointer;min-height:48px;display:flex;align-items:center;
+ font-weight:650;padding:12px 4px;list-style:disclosure-closed;
+}
+body[data-tool="application-document-prep"] .app-advanced-settings[open] summary{border-bottom:1px solid #dce6e0}
+body[data-tool="application-document-prep"] .app-advanced-fields{padding:16px 0}
+body[data-tool="application-document-prep"] .app-crop-panel{
+ border:1px solid #dce6e0;border-radius:10px;margin:12px 0 16px;padding:14px;
+}
+body[data-tool="application-document-prep"] .app-crop-panel h2{font-size:17px;margin:0 0 6px}
+body[data-tool="application-document-prep"] .app-crop-help{font-size:13px;color:#4d6257;margin:0 0 14px}
+body[data-tool="application-document-prep"] .app-crop-fields{gap:12px}
+body[data-tool="application-document-prep"] .app-crop-panel .actions{margin-top:12px}
+body[data-tool="application-document-prep"] .canvas-frame{width:100%;min-width:0}
+body[data-tool="application-document-prep"] .canvas-frame canvas{max-width:100%;height:auto}
+body[data-tool="application-document-prep"] [hidden]{display:none!important}
+body[data-tool="application-document-prep"] .app-advanced-settings summary:focus-visible{
+ outline:3px solid #598bdb;outline-offset:3px;border-radius:4px;
+}
+@media(max-width:700px){
+ body[data-tool="application-document-prep"] .app-crop-panel{padding:12px}
+ body[data-tool="application-document-prep"] .app-crop-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body[data-tool="application-document-prep"] .app-crop-panel .actions{display:grid;grid-template-columns:1fr}
+ body[data-tool="application-document-prep"] .app-crop-panel .actions button{width:100%}
+ body[data-tool="application-document-prep"] .workspace .actions{gap:10px}
+ body[data-tool="application-document-prep"] .workspace .actions button{max-width:100%}
+}
+@media(max-width:340px){
+ body[data-tool="application-document-prep"] .app-crop-fields{grid-template-columns:1fr}
+}
