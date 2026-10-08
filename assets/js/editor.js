@@ -231,7 +231,7 @@ if(csvClean){
   $('#downloads').addEventListener('click',event=>{
     const anchor=event.target.closest('a[download]');if(!anchor)return;
     if(csvPreparedExportVersion!==csvChangeVersion){event.preventDefault();csvEditStatus.textContent='Data changed since export. Generate a fresh file before downloading.';return;}
-    csvDirty=false;csvPreparedExportVersion=-1;
+    csvDirty=false;
     csvEditStatus.textContent='Download requested. Confirm the file appears in your downloads before leaving.';
   });
 }
