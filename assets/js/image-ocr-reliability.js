@@ -60,15 +60,26 @@ export function networkFriendlyError(error){
   return Error('OCR engine or English language data could not load. Check your connection and retry. The previous text is preserved.');
  return error instanceof Error?error:Error(message);
 }
-export async function withinTime(operation,timeoutMs,label){
+export function abortError(){return Object.assign(Error('OCR cancelled. Previous text and downloads are preserved.'),{name:'AbortError'});}
+export async function withinTime(operation,timeoutMs,label,signal=null){
  if(!Number.isFinite(timeoutMs)||timeoutMs<1)throw Error('Invalid timeout.');
- let timer;
+ if(signal?.aborted)throw abortError();
+ let timer,onAbort;
  try{
-  return await Promise.race([
-   Promise.resolve().then(operation),
+  const tasks=[
+   Promise.resolve().then(()=>{if(signal?.aborted)throw abortError();return operation();}),
    new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label+' timed out.')),timeoutMs);})
-  ]);
- }finally{clearTimeout(timer);}
+  ];
+  if(signal)tasks.push(new Promise((_,reject)=>{
+   onAbort=()=>reject(abortError());
+   signal.addEventListener('abort',onAbort,{once:true});
+   if(signal.aborted)onAbort();
+  }));
+  return await Promise.race(tasks);
+ }finally{
+  clearTimeout(timer);
+  if(onAbort)signal.removeEventListener('abort',onAbort);
+ }
 }
 export async function createWorkerSafely(factory,timeoutMs=120000){
  let expired=false,timer;
@@ -101,15 +112,18 @@ export async function withOcrWorker(factory,operation,{startupMs=120000}={}){
   }
  }
 }
-export async function recognizeSafely(worker,image,canvasFactory,{deadlineMs=120000}={}){
- const dimensions=recognitionSize(image.width,image.height);
+export async function recognizeSafely(worker,image,canvasFactory,{deadlineMs=120000,signal=null,rotation=0,paint=null}={}){
+ if(signal?.aborted)throw abortError();
+ const base=recognitionSize(image.width,image.height);
+ const dimensions=rotation%180?{width:base.height,height:base.width}:base;
  let canvas=null;
  try{
   canvas=canvasFactory(dimensions.width,dimensions.height);
   const context=canvas?.getContext('2d');
   if(!context)throw Error('Image processing canvas is unavailable in this browser.');
-  context.drawImage(image,0,0,dimensions.width,dimensions.height);
-  const result=await withinTime(()=>worker.recognize(canvas),deadlineMs,'OCR recognition');
+  if(paint)paint(context,image,dimensions);
+  else context.drawImage(image,0,0,dimensions.width,dimensions.height);
+  const result=await withinTime(()=>worker.recognize(canvas),deadlineMs,'OCR recognition',signal);
   if(typeof result?.data?.text!=='string')throw Error('OCR engine did not return valid recognized text.');
   return result.data.text;
  }finally{
