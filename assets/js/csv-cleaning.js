@@ -20,10 +20,12 @@ export function transformRows(rows,kind,{header=false}={}){
 }
 export function formulaRisk(value){
  if(typeof value!=='string')return false;
- const trimmed=value.trimStart();
- if(/^[+-](?:\\d+(?:\\.\\d+)?|\\.\\d+)$/.test(trimmed))return false;
- if(/^\\+\\d[\\d\\s().-]{5,}$/.test(trimmed))return false;
- return /^[=+\\-@\\t\\r]/.test(trimmed);
+ const t=value.trimStart();
+ // Preserve signed numeric values and customary international telephone strings.
+ if((t.startsWith('-')||t.startsWith('+')) && Number.isFinite(Number(t)) && t.trim()!=='')return false;
+ if(t.startsWith('+') && t.length>=7 && /^[+0-9 ().-]+$/.test(t))return false;
+ return ['=','+','-','@'].some(prefix=>t.startsWith(prefix)) ||
+   value.startsWith('\t') || value.startsWith('\r');
 }
 // CSV cannot represent a spreadsheet-safe formula literal without changing its underlying
 // value. Refuse unsafe CSV exports rather than corrupting legitimate source values.
