@@ -11,9 +11,18 @@ export function viewIndices(rows,{header=false,search='',filterColumn=-1,filterT
  }
  if(sortColumn>=0){
   const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
+  // Use numeric ordering only when every populated value is a plain decimal.
+  // Mixed text columns retain the previous natural-language sorting behavior.
+  const decimal=/^[+-]?(?:0|[1-9]\\d*)(?:\\.\\d+)?$|^[+-]?\\.\\d+$/;
+  const values=indices.map(i=>String(rows[i][sortColumn]??''));
+  const numericColumn=values.some(v=>v.trim()!=='') &&
+    values.every(v=>v.trim()===''||decimal.test(v.trim()));
   indices.sort((a,b)=>{
    const x=String(rows[a][sortColumn]??''),y=String(rows[b][sortColumn]??'');
-   const cmp=collator.compare(x,y);
+   const numericCmp=numericColumn && x.trim()!=='' && y.trim()!==''?
+     Math.sign(Number(x)-Number(y)):0;
+   const cmp=numericColumn && x.trim()!=='' && y.trim()!==''?
+     numericCmp:collator.compare(x,y);
    return (descending?-cmp:cmp)||(a-b);
   });
  }
