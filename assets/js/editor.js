@@ -96,13 +96,18 @@ if(csvClean){
   const cell=e.target.closest('td[data-row][data-col]');
   if(cell)csvSelectedRow=Number(cell.dataset.row);
   if(!cell)return;
-  if(!editRecorded){csvHistory.record(sheets[activeSheet].rows);editRecorded=true;}
+
  });
  grid.addEventListener('focusout',e=>{if(e.target.matches('td[data-row][data-col]'))editRecorded=false});
  grid.addEventListener('input',e=>{
   const cell=e.target.closest('td[data-row][data-col]');if(!cell)return;
   const i=Number(cell.dataset.row),j=Number(cell.dataset.col);
-  const rows=sheets[activeSheet]?.rows;if(rows&&rows[i]&&rows[i][j]!==cell.textContent){rows[i][j]=cell.textContent;markCsvDirty();}
+  const rows=sheets[activeSheet]?.rows;
+  if(rows&&rows[i]&&rows[i][j]!==cell.textContent){
+    if(!editRecorded){csvHistory.record(rows);editRecorded=true;}
+    rows[i][j]=cell.textContent;
+    markCsvDirty();
+  }
  });
  grid.addEventListener('paste',e=>{
   if(!e.target.closest('td[data-row][data-col]'))return;
@@ -111,18 +116,22 @@ if(csvClean){
 }
 
 $('#sheet-select').addEventListener('change',()=>{activeSheet=+read('sheet-select');renderTable()});
-async function loadFile(file){const ext=checkFile(file,null,20);clearOutputs();filename=file.name;if(['doc','xls','ppt'].includes(ext))throw Error('Legacy '+ext.toUpperCase()+' editing is not enabled. Open it in an office application and save as DOCX or XLSX first.');if(ext==='pptx')throw Error('PowerPoint files are recognized, but slide editing is not enabled. Use a presentation application.');if(['jpg','jpeg','png','webp'].includes(ext)){editor.hidden=true;const p=el('p',{},[el('a',{class:'button',href:url('documents/image-to-text/'),text:'Open Image to Text OCR'}),el('a',{class:'button',href:url('images/studio/'),text:'Open Image Studio'})]);root.prepend(p);throw Error('This is an image. Choose Image Studio or OCR using the links above.')}if(!['docx','xlsx','csv','txt','pdf'].includes(ext))throw Error('Supported editable files: DOCX, XLSX, CSV and TXT.');kind=ext;sheets=[];activeSheet=0;if(ext!=='csv')csvHasHeader=false;sheetControls.hidden=grid.hidden=true;editor.hidden=toolbar.hidden=false;
-if(ext==='docx'){status('Loading Word engine…');const mammoth=await load('mammoth');const result=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()},{convertImage:mammoth.images.imgElement(()=>Promise.resolve({src:''}))});await setHTML(result.value)}
-else if(ext==='txt'){editor.replaceChildren(...(await file.text()).split('\n').map(line=>el('p',{text:line||'\u00a0'})))}
-else if(ext==='pdf'){notice(root,'PDF text is reconstructed into a flowing document. Original layout is not retained. For visual edits, use Edit PDF. Scanned pages require OCR.');const doc=await openPDF(await file.arrayBuffer());const fragments=[];try{for(let i=1;i<=doc.numPages;i++){status(`Extracting page ${i} of ${doc.numPages}…`);const page=await doc.getPage(i),content=await page.getTextContent();let line='';for(const item of content.items){line+=item.str+' ';if(item.hasEOL){fragments.push(el('p',{text:line.trim()}));line=''}}if(line.trim())fragments.push(el('p',{text:line.trim()}));page.cleanup()}}finally{await doc.destroy()}if(!fragments.length)throw Error('This PDF has no selectable text. Use Scanned PDF to Text OCR, then paste the text here.');editor.replaceChildren(...fragments);kind='docx'}
-else if(ext==='csv'&&csvImport){
-  parser=await load('csv');
-  const imported=await csvImport.importCsvFile(file,parser,{
+async function loadFile(file){const ext=checkFile(file,null,20);
+ if(ext==='csv'&&csvImport){
+  // Validate replacement off-state: errors must not discard the active CSV.
+  const candidateParser=parser||await load('csv');
+  const imported=await csvImport.importCsvFile(file,candidateParser,{
     encoding:read('csv-encoding'),delimiter:read('csv-delimiter'),
     header:read('csv-header')==='yes'
   });
   if(imported.rows.length>2000||imported.rows.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');
-  csvHistory.reset();csvDirty=false;csvPreparedExportVersion=-1;csvChangeVersion=0;if(csvEditStatus)csvEditStatus.textContent='CSV loaded. No unsaved edits.';csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;csvResetViewControls();
+  // Commit only after complete, successful validation.
+  clearOutputs();parser=candidateParser;filename=file.name;kind='csv';
+  activeSheet=0;
+  csvHistory.reset();csvDirty=false;csvPreparedExportVersion=-1;csvChangeVersion=0;
+  if(csvEditStatus)csvEditStatus.textContent='CSV loaded. No unsaved edits.';
+  csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};
+  csvSelectedRow=null;csvResetViewControls();
   sheets=[{name:'Sheet1',rows:imported.rows}];
   csvHasHeader=imported.diagnostics.headerSelected;
   renderSheets();
@@ -130,7 +139,14 @@ else if(ext==='csv'&&csvImport){
   csvReport.textContent=csvImport.formatImportSummary(imported.diagnostics);
   const reportDetails=csvReport.closest('details');if(reportDetails)reportDetails.open=imported.diagnostics.warnings.length>0;
   lastCsvFile=file;
-}
+  return;
+ }
+ 
+ clearOutputs();filename=file.name;if(['doc','xls','ppt'].includes(ext))throw Error('Legacy '+ext.toUpperCase()+' editing is not enabled. Open it in an office application and save as DOCX or XLSX first.');if(ext==='pptx')throw Error('PowerPoint files are recognized, but slide editing is not enabled. Use a presentation application.');if(['jpg','jpeg','png','webp'].includes(ext)){editor.hidden=true;const p=el('p',{},[el('a',{class:'button',href:url('documents/image-to-text/'),text:'Open Image to Text OCR'}),el('a',{class:'button',href:url('images/studio/'),text:'Open Image Studio'})]);root.prepend(p);throw Error('This is an image. Choose Image Studio or OCR using the links above.')}if(!['docx','xlsx','csv','txt','pdf'].includes(ext))throw Error('Supported editable files: DOCX, XLSX, CSV and TXT.');kind=ext;sheets=[];activeSheet=0;if(ext!=='csv')csvHasHeader=false;sheetControls.hidden=grid.hidden=true;editor.hidden=toolbar.hidden=false;
+if(ext==='docx'){status('Loading Word engine…');const mammoth=await load('mammoth');const result=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()},{convertImage:mammoth.images.imgElement(()=>Promise.resolve({src:''}))});await setHTML(result.value)}
+else if(ext==='txt'){editor.replaceChildren(...(await file.text()).split('\n').map(line=>el('p',{text:line||'\u00a0'})))}
+else if(ext==='pdf'){notice(root,'PDF text is reconstructed into a flowing document. Original layout is not retained. For visual edits, use Edit PDF. Scanned pages require OCR.');const doc=await openPDF(await file.arrayBuffer());const fragments=[];try{for(let i=1;i<=doc.numPages;i++){status(`Extracting page ${i} of ${doc.numPages}…`);const page=await doc.getPage(i),content=await page.getTextContent();let line='';for(const item of content.items){line+=item.str+' ';if(item.hasEOL){fragments.push(el('p',{text:line.trim()}));line=''}}if(line.trim())fragments.push(el('p',{text:line.trim()}));page.cleanup()}}finally{await doc.destroy()}if(!fragments.length)throw Error('This PDF has no selectable text. Use Scanned PDF to Text OCR, then paste the text here.');editor.replaceChildren(...fragments);kind='docx'}
+
 else if(ext==='csv'){parser=await load('csv');const result=parser.parse(await file.text(),{skipEmptyLines:false});if(result.errors.some(e=>e.type==='Quotes'))throw Error('CSV contains malformed quotes. Check the source file.');if(result.data.length>2000||result.data.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');sheets=[{name:'Sheet1',rows:result.data.length?result.data:[['']]}];renderSheets()}
 else{status('Loading spreadsheet engine…');const Excel=await load('excel');workbook=new Excel.Workbook();await workbook.xlsx.load(await file.arrayBuffer());if(workbook.worksheets.length>20)throw Error('Use a workbook with at most 20 sheets.');for(const sheet of workbook.worksheets){if(sheet.rowCount>2000||sheet.columnCount>100)throw Error('For responsive editing, use at most 2,000 rows and 100 columns per sheet.');const rows=[];for(let i=1;i<=Math.max(1,sheet.rowCount);i++){const row=[];for(let j=1;j<=Math.max(1,sheet.columnCount);j++)row.push(textOfCell(sheet.getCell(i,j).value));rows.push(row)}sheets.push({name:sheet.name,rows})}if(!sheets.length)sheets=[{name:'Sheet1',rows:[['']]}];renderSheets()}}
 bindFile(input,async files=>{if(csvDirty&&!window.confirm('You have unsaved CSV changes. Open another file and discard them?'))return;await loadFile(files[0]);cleanActions.hidden=!!csvClean||!sheets.length;if(csvCleanActions)csvCleanActions.hidden=!sheets.length;csvRefreshControls();$('#export-format').value=sheets.length?(kind==='csv'?'csv':'xlsx'):'docx';for(const o of $('#export-format').options)o.disabled=sheets.length?!['xlsx','csv'].includes(o.value):['xlsx','csv'].includes(o.value)});
