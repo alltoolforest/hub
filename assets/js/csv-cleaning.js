@@ -19,7 +19,11 @@ export function transformRows(rows,kind,{header=false}={}){
  return {rows:next,changed,removed,description:kind==='trim'?changed+' cells will be trimmed':removed+' rows will be removed'};
 }
 export function formulaRisk(value){
- return typeof value==='string' && /^[\s\t\r]*[=+\-@]/u.test(value);
+ if(typeof value!=='string')return false;
+ const trimmed=value.trimStart();
+ if(/^[+-](?:\\d+(?:\\.\\d+)?|\\.\\d+)$/.test(trimmed))return false;
+ if(/^\\+\\d[\\d\\s().-]{5,}$/.test(trimmed))return false;
+ return /^[=+\\-@\\t\\r]/.test(trimmed);
 }
 // CSV cannot represent a spreadsheet-safe formula literal without changing its underlying
 // value. Refuse unsafe CSV exports rather than corrupting legitimate source values.
