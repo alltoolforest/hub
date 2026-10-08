@@ -1,7 +1,9 @@
 import { ExperimentalFaceGuard, ExperimentalModelLoader } from './enhance-unblur-common.js';
-import { IdentityPreservingEnhancementEngine } from './enhance-unblur-enhancement-engine.js';
+import { IdentityPreservingEnhancementEngine } from './enhance-unblur-enhancement-engine.js?v=5';
 import { StrictIdentityDeblurEngine } from './enhance-unblur-deblur-engine.js';
 import { getProcessingSpec } from './enhance-unblur-specs.js';
+
+const EXPERIMENT_BUILD = 'V5';
 
 const workspace = document.getElementById('workspace');
 if (!workspace) throw new Error('Image Enhancer & Unblur workspace was not found.');
@@ -180,7 +182,7 @@ async function selectFile(file) {
     sourceMeta.textContent = `${file.name} · ${decoded.image.width} × ${decoded.image.height} · ${formatBytes(file.size)}`;
     processButton.disabled = false;
     resetButton.disabled = false;
-    setStatus('Ready. Choose the engine and processing level.');
+    setStatus(`Ready · ${EXPERIMENT_BUILD}. Choose the engine and processing level.`);
   } catch (error) {
     fileInput.value = '';
     processButton.disabled = true;
