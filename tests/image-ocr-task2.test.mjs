@@ -109,6 +109,8 @@ test('abort during late worker startup cleans the arriving worker',async()=>{
  const task=createWorkerSafely(()=>new Promise(resolve=>setTimeout(()=>resolve({
   recognize:async()=>({data:{text:'late'}}),terminate:async()=>{terminations++}
  }),25)),1000,ctrl.signal);
+ // Ensure the factory has started; aborting before it starts correctly creates no worker.
+ await new Promise(resolve=>setImmediate(resolve));
  ctrl.abort();
  await assert.rejects(()=>task,{name:'AbortError'});
  await new Promise(r=>setTimeout(r,45));
