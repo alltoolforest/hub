@@ -23,18 +23,18 @@ export function formulaRisk(value){
  const t=value.trimStart();
  if(!t)return false;
  // Signed decimal literals are data, not spreadsheet expressions.
- if(/^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(t))return false;
+ if(/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(t))return false;
  // Preserve recognizable international numbers with spacing/grouping.
  // Do not whitelist arithmetic chains such as +1-2-3-4 or +1234567-8.
- if(t.startsWith('+') && /^[+\\d\\s().-]+$/.test(t)){
-   const digits=t.replace(/\\D/g,'');
-   const groups=t.match(/\\d+/g)||[];
+ if(t.startsWith('+') && /^[+\d\s().-]+$/.test(t)){
+   const digits=t.replace(/\D/g,'');
+   const groups=t.match(/\d+/g)||[];
    if(digits.length>=7 && digits.length<=15 &&
-      groups.some(g=>g.length>=4) && /[\\s()]/.test(t) &&
-      !/[\\t\\r\\n]/.test(t))return false;
+      groups.some(g=>g.length>=4) && /[\s()]/.test(t) &&
+      !/[\t\r\n]/.test(t))return false;
  }
  return ['=','+','-','@'].some(prefix=>t.startsWith(prefix)) ||
-   /^[\\t\\r\\n]/.test(value);
+   /^[\t\r\n]/.test(value);
 }
 // CSV cannot represent a spreadsheet-safe formula literal without changing its underlying
 // value. Refuse unsafe CSV exports rather than corrupting legitimate source values.
