@@ -1,0 +1,43 @@
+name: Application Document Prep Task 3 release smoke
+on:
+  pull_request:
+    paths:
+      - 'assets/js/application-prep*.js'
+      - 'assets/js/images.js'
+      - 'assets/css/application-prep.css'
+      - 'documents/application-document-prep/index.html'
+      - 'tests/application-prep*.mjs'
+      - '.github/workflows/application-prep-task3.yml'
+  workflow_dispatch:
+jobs:
+  application-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Task 1 and 2 scripts and regression tests
+        run: |
+          node --check assets/js/application-prep.js
+          node --check assets/js/application-prep-checks.js
+          node --check assets/js/application-prep-crop.js
+          node --test tests/application-prep-task1.test.mjs tests/application-prep-task2.test.mjs
+      - name: Install browser test dependency
+        run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - name: Install browser runtime
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Launch static site and run real-browser smoke
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/application-prep-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/application-document-prep/ >/dev/null && break || sleep 1; done
+          node tests/application-prep-browser.mjs
