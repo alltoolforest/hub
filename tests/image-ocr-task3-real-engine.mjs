@@ -1,9 +1,10 @@
 // Task 3: run the actual bundled Tesseract.js worker and downloaded English model.
 // These are synthetic known-text benchmarks, not a guarantee about arbitrary scans.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright';
+import {chromium,firefox,webkit} from 'playwright';
 
-const browser=await chromium.launch({headless:true});
+const engine=process.env.BROWSER||'chromium';
+const browser=await {chromium,firefox,webkit}[engine].launch({headless:true});
 const page=await browser.newPage({viewport:{width:1280,height:850},acceptDownloads:true});
 const errors=[],externalWrites=[];
 page.on('pageerror',e=>errors.push(e.message));
@@ -77,5 +78,5 @@ try{
  assert.ok(second.output.includes('78'));
  assert.deepEqual(externalWrites,[],'Selected document content must not be POSTed externally');
  assert.deepEqual(errors,[],'Unexpected runtime exceptions');
- console.log('IMAGE_OCR_TASK3_REAL_ENGINE_PASS: clean and sideways printed English, real Tesseract worker, CER <= 15%, no document upload');
+ console.log('IMAGE_OCR_TASK3_REAL_ENGINE_PASS: '+engine+' clean and sideways printed English, real Tesseract worker, CER <= 15%, no document upload');
 }finally{await browser.close();}
