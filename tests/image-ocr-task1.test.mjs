@@ -26,7 +26,7 @@ test('OCR canvas dimensions remain bounded without increasing input size',()=>{
  assert.throws(()=>recognitionSize(0,90),/invalid/);
 });
 
-test('PNG header is verified and dimensions are obtained before decode',()=>{
+test('PNG header is verified and dimensions are obtained before decode',async()=>{
  const png=new Uint8Array(24);
  png.set([137,80,78,71,13,10,26,10],0);png.set([73,72,68,82],12);
  const v=new DataView(png.buffer);v.setUint32(16,8000);v.setUint32(20,5000);
