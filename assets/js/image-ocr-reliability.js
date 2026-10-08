@@ -81,28 +81,38 @@ export async function withinTime(operation,timeoutMs,label,signal=null){
   if(onAbort)signal.removeEventListener('abort',onAbort);
  }
 }
-export async function createWorkerSafely(factory,timeoutMs=120000){
- let expired=false,timer;
- const pending=Promise.resolve().then(factory);
+export async function createWorkerSafely(factory,timeoutMs=120000,signal=null){
+ if(signal?.aborted)throw abortError();
+ let abandoned=false,timer,onAbort;
+ const pending=Promise.resolve().then(()=>{if(signal?.aborted)throw abortError();return factory();});
  try{
-  const worker=await Promise.race([pending,new Promise((_,reject)=>{
-   timer=setTimeout(()=>{expired=true;reject(Error('OCR engine initialization timed out.'));},timeoutMs);
-  })]);
+  const racers=[pending,new Promise((_,reject)=>{
+   timer=setTimeout(()=>{abandoned=true;reject(Error('OCR engine initialization timed out.'));},timeoutMs);
+  })];
+  if(signal)racers.push(new Promise((_,reject)=>{
+   onAbort=()=>{abandoned=true;reject(abortError());};
+   signal.addEventListener('abort',onAbort,{once:true});
+   if(signal.aborted)onAbort();
+  }));
+  const worker=await Promise.race(racers);
   if(!worker||typeof worker.recognize!=='function'||typeof worker.terminate!=='function'){
    try{await worker?.terminate?.();}catch{}
    throw Error('OCR engine initialization returned an invalid worker.');
   }
   return worker;
  }catch(error){
-  // A worker may become available after the timeout; never leave that late worker active.
-  if(expired)pending.then(w=>Promise.resolve(w?.terminate?.()).catch(()=>{})).catch(()=>{});
+  // Late initializers are cleaned up whether abandoned by timeout or cancellation.
+  if(abandoned)pending.then(w=>Promise.resolve(w?.terminate?.()).catch(()=>{})).catch(()=>{});
   throw error;
- }finally{clearTimeout(timer);}
+ }finally{
+  clearTimeout(timer);
+  if(onAbort)signal.removeEventListener('abort',onAbort);
+ }
 }
-export async function withOcrWorker(factory,operation,{startupMs=120000}={}){
+export async function withOcrWorker(factory,operation,{startupMs=120000,signal=null}={}){
  let worker=null,failed=false;
  try{
-  worker=await createWorkerSafely(factory,startupMs);
+  worker=await createWorkerSafely(factory,startupMs,signal);
   return await operation(worker);
  }catch(error){failed=true;throw error;}
  finally{
