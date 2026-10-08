@@ -32,7 +32,8 @@ try{
   const e=document.activeElement;
   return {label:e?.textContent?.trim(),item:e?.closest('.ocr-batch-item')?.textContent||''};
  });
- assert.equal(focused.label,'Move up');
+ // At the top boundary Move up is disabled, so focus safely moves to View.
+ assert.equal(focused.label,'View');
  assert.match(focused.item,/B.png/);
  await page.getByRole('button',{name:'Recognize text'}).click();
  await page.waitForFunction(()=>document.querySelector('#ocr-text')?.value?.includes('SOURCE 2'));
