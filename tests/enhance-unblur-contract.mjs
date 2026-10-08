@@ -14,6 +14,10 @@ assert.match(enhancement, /general-x4/);
 assert.match(enhancement, /identity-preserving restoration guard/i);
 assert.match(enhancement, /learnedRestorationUsed/);
 assert.match(enhancement, /No low-quality fallback was returned/);
+assert.match(enhancement, /restorationTensorToCanvas/);
+assert.match(enhancement, /validateRestorationCandidate/);
+assert.match(enhancement, /Learned restoration contributes/);
+assert.doesNotMatch(enhancement, /tensorToCanvas/);
 assert.doesNotMatch(enhancement, /deblur-nafnet/);
 
 assert.match(deblur, /deblur-nafnet/);

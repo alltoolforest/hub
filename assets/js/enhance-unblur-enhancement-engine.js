@@ -1,5 +1,5 @@
 import {
-  abortIfNeeded, byte, clamp, faceInfluence, imageToTensor, nextFrame, tensorToCanvas
+  abortIfNeeded, byte, clamp, faceInfluence, imageToTensor, nextFrame
 } from './enhance-unblur-common.js';
 
 const SETTINGS = Object.freeze({
@@ -153,6 +153,48 @@ function luma(data, offset) {
   return data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722;
 }
 
+function restorationTensorToCanvas(data, width, height) {
+  const values = data instanceof Float32Array ? data : new Float32Array(data);
+  const plane = width * height;
+  if (values.length < plane * 3) throw new Error('Enhancement model returned incomplete pixel data.');
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) throw new Error('Enhancement restoration output canvas is unavailable.');
+
+  const image = ctx.createImageData(width, height);
+  for (let i = 0, p = 0; i < plane; i++, p += 4) {
+    // The verified Real-ESRGAN model uses normalized float output. Clamp rare
+    // overshoot values instead of letting a single >2 sample misclassify the
+    // entire tensor as byte-range data.
+    image.data[p] = byte(clamp(values[i], 0, 1) * 255);
+    image.data[p + 1] = byte(clamp(values[plane + i], 0, 1) * 255);
+    image.data[p + 2] = byte(clamp(values[plane * 2 + i], 0, 1) * 255);
+    image.data[p + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function validateRestorationCandidate(sourceStats, candidateStats) {
+  const lumaRatio = candidateStats.meanLuma / Math.max(1, sourceStats.meanLuma);
+  const gradientRatio = candidateStats.meanGradient / Math.max(0.25, sourceStats.meanGradient);
+
+  if (!Number.isFinite(lumaRatio) || lumaRatio < 0.78 || lumaRatio > 1.28) {
+    throw new Error('Restoration candidate changed image brightness beyond the safe fidelity range.');
+  }
+  if (!Number.isFinite(gradientRatio) || gradientRatio < 0.86) {
+    throw new Error('Restoration candidate reduced source detail and was rejected.');
+  }
+  if (gradientRatio > 5.0) {
+    throw new Error('Restoration candidate introduced excessive edge detail and was rejected.');
+  }
+
+  return { lumaRatio, gradientRatio };
+}
+
 export class IdentityPreservingEnhancementEngine {
   constructor(faceGuard) {
     this.faceGuard = faceGuard;
@@ -202,7 +244,7 @@ export class IdentityPreservingEnhancementEngine {
         throw new Error(`Enhancement model returned ${outW} × ${outH}; expected ${expectedW} × ${expectedH}.`);
       }
       abortIfNeeded(signal);
-      return tensorToCanvas(output.data, outW, outH);
+      return restorationTensorToCanvas(output.data, outW, outH);
     } finally {
       tensor.dispose?.();
       for (const output of Object.values(results || {})) output.dispose?.();
@@ -342,32 +384,39 @@ export class IdentityPreservingEnhancementEngine {
               weight = Math.min(weight, settings.fallbackBlendCap);
             }
 
-            const deviation = Math.abs(restoredY - sourceY);
-            const faceDeviationLimit = 6 + (1 - face) * 10;
-            if (deviation > faceDeviationLimit) {
-              const excess = deviation - faceDeviationLimit;
-              weight *= clamp(1 - excess / 36, face > 0.35 ? 0.22 : 0.34, 1);
+            // Preserve the source tone and color. Learned restoration contributes
+            // only high-frequency detail, never its base luminance/chroma.
+            if (restoredEdge < sourceEdge * 0.86) {
+              weight *= 0.36;
+            } else {
+              const recoveredEdge = clamp((restoredEdge - sourceEdge + 1.5) / 10, 0.18, 1);
+              weight *= recoveredEdge;
+            }
+            if (sourceEdge < 2.0 && restoredEdge > 6.5) {
+              weight *= face > 0.2 ? 0.22 : 0.46;
+            }
+            if (restoredEdge > Math.max(30, sourceEdge * 2.8 + 9)) {
+              weight *= face > 0.2 ? 0.36 : 0.58;
+            }
+            if (face > 0.50 && restoredEdge > sourceEdge * 1.50 + 3) {
+              weight *= 0.42;
             }
 
-            if (sourceEdge < 2.2 && restoredEdge > 5.8) {
-              weight *= face > 0.2 ? 0.30 : 0.52;
-            }
-            if (restoredEdge < sourceEdge * 0.80) {
-              weight *= 0.72;
-            }
-            if (restoredEdge > Math.max(30, sourceEdge * 2.7 + 8)) {
-              weight *= face > 0.2 ? 0.42 : 0.62;
-            }
-            if (face > 0.50 && restoredEdge > sourceEdge * 1.55 + 3) {
-              weight *= 0.48;
-            }
-
-            weight = clamp(weight, 0.02, settings.learnedBlend);
+            weight = clamp(weight, 0.01, settings.learnedBlend);
+            const detailCap = 8 + (1 - face) * 16;
 
             for (let c = 0; c < 3; c++) {
-              core.data[out + c] = byte(
-                src[center + c] + (restored[center + c] - src[center + c]) * weight
-              );
+              const sourceAverage = (
+                src[left + c] + src[right + c] + src[up + c] + src[down + c]
+              ) * 0.25;
+              const restoredAverage = (
+                restored[left + c] + restored[right + c] + restored[up + c] + restored[down + c]
+              ) * 0.25;
+              const sourceDetail = src[center + c] - sourceAverage;
+              const restoredDetail = restored[center + c] - restoredAverage;
+              const recoveredDetail = clamp(restoredDetail - sourceDetail, -detailCap, detailCap);
+
+              core.data[out + c] = byte(src[center + c] + recoveredDetail * weight);
             }
             core.data[out + 3] = src[center + 3];
           }
@@ -493,6 +542,8 @@ export class IdentityPreservingEnhancementEngine {
       if (!candidate) {
         throw new Error('The detail-restoration model is unavailable in this browser.');
       }
+      const candidateStats = analyze(candidate);
+      validateRestorationCandidate(stats, candidateStats);
       workingCanvas = await this.blendRestorationWithSource(
         image,
         candidate,
