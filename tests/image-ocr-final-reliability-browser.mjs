@@ -87,7 +87,17 @@ try{
  const intl='தமிழ் العربية 日本語 हिन्दी — International OCR';
  await page.locator('#ocr-text').fill(intl);
  await page.getByRole('button',{name:'Download PDF'}).click();
- await page.waitForFunction(()=>document.querySelector('#downloads')?.textContent?.includes('extracted-text.pdf'));
+ try{
+  await page.waitForFunction(()=>document.querySelector('#downloads')?.textContent?.includes('extracted-text.pdf'),null,{timeout:9000});
+ }catch(error){
+  const state=await page.evaluate(()=>({
+   status:document.querySelector('#status')?.textContent,
+   downloads:document.querySelector('#downloads')?.textContent,
+   text:document.querySelector('#ocr-text')?.value,
+   disabled:[...document.querySelectorAll('#workspace button')].filter(b=>b.disabled).map(b=>b.textContent)
+  }));
+  throw Error('International PDF export failed: '+JSON.stringify(state)+' / '+error.message);
+ }
  const d=page.waitForEvent('download');
  await page.locator('.download-row').last().locator('a[download]').click();
  const bytes=await readFile(await (await d).path());
