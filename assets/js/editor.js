@@ -12,7 +12,10 @@ let csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:fa
 let csvSelectedRow=null;
 const csvHistory=csvClean?new csvClean.CsvHistory():null;
 let csvCleanActions=null;
-let lastCsvFile=null, csvHasHeader=false;
+let lastCsvFile=null, csvHasHeader=false, csvDirty=false;
+const csvEditStatus=csvClean?el('p',{class:'csv-edit-status',role:'status','aria-live':'polite'}):null;
+function markCsvDirty(){if(!csvClean)return;csvDirty=true;if(csvEditStatus)csvEditStatus.textContent='Unsaved changes — export CSV or XLSX to save.';}
+if(csvClean)window.addEventListener('beforeunload',event=>{if(!csvDirty)return;event.preventDefault();event.returnValue='';});
 const csvOptions=el('div',{class:'fields',hidden:slug!=='csv-cleaner'});
 const csvReport=el('pre',{class:'notice',hidden:true,style:'white-space:pre-wrap;overflow-wrap:anywhere','role':'status','aria-live':'polite'});
 if(csvImport){
@@ -22,7 +25,7 @@ if(csvImport){
   root.append(csvOptions,csvReport);
   csvOptions.addEventListener('change',async()=>{
     if(!lastCsvFile)return;
-    try{status('Re-reading CSV with selected import options…');await loadFile(lastCsvFile);status('CSV import options applied.');}
+    try{if(csvDirty&&!window.confirm('Changing import settings reloads the original file and discards edits. Continue?'))return;status('Re-reading CSV with selected import options…');await loadFile(lastCsvFile);status('CSV import options applied.');}
     catch(e){status(e.message||String(e),true);}
   });
 }
@@ -37,7 +40,10 @@ editor.addEventListener('paste',async e=>{e.preventDefault();const plain=e.clipb
 editor.addEventListener('drop',e=>e.preventDefault());
 function renderSheets(){sheetControls.hidden=grid.hidden=false;editor.hidden=toolbar.hidden=true;$('#sheet-select').replaceChildren(...sheets.map((s,i)=>el('option',{value:i,text:s.name})));$('#sheet-select').value=String(activeSheet);renderTable()}
 let csvPage=0;
-const csvPageBar=csvClean?el('div',{class:'actions'}):null;
+const csvPageBar=csvClean?el('div',{class:'csv-navigation'}):null;
+if(csvClean){grid.classList.add('csv-table-shell');grid.setAttribute('role','region');grid.setAttribute('aria-label','Scrollable CSV data table');grid.setAttribute('tabindex','0');
+ const hint=el('p',{class:'csv-edit-hint',text:'Swipe or scroll sideways to see more columns. Tap or focus a cell to edit; use Tab to move between cells. Changes stay in this browser until exported.'});
+ grid.before(hint);grid.after(csvEditStatus);}
 if(csvPageBar){csvPageBar.setAttribute('aria-label','CSV page navigation');grid.after(csvPageBar);}
 function renderTable(){
  const rows=sheets[activeSheet].rows;
@@ -57,14 +63,15 @@ function renderTable(){
  const {count,pages,from,to}=windowPage;
  csvPage=windowPage.page;
  const table=el('table'),head=el('tr'),body=el('tbody');
- head.append(el('th',{text:'#'}));
- for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):columnName(j)}));
+ table.setAttribute('aria-label','CSV rows');
+ head.append(el('th',{text:'#',scope:'col'}));
+ for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):columnName(j),scope:'col'}));
  table.append(el('thead',{},head));
  for(let k=from;k<to;k++){
    const i=visible[k];
-   const tr=el('tr');tr.append(el('th',{text:i+1}));
+   const tr=el('tr');tr.append(el('th',{text:i+1,scope:'row'}));
    for(let j=0;j<cols;j++){
-     const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`${columnName(j)}${i+1}`,text:rows[i]?.[j]??''});
+     const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`Row ${i+1}, ${csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):'column '+columnName(j)}`,text:rows[i]?.[j]??''});
      td.dataset.row=String(i);td.dataset.col=String(j);tr.append(td);
    }body.append(tr);
  }
@@ -73,7 +80,7 @@ function renderTable(){
  const previous=el('button',{type:'button',text:'Previous page'});
  const next=el('button',{type:'button',text:'Next page'});
  previous.disabled=csvPage===0;next.disabled=csvPage>=pages-1;
- const summary=el('span',{text:`Showing ${count?from+1:0}–${to} of ${visible.length} matching rows (${rows.length-(csvHasHeader?1:0)} total); page ${csvPage+1} of ${pages}`});
+ const summary=el('span',{role:'status','aria-live':'polite',text:`Showing ${count?from+1:0}–${to} of ${visible.length} matching rows (${rows.length-(csvHasHeader?1:0)} total); page ${csvPage+1} of ${pages}`});
  previous.addEventListener('click',()=>{csvPage--;renderTable()});
  next.addEventListener('click',()=>{csvPage++;renderTable()});
  csvPageBar.append(previous,summary,next);
@@ -91,7 +98,7 @@ if(csvClean){
  grid.addEventListener('input',e=>{
   const cell=e.target.closest('td[data-row][data-col]');if(!cell)return;
   const i=Number(cell.dataset.row),j=Number(cell.dataset.col);
-  const rows=sheets[activeSheet]?.rows;if(rows&&rows[i])rows[i][j]=cell.textContent;
+  const rows=sheets[activeSheet]?.rows;if(rows&&rows[i]&&rows[i][j]!==cell.textContent){rows[i][j]=cell.textContent;markCsvDirty();}
  });
  grid.addEventListener('paste',e=>{
   if(!e.target.closest('td[data-row][data-col]'))return;
@@ -111,7 +118,7 @@ else if(ext==='csv'&&csvImport){
     header:read('csv-header')==='yes'
   });
   if(imported.rows.length>2000||imported.rows.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');
-  csvHistory.reset();csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;
+  csvHistory.reset();csvDirty=false;if(csvEditStatus)csvEditStatus.textContent='CSV loaded. No unsaved edits.';csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;
   sheets=[{name:'Sheet1',rows:imported.rows}];
   csvHasHeader=imported.diagnostics.headerSelected;
   renderSheets();
@@ -121,7 +128,7 @@ else if(ext==='csv'&&csvImport){
 }
 else if(ext==='csv'){parser=await load('csv');const result=parser.parse(await file.text(),{skipEmptyLines:false});if(result.errors.some(e=>e.type==='Quotes'))throw Error('CSV contains malformed quotes. Check the source file.');if(result.data.length>2000||result.data.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');sheets=[{name:'Sheet1',rows:result.data.length?result.data:[['']]}];renderSheets()}
 else{status('Loading spreadsheet engine…');const Excel=await load('excel');workbook=new Excel.Workbook();await workbook.xlsx.load(await file.arrayBuffer());if(workbook.worksheets.length>20)throw Error('Use a workbook with at most 20 sheets.');for(const sheet of workbook.worksheets){if(sheet.rowCount>2000||sheet.columnCount>100)throw Error('For responsive editing, use at most 2,000 rows and 100 columns per sheet.');const rows=[];for(let i=1;i<=Math.max(1,sheet.rowCount);i++){const row=[];for(let j=1;j<=Math.max(1,sheet.columnCount);j++)row.push(textOfCell(sheet.getCell(i,j).value));rows.push(row)}sheets.push({name:sheet.name,rows})}if(!sheets.length)sheets=[{name:'Sheet1',rows:[['']]}];renderSheets()}}
-bindFile(input,async files=>{await loadFile(files[0]);cleanActions.hidden=csvClean||!sheets.length;if(csvCleanActions)csvCleanActions.hidden=!sheets.length;$('#export-format').value=sheets.length?(kind==='csv'?'csv':'xlsx'):'docx';for(const o of $('#export-format').options)o.disabled=sheets.length?!['xlsx','csv'].includes(o.value):['xlsx','csv'].includes(o.value)});
+bindFile(input,async files=>{if(csvDirty&&!window.confirm('You have unsaved CSV changes. Open another file and discard them?'))return;await loadFile(files[0]);cleanActions.hidden=csvClean||!sheets.length;if(csvCleanActions)csvCleanActions.hidden=!sheets.length;$('#export-format').value=sheets.length?(kind==='csv'?'csv':'xlsx'):'docx';for(const o of $('#export-format').options)o.disabled=sheets.length?!['xlsx','csv'].includes(o.value):['xlsx','csv'].includes(o.value)});
 const cleanActions=el('div',{class:'actions',hidden:true});cleanActions.append(action('Add row',()=>{if(!sheets.length)throw Error('Open a spreadsheet first.');const rows=sheets[activeSheet].rows;if(rows.length>=2000)throw Error('The editor supports up to 2,000 rows.');rows.push(Array(Math.max(1,...rows.map(r=>r.length))).fill(''));renderTable()}),action('Add column',()=>{if(!sheets.length)throw Error('Open a spreadsheet first.');if(sheets[activeSheet].rows[0].length>=100)throw Error('The editor supports up to 100 columns.');sheets[activeSheet].rows.forEach(r=>r.push(''));renderTable()}),action('Clean rows',()=>{if(!sheets.length)throw Error('Open a CSV or spreadsheet first.');sheets[activeSheet].rows=sheets[activeSheet].rows.map(r=>r.map(v=>typeof v==='string'?v.trim():v)).filter(r=>r.some(v=>String(v).trim()));if(!sheets[activeSheet].rows.length)sheets[activeSheet].rows=[['']];renderTable()}),action('Remove duplicates',()=>{if(!sheets.length)throw Error('Open a CSV or spreadsheet first.');const seen=new Set();sheets[activeSheet].rows=sheets[activeSheet].rows.filter(r=>{const key=JSON.stringify(r);if(seen.has(key))return false;seen.add(key);return true});renderTable()}));root.append(cleanActions);
 if(csvClean){
   const controls=el('div',{class:'actions'});csvCleanActions=controls;
@@ -132,12 +139,12 @@ if(csvClean){
       const result=csvClean.transformRows(rows(),kind,{header:csvHasHeader});
       if(!result.changed&&!result.removed){report.textContent='No changes required.';return;}
       if(!window.confirm(result.description+'. Apply?')){report.textContent='Cancelled without changes.';return;}
-      csvHistory.record(rows());sheets[activeSheet].rows=result.rows;renderTable();
+      csvHistory.record(rows());sheets[activeSheet].rows=result.rows;markCsvDirty();renderTable();
       report.textContent='Applied: '+result.description.replace('will be','were')+'.';
     }));
   }
-  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;renderTable();report.textContent='Undone.';}));
-  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;renderTable();report.textContent='Redone.';}));
+  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;markCsvDirty();renderTable();report.textContent='Undone.';}));
+  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;markCsvDirty();renderTable();report.textContent='Redone.';}));
   const find=field('csv-search','Find in any column','text','');
   const filterCol=field('csv-filter-column','Filter column (1-based; 0 for all)','number','0');
   const filterText=field('csv-filter-text','Filter contains','text','');
@@ -158,7 +165,7 @@ if(csvClean){
                     for(const id of ['csv-search','csv-filter-text','csv-filter-column','csv-sort-column'])$('#'+id).value=id.includes('column')?'0':'';
                     $('#csv-sort-direction').value='asc';resetView();report.textContent='All rows visible.';
                   }));
-  function commit(next,description){csvHistory.record(rows());sheets[activeSheet].rows=next;csvPage=0;csvSelectedRow=null;renderTable();report.textContent=description;}
+  function commit(next,description){csvHistory.record(rows());sheets[activeSheet].rows=next;markCsvDirty();csvPage=0;csvSelectedRow=null;renderTable();report.textContent=description;}
   controls.append(action('Add row',()=>commit(csvOps.addRow(rows()),'Blank row added.')),
     action('Delete selected row',()=>{
       if(csvSelectedRow===null)throw Error('Select an editable table cell first.');
@@ -185,9 +192,9 @@ if(csvClean){
 const exportFields=el('div',{class:'fields'});exportFields.append(field('export-format','Export format','select',slug==='csv-cleaner'?'csv':'docx',{options:[['docx','Word (.docx)'],['txt','Plain text (.txt)'],['html','HTML document'],['xlsx','Excel workbook (.xlsx)'],['csv','CSV (selected sheet)']]}));root.append(exportFields);
 async function exportFile(){const ext=read('export-format');clearOutputs();if(['xlsx','csv'].includes(ext)){if(!sheets.length)throw Error('Open an XLSX or CSV file before spreadsheet export.');if(ext==='csv'){parser||=await load('csv');const rows=sheets[activeSheet].rows;
   if(csvClean){const risks=csvClean.csvExportCheck(rows);if(risks.length)throw Error('Export blocked: '+risks.length+' potentially executable spreadsheet formula values (first at row '+risks[0][0]+', column '+risks[0][1]+'). Use XLSX to preserve exact text safely.');}
-  const text=parser.unparse(csvClean?rows:rows.map(r=>r.map(safeCell)));output(new Blob(['\ufeff',text],{type:'text/csv;charset=utf-8'}),safeName(filename,'-edited','csv'))}else{const Excel=await load('excel'),book=new Excel.Workbook();for(const sheet of sheets){const s=book.addWorksheet(sheet.name.slice(0,31));for(const row of sheet.rows)s.addRow(row.map(v=>csvClean?csvClean.escapeForXlsx(v):typeof v==='string'?safeCell(v):v))}output(new Blob([await book.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),safeName(filename,'-edited','xlsx'))}return}
+  const text=parser.unparse(csvClean?rows:rows.map(r=>r.map(safeCell)));output(new Blob(['\ufeff',text],{type:'text/csv;charset=utf-8'}),safeName(filename,'-edited','csv'));if(csvClean){csvDirty=false;csvEditStatus.textContent='CSV export prepared. No unsaved edits.';}}else{const Excel=await load('excel'),book=new Excel.Workbook();for(const sheet of sheets){const s=book.addWorksheet(sheet.name.slice(0,31));for(const row of sheet.rows)s.addRow(row.map(v=>csvClean?csvClean.escapeForXlsx(v):typeof v==='string'?safeCell(v):v))}output(new Blob([await book.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),safeName(filename,'-edited','xlsx'));if(csvClean){csvDirty=false;csvEditStatus.textContent='XLSX export prepared. No unsaved edits.';}}return}
 if(sheets.length)throw Error('Choose XLSX or CSV for spreadsheet export.');const clean=sanitizeDocument(await ensureSanitizer(),editor.innerHTML);if(ext==='txt')output(new Blob([editor.innerText??editor.textContent],{type:'text/plain;charset=utf-8'}),safeName(filename,'-edited','txt'));else if(ext==='html')output(new Blob([`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Edited document</title><style>body{font:16px/1.6 system-ui;max-width:800px;margin:40px auto;padding:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:8px}</style></head><body>${clean}</body></html>`],{type:'text/html;charset=utf-8'}),safeName(filename,'-edited','html'));else{status('Preparing Word export…');const d=await load('docx');const holder=el('div');holder.innerHTML=clean;const children=toDocxBlocks(holder,d);const document=new d.Document({sections:[{properties:{},children:children.length?children:[new d.Paragraph('')]}]});output(await d.Packer.toBlob(document),safeName(filename,'-edited','docx'))}}
-root.append(el('div',{class:'actions'},[action('Export document',exportFile,true),action('Print / Save PDF',()=>{if(sheets.length)throw Error('Export a workbook as XLSX or CSV.');document.body.classList.add('print-editor');window.print()}),action('Copy text',()=>copy(sheets.length?sheets[activeSheet].rows.map(r=>r.join('\t')).join('\n'):(editor.innerText??editor.textContent))),action('New blank document',()=>{editor.replaceChildren();editor.hidden=toolbar.hidden=false;sheetControls.hidden=grid.hidden=true;sheets=[];cleanActions.hidden=true;$('#export-format').value='docx';for(const o of $('#export-format').options)o.disabled=['xlsx','csv'].includes(o.value);filename='document.docx';kind='docx';clearOutputs()})]));notice(root,csvClean?'CSV export preserves values and blocks spreadsheet formula risks; XLSX stores imported values as literal strings. Export before leaving.':'CSV and XLSX exports protect formula-like text by prefixing it with an apostrophe. New spreadsheet formulas are treated as text. Use Export to retain your changes before leaving this page.');setupStatus(root);downloads(root);
+root.append(el('div',{class:'actions'},[action('Export document',exportFile,true),action('Print / Save PDF',()=>{if(sheets.length)throw Error('Export a workbook as XLSX or CSV.');document.body.classList.add('print-editor');window.print()}),action('Copy text',()=>copy(sheets.length?sheets[activeSheet].rows.map(r=>r.join('\t')).join('\n'):(editor.innerText??editor.textContent))),action('New blank document',()=>{editor.replaceChildren();editor.hidden=toolbar.hidden=false;sheetControls.hidden=grid.hidden=true;sheets=[];cleanActions.hidden=true;$('#export-format').value='docx';for(const o of $('#export-format').options)o.disabled=['xlsx','csv'].includes(o.value);filename='document.docx';kind='docx';if(csvClean){csvDirty=false;csvEditStatus.textContent='No unsaved changes.';}clearOutputs()})]));notice(root,csvClean?'CSV export preserves values and blocks spreadsheet formula risks; XLSX stores imported values as literal strings. Export before leaving.':'CSV and XLSX exports protect formula-like text by prefixing it with an apostrophe. New spreadsheet formulas are treated as text. Use Export to retain your changes before leaving this page.');setupStatus(root);downloads(root);
 }
 function columnName(index){let n=index+1,s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
 export function toDocxBlocks(container,d){function runs(node,styles={}){if(node.nodeType===3)return [new d.TextRun({text:node.textContent,...styles})];if(node.nodeType!==1)return [];const next={...styles};if(['STRONG','B'].includes(node.tagName))next.bold=true;if(['EM','I'].includes(node.tagName))next.italics=true;if(node.tagName==='U')next.underline={};if(node.tagName==='BR')return [new d.TextRun({break:1})];return [...node.childNodes].flatMap(n=>runs(n,next))}const out=[];for(const n of container.childNodes){if(n.nodeType===3){if(n.textContent.trim())out.push(new d.Paragraph({children:runs(n)}));continue}if(n.tagName==='TABLE'){const rows=[...n.querySelectorAll('tr')].map(tr=>new d.TableRow({children:[...tr.children].map(td=>new d.TableCell({children:[new d.Paragraph({children:runs(td)})]}))}));if(rows.length)out.push(new d.Table({rows,width:{size:100,type:d.WidthType.PERCENTAGE}}))}else if(['UL','OL'].includes(n.tagName)){[...n.children].forEach((li,i)=>out.push(new d.Paragraph({children:[...(n.tagName==='OL'?[new d.TextRun(`${i+1}. `)]:[]),...runs(li)],...(n.tagName==='UL'?{bullet:{level:0}}:{})})))}else out.push(new d.Paragraph({children:runs(n),...(/^H[1-4]$/.test(n.tagName)?{heading:d.HeadingLevel['HEADING_'+n.tagName.slice(1)]}:{})}))}return out}
