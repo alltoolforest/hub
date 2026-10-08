@@ -1,0 +1,23 @@
+/* Image to Text OCR Task 2 only: source / result comparison and accessible progress. */
+body[data-tool="image-to-text"] .workspace{min-width:0;overflow-wrap:anywhere}
+body[data-tool="image-to-text"] .ocr-source{margin:12px 0 18px;border:1px solid #dce6e0;border-radius:10px;padding:14px;min-width:0}
+body[data-tool="image-to-text"] .ocr-source h2{font-size:16px;margin:0 0 10px}
+body[data-tool="image-to-text"] .ocr-source canvas{display:block;max-width:100%;width:auto;height:auto;margin:auto;box-shadow:0 1px 8px #132c1920}
+body[data-tool="image-to-text"] .selected-ocr-source,
+body[data-tool="image-to-text"] .ocr-review,
+body[data-tool="image-to-text"] .ocr-hint{line-height:1.5;overflow-wrap:anywhere}
+body[data-tool="image-to-text"] .ocr-review{border-left:3px solid #145940;padding:8px 12px;background:#f4f8f6;border-radius:4px}
+body[data-tool="image-to-text"] .ocr-options{margin:16px 0;gap:12px}
+body[data-tool="image-to-text"] label[for="ocr-text"]{display:block;font-size:15px;font-weight:650;margin:14px 0 8px}
+body[data-tool="image-to-text"] #ocr-text{width:100%;max-width:100%;min-height:240px;resize:vertical}
+body[data-tool="image-to-text"] .ocr-progress-area{display:flex;align-items:center;gap:12px;margin:12px 0;flex-wrap:wrap}
+body[data-tool="image-to-text"] .ocr-progress-area progress{flex:1;min-width:160px;height:16px}
+body[data-tool="image-to-text"] .ocr-progress-area span{font-size:13px}
+body[data-tool="image-to-text"] [hidden]{display:none!important}
+body[data-tool="image-to-text"] .workspace .actions button{min-height:44px}
+@media(max-width:700px){
+ body[data-tool="image-to-text"] .ocr-options{grid-template-columns:1fr}
+ body[data-tool="image-to-text"] .ocr-source{padding:10px}
+ body[data-tool="image-to-text"] .workspace .actions{display:flex;gap:10px}
+ body[data-tool="image-to-text"] .workspace .actions button{flex:1 1 130px;min-width:0}
+}
