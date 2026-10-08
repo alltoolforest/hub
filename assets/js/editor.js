@@ -85,8 +85,8 @@ function renderTable(){
  const next=el('button',{type:'button',text:'Next page'});
  previous.disabled=csvPage===0;next.disabled=csvPage>=pages-1;
  const summary=el('span',{role:'status','aria-live':'polite',text:`Showing ${count?from+1:0}–${to} of ${visible.length} matching rows (${rows.length-(csvHasHeader?1:0)} total); page ${csvPage+1} of ${pages}`});
- previous.addEventListener('click',()=>{csvPage--;renderTable()});
- next.addEventListener('click',()=>{csvPage++;renderTable()});
+ previous.addEventListener('click',()=>{csvSelectedRow=null;csvPage--;renderTable()});
+ next.addEventListener('click',()=>{csvSelectedRow=null;csvPage++;renderTable()});
  csvPageBar.append(previous,summary,next);
 }
 if(csvClean){
@@ -148,16 +148,16 @@ if(csvClean){
       report.textContent='Applied: '+result.description.replace('will be','were')+'.';
     }));
   }
-  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;markCsvDirty();renderTable();report.textContent='Undone.';}));
-  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;markCsvDirty();renderTable();report.textContent='Redone.';}));
+  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;markCsvDirty();csvSelectedRow=null;renderTable();report.textContent='Undone.';}));
+  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;markCsvDirty();csvSelectedRow=null;renderTable();report.textContent='Redone.';}));
   const find=field('csv-search','Find in any column','text','');
-  const filterCol=field('csv-filter-column','Filter column (1-based; 0 for all)','number','0');
+  const filterCol=field('csv-filter-column','Filter column (1-based; 0 for none)','number','0');
   const filterText=field('csv-filter-text','Filter contains','text','');
   const sortCol=field('csv-sort-column','Sort column (1-based; 0 for none)','number','0');
   const sortDir=field('csv-sort-direction','Sort direction','select','asc',{options:[['asc','Ascending'],['desc','Descending']]});
   const viewFields=el('div',{class:'fields'},[find,filterCol,filterText,sortCol,sortDir]);
   csvResetViewControls=()=>{for(const [id,value] of [['csv-search',''],['csv-filter-text',''],['csv-filter-column','0'],['csv-sort-column','0'],['csv-sort-direction','asc']]){const control=$('#'+id);if(control)control.value=value;}};
-  const resetView=()=>{csvPage=0;renderTable();};
+  const resetView=()=>{csvPage=0;csvSelectedRow=null;renderTable();};
   function updateView(){
     const max=csvOps.width(rows());
     const fc=Number(read('csv-filter-column')),sc=Number(read('csv-sort-column'));
