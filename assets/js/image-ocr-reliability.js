@@ -77,8 +77,10 @@ export async function createWorkerSafely(factory,timeoutMs=120000){
   const worker=await Promise.race([pending,new Promise((_,reject)=>{
    timer=setTimeout(()=>{expired=true;reject(Error('OCR engine initialization timed out.'));},timeoutMs);
   })]);
-  if(!worker||typeof worker.recognize!=='function'||typeof worker.terminate!=='function')
+  if(!worker||typeof worker.recognize!=='function'||typeof worker.terminate!=='function'){
+   try{await worker?.terminate?.();}catch{}
    throw Error('OCR engine initialization returned an invalid worker.');
+  }
   return worker;
  }catch(error){
   // A worker may become available after the timeout; never leave that late worker active.
