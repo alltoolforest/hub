@@ -7,6 +7,9 @@ const input=fileInput(root,slug==='docx-viewer'?'.docx':slug==='csv-cleaner'?'.c
 const csvImport=slug==='csv-cleaner'?await import('./csv-import.js'):null;
 const csvClean=slug==='csv-cleaner'?await import('./csv-cleaning.js'):null;
 const csvPaging=slug==='csv-cleaner'?await import('./csv-table-page.js'):null;
+const csvOps=slug==='csv-cleaner'?await import('./csv-operations.js'):null;
+let csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};
+let csvSelectedRow=null;
 const csvHistory=csvClean?new csvClean.CsvHistory():null;
 let csvCleanActions=null;
 let lastCsvFile=null, csvHasHeader=false;
@@ -49,14 +52,16 @@ function renderTable(){
  }
  // Only the current CSV page is materialized; the entire model remains available for export.
  const cols=rows.reduce((n,row)=>Math.max(n,row.length),1),first=csvHasHeader?1:0;
- const windowPage=csvPaging.pageWindow(rows.length,csvHasHeader,csvPage);
+ const visible=csvOps.viewIndices(rows,{...csvView,header:csvHasHeader});
+ const windowPage=csvPaging.pageWindow(visible.length,false,csvPage);
  const {count,pages,from,to}=windowPage;
  csvPage=windowPage.page;
  const table=el('table'),head=el('tr'),body=el('tbody');
  head.append(el('th',{text:'#'}));
  for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):columnName(j)}));
  table.append(el('thead',{},head));
- for(let i=from;i<to;i++){
+ for(let k=from;k<to;k++){
+   const i=visible[k];
    const tr=el('tr');tr.append(el('th',{text:i+1}));
    for(let j=0;j<cols;j++){
      const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`${columnName(j)}${i+1}`,text:rows[i]?.[j]??''});
@@ -68,7 +73,7 @@ function renderTable(){
  const previous=el('button',{type:'button',text:'Previous page'});
  const next=el('button',{type:'button',text:'Next page'});
  previous.disabled=csvPage===0;next.disabled=csvPage>=pages-1;
- const summary=el('span',{text:`Rows ${count?from+1:0}–${to} of ${rows.length}; page ${csvPage+1} of ${pages}`});
+ const summary=el('span',{text:`Showing ${count?from+1:0}–${to} of ${visible.length} matching rows (${rows.length-(csvHasHeader?1:0)} total); page ${csvPage+1} of ${pages}`});
  previous.addEventListener('click',()=>{csvPage--;renderTable()});
  next.addEventListener('click',()=>{csvPage++;renderTable()});
  csvPageBar.append(previous,summary,next);
@@ -78,6 +83,7 @@ if(csvClean){
  let editRecorded=false;
  grid.addEventListener('focusin',e=>{
   const cell=e.target.closest('td[data-row][data-col]');
+  if(cell)csvSelectedRow=Number(cell.dataset.row);
   if(!cell)return;
   if(!editRecorded){csvHistory.record(sheets[activeSheet].rows);editRecorded=true;}
  });
@@ -105,7 +111,7 @@ else if(ext==='csv'&&csvImport){
     header:read('csv-header')==='yes'
   });
   if(imported.rows.length>2000||imported.rows.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');
-  csvHistory.reset();csvPage=0;
+  csvHistory.reset();csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;
   sheets=[{name:'Sheet1',rows:imported.rows}];
   csvHasHeader=imported.diagnostics.headerSelected;
   renderSheets();
@@ -132,7 +138,49 @@ if(csvClean){
   }
   controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;renderTable();report.textContent='Undone.';}));
   controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;renderTable();report.textContent='Redone.';}));
-  root.append(controls,report);
+  const find=field('csv-search','Find in any column','text','');
+  const filterCol=field('csv-filter-column','Filter column (1-based; 0 for all)','number','0');
+  const filterText=field('csv-filter-text','Filter contains','text','');
+  const sortCol=field('csv-sort-column','Sort column (1-based; 0 for none)','number','0');
+  const sortDir=field('csv-sort-direction','Sort direction','select','asc',{options:[['asc','Ascending'],['desc','Descending']]});
+  const viewFields=el('div',{class:'fields'},[find,filterCol,filterText,sortCol,sortDir]);
+  const resetView=()=>{csvPage=0;renderTable();};
+  function updateView(){
+    const max=csvOps.width(rows());
+    const fc=Number(read('csv-filter-column')),sc=Number(read('csv-sort-column'));
+    if(!Number.isInteger(fc)||!Number.isInteger(sc)||fc<0||sc<0||fc>max||sc>max)throw Error('Column numbers must be 0 to '+max+'.');
+    csvView={search:String(read('csv-search')||''),filterColumn:fc-1,filterText:String(read('csv-filter-text')||''),sortColumn:sc-1,descending:read('csv-sort-direction')==='desc'};
+    resetView();report.textContent='Table view updated. Hidden rows are preserved for export.';
+  }
+  controls.append(action('Apply search / filter / sort',updateView),
+                  action('Clear view',()=>{
+                    csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};
+                    for(const id of ['csv-search','csv-filter-text','csv-filter-column','csv-sort-column'])$('#'+id).value=id.includes('column')?'0':'';
+                    $('#csv-sort-direction').value='asc';resetView();report.textContent='All rows visible.';
+                  }));
+  function commit(next,description){csvHistory.record(rows());sheets[activeSheet].rows=next;csvPage=0;csvSelectedRow=null;renderTable();report.textContent=description;}
+  controls.append(action('Add row',()=>commit(csvOps.addRow(rows()),'Blank row added.')),
+    action('Delete selected row',()=>{
+      if(csvSelectedRow===null)throw Error('Select an editable table cell first.');
+      if(!window.confirm('Delete original row '+(csvSelectedRow+1)+'?'))return;
+      commit(csvOps.deleteRow(rows(),csvSelectedRow,{header:csvHasHeader}),'Row deleted.');
+    }),
+    action('Add column',()=>commit(csvOps.addColumn(rows()),'Column added.')));
+  const deleteCol=field('csv-delete-column','Delete column (1-based)','number','1');
+  const dedupCols=field('csv-dedup-columns','Duplicate comparison columns (e.g. 1,3)','text','1');
+  controls.append(action('Delete specified column',()=>{
+    const col=Number(read('csv-delete-column'))-1;
+    const next=csvOps.deleteColumn(rows(),col);
+    if(!window.confirm('Delete column '+(col+1)+' from all rows?'))return;
+    commit(next,'Column deleted.');
+  }),action('Remove duplicates by columns',()=>{
+    const cols=String(read('csv-dedup-columns')).split(',').map(x=>Number(x.trim())-1);
+    const result=csvOps.removeDuplicateKeys(rows(),cols,{header:csvHasHeader});
+    if(!result.removed){report.textContent='No matching duplicates.';return;}
+    if(!window.confirm('Remove '+result.removed+' duplicate rows from the full dataset?'))return;
+    commit(result.rows,result.removed+' duplicate rows removed.');
+  }));
+  root.append(viewFields,deleteCol,dedupCols,controls,report);
 }
 const exportFields=el('div',{class:'fields'});exportFields.append(field('export-format','Export format','select',slug==='csv-cleaner'?'csv':'docx',{options:[['docx','Word (.docx)'],['txt','Plain text (.txt)'],['html','HTML document'],['xlsx','Excel workbook (.xlsx)'],['csv','CSV (selected sheet)']]}));root.append(exportFields);
 async function exportFile(){const ext=read('export-format');clearOutputs();if(['xlsx','csv'].includes(ext)){if(!sheets.length)throw Error('Open an XLSX or CSV file before spreadsheet export.');if(ext==='csv'){parser||=await load('csv');const rows=sheets[activeSheet].rows;
