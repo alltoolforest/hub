@@ -4,6 +4,7 @@ import {$,el,field,read,num,format,action,notice,setupStatus,status,fileInput,bi
 import {encodeTarget} from './images.js'; // Reuse the existing verified encoding engine.
 import {A4_POINTS,sourcePixelLimit,outputPixelLimit,checkPixels,checkApplicationFit,
   validateEncodedBlob,sniffImageDimensions,validatePdfPages} from './application-prep-checks.js';
+import {cropFromPercent,cropToPercent,cropToPixels} from './application-prep-crop.js';
 
 function fittedDraw(ctx,image,w,h,fit,position){
  const scale=fit==='contain'?Math.min(w/image.width,h/image.height):Math.max(w/image.width,h/image.height);
@@ -29,7 +30,21 @@ export async function mount(root){
  const input=fileInput(root,'.jpg,.jpeg,.png,.webp,.heic,.heif',false,'Select a photo or signature');
  const preview=el('canvas',{'aria-label':'Image preview; use manual crop then drag to select an area',role:'img'});
  const frame=el('div',{class:'canvas-frame',hidden:true});frame.append(preview);root.append(frame);
- const form=el('div',{class:'fields'});root.append(form);
+ const modeFields=el('div',{class:'fields app-workflow-fields'},[
+   field('app-workflow','Preparing','select','photo',{options:[
+     ['photo','Application photo'],['signature','Signature'],['document','Supporting image / PDF']
+   ]})
+ ]);
+ const guidance=el('p',{class:'app-guidance',role:'status','aria-live':'polite'});
+ frame.before(modeFields,guidance);
+ const modeHints={
+   photo:'Application photo: enter the exact portal dimensions and KB limit. Use Cover only when cropping is allowed. Do not alter identity features; acceptance is not guaranteed.',
+   signature:'Signature: use the portal dimensions and KB limit. PNG preserves a transparent background where supported; JPG uses white. Avoid distortion.',
+   document:'Supporting image: enter your required size, then choose image export or single-page A4 PDF. Check the portal accepts A4 and the final file size.'
+ };
+ const updateGuidance=()=>{guidance.textContent=modeHints[read('app-workflow')]||modeHints.photo;};
+ $('#app-workflow').addEventListener('change',updateGuidance);updateGuidance();
+ const form=el('div',{class:'fields app-essential-fields'});root.append(form);
  const add=(id,label,type='number',v='',options={})=>form.append(field(id,label,type,v,options));
  add('width','Width (pixels)','number',1200,{min:1,max:16384,step:1});
  add('height','Height (pixels)','number',800,{min:1,max:16384,step:1});
@@ -46,7 +61,39 @@ export async function mount(root){
     'Keep aspect ratio when changing dimensions']),
     el('label',{class:'check-row'},[el('input',{id:'flip-x',type:'checkbox'}),'Flip horizontally']),
     el('label',{class:'check-row'},[el('input',{id:'flip-y',type:'checkbox'}),'Flip vertically']));
- notice(root,'Enter your application portal’s exact requirements. No official sizes or acceptance are guaranteed. Stretching is disabled to avoid distortion. A4 supporting-image PDFs are verified against the maximum KB value when entered. Do not alter identity features in official photographs.');
+ const advanced=el('details',{class:'app-advanced-settings'});
+ advanced.append(el('summary',{text:'Advanced adjustments · quality, rotation, position'}));
+ const advancedFields=el('div',{class:'fields app-advanced-fields'});
+ for(const id of ['position','quality','rotation','brightness','contrast','watermark']){
+   const fieldWrap=$('#'+id)?.closest('.field');
+   if(fieldWrap)advancedFields.append(fieldWrap);
+ }
+ for(const id of ['flip-x','flip-y']){
+   const check=$('#'+id)?.closest('.check-row');if(check)advancedFields.append(check);
+ }
+ advanced.append(advancedFields);root.append(advanced);
+ const ratio=$('#lock-ratio')?.closest('.check-row');
+ if(ratio){form.append(ratio);}
+ const requirements=el('p',{class:'app-requirements',role:'status','aria-live':'polite'});
+ root.append(requirements);
+ const refreshRequirements=()=>{
+   if(!image){requirements.textContent='Choose an image, then enter your portal’s width, height, format and optional KB limit.';return;}
+   const w=Number(read('width')),h=Number(read('height')),kb=Number(read('target'));
+   const valid=Number.isSafeInteger(w)&&Number.isSafeInteger(h)&&w>0&&h>0;
+   const original=image.width+' × '+image.height+' px';
+   const output=valid?w+' × '+h+' px':'invalid output dimensions';
+   const type=($('#format').selectedOptions[0]?.textContent)||read('format');
+   const fit=read('fit');
+   requirements.textContent='Source: '+original+' · Requested: '+output+' · '+type+
+     (Number.isFinite(kb)&&kb>0?' · Max '+kb+' KB':' · No KB limit')+
+     ' · '+(fit==='cover'?'Cover may crop image edges.':'Contain may add padding.')+
+     ' Actual file size is checked after export.';
+ };
+ form.addEventListener('input',refreshRequirements);
+ form.addEventListener('change',refreshRequirements);
+ advanced.addEventListener('change',refreshRequirements);
+ refreshRequirements();
+ 
  for(const id of ['width','height'])$('#'+id).addEventListener('input',()=>{
   if(updating||!image||!$('#lock-ratio').checked)return;
   const w=crop?crop.w*image.width:image.width,h=crop?crop.h*image.height:image.height;
@@ -97,8 +144,49 @@ export async function mount(root){
    clearOutputs();
    if(old.image!==candidate)old.image?.close?.();
    $('#width').value=image.width;$('#height').value=image.height;
+   resetCropFields();cropPanel.hidden=false;
+   refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';
   }catch(error){if(candidate!==image)candidate?.close?.();throw error;}
  });
+ const cropPanel=el('section',{class:'app-crop-panel',hidden:true,'aria-label':'Crop image without dragging'});
+ cropPanel.append(el('h2',{text:'Crop the image'}));
+ const cropHelp=el('p',{class:'app-crop-help',id:'app-crop-help',
+   text:'Use the visual crop or enter left, top, width and height as percentages of the original image. Both methods produce the same crop.'});
+ cropPanel.append(cropHelp);
+ const cropFields=el('div',{class:'fields app-crop-fields'},[
+   field('app-crop-x','Left (%)','number',0,{min:0,max:100,step:'any'}),
+   field('app-crop-y','Top (%)','number',0,{min:0,max:100,step:'any'}),
+   field('app-crop-w','Width (%)','number',100,{min:0.01,max:100,step:'any'}),
+   field('app-crop-h','Height (%)','number',100,{min:0.01,max:100,step:'any'})
+ ]);
+ cropPanel.append(cropFields);
+ function resetCropFields(){for(const [id,v] of [['app-crop-x',0],['app-crop-y',0],['app-crop-w',100],['app-crop-h',100]])$('#'+id).value=String(v);}
+ function syncCropFields(){const p=cropToPercent(crop);
+   for(const [id,v] of [['app-crop-x',p.x],['app-crop-y',p.y],['app-crop-w',p.w],['app-crop-h',p.h]])$('#'+id).value=String(v);
+ }
+ function applyCrop(c){
+   if(!image)throw Error('Open an image first.');
+   const px=cropToPixels(c,image.width,image.height);
+   crop=c;drag=null;manual=false;preview.style.touchAction='auto';
+   $('#width').value=px.w;$('#height').value=px.h;
+   syncCropFields();showSource();refreshRequirements();
+   cropHelp.textContent='Crop applied: '+px.w+' × '+px.h+' source pixels. Adjust percentages or clear the crop to revise.';
+   status('Crop applied. Create the image or PDF to verify the final result.');
+ }
+ cropPanel.append(el('div',{class:'actions'},[
+   action('Apply crop values',()=>applyCrop(cropFromPercent(
+     read('app-crop-x'),read('app-crop-y'),read('app-crop-w'),read('app-crop-h')))),
+   action('Use full image',()=>{
+     if(!image)throw Error('Open an image first.');
+     crop=null;drag=null;manual=false;preview.style.touchAction='auto';
+     $('#width').value=image.width;$('#height').value=image.height;
+     resetCropFields();showSource();refreshRequirements();
+     cropHelp.textContent='Full image selected. You may enter new crop percentages.';
+     status('Full image selected.');
+   })
+ ]));
+ frame.after(cropPanel);
+ const resultDetails=el('p',{class:'app-output-status',role:'status','aria-live':'polite',hidden:true});
  const point=e=>{
   const r=preview.getBoundingClientRect();
   return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),
@@ -115,11 +203,8 @@ export async function mount(root){
   if(!drag)return;
   const a=drag.start,b=drag.end;drag=null;
   if(Math.abs(a.x-b.x)<.005||Math.abs(a.y-b.y)<.005){status('Drag a larger crop area.',true);return;}
-  crop={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
-  manual=false;preview.style.touchAction='auto';
-  $('#width').value=Math.max(1,Math.round(crop.w*image.width));
-  $('#height').value=Math.max(1,Math.round(crop.h*image.height));
-  showSource();status('Crop selected. Create the image to preview the final result.');
+  const selection={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
+  applyCrop(selection);
  });
  preview.addEventListener('pointercancel',()=>{drag=null;showSource()});
  root.append(el('div',{class:'actions'},[
@@ -127,7 +212,8 @@ export async function mount(root){
      manual=true;preview.style.touchAction='none';showSource();
      status('Drag on the image to select a crop. Scroll outside the image.');}),
    action('Clear crop',()=>{crop=null;manual=false;preview.style.touchAction='auto';
-     showSource();if(image){$('#width').value=image.width;$('#height').value=image.height;}})
+     showSource();if(image){$('#width').value=image.width;$('#height').value=image.height;}
+     resetCropFields();refreshRequirements();})
  ]));
  function renderOutput(){
   if(!image)throw Error('Open an image first.');
@@ -176,6 +262,9 @@ export async function mount(root){
    clearOutputs();
    const link=output(blob,safeName(file.name,'-edited',actual));
    $('#downloads').prepend(el('img',{src:link,alt:'Processed image preview',class:'preview-image'}));
+   resultDetails.hidden=false;
+   resultDetails.textContent='Ready: '+info.width+' × '+info.height+' px · '+format(info.kb)+' KB · '+actual.toUpperCase()+
+     '. Compare with your portal’s required dimensions, format and size before submitting.';
    status(info.width+' × '+info.height+' pixels · '+format(info.kb)+' KB · '+actual.toUpperCase()+
      (target?' · within '+target+' KB limit.':'.')+
      ' Check your portal requirements; file acceptance is not guaranteed.');
@@ -199,6 +288,8 @@ export async function mount(root){
    const info=validateEncodedBlob(blob,'application/pdf',c.width,c.height,target);
    clearOutputs();
    output(blob,safeName(file.name,'-application','pdf'));
+   resultDetails.hidden=false;
+   resultDetails.textContent='Ready: single-page A4 PDF · '+format(info.kb)+' KB. Check that your portal accepts A4 PDFs.';
    status('A4 PDF · one page · '+format(info.kb)+' KB'+
      (target?' · within '+target+' KB limit.':'.')+
      ' Verify your portal accepts A4 PDFs. The image is fitted without stretching.');
@@ -211,9 +302,10 @@ export async function mount(root){
   $('#rotation').value='0';$('#brightness').value=$('#contrast').value='100';
   $('#flip-x').checked=$('#flip-y').checked=false;$('#watermark').value='';
   if(image){$('#width').value=image.width;$('#height').value=image.height;}
+  resetCropFields();refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';
   showSource();
  }));
- root.append(actions);
+ root.append(actions,resultDetails);
  setupStatus(root);downloads(root);
  window.addEventListener('pagehide',()=>image?.close?.(),{once:true});
 }
