@@ -32,7 +32,67 @@ async function setHTML(html){editor.innerHTML=sanitizeDocument(await ensureSanit
 editor.addEventListener('paste',async e=>{e.preventDefault();const plain=e.clipboardData.getData('text/plain');document.execCommand('insertText',false,plain)});
 editor.addEventListener('drop',e=>e.preventDefault());
 function renderSheets(){sheetControls.hidden=grid.hidden=false;editor.hidden=toolbar.hidden=true;$('#sheet-select').replaceChildren(...sheets.map((s,i)=>el('option',{value:i,text:s.name})));$('#sheet-select').value=String(activeSheet);renderTable()}
-function renderTable(){const rows=sheets[activeSheet].rows;grid.replaceChildren();const table=el('table'),body=el('tbody'),cols=Math.max(1,...rows.map(r=>r.length));const head=el('tr');head.append(el('th',{text:'#'}));for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?(String(rows[0]?.[j]??'')||columnName(j)):columnName(j)}));table.append(el('thead',{},head));rows.forEach((row,i)=>{if(csvHasHeader&&i===0)return;const tr=el('tr');tr.append(el('th',{text:i+1}));for(let j=0;j<cols;j++){const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`${columnName(j)}${i+1}`,text:row[j]??''});td.addEventListener('focus',()=>{if(csvHistory)csvHistory.record(rows)});td.addEventListener('input',()=>{rows[i][j]=td.textContent});td.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'))});tr.append(td)}body.append(tr)});table.append(body);grid.append(table)}
+const CSV_PAGE_SIZE=50;
+let csvPage=0;
+const csvPageBar=csvClean?el('div',{class:'actions'}):null;
+if(csvPageBar){csvPageBar.setAttribute('aria-label','CSV page navigation');grid.after(csvPageBar);}
+function renderTable(){
+ const rows=sheets[activeSheet].rows;
+ if(!csvClean){
+   grid.replaceChildren();const table=el('table'),body=el('tbody'),cols=Math.max(1,...rows.map(r=>r.length));const head=el('tr');head.append(el('th',{text:'#'}));
+   for(let j=0;j<cols;j++)head.append(el('th',{text:columnName(j)}));table.append(el('thead',{},head));
+   rows.forEach((row,i)=>{const tr=el('tr');tr.append(el('th',{text:i+1}));
+     for(let j=0;j<cols;j++){const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`${columnName(j)}${i+1}`,text:row[j]??''});
+       td.addEventListener('input',()=>{rows[i][j]=td.textContent});
+       td.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'))});tr.append(td)}body.append(tr)});
+   table.append(body);grid.append(table);return;
+ }
+ // Only the current CSV page is materialized; the entire model remains available for export.
+ const cols=rows.reduce((n,row)=>Math.max(n,row.length),1),first=csvHasHeader?1:0;
+ const count=Math.max(0,rows.length-first),pages=Math.max(1,Math.ceil(count/CSV_PAGE_SIZE));
+ csvPage=Math.min(Math.max(csvPage,0),pages-1);
+ const from=first+csvPage*CSV_PAGE_SIZE,to=Math.min(rows.length,from+CSV_PAGE_SIZE);
+ const table=el('table'),head=el('tr'),body=el('tbody');
+ head.append(el('th',{text:'#'}));
+ for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):columnName(j)}));
+ table.append(el('thead',{},head));
+ for(let i=from;i<to;i++){
+   const tr=el('tr');tr.append(el('th',{text:i+1}));
+   for(let j=0;j<cols;j++){
+     const td=el('td',{contenteditable:'true',role:'textbox','aria-label':`${columnName(j)}${i+1}`,text:rows[i]?.[j]??''});
+     td.dataset.row=String(i);td.dataset.col=String(j);tr.append(td);
+   }body.append(tr);
+ }
+ table.append(body);grid.replaceChildren(table);
+ csvPageBar.replaceChildren();
+ const previous=el('button',{type:'button',text:'Previous page'});
+ const next=el('button',{type:'button',text:'Next page'});
+ previous.disabled=csvPage===0;next.disabled=csvPage>=pages-1;
+ const summary=el('span',{text:`Rows ${count?from+1:0}–${to} of ${rows.length}; page ${csvPage+1} of ${pages}`});
+ previous.addEventListener('click',()=>{csvPage--;renderTable()});
+ next.addEventListener('click',()=>{csvPage++;renderTable()});
+ csvPageBar.append(previous,summary,next);
+}
+if(csvClean){
+ // Delegation avoids two listeners per editable cell and retains model indices across pages.
+ let editRecorded=false;
+ grid.addEventListener('focusin',e=>{
+  const cell=e.target.closest('td[data-row][data-col]');
+  if(!cell)return;
+  if(!editRecorded){csvHistory.record(sheets[activeSheet].rows);editRecorded=true;}
+ });
+ grid.addEventListener('focusout',e=>{if(e.target.matches('td[data-row][data-col]'))editRecorded=false});
+ grid.addEventListener('input',e=>{
+  const cell=e.target.closest('td[data-row][data-col]');if(!cell)return;
+  const i=Number(cell.dataset.row),j=Number(cell.dataset.col);
+  const rows=sheets[activeSheet]?.rows;if(rows&&rows[i])rows[i][j]=cell.textContent;
+ });
+ grid.addEventListener('paste',e=>{
+  if(!e.target.closest('td[data-row][data-col]'))return;
+  e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'));
+ });
+}
+
 $('#sheet-select').addEventListener('change',()=>{activeSheet=+read('sheet-select');renderTable()});
 async function loadFile(file){const ext=checkFile(file,null,20);clearOutputs();filename=file.name;if(['doc','xls','ppt'].includes(ext))throw Error('Legacy '+ext.toUpperCase()+' editing is not enabled. Open it in an office application and save as DOCX or XLSX first.');if(ext==='pptx')throw Error('PowerPoint files are recognized, but slide editing is not enabled. Use a presentation application.');if(['jpg','jpeg','png','webp'].includes(ext)){editor.hidden=true;const p=el('p',{},[el('a',{class:'button',href:url('documents/image-to-text/'),text:'Open Image to Text OCR'}),el('a',{class:'button',href:url('images/studio/'),text:'Open Image Studio'})]);root.prepend(p);throw Error('This is an image. Choose Image Studio or OCR using the links above.')}if(!['docx','xlsx','csv','txt','pdf'].includes(ext))throw Error('Supported editable files: DOCX, XLSX, CSV and TXT.');kind=ext;sheets=[];activeSheet=0;if(ext!=='csv')csvHasHeader=false;sheetControls.hidden=grid.hidden=true;editor.hidden=toolbar.hidden=false;
 if(ext==='docx'){status('Loading Word engine…');const mammoth=await load('mammoth');const result=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()},{convertImage:mammoth.images.imgElement(()=>Promise.resolve({src:''}))});await setHTML(result.value)}
@@ -45,7 +105,7 @@ else if(ext==='csv'&&csvImport){
     header:read('csv-header')==='yes'
   });
   if(imported.rows.length>2000||imported.rows.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');
-  csvHistory.reset();
+  csvHistory.reset();csvPage=0;
   sheets=[{name:'Sheet1',rows:imported.rows}];
   csvHasHeader=imported.diagnostics.headerSelected;
   renderSheets();
