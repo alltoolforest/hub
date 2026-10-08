@@ -40,7 +40,12 @@ export function inspectCsv(parser,text,{delimiter='auto',header=false,encoding='
   const errors=result.errors||[];
   const quoteError=errors.find(e=>e.type==='Quotes');
   if(quoteError) throw Error('Malformed quoted CSV field at row '+(Number.isInteger(quoteError.row)?quoteError.row+1:'unknown')+'. Check the original file.');
-  const rows=result.data||[];
+  // Papa Parse emits one synthetic empty record for a terminal CSV record separator.
+  // Remove only that synthetic record; keep intentional internal or trailing blank lines.
+  const rows=[...(result.data||[])];
+  const last=rows[rows.length-1];
+  if((text.endsWith('\n')||text.endsWith('\r')) &&
+     last?.length===1 && last[0]==='') rows.pop();
   const width=rows.reduce((largest,r)=>Math.max(largest,r.length),0);
   const counts=new Map();
   for(const row of rows) counts.set(row.length,(counts.get(row.length)||0)+1);
