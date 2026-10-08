@@ -21,3 +21,35 @@ body[data-tool="image-to-text"] .workspace .actions button{min-height:44px}
  body[data-tool="image-to-text"] .workspace .actions{display:flex;gap:10px}
  body[data-tool="image-to-text"] .workspace .actions button{flex:1 1 130px;min-width:0}
 }
+
+
+/* Ordered-image OCR queue: scoped to Image to Text OCR, not shared PDF/image tools. */
+body[data-tool="image-to-text"] .ocr-batch-list{list-style:none;margin:12px 0 18px;padding:0;display:grid;gap:12px}
+body[data-tool="image-to-text"] .ocr-batch-item{
+ display:grid;grid-template-columns:130px minmax(0,1fr);
+ gap:12px;align-items:center;min-width:0;border:1px solid #dce6e0;
+ border-radius:10px;padding:12px;background:var(--surface,#fff)
+}
+body[data-tool="image-to-text"] .ocr-batch-item.selected{border-color:#145940;box-shadow:inset 0 0 0 1px #145940}
+body[data-tool="image-to-text"] .ocr-thumb{display:block;width:auto;max-width:130px;max-height:130px;height:auto;object-fit:contain;justify-self:center}
+body[data-tool="image-to-text"] .ocr-batch-info{min-width:0;overflow-wrap:anywhere}
+body[data-tool="image-to-text"] .ocr-batch-info strong{display:block;font-size:14px}
+body[data-tool="image-to-text"] .ocr-batch-info small{display:block;margin-top:5px;color:#476653}
+body[data-tool="image-to-text"] .ocr-batch-buttons{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+body[data-tool="image-to-text"] .ocr-batch-buttons button{
+ min-height:42px;padding:7px 12px;font-size:13px;flex:1 1 auto
+}
+body[data-tool="image-to-text"] .ocr-batch-buttons button:focus-visible{
+ outline:3px solid #3675c1;outline-offset:2px
+}
+@media(max-width:560px){
+ body[data-tool="image-to-text"] .ocr-batch-item{grid-template-columns:94px minmax(0,1fr);gap:10px;padding:10px}
+ body[data-tool="image-to-text"] .ocr-thumb{max-width:94px;max-height:94px}
+ body[data-tool="image-to-text"] .ocr-batch-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ body[data-tool="image-to-text"] .ocr-batch-buttons button{min-width:0;width:100%}
+}
+@media(max-width:340px){
+ body[data-tool="image-to-text"] .ocr-batch-item{grid-template-columns:1fr}
+ body[data-tool="image-to-text"] .ocr-thumb{max-width:130px}
+ body[data-tool="image-to-text"] .ocr-batch-buttons{grid-template-columns:1fr}
+}
