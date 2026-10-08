@@ -1,7 +1,7 @@
 // Application Document Prep Task 2: keyboard-operable crop geometry.
 // Coordinates are percentages of the original image, not of its displayed canvas.
 export function cropFromPercent(x,y,w,h){
- const values=[x,y,w,h].map(Number);
+ const values=[x,y,w,h].map(v=>String(v).trim()===''?NaN:Number(v));
  if(values.some(v=>!Number.isFinite(v)))throw Error('Enter numeric crop values.');
  const [left,top,width,height]=values;
  if(left<0||top<0||width<=0||height<=0||left>=100||top>=100||
