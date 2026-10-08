@@ -113,7 +113,18 @@ try {
     finally{canvas.width=canvas.height=0;}
   });
   assert.equal(cancellation.aborted,true);assert.ok(cancellation.ms<1500);
-  console.log('Independent Enhance/no models/original dimensions, worker cancellation, strict Deblur failure, mode switching/reset PASS');
+  // Detector outage: portrait enhancement stays non-generative and conservative;
+  // dedicated deblur must stop rather than silently dropping identity safeguards.
+  await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+  await page.route('https://huggingface.co/**', route => route.abort());
+  await page.locator('#enhancer-content').selectOption('portrait');
+  await page.locator('#enhancer-run').click();
+  await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('Face locations were uncertain') && !!document.querySelector('#downloads a[download]'));
+  await page.locator('#enhancer-mode-deblur').click();
+  await page.locator('#enhancer-run').click();
+  await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('Face-safety detection is unavailable'));
+  assert.equal(await page.locator('#downloads a[download]').count(),0);
+  console.log('Independent modes, original dimensions, cancellation, portrait detector fallback and strict Deblur safety failure PASS');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

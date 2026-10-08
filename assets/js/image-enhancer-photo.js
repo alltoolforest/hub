@@ -1,3 +1,4 @@
+import { portraitProtectionAt } from './image-enhancer-portrait.js';
 // Non-generative photographic enhancement. No neural reconstruction, resizing,
 // deconvolution, geometry changes or model dependencies. Operates on native pixels.
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -95,7 +96,7 @@ export function makePhotoPlan(stats, options = {}) {
     tone[i] = clamp(i + (mapped - i) * Math.min(1, strength), 0, 255);
   }
   const sharp = ({ off: 0, low: .14, medium: .28, auto: .18 })[options.sharpness || 'auto'] ?? .18;
-  return { noise, wb, tone, strength, graphic, blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
+  return { noise, wb, tone, strength, graphic, portrait: options.content === 'portrait', blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
 }
 
 // Strip input includes a 10px halo; returns RGBA for only the requested rows.
@@ -108,6 +109,8 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
   const horizontal = new Float32Array(n);
   const output = new Uint8ClampedArray(width * rowCount * 4);
   const sigma = Math.max(4, plan.noise * 2.2);
+  const protectionMask = faces.length ? new Float32Array(n) : null;
+  if (protectionMask) for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) protectionMask[y * width + x] = portraitProtectionAt(x, y + offsetY, faces);
   const rangeWeight = new Float32Array(256);
   for (let i = 0; i < 256; i++) rangeWeight[i] = Math.exp(-(i * i) / (2 * sigma * sigma));
   const cleanup = plan.graphic ? 0 : clamp((plan.noise - 1.2) / 10, 0, .78) * Math.min(1, plan.strength);
@@ -123,7 +126,16 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
         const weight = rangeWeight[Math.round(diff)] * (dx === 0 ? 2 : 1) * (dy === 0 ? 2 : 1);
         sr += data[q] * weight; sg += data[q + 1] * weight; sb += data[q + 2] * weight; total += weight;
       }
-      r += (sr / total - r) * cleanup; g += (sg / total - g) * cleanup; b += (sb / total - b) * cleanup;
+      // Keep photographed luminance texture in faces; clean chroma more than
+      // luminance so noise reduction does not erase pores and identifying marks.
+      const dr = sr / total - r, dg = sg / total - g, db = sb / total - b;
+      const dl = .2126 * dr + .7152 * dg + .0722 * db;
+      const protectedAmount = protectionMask?.[i] || 0;
+      const lumaCleanup = cleanup * (1 - .75 * protectedAmount);
+      const chromaCleanup = cleanup * (1 - .25 * protectedAmount);
+      r += dl * lumaCleanup + (dr - dl) * chromaCleanup;
+      g += dl * lumaCleanup + (dg - dl) * chromaCleanup;
+      b += dl * lumaCleanup + (db - dl) * chromaCleanup;
     }
     if (!plan.graphic && plan.blockStrength > 0 && data[p + 3] === 255) {
       let dr=0,dg=0,db=0,axes=0;
@@ -170,12 +182,12 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
       const i = y * width + x, p = i * 4, q = ((y - startRow) * width + x) * 4;
       const l = lum[i], detail = l - sum / 17;
       const skin = data[p] > data[p + 2] * 1.08 && data[p] > data[p + 1] * 1.02 && data[p + 1] > data[p + 2] * .95;
-      const face = faces.some(f => x >= f.x && x < f.x + f.width && y + offsetY >= f.y && y + offsetY < f.y + f.height);
-      const protection = face || skin ? .45 : 1;
+      const face = protectionMask?.[i] || 0;
+      const protection = Math.min(skin ? .45 : 1, 1 - .85 * face);
       const boundary = Math.max(0, 1 - Math.abs(detail) / 36);
       const high = l - (lum[y * width + Math.max(0, x - 1)] + lum[y * width + Math.min(width - 1, x + 1)] + lum[Math.max(0, y - 1) * width + x] + lum[Math.min(height - 1, y + 1) * width + x]) / 4;
       const sharpen = Math.abs(high) > Math.max(2, plan.noise * 1.8) ? clamp(high * plan.sharp, -3, 3) : 0;
-      const local = Math.abs(detail) > plan.noise * 1.5 ? clamp(detail * plan.local * boundary, -3, 3) : 0;
+      const local = Math.abs(detail) > plan.noise * 1.5 ? clamp(detail * plan.local * (plan.portrait ? 1.5 : 1) * boundary, -3, 3) : 0;
       const target = clamp(l + (local + sharpen) * protection, 0, 255);
       const saturation = plan.graphic ? 1 : 1 + .035 * plan.strength * (1 - plan.blockStrength) * protection * Math.max(0, 1 - Math.abs(detail) / 60);
       let chromaScale = saturation;
