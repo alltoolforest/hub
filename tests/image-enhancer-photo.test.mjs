@@ -115,3 +115,33 @@ test('portrait protection preserves fine luminance texture while reducing chroma
  for(let y=0;y<h;y+=27){const top=Math.max(0,y-PHOTO_HALO),n=Math.min(27,h-y),bottom=Math.min(h,y+n+PHOTO_HALO);strips.set(enhancePhotoStrip(data.slice(top*w*4,bottom*w*4),w,bottom-top,y-top,n,p,{faces,offsetY:top}),y*w*4);}
  assert.deepEqual(strips,guarded,'portrait boundaries must not create strip seams');
 });
+
+test('portrait exposure lift does not multiply an existing color cast by full brightness gain',()=>{
+ const w=64,h=64,data=rgba(w,h,()=>[100,40,55,255]);
+ const out=process(data,w,h,{content:'portrait',sharpness:'off'});
+ const luma=d=>d[0]*.2126+d[1]*.7152+d[2]*.0722;
+ const gain=luma(out)/luma(data);
+ assert.ok(gain>1.25,'underexposed portrait must still become visibly brighter');
+ assert.ok(out[0]-out[1] < (data[0]-data[1])*gain*.85,'avoid exposure-induced red amplification');
+ assert.ok(out[0]>out[2]&&out[2]>out[1],'retain original channel ordering');
+});
+
+test('contrast correction preserves distinctions in photographed shadows',()=>{
+ const w=160,h=100,data=rgba(w,h,x=>{const v=50+x*.9;return[v,v,v,255];});
+ const p=plan(data,w,h,{content:'portrait'});
+ for(let i=1;i<40;i++) assert.ok(p.tone[i]>p.tone[i-1],'no flat clipped shadow interval');
+ assert.ok(p.tone[8]>5,'keep dark detail instead of forcing it toward black');
+});
+
+test('isolated chroma noise is cleaned without erasing protected luminance structure',()=>{
+ let seed=531;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};
+ const w=100,h=80,reference=rgba(w,h,(x)=>{const v=110+(x%7)*2;return[v,v,v,255];});
+ const data=rgba(w,h,x=>{const v=110+(x%7)*2,n=(rand()-.5)*30;return[v+n,v-n*.2126/.7152,v,255];});
+ const p=plan(data,w,h,{content:'portrait',sharpness:'off'});
+ assert.ok(p.chromaNoise>p.noise*2,'separate color and luminance noise estimates');
+ const out=enhancePhotoStrip(data,w,h,0,h,p,{faces:[{x:0,y:0,width:w,height:h}]});
+ assert.ok(mae(out,reference)<mae(data,reference)*.9,'measurable color noise reduction');
+ let error=0;
+ for(let i=0;i<data.length;i+=4)error+=Math.abs((out[i]-data[i])*.2126+(out[i+1]-data[i+1])*.7152+(out[i+2]-data[i+2])*.0722);
+ assert.ok(error/(w*h)<1,'preserve fine luminance signal in protected regions');
+});

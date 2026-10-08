@@ -6,7 +6,7 @@ const Y = (d, p) => d[p] * .2126 + d[p + 1] * .7152 + d[p + 2] * .0722;
 export const PHOTO_HALO = 10;
 const blockAxis = () => ({ sum: new Float64Array(8), count: new Uint32Array(8) });
 export function photoStatistics() {
-  return { blocks: [blockAxis(), blockAxis()], histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, neutralBands: Array.from({length:3}, () => ({count:0, rgb:[0,0,0]})), residuals: [] };
+  return { blocks: [blockAxis(), blockAxis()], histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, neutralBands: Array.from({length:3}, () => ({count:0, rgb:[0,0,0]})), residuals: [], chromaResiduals: new Uint32Array(256), chromaCount: 0 };
 }
 // Sample native pixels, not a resized preview: resizing conceals sensor noise.
 export function collectPhotoStatistics(data, width, height, stats, step = 4, offsetY = 0) {
@@ -47,6 +47,16 @@ export function collectPhotoStatistics(data, width, height, stats, step = 4, off
       const up = Y(data, p - width * 4), down = Y(data, p + width * 4);
       if (Math.abs(left - right) + Math.abs(up - down) < 24 && l > 12 && l < 243 && stats.residuals.length < 100000) {
         stats.residuals.push(Math.abs(l - (left + right + up + down) / 4));
+        // Estimate color speckle separately: low luminance noise does not imply
+        // clean chroma, especially in phone JPEG shadows.
+        const neighborY = (left + right + up + down) / 4;
+        let chromaResidual = 0;
+        for (const c of [0, 2]) {
+          const neighbor = (data[p-4+c] + data[p+4+c] + data[p-width*4+c] + data[p+width*4+c]) / 4;
+          chromaResidual = Math.max(chromaResidual, Math.abs((data[p+c]-l) - (neighbor-neighborY)));
+        }
+        stats.chromaResiduals[Math.min(255, Math.round(4 * chromaResidual))]++;
+        stats.chromaCount++;
       }
     }
   }
@@ -61,6 +71,12 @@ export function makePhotoPlan(stats, options = {}) {
   }
   stats.residuals.sort((a, b) => a - b);
   const noise = clamp((stats.residuals[Math.floor(stats.residuals.length / 2)] || 0) / .754, 0, 16);
+  let chromaMedian = 0, chromaCount = 0;
+  for (let i = 0; i < 256 && stats.chromaCount; i++) {
+    chromaCount += stats.chromaResiduals[i];
+    if (chromaCount > stats.chromaCount / 2) { chromaMedian = i / 4; break; }
+  }
+  const chromaNoise = clamp(chromaMedian / .754, 0, 16);
   const mean = stats.count ? stats.sum / stats.count : 128;
   const p05 = percentile(.05), p95 = percentile(.95);
   const range = p95 - p05;
@@ -90,13 +106,16 @@ export function makePhotoPlan(stats, options = {}) {
   const white = 255 - Math.min(35, (255 - p95) * .5) * contrast;
   const tone = new Float32Array(256);
   for (let i = 0; i < 256; i++) {
-    const stretched = clamp((i - black) / (white - black), 0, 1);
+    // A smooth toe preserves distinctions in dark hair and clothing instead of
+    // clipping every input below the estimated black point to the same value.
+    const toe = black > 0 ? black * (1 - Math.exp(-i / (4 * black))) : 0;
+    const stretched = clamp((i - toe) / (white - black), 0, 1);
     const mapped = 255 * Math.pow(stretched, gamma);
     // Strength controls correction, not an extra processing pass.
     tone[i] = clamp(i + (mapped - i) * Math.min(1, strength), 0, 255);
   }
   const sharp = ({ off: 0, low: .14, medium: .28, auto: .18 })[options.sharpness || 'auto'] ?? .18;
-  return { noise, wb, tone, strength, graphic, portrait: options.content === 'portrait', blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
+  return { noise, chromaNoise, wb, tone, strength, graphic, portrait: options.content === 'portrait', blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
 }
 
 // Strip input includes a 10px halo; returns RGBA for only the requested rows.
@@ -108,16 +127,17 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
   const lum = new Float32Array(n);
   const horizontal = new Float32Array(n);
   const output = new Uint8ClampedArray(width * rowCount * 4);
-  const sigma = Math.max(4, plan.noise * 2.2);
+  const sigma = Math.max(4, Math.max(plan.noise, plan.chromaNoise || 0) * 2.2);
   const protectionMask = faces.length ? new Float32Array(n) : null;
   if (protectionMask) for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) protectionMask[y * width + x] = portraitProtectionAt(x, y + offsetY, faces);
   const rangeWeight = new Float32Array(256);
   for (let i = 0; i < 256; i++) rangeWeight[i] = Math.exp(-(i * i) / (2 * sigma * sigma));
   const cleanup = plan.graphic ? 0 : clamp((plan.noise - 1.2) / 10, 0, .78) * Math.min(1, plan.strength);
+  const colorCleanup = plan.graphic ? 0 : Math.max(cleanup, clamp(((plan.chromaNoise || 0) - 1.2) / 8, 0, .78) * Math.min(1, plan.strength));
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const i = y * width + x, p = i * 4;
     let r = data[p], g = data[p + 1], b = data[p + 2];
-    if (cleanup > 0 && data[p + 3] === 255) {
+    if (colorCleanup > 0 && data[p + 3] === 255) {
       let sr = 0, sg = 0, sb = 0, total = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const q = (clamp(y + dy, 0, height - 1) * width + clamp(x + dx, 0, width - 1)) * 4;
@@ -132,7 +152,7 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
       const dl = .2126 * dr + .7152 * dg + .0722 * db;
       const protectedAmount = protectionMask?.[i] || 0;
       const lumaCleanup = cleanup * (1 - .75 * protectedAmount);
-      const chromaCleanup = cleanup * (1 - .25 * protectedAmount);
+      const chromaCleanup = colorCleanup * (1 - .25 * protectedAmount);
       r += dl * lumaCleanup + (dr - dl) * chromaCleanup;
       g += dl * lumaCleanup + (dg - dl) * chromaCleanup;
       b += dl * lumaCleanup + (db - dl) * chromaCleanup;
@@ -161,8 +181,14 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
     const cleanedY = .2126 * r + .7152 * g + .0722 * b;
     const target = plan.tone[clamp(Math.round(cleanedY), 0, 255)];
     const gain = cleanedY > 0 ? clamp(target / cleanedY, .65, 2.8) : 1;
-    clean[i * 3] = r * gain; clean[i * 3 + 1] = g * gain; clean[i * 3 + 2] = b * gain;
     lum[i] = cleanedY * gain;
+    // Exposure is primarily luminance correction. Scaling all RGB channels by
+    // the full lift also magnifies an existing color cast, especially on skin.
+    // Retain hue and some chroma growth without assuming a target skin color.
+    const chromaGain = gain > 1 ? 1 + (gain - 1) * (plan.portrait ? .25 : .5) : gain;
+    clean[i * 3] = lum[i] + (r - cleanedY) * chromaGain;
+    clean[i * 3 + 1] = lum[i] + (g - cleanedY) * chromaGain;
+    clean[i * 3 + 2] = lum[i] + (b - cleanedY) * chromaGain;
   }
   // Separable 17px local mean, linear time. Strong boundaries suppress the detail
   // term; noise-level thresholds avoid using noise as texture/sharpening evidence.
