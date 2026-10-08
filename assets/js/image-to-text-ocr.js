@@ -74,8 +74,7 @@ export async function mount(root){
  function dirty(reason){
   queueRevision++;
   if(text.value.trim()){
-   clearOutputs();
-   review.textContent=reason+' Your previous text remains visible. Run OCR again to update the text and enable export.';
+   review.textContent=reason+' Your previous text and downloads remain available for reference. Run OCR again to export the newly ordered images.';
   }
  }
  function showSelected(){
