@@ -6,6 +6,7 @@ export async function mount(root,slug){let filename='document.docx',kind='docx',
 const input=fileInput(root,slug==='docx-viewer'?'.docx':slug==='csv-cleaner'?'.csv':'.docx,.xlsx,.csv,.txt,.pdf,.doc,.xls,.ppt,.pptx,.jpg,.jpeg,.png,.webp',false,slug==='csv-cleaner'?'Open a CSV file':slug==='docx-viewer'?'Open a Word document':'Open your document');
 const csvImport=slug==='csv-cleaner'?await import('./csv-import.js'):null;
 const csvClean=slug==='csv-cleaner'?await import('./csv-cleaning.js'):null;
+const csvPaging=slug==='csv-cleaner'?await import('./csv-table-page.js'):null;
 const csvHistory=csvClean?new csvClean.CsvHistory():null;
 let csvCleanActions=null;
 let lastCsvFile=null, csvHasHeader=false;
@@ -32,7 +33,6 @@ async function setHTML(html){editor.innerHTML=sanitizeDocument(await ensureSanit
 editor.addEventListener('paste',async e=>{e.preventDefault();const plain=e.clipboardData.getData('text/plain');document.execCommand('insertText',false,plain)});
 editor.addEventListener('drop',e=>e.preventDefault());
 function renderSheets(){sheetControls.hidden=grid.hidden=false;editor.hidden=toolbar.hidden=true;$('#sheet-select').replaceChildren(...sheets.map((s,i)=>el('option',{value:i,text:s.name})));$('#sheet-select').value=String(activeSheet);renderTable()}
-const CSV_PAGE_SIZE=50;
 let csvPage=0;
 const csvPageBar=csvClean?el('div',{class:'actions'}):null;
 if(csvPageBar){csvPageBar.setAttribute('aria-label','CSV page navigation');grid.after(csvPageBar);}
@@ -49,9 +49,9 @@ function renderTable(){
  }
  // Only the current CSV page is materialized; the entire model remains available for export.
  const cols=rows.reduce((n,row)=>Math.max(n,row.length),1),first=csvHasHeader?1:0;
- const count=Math.max(0,rows.length-first),pages=Math.max(1,Math.ceil(count/CSV_PAGE_SIZE));
- csvPage=Math.min(Math.max(csvPage,0),pages-1);
- const from=first+csvPage*CSV_PAGE_SIZE,to=Math.min(rows.length,from+CSV_PAGE_SIZE);
+ const windowPage=csvPaging.pageWindow(rows.length,csvHasHeader,csvPage);
+ const {count,pages,from,to}=windowPage;
+ csvPage=windowPage.page;
  const table=el('table'),head=el('tr'),body=el('tbody');
  head.append(el('th',{text:'#'}));
  for(let j=0;j<cols;j++)head.append(el('th',{text:csvHasHeader?String(rows[0]?.[j]??'')||columnName(j):columnName(j)}));
