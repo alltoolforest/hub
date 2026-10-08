@@ -13,7 +13,7 @@ export function viewIndices(rows,{header=false,search='',filterColumn=-1,filterT
   const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
   // Use numeric ordering only when every populated value is a plain decimal.
   // Mixed text columns retain the previous natural-language sorting behavior.
-  const decimal=/^[+-]?(?:0|[1-9]\\d*)(?:\\.\\d+)?$|^[+-]?\\.\\d+$/;
+  const decimal=/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?$|^[+-]?\.\d+$/;
   const values=indices.map(i=>String(rows[i][sortColumn]??''));
   const numericColumn=values.some(v=>v.trim()!=='') &&
     values.every(v=>v.trim()===''||decimal.test(v.trim()));
