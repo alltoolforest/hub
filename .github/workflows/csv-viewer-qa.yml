@@ -1,0 +1,23 @@
+name: CSV Viewer & Cleaner regression
+on:
+  pull_request:
+    paths:
+      - 'assets/js/editor.js'
+      - 'assets/js/csv-*.js'
+      - 'assets/css/csv-cleaner.css'
+      - 'documents/csv-cleaner/index.html'
+      - 'tests/csv-*.test.mjs'
+      - '.github/workflows/csv-viewer-qa.yml'
+  workflow_dispatch:
+jobs:
+  csv-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run CSV regression tests
+        run: node --test tests/csv-*.test.mjs

@@ -22,7 +22,7 @@ test('user receives edit guidance and unsaved state warnings',()=>{
  assert.match(editor,/beforeunload/);
  assert.match(editor,/Open another file and discard them/);
  assert.match(editor,/Changing import settings reloads/);
- assert.match(editor,/Discard unsaved CSV edits and start a new blank document/);
+ assert.match(editor,/Discard unsaved CSV edits and clear the workspace/);
 });
 test('styles cannot accidentally target unrelated tools',()=>{
  for(const selector of css.split('\n').filter(s=>s.trim()&&s.includes('{'))){

@@ -18,3 +18,6 @@ body[data-tool="csv-cleaner"] .csv-control-section>summary{cursor:pointer;paddin
 body[data-tool="csv-cleaner"] .csv-control-section[open]{padding-bottom:12px}
 body[data-tool="csv-cleaner"] .csv-control-section>summary:focus-visible{outline:3px solid #247a61;outline-offset:2px}
 body[data-tool="csv-cleaner"] .csv-control-section>.fields,body[data-tool="csv-cleaner"] .csv-control-section>.actions{margin-top:8px}
+
+/* Author layout rules must not override the HTML hidden attribute. */
+body[data-tool="csv-cleaner"] [hidden]{display:none!important}

@@ -13,9 +13,11 @@ let csvSelectedRow=null;
 const csvHistory=csvClean?new csvClean.CsvHistory():null;
 let csvCleanActions=null;
 let csvRefreshControls=()=>{};
+let csvResetViewControls=()=>{};
+let csvPreparedExportVersion=-1, csvChangeVersion=0;
 let lastCsvFile=null, csvHasHeader=false, csvDirty=false;
 const csvEditStatus=csvClean?el('p',{class:'csv-edit-status',role:'status','aria-live':'polite'}):null;
-function markCsvDirty(){if(!csvClean)return;csvDirty=true;if(csvEditStatus)csvEditStatus.textContent='Unsaved changes — export CSV or XLSX to save.';}
+function markCsvDirty(){if(!csvClean)return;csvDirty=true;csvChangeVersion++;if(csvPreparedExportVersion!==-1){clearOutputs();csvPreparedExportVersion=-1;}if(csvEditStatus)csvEditStatus.textContent='Unsaved changes — export CSV or XLSX to save.';}
 if(csvClean)window.addEventListener('beforeunload',event=>{if(!csvDirty)return;event.preventDefault();event.returnValue='';});
 const csvOptions=el('div',{class:'fields',hidden:slug!=='csv-cleaner'});
 const csvReport=el('pre',{class:'notice',hidden:true,style:'white-space:pre-wrap;overflow-wrap:anywhere','role':'status','aria-live':'polite'});
@@ -42,9 +44,10 @@ editor.addEventListener('drop',e=>e.preventDefault());
 function renderSheets(){sheetControls.hidden=!!csvClean;grid.hidden=false;editor.hidden=toolbar.hidden=true;$('#sheet-select').replaceChildren(...sheets.map((s,i)=>el('option',{value:i,text:s.name})));$('#sheet-select').value=String(activeSheet);renderTable()}
 let csvPage=0;
 const csvPageBar=csvClean?el('div',{class:'csv-navigation'}):null;
+let csvEditHint=null;
 if(csvClean){grid.classList.add('csv-table-shell');grid.setAttribute('role','region');grid.setAttribute('aria-label','Scrollable CSV data table');grid.setAttribute('tabindex','0');
- const hint=el('p',{class:'csv-edit-hint',text:'Swipe or scroll sideways to see more columns. Tap or focus a cell to edit; use Tab to move between cells. Changes stay in this browser until exported.'});
- grid.before(hint);grid.after(csvEditStatus);}
+ csvEditHint=el('p',{class:'csv-edit-hint',text:'Swipe or scroll sideways to see more columns. Tap or focus a cell to edit; use Tab to move between cells. Changes stay in this browser until exported.'});
+ grid.before(csvEditHint);grid.after(csvEditStatus);}
 if(csvPageBar){csvPageBar.setAttribute('aria-label','CSV page navigation');grid.after(csvPageBar);}
 function renderTable(){
  const rows=sheets[activeSheet].rows;
@@ -82,8 +85,8 @@ function renderTable(){
  const next=el('button',{type:'button',text:'Next page'});
  previous.disabled=csvPage===0;next.disabled=csvPage>=pages-1;
  const summary=el('span',{role:'status','aria-live':'polite',text:`Showing ${count?from+1:0}–${to} of ${visible.length} matching rows (${rows.length-(csvHasHeader?1:0)} total); page ${csvPage+1} of ${pages}`});
- previous.addEventListener('click',()=>{csvPage--;renderTable()});
- next.addEventListener('click',()=>{csvPage++;renderTable()});
+ previous.addEventListener('click',()=>{csvSelectedRow=null;csvPage--;renderTable()});
+ next.addEventListener('click',()=>{csvSelectedRow=null;csvPage++;renderTable()});
  csvPageBar.append(previous,summary,next);
 }
 if(csvClean){
@@ -119,12 +122,13 @@ else if(ext==='csv'&&csvImport){
     header:read('csv-header')==='yes'
   });
   if(imported.rows.length>2000||imported.rows.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');
-  csvHistory.reset();csvDirty=false;if(csvEditStatus)csvEditStatus.textContent='CSV loaded. No unsaved edits.';csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;
+  csvHistory.reset();csvDirty=false;csvPreparedExportVersion=-1;csvChangeVersion=0;if(csvEditStatus)csvEditStatus.textContent='CSV loaded. No unsaved edits.';csvPage=0;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvSelectedRow=null;csvResetViewControls();
   sheets=[{name:'Sheet1',rows:imported.rows}];
   csvHasHeader=imported.diagnostics.headerSelected;
   renderSheets();
   csvReport.hidden=false;
   csvReport.textContent=csvImport.formatImportSummary(imported.diagnostics);
+  const reportDetails=csvReport.closest('details');if(reportDetails)reportDetails.open=imported.diagnostics.warnings.length>0;
   lastCsvFile=file;
 }
 else if(ext==='csv'){parser=await load('csv');const result=parser.parse(await file.text(),{skipEmptyLines:false});if(result.errors.some(e=>e.type==='Quotes'))throw Error('CSV contains malformed quotes. Check the source file.');if(result.data.length>2000||result.data.some(r=>r.length>100))throw Error('For responsive editing, use at most 2,000 rows and 100 columns.');sheets=[{name:'Sheet1',rows:result.data.length?result.data:[['']]}];renderSheets()}
@@ -144,15 +148,16 @@ if(csvClean){
       report.textContent='Applied: '+result.description.replace('will be','were')+'.';
     }));
   }
-  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;markCsvDirty();renderTable();report.textContent='Undone.';}));
-  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;markCsvDirty();renderTable();report.textContent='Redone.';}));
+  controls.append(action('Undo',()=>{const prior=csvHistory.undo(rows());if(!prior)throw Error('Nothing to undo.');sheets[activeSheet].rows=prior;markCsvDirty();csvSelectedRow=null;renderTable();report.textContent='Undone.';}));
+  controls.append(action('Redo',()=>{const next=csvHistory.redo(rows());if(!next)throw Error('Nothing to redo.');sheets[activeSheet].rows=next;markCsvDirty();csvSelectedRow=null;renderTable();report.textContent='Redone.';}));
   const find=field('csv-search','Find in any column','text','');
-  const filterCol=field('csv-filter-column','Filter column (1-based; 0 for all)','number','0');
+  const filterCol=field('csv-filter-column','Filter column (1-based; 0 for none)','number','0');
   const filterText=field('csv-filter-text','Filter contains','text','');
   const sortCol=field('csv-sort-column','Sort column (1-based; 0 for none)','number','0');
   const sortDir=field('csv-sort-direction','Sort direction','select','asc',{options:[['asc','Ascending'],['desc','Descending']]});
   const viewFields=el('div',{class:'fields'},[find,filterCol,filterText,sortCol,sortDir]);
-  const resetView=()=>{csvPage=0;renderTable();};
+  csvResetViewControls=()=>{for(const [id,value] of [['csv-search',''],['csv-filter-text',''],['csv-filter-column','0'],['csv-sort-column','0'],['csv-sort-direction','asc']]){const control=$('#'+id);if(control)control.value=value;}};
+  const resetView=()=>{csvPage=0;csvSelectedRow=null;renderTable();};
   function updateView(){
     const max=csvOps.width(rows());
     const fc=Number(read('csv-filter-column')),sc=Number(read('csv-sort-column'));
@@ -163,8 +168,7 @@ if(csvClean){
   controls.append(action('Apply search / filter / sort',updateView),
                   action('Clear view',()=>{
                     csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};
-                    for(const id of ['csv-search','csv-filter-text','csv-filter-column','csv-sort-column'])$('#'+id).value=id.includes('column')?'0':'';
-                    $('#csv-sort-direction').value='asc';resetView();report.textContent='All rows visible.';
+                    csvResetViewControls();resetView();report.textContent='All rows visible.';
                   }));
   function commit(next,description){csvHistory.record(rows());sheets[activeSheet].rows=next;markCsvDirty();csvPage=0;csvSelectedRow=null;renderTable();report.textContent=description;}
   controls.append(action('Add row',()=>commit(csvOps.addRow(rows()),'Blank row added.')),
@@ -193,20 +197,24 @@ if(csvClean){
 const exportFields=el('div',{class:'fields'});exportFields.append(field('export-format','Export format','select',slug==='csv-cleaner'?'csv':'docx',{options:[['docx','Word (.docx)'],['txt','Plain text (.txt)'],['html','HTML document'],['xlsx','Excel workbook (.xlsx)'],['csv','CSV (selected sheet)']]}));root.append(exportFields);
 async function exportFile(){const ext=read('export-format');clearOutputs();if(['xlsx','csv'].includes(ext)){if(!sheets.length)throw Error('Open an XLSX or CSV file before spreadsheet export.');if(ext==='csv'){parser||=await load('csv');const rows=sheets[activeSheet].rows;
   if(csvClean){const risks=csvClean.csvExportCheck(rows);if(risks.length)throw Error('Export blocked: '+risks.length+' potentially executable spreadsheet formula values (first at row '+risks[0][0]+', column '+risks[0][1]+'). Use XLSX to preserve exact text safely.');}
-  const text=parser.unparse(csvClean?rows:rows.map(r=>r.map(safeCell)));output(new Blob(['\ufeff',text],{type:'text/csv;charset=utf-8'}),safeName(filename,'-edited','csv'));if(csvClean){csvDirty=false;csvEditStatus.textContent='CSV export prepared. No unsaved edits.';}}else{const Excel=await load('excel'),book=new Excel.Workbook();for(const sheet of sheets){const s=book.addWorksheet(sheet.name.slice(0,31));for(const row of sheet.rows)s.addRow(row.map(v=>csvClean?csvClean.escapeForXlsx(v):typeof v==='string'?safeCell(v):v))}output(new Blob([await book.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),safeName(filename,'-edited','xlsx'));if(csvClean){csvDirty=false;csvEditStatus.textContent='XLSX export prepared. No unsaved edits.';}}return}
+  const text=parser.unparse(csvClean?rows:rows.map(r=>r.map(safeCell)));output(new Blob(['\ufeff',text],{type:'text/csv;charset=utf-8'}),safeName(filename,'-edited','csv'));if(csvClean){csvPreparedExportVersion=csvChangeVersion;csvEditStatus.textContent='CSV prepared. Choose Download below and confirm your device saved it.';}}else{const Excel=await load('excel'),book=new Excel.Workbook();for(const sheet of sheets){const s=book.addWorksheet(sheet.name.slice(0,31));for(const row of sheet.rows)s.addRow(row.map(v=>csvClean?csvClean.escapeForXlsx(v):typeof v==='string'?safeCell(v):v))}output(new Blob([await book.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),safeName(filename,'-edited','xlsx'));if(csvClean){csvPreparedExportVersion=csvChangeVersion;csvEditStatus.textContent='XLSX prepared. Choose Download below and confirm your device saved it.';}}return}
 if(sheets.length)throw Error('Choose XLSX or CSV for spreadsheet export.');const clean=sanitizeDocument(await ensureSanitizer(),editor.innerHTML);if(ext==='txt')output(new Blob([editor.innerText??editor.textContent],{type:'text/plain;charset=utf-8'}),safeName(filename,'-edited','txt'));else if(ext==='html')output(new Blob([`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Edited document</title><style>body{font:16px/1.6 system-ui;max-width:800px;margin:40px auto;padding:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:8px}</style></head><body>${clean}</body></html>`],{type:'text/html;charset=utf-8'}),safeName(filename,'-edited','html'));else{status('Preparing Word export…');const d=await load('docx');const holder=el('div');holder.innerHTML=clean;const children=toDocxBlocks(holder,d);const document=new d.Document({sections:[{properties:{},children:children.length?children:[new d.Paragraph('')]}]});output(await d.Packer.toBlob(document),safeName(filename,'-edited','docx'))}}
-const exportActions=el('div',{class:'actions'},[action(csvClean?'Download cleaned file':'Export document',exportFile,true),action('Print / Save PDF',()=>{if(sheets.length)throw Error('Export a workbook as XLSX or CSV.');document.body.classList.add('print-editor');window.print()}),action('Copy text',()=>copy(sheets.length?sheets[activeSheet].rows.map(r=>r.join('\t')).join('\n'):(editor.innerText??editor.textContent))),action('New blank document',()=>{if(csvDirty&&!window.confirm('Discard unsaved CSV edits and start a new blank document?'))return;editor.replaceChildren();editor.hidden=toolbar.hidden=false;sheetControls.hidden=grid.hidden=true;sheets=[];cleanActions.hidden=true;$('#export-format').value='docx';for(const o of $('#export-format').options)o.disabled=['xlsx','csv'].includes(o.value);filename='document.docx';kind='docx';if(csvClean){csvDirty=false;csvEditStatus.textContent='No unsaved changes.';}clearOutputs();csvRefreshControls()})]);root.append(exportActions);notice(root,csvClean?'CSV export preserves values and blocks spreadsheet formula risks; XLSX stores imported values as literal strings. Export before leaving.':'CSV and XLSX exports protect formula-like text by prefixing it with an apostrophe. New spreadsheet formulas are treated as text. Use Export to retain your changes before leaving this page.');setupStatus(root);downloads(root);
+const exportActions=el('div',{class:'actions'},[action(csvClean?'Download cleaned file':'Export document',exportFile,true),action('Print / Save PDF',()=>{if(sheets.length)throw Error('Export a workbook as XLSX or CSV.');document.body.classList.add('print-editor');window.print()}),action('Copy text',()=>copy(sheets.length?sheets[activeSheet].rows.map(r=>r.join('\t')).join('\n'):(editor.innerText??editor.textContent))),action(csvClean?'Clear CSV workspace':'New blank document',()=>{if(csvDirty&&!window.confirm('Discard unsaved CSV edits and clear the workspace?'))return;editor.replaceChildren();editor.hidden=toolbar.hidden=!!csvClean;sheetControls.hidden=grid.hidden=true;sheets=[];cleanActions.hidden=true;$('#export-format').value=csvClean?'csv':'docx';for(const o of $('#export-format').options)o.disabled=['xlsx','csv'].includes(o.value);filename=csvClean?'data.csv':'document.docx';kind=csvClean?'csv':'docx';if(csvClean){csvDirty=false;csvPreparedExportVersion=-1;csvChangeVersion=0;csvPage=0;csvSelectedRow=null;csvHasHeader=false;lastCsvFile=null;csvView={search:'',filterColumn:-1,filterText:'',sortColumn:-1,descending:false};csvHistory.reset();csvResetViewControls();csvReport.hidden=true;csvReport.textContent='';csvPageBar.replaceChildren();csvEditStatus.textContent='';}clearOutputs();csvRefreshControls()})]);root.append(exportActions);notice(root,csvClean?'CSV export preserves values and blocks spreadsheet formula risks; XLSX stores imported values as literal strings. Export before leaving.':'CSV and XLSX exports protect formula-like text by prefixing it with an apostrophe. New spreadsheet formulas are treated as text. Use Export to retain your changes before leaving this page.');setupStatus(root);downloads(root);
 if(csvClean){
   // Progressive disclosure: only CSV tool controls are regrouped; handlers and data stay untouched.
   const section=(label,opened=false)=>{const d=el('details',{class:'csv-control-section'});if(opened)d.open=true;d.append(el('summary',{text:label}));return d;};
   const importOptions=section('Import settings · encoding, delimiter, header');
   csvOptions.replaceWith(importOptions);importOptions.append(csvOptions);csvOptions.hidden=false;
+  const importReport=section('Import details and warnings');
+  csvReport.replaceWith(importReport);importReport.append(csvReport);
   const quick=el('div',{class:'actions'}),advanced=section('Find, filter and sort'),manage=section('Rows, columns and advanced duplicates'),extras=section('More actions');
-  const basic=new Set(['Trim whitespace','Remove blank rows','Remove exact duplicates','Undo','Redo']);
+  const basic=new Set(['Trim whitespace','Remove blank rows','Remove exact duplicates']);
+  const history=new Set(['Undo','Redo']);
   const view=new Set(['Apply search / filter / sort','Clear view']);
   const management=new Set(['Add row','Delete selected row','Add column','Delete specified column','Remove duplicates by columns']);
   for(const b of [...csvCleanActions.querySelectorAll('button')]){
     if(basic.has(b.textContent))quick.append(b);
+    else if(history.has(b.textContent))extras.append(b);
     else if(view.has(b.textContent))advanced.append(b);
     else if(management.has(b.textContent))manage.append(b);
   }
@@ -214,12 +222,22 @@ if(csvClean){
   if(findField)advanced.prepend(findField);
   for(const id of ['csv-delete-column','csv-dedup-columns']){const item=$('#'+id)?.closest('.field');if(item)manage.append(item);}
   csvCleanActions.replaceWith(quick,advanced,manage);
-  for(const button of [...exportActions.querySelectorAll('button')])if(button.textContent!=='Download cleaned file')extras.append(button);
+  for(const button of [...exportActions.querySelectorAll('button')]){
+    if(button.textContent==='Download cleaned file')continue;
+    if(button.textContent==='Print / Save PDF'){button.remove();continue;}
+    extras.append(button);
+  }
   exportActions.after(extras);
   sheetControls.hidden=true;
-  const showControls=()=>{const active=!!sheets.length;quick.hidden=!active;advanced.hidden=!active;manage.hidden=!active;exportFields.hidden=!active;exportActions.hidden=!active;extras.hidden=!active;};
+  const showControls=()=>{const active=!!sheets.length;quick.hidden=!active;advanced.hidden=!active;manage.hidden=!active;exportFields.hidden=!active;exportActions.hidden=!active;extras.hidden=!active;importReport.hidden=!active;csvPageBar.hidden=!active;csvEditStatus.hidden=!active;csvEditHint.hidden=!active;};
   showControls();
   csvRefreshControls=showControls;
+  $('#downloads').addEventListener('click',event=>{
+    const anchor=event.target.closest('a[download]');if(!anchor)return;
+    if(csvPreparedExportVersion!==csvChangeVersion){event.preventDefault();csvEditStatus.textContent='Data changed since export. Generate a fresh file before downloading.';return;}
+    csvDirty=false;
+    csvEditStatus.textContent='Download requested. Confirm the file appears in your downloads before leaving.';
+  });
 }
 }
 function columnName(index){let n=index+1,s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
