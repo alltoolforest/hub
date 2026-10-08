@@ -60,7 +60,11 @@ try{
  assert.equal(await page.locator('#downloads a[download]').count(),1);
  await page.evaluate(()=>window.__ocrMode='normal');
  await page.getByRole('button',{name:'Recognize text'}).click();
- await page.waitForFunction(()=>document.querySelector('#ocr-text')?.value==='SOURCE-FAITHFUL TEST TEXT');
+ await page.waitForFunction(()=>{
+  const text=document.querySelector('#ocr-text')?.value||'';
+  return text.includes('Image 1 — photo.png')&&text.includes('Image 2 — camera.webp')&&
+    text.includes('SOURCE-FAITHFUL TEST TEXT')&&!text.includes('— reviewed');
+ });
  assert.equal(await page.locator('#downloads a[download]').count(),0);
  assert.deepEqual(errors,[]);
  const overflow=await page.evaluate(()=>Math.round(document.querySelector('#workspace').scrollWidth-document.querySelector('#workspace').clientWidth));
