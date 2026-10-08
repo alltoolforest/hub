@@ -1,0 +1,27 @@
+name: Application Document Prep Task 1 checks
+on:
+  pull_request:
+    paths:
+      - 'assets/js/application-prep.js'
+      - 'assets/js/application-prep-checks.js'
+      - 'assets/js/images.js'
+      - 'tests/application-prep-task1.test.mjs'
+      - '.github/workflows/application-prep-task1.yml'
+  workflow_dispatch:
+jobs:
+  task1-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check isolated source and shared image router
+        run: |
+          node --check assets/js/application-prep.js
+          node --check assets/js/application-prep-checks.js
+          node --check assets/js/images.js
+      - name: Run Application Document Prep Task 1 regression
+        run: node --test tests/application-prep-task1.test.mjs
