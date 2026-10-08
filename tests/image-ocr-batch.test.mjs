@@ -113,8 +113,8 @@ test('the isolated OCR module preserves per-image progress and user-corrected te
  assert.match(app,/resultRevision=queueRevision/);
  assert.match(app,/clearOutputs\(\)/);
  assert.match(app,/activeController.abort\(\)/);
- assert.match(app,/action\('Download DOCX'/);
- assert.match(app,/action\('Download PDF'/);
+ assert.match(app,/localAction\('Download DOCX'/);
+ assert.match(app,/localAction\('Download PDF'/);
  assert.match(css,/ocr-batch-item/);
  assert.match(css,/@media\(max-width:560px\)/);
 });
