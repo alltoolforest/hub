@@ -1,0 +1,13 @@
+/* CSV Viewer & Cleaner only: no global/frozen-tool selectors. */
+body[data-tool="csv-cleaner"] .csv-table-shell{max-width:100%;min-width:0;overflow:auto;overscroll-behavior-inline:contain;scrollbar-gutter:stable;max-height:58vh;border:1px solid var(--line,#d2d8d5);border-radius:10px}
+body[data-tool="csv-cleaner"] .csv-table-shell table{min-width:max-content;border-collapse:separate;border-spacing:0}
+body[data-tool="csv-cleaner"] .csv-table-shell thead th{position:sticky;top:0;z-index:2;background:var(--panel,#fff)}
+body[data-tool="csv-cleaner"] .csv-table-shell tr>th:first-child{position:sticky;left:0;z-index:1;background:var(--panel,#fff)}
+body[data-tool="csv-cleaner"] .csv-table-shell thead th:first-child{z-index:3}
+body[data-tool="csv-cleaner"] .csv-table-shell td{min-width:110px;max-width:280px;white-space:pre-wrap;overflow-wrap:anywhere}
+body[data-tool="csv-cleaner"] .csv-table-shell td:focus-visible{outline:3px solid #247a61;outline-offset:-3px}
+body[data-tool="csv-cleaner"] .csv-navigation{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-block:12px}
+body[data-tool="csv-cleaner"] .csv-navigation button{min-height:44px}
+body[data-tool="csv-cleaner"] .csv-edit-hint{font-size:.9rem;margin-block:8px}
+body[data-tool="csv-cleaner"] .csv-edit-status{min-height:1.5em}
+@media(max-width:700px){body[data-tool="csv-cleaner"] .csv-table-shell{max-height:50vh;width:100%}body[data-tool="csv-cleaner"] .csv-table-shell td{min-width:132px}body[data-tool="csv-cleaner"] .csv-navigation button{flex:1 1 120px}body[data-tool="csv-cleaner"] .csv-edit-hint{font-size:.875rem}}
