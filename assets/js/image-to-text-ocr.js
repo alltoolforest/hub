@@ -159,7 +159,8 @@ export async function mount(root){
     }catch(e){decoded?.close?.();throw e;}
    }
    items.push(...staged);
-   if(activeId===null)activeId=items[0]?.id??null;
+   // Show the newly added source immediately so rotation controls follow the upload.
+   activeId=staged[0]?.id??activeId;
    dirty('New images added.');
    renderQueue();showSelected();
    status(items.length+' image(s) ready. Set the order and rotation, then recognize.');
