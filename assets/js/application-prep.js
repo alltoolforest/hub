@@ -204,7 +204,7 @@ export async function mount(root){
   const a=drag.start,b=drag.end;drag=null;
   if(Math.abs(a.x-b.x)<.005||Math.abs(a.y-b.y)<.005){status('Drag a larger crop area.',true);return;}
   const selection={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
-  applyCrop(selection);
+  try{applyCrop(selection);}catch(error){status(error.message||'Crop selection could not be applied.',true);}
  });
  preview.addEventListener('pointercancel',()=>{drag=null;showSource()});
  root.append(el('div',{class:'actions'},[
