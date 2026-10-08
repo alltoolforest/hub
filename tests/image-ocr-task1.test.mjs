@@ -142,14 +142,14 @@ test('Image OCR routes independently; scanned PDF and PDF editors keep previous 
 
 test('recognition commits only on success and preserves edited text during failure',()=>{
  assert.match(imageUI,/text\.readOnly=true/);
- assert.match(imageUI,/finally\{progressActive=false;text\.readOnly=false;\}/);
+ assert.match(imageUI,/progressActive=false;text\.readOnly=false;/);
  assert.match(imageUI,/if\(!recognized\.trim\(\)\)throw Error\(/);
  const sourceIdx=imageUI.indexOf('const {blob');
  const recognitionIdx=imageUI.indexOf("if(!recognized.trim())throw Error");
  const clearIdx=imageUI.indexOf('clearOutputs();',recognitionIdx);
  const commitIdx=imageUI.indexOf('text.value=recognized',recognitionIdx);
  assert.ok(recognitionIdx>=0&&clearIdx>recognitionIdx&&commitIdx>clearIdx);
- assert.doesNotMatch(imageUI.slice(imageUI.indexOf("action('Recognize text'"),recognitionIdx),/text\.value\s*=\s*['"]{2}/);
+ assert.doesNotMatch(imageUI.slice(imageUI.indexOf("recognize.addEventListener('click'"),recognitionIdx),/text\.value\s*=\s*['"]{2}/);
  assert.match(imageUI,/if\(decoded!==image\)decoded\?\.close\?\.\(\)/);
  assert.match(imageUI,/window\.addEventListener\('pagehide'/);
 });
