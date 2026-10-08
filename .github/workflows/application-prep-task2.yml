@@ -1,0 +1,28 @@
+name: Application Document Prep Task 2 checks
+on:
+  pull_request:
+    paths:
+      - 'assets/js/application-prep.js'
+      - 'assets/js/application-prep-crop.js'
+      - 'assets/css/application-prep.css'
+      - 'documents/application-document-prep/index.html'
+      - 'tests/application-prep-task2.test.mjs'
+      - '.github/workflows/application-prep-task2.yml'
+  workflow_dispatch:
+jobs:
+  task2-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check Application Prep modules
+        run: |
+          node --check assets/js/application-prep.js
+          node --check assets/js/application-prep-crop.js
+          node --check assets/js/application-prep-checks.js
+      - name: Task 1 plus Task 2 regression
+        run: node --test tests/application-prep-task1.test.mjs tests/application-prep-task2.test.mjs
