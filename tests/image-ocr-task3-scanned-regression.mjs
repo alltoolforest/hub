@@ -10,6 +10,10 @@ const browser=await {chromium,firefox,webkit}[type].launch({headless:true});
 const page=await browser.newPage({viewport:{width:375,height:812}});
 const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
+const failedRequests=[];
+page.on('requestfailed',r=>failedRequests.push(r.url()+': '+r.failure()?.errorText));
+const browserWarnings=[];
+page.on('console',m=>{if(m.type()==='error')browserWarnings.push(m.text());});
 try{
  const mock="window.__scannedRecognitions=0;window.__scannedTerminations=0;"+
  "window.Tesseract={createWorker:async()=>({"+
@@ -25,7 +29,15 @@ try{
  await page.waitForFunction(()=>document.querySelector('.selected-files')?.textContent?.includes('scanned-test.pdf'));
  await page.locator('#ranges').fill('1-2');
  await page.getByRole('button',{name:'Recognize text'}).click();
- await page.waitForFunction(()=>document.querySelector('#ocr-text')?.value?.includes('SCANNED DOCUMENT TEXT 2'),null,{timeout:90000});
+ try{
+  await page.waitForFunction(()=>document.querySelector('#ocr-text')?.value?.includes('SCANNED DOCUMENT TEXT 2'),null,{timeout:18000});
+ }catch(error){
+  const details=await page.evaluate(()=>({status:document.querySelector('#status')?.textContent,
+    text:document.querySelector('#ocr-text')?.value,
+    activeButtons:[...document.querySelectorAll('#workspace button')].map(b=>({text:b.textContent,disabled:b.disabled})),
+    selected:document.querySelector('.selected-files')?.textContent}));
+  throw Error(type+' scanned PDF OCR did not produce page 2: '+JSON.stringify({details,errors,browserWarnings,failedRequests,cause:error.message}));
+ }
  const actual=await page.locator('#ocr-text').inputValue();
  assert.match(actual,/Page 1\s+SCANNED DOCUMENT TEXT 1/);
  assert.match(actual,/Page 2\s+SCANNED DOCUMENT TEXT 2/);
