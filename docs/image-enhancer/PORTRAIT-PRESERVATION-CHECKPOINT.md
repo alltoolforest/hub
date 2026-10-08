@@ -54,3 +54,19 @@ latency, and phone Auto Enhance parity remain unresolved. No new real-photo
 before/after quality claim is made from synthetic tests. Do not freeze this tool.
 
 Deployment requires completion of candidate CI review and explicit user approval.
+
+## Completed pre-deployment automation
+Candidate e40300f5893d84797321ce6f0fde2a11f5e97f91:
+- Full audit 37727636455 PASS: Chrome job 113149325850 and Firefox/WebKit
+  job 113149326068. 43 numerical/lifecycle/reference tests passed in total.
+- HEIC audit 37727636468 PASS for Chrome and Firefox/WebKit.
+- Real-model deblur, face detector, artifact protection, independent-mode failure
+  handling, quality benchmark, export/inspector/planner, mobile emulation and
+  memory/cancellation resilience passed. No weakened quality acceptance threshold.
+- Desktop responsiveness maximum gaps: Enhance 51ms; Upscale 69ms.
+- 12MP synthetic portrait strip arithmetic: 2659ms, host RSS 186MiB. Excludes
+  decode, detector and output encoding; not a physical-device measurement.
+
+Automated deployment gates pass. Real portrait visual acceptance, identity review,
+phone-editor comparison and physical-device verification remain pending. This
+candidate is available for review, not a claim of full launch quality or freeze.
