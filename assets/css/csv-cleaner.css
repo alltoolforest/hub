@@ -11,3 +11,10 @@ body[data-tool="csv-cleaner"] .csv-navigation button{min-height:44px}
 body[data-tool="csv-cleaner"] .csv-edit-hint{font-size:.9rem;margin-block:8px}
 body[data-tool="csv-cleaner"] .csv-edit-status{min-height:1.5em}
 @media(max-width:700px){body[data-tool="csv-cleaner"] .csv-table-shell{max-height:50vh;width:100%}body[data-tool="csv-cleaner"] .csv-table-shell td{min-width:132px}body[data-tool="csv-cleaner"] .csv-navigation button{flex:1 1 120px}body[data-tool="csv-cleaner"] .csv-edit-hint{font-size:.875rem}}
+
+/* Progressive disclosure of advanced CSV actions. */
+body[data-tool="csv-cleaner"] .csv-control-section{margin-block:10px;border:1px solid var(--line,#d2d8d5);border-radius:10px;padding:0 12px}
+body[data-tool="csv-cleaner"] .csv-control-section>summary{cursor:pointer;padding:13px 4px;font-weight:600;min-height:44px;list-style-position:inside}
+body[data-tool="csv-cleaner"] .csv-control-section[open]{padding-bottom:12px}
+body[data-tool="csv-cleaner"] .csv-control-section>summary:focus-visible{outline:3px solid #247a61;outline-offset:2px}
+body[data-tool="csv-cleaner"] .csv-control-section>.fields,body[data-tool="csv-cleaner"] .csv-control-section>.actions{margin-top:8px}
