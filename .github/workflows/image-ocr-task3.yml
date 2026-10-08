@@ -1,0 +1,79 @@
+name: Image OCR Task 3 pre-deployment audit
+on:
+  pull_request:
+    paths:
+      - 'assets/js/image-ocr*.js'
+      - 'assets/js/image-to-text-ocr.js'
+      - 'assets/js/pdf.js'
+      - 'assets/css/image-to-text-ocr.css'
+      - 'documents/image-to-text/index.html'
+      - 'tests/image-ocr-task*.mjs'
+      - '.github/workflows/image-ocr-task3.yml'
+  workflow_dispatch:
+jobs:
+  browser-regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and original Task 1/2 regressions
+        run: |
+          node --check assets/js/image-to-text-ocr.js
+          node --check assets/js/image-ocr-reliability.js
+          node --check assets/js/image-ocr-prep.js
+          node --check assets/js/pdf.js
+          node --test tests/image-ocr-task1.test.mjs tests/image-ocr-task2.test.mjs
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Diagnostic only — pre-existing scanned-PDF compatibility (no scoped source changes)
+        continue-on-error: true
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/ocr-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/image-to-text/ >/dev/null && break || sleep 1; done
+          node tests/image-ocr-task3-scanned-regression.mjs
+      - name: Recheck image-to-text browser failure and cancellation
+        if: matrix.browser == 'chromium'
+        run: |
+          node tests/image-ocr-task1-browser.mjs
+          node tests/image-ocr-task2-browser.mjs
+      - name: Check OCR workspace WCAG and keyboard navigation
+        if: matrix.browser == 'chromium'
+        run: node tests/image-ocr-task3-accessibility.mjs
+  real-ocr-accuracy:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install ${{ matrix.browser }} browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Exercise real Tesseract engine and language data
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/ocr-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/image-to-text/ >/dev/null && break || sleep 1; done
+          node tests/image-ocr-task3-real-engine.mjs

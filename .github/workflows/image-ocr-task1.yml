@@ -1,0 +1,37 @@
+name: Image to Text OCR Task 1 reliability
+on:
+  pull_request:
+    paths:
+      - 'assets/js/image-to-text-ocr.js'
+      - 'assets/js/image-ocr-reliability.js'
+      - 'assets/js/pdf.js'
+      - 'tests/image-ocr-task1.test.mjs'
+      - 'tests/image-ocr-task1-browser.mjs'
+      - '.github/workflows/image-ocr-task1.yml'
+  workflow_dispatch:
+jobs:
+  image-ocr-reliability:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check OCR module and PDF router syntax
+        run: |
+          node --check assets/js/image-to-text-ocr.js
+          node --check assets/js/image-ocr-reliability.js
+          node --check assets/js/pdf.js
+      - name: Run Task 1 regressions
+        run: node --test tests/image-ocr-task1.test.mjs
+      - name: Install Chromium for a browser integration smoke test
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run browser transactional recovery checks
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/image-ocr-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/image-to-text/ >/dev/null && break || sleep 1; done
+          node tests/image-ocr-task1-browser.mjs
