@@ -83,7 +83,7 @@ export async function validatePhoneImage(file,extension,isMobile){
 }
 export function ocrProgressMilestone(progress,statusText,previous=-1){
  const percentage=Number.isFinite(progress)?Math.max(0,Math.min(100,Math.round(progress*100))):null;
- const milestone=percentage===null?null:Math.floor(percentage/20)*20;
+ const milestone=percentage===null?null:Math.floor(Math.max(0,Math.min(1,progress))*5)*20;
  return {
   value:percentage,
   announce:milestone!==null&&milestone>previous,
