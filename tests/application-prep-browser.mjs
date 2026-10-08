@@ -12,7 +12,14 @@ if(!browserType)throw Error('Unsupported browser: '+browserName);
 const browser=await browserType.launch({headless:true});
 const page=await browser.newPage({acceptDownloads:true,viewport:{width:375,height:812}});
 const errors=[];
+const outbound=[];
 page.on('pageerror',error=>errors.push(error.message));
+page.on('request',request=>{
+ const dest=request.url();
+ if(!dest.startsWith('http://127.0.0.1:8765/') &&
+    !dest.startsWith('blob:') && !dest.startsWith('data:') &&
+    !dest.startsWith('about:')) outbound.push(dest);
+});
 const base=process.env.SITE_URL||'http://127.0.0.1:8765';
 const ready=(selector,text)=>page.waitForFunction(([s,v])=>
  document.querySelector(s)?.textContent?.includes(v),[selector,text],{timeout:20000});
@@ -85,12 +92,26 @@ try{
  const pageSize=doc.getPages()[0].getSize();
  assert.ok(Math.abs(pageSize.width-595.28)<0.3);
  assert.ok(Math.abs(pageSize.height-841.89)<0.3);
+ // On impossible KB requests, keep the last successfully generated PDF.
+ await page.locator('#target').fill('0.001');
+ await page.getByRole('button',{name:'Create supporting-image PDF'}).click();
+ await ready('#status','exceeding the requested');
+ assert.equal(await page.locator('#downloads a[download]').count(),1);
+ assert.equal(await page.locator('#downloads a[download]').getAttribute('download'),pdf.suggestedFilename());
+ await page.locator('#target').fill('0');
  // At mobile viewport, tool content must remain within the workspace.
  const overflow=await page.evaluate(()=>{
   const root=document.querySelector('#workspace');
   return Math.round(root.scrollWidth-root.clientWidth);
  });
  assert.ok(overflow<=2,'Workspace overflows narrow viewport by '+overflow+'px');
+ await page.setViewportSize({width:1280,height:800});
+ const desktopOverflow=await page.evaluate(()=>{
+   const root=document.querySelector('#workspace');
+   return Math.round(root.scrollWidth-root.clientWidth);
+ });
+ assert.ok(desktopOverflow<=2,'Workspace overflows desktop by '+desktopOverflow+'px');
+ assert.deepEqual(outbound,[],'Document processing sent requests to remote URLs');
  assert.deepEqual(errors,[],'Unexpected browser errors');
  console.log('BROWSER_SMOKE_PASS: '+browserName+' upload, keyboard crop, PNG pixel check, failed-import recovery, PDF A4 roundtrip, mobile viewport');
 }finally{await browser.close();}
