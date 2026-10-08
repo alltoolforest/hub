@@ -83,6 +83,10 @@ try{
  assert.equal(await page.locator('.download-row').count(),1);
  await page.locator('.ocr-batch-item').first().getByRole('button',{name:'Rotate right'}).click();
  await page.waitForFunction(()=>document.querySelector('.ocr-source canvas')?.width===80);
+ // The rotation changed OCR reading order; refresh the OCR result before exporting.
+ await page.evaluate(()=>window.__mode='normal');
+ await page.getByRole('button',{name:'Recognize text'}).click();
+ await page.waitForFunction(()=>window.__run>=7&&document.querySelector('#status')?.textContent?.startsWith('Text recognized from'));
  // Intl characters that cannot be encoded by WinAnsi produce a valid visual PDF.
  const intl='தமிழ் العربية 日本語 हिन्दी — International OCR';
  await page.locator('#ocr-text').fill(intl);
