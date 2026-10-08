@@ -34,7 +34,8 @@ test('export is not marked downloaded until link is activated',()=>{
  const exportSource=source.slice(preparedStart,handlerStart);
  assert.doesNotMatch(exportSource,/CSV export prepared\. No unsaved edits/);
  assert.match(source,/csvPreparedExportVersion=csvChangeVersion/);
- assert.match(source,/csvDirty=false;\s*csvEditStatus\.textContent='Download requested/);
+ assert.doesNotMatch(source.slice(handlerStart),/csvDirty=false;\s*csvEditStatus\.textContent='Download requested/);
+ assert.match(source,/csvEditStatus\.textContent='Download requested\. Confirm the file was saved; unsaved-change protection remains active\.'/);
  assert.match(source,/clearOutputs\(\);csvPreparedExportVersion=-1/);
 });
 
