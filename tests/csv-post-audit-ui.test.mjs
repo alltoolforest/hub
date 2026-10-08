@@ -5,7 +5,8 @@ const source=readFileSync(new URL('../assets/js/editor.js',import.meta.url),'utf
 const css=readFileSync(new URL('../assets/css/csv-cleaner.css',import.meta.url),'utf8');
 
 test('re-import resets both view model and visible filter/sort fields',()=>{
- assert.match(source,/csvResetViewControls\(\);\s*csvPage=0/);
+ assert.match(source,/csvHistory\.reset\(\);csvDirty=false;[\s\S]*?csvPage=0;csvView=/);
+ assert.match(source,/csvSelectedRow=null;csvResetViewControls\(\)/);
  for(const fragment of ["['csv-search','']","['csv-filter-text','']","['csv-filter-column','0']","['csv-sort-column','0']","['csv-sort-direction','asc']"])
    assert.ok(source.includes(fragment),fragment);
 });
