@@ -1,0 +1,182 @@
+[
+  {
+    "case": "baby",
+    "quality": 30,
+    "sourceMAE": 4.257017771402995,
+    "outputMAE": 3.987201690673828,
+    "sourceMSE": 35.46090825398763,
+    "outputMSE": 31.347273508707683,
+    "seconds": 2.8004075020000982
+  },
+  {
+    "case": "baby",
+    "quality": 50,
+    "sourceMAE": 3.4868812561035156,
+    "outputMAE": 3.3004964192708335,
+    "sourceMSE": 24.284033457438152,
+    "outputMSE": 21.786959330240887,
+    "seconds": 2.8612164690000554
+  },
+  {
+    "case": "baby",
+    "quality": 70,
+    "sourceMAE": 2.8591524759928384,
+    "outputMAE": 2.7103602091471353,
+    "sourceMSE": 16.753597259521484,
+    "outputMSE": 15.098864237467447,
+    "seconds": 2.576213245999952
+  },
+  {
+    "case": "baby",
+    "quality": 100,
+    "sourceMAE": 0.0,
+    "outputMAE": 0.5340665181477865,
+    "sourceMSE": 0.0,
+    "outputMSE": 0.8393109639485677,
+    "seconds": 2.0152632339998036
+  },
+  {
+    "case": "bird",
+    "quality": 30,
+    "sourceMAE": 5.6722085583847734,
+    "outputMAE": 5.25684397505144,
+    "sourceMSE": 66.61142055684157,
+    "outputMSE": 59.04535188400206,
+    "seconds": 0.8680126050001036
+  },
+  {
+    "case": "bird",
+    "quality": 50,
+    "sourceMAE": 4.592371559927984,
+    "outputMAE": 4.297007619598766,
+    "sourceMSE": 47.121507683899175,
+    "outputMSE": 42.57850678369341,
+    "seconds": 0.7843334149999919
+  },
+  {
+    "case": "bird",
+    "quality": 70,
+    "sourceMAE": 3.890154803240741,
+    "outputMAE": 3.681688850308642,
+    "sourceMSE": 33.57679478523662,
+    "outputMSE": 30.84917534722222,
+    "seconds": 0.7908111589999862
+  },
+  {
+    "case": "bird",
+    "quality": 100,
+    "sourceMAE": 0.0,
+    "outputMAE": 0.486645608281893,
+    "sourceMSE": 0.0,
+    "outputMSE": 0.6782849472736625,
+    "seconds": 0.7320323259998531
+  },
+  {
+    "case": "butterfly",
+    "quality": 30,
+    "sourceMAE": 7.8966064453125,
+    "outputMAE": 6.0205230712890625,
+    "sourceMSE": 118.78905232747395,
+    "outputMSE": 72.53128560384114,
+    "seconds": 0.7866155589999835
+  },
+  {
+    "case": "butterfly",
+    "quality": 50,
+    "sourceMAE": 6.52117919921875,
+    "outputMAE": 5.032572428385417,
+    "sourceMSE": 80.76063028971355,
+    "outputMSE": 50.325236002604164,
+    "seconds": 0.8349163430000317
+  },
+  {
+    "case": "butterfly",
+    "quality": 70,
+    "sourceMAE": 5.3022410074869795,
+    "outputMAE": 4.217671712239583,
+    "sourceMSE": 53.10801696777344,
+    "outputMSE": 35.151774088541664,
+    "seconds": 0.7318103819998214
+  },
+  {
+    "case": "butterfly",
+    "quality": 100,
+    "sourceMAE": 0.0,
+    "outputMAE": 0.8764241536458334,
+    "sourceMSE": 0.0,
+    "outputMSE": 1.6866963704427083,
+    "seconds": 0.5945721360001244
+  },
+  {
+    "case": "head",
+    "quality": 30,
+    "sourceMAE": 6.00703656462585,
+    "outputMAE": 5.790335884353741,
+    "sourceMSE": 65.69701105442176,
+    "outputMSE": 61.9921556122449,
+    "seconds": 0.7618714149998596
+  },
+  {
+    "case": "head",
+    "quality": 50,
+    "sourceMAE": 5.3815051020408164,
+    "outputMAE": 5.1903954081632655,
+    "sourceMSE": 54.267202380952384,
+    "outputMSE": 51.95593112244898,
+    "seconds": 0.807133537999789
+  },
+  {
+    "case": "head",
+    "quality": 70,
+    "sourceMAE": 4.937886904761905,
+    "outputMAE": 4.791067176870748,
+    "sourceMSE": 46.38063350340136,
+    "outputMSE": 44.78139880952381,
+    "seconds": 0.7275514539999222
+  },
+  {
+    "case": "head",
+    "quality": 100,
+    "sourceMAE": 0.0,
+    "outputMAE": 2.878673469387755,
+    "sourceMSE": 0.0,
+    "outputMSE": 16.0578231292517,
+    "seconds": 0.6898785619998762
+  },
+  {
+    "case": "woman",
+    "quality": 30,
+    "sourceMAE": 4.574323405412756,
+    "outputMAE": 3.9974500203998367,
+    "sourceMSE": 43.416190670474634,
+    "outputMSE": 32.37454950360397,
+    "seconds": 0.6611206720001519
+  },
+  {
+    "case": "woman",
+    "quality": 50,
+    "sourceMAE": 3.867626308989528,
+    "outputMAE": 3.341425268597851,
+    "sourceMSE": 32.20607660138719,
+    "outputMSE": 23.16171970624235,
+    "seconds": 0.7365323259998604
+  },
+  {
+    "case": "woman",
+    "quality": 70,
+    "sourceMAE": 1.3115990072079424,
+    "outputMAE": 1.780638004895961,
+    "sourceMSE": 3.5778763769889843,
+    "outputMSE": 7.138306643546851,
+    "seconds": 0.9776145700000143
+  },
+  {
+    "case": "woman",
+    "quality": 100,
+    "sourceMAE": 0.0,
+    "outputMAE": 1.3304476064191486,
+    "sourceMSE": 0.0,
+    "outputMSE": 4.918608901128791,
+    "seconds": 1.0131887459999689
+  }
+]

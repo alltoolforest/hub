@@ -66,11 +66,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Shared images.js includes the already-merged 4c1a7d75 application-prep routing; unchanged by this PR.
       - name: Protect frozen files
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git hash-object assets/js/images.js)" = "07caaa63a6c3fa208b5f476e1748d8dfab681f7b"
+          test "$(git hash-object assets/js/images.js)" = "66083abc7fc8cd6ef2a42e90b85d40ce3c923759"
           test "$(git hash-object assets/js/batch-image-processor.js)" = "56886c29575ceca209aa057bf0f6078c212a837d"
           test "$(git hash-object assets/js/background-remover.js)" = "041046003d0e6cbf0985c248fea57465e57fee8b"
           test "$(git hash-object assets/js/image-studio.js)" = "cb569aa47ebc18c0b4649a99a270c999678922f8"
