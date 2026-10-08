@@ -54,7 +54,7 @@ async function recognize(){
  await page.getByRole('button',{name:'Recognize text'}).click();
  await page.waitForFunction(()=>{
   const msg=document.querySelector('#status')?.textContent||'';
-  return msg.startsWith('Text recognized.')||msg.includes('could not load')||msg.includes('timed out')||msg.includes('failed');
+  return msg.startsWith('Text recognized')||msg.includes('could not load')||msg.includes('timed out')||msg.includes('failed');
  },{timeout:120000}).catch(()=>{});
  // Explicit timeout because language downloads and model initialization can be slow.
  const msg=await page.locator('#status').textContent();
