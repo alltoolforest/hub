@@ -29,6 +29,10 @@ function editDistance(a,b){
 }
 function normalize(text){return text.toUpperCase().replace(/[^A-Z0-9.]+/g,' ').trim().replace(/\s+/g,' ');}
 async function upload(rotateImage=false){
+ // Each accuracy case tests one source at a time in the multi-image UI.
+ // Remove the prior case instead of accidentally recognizing both images.
+ if(rotateImage&&await page.locator('.ocr-batch-item').count())
+  await page.locator('.ocr-batch-item').first().getByRole('button',{name:'Remove'}).click();
  const contents=await page.evaluate(({rotateImage})=>{
   const base=document.createElement('canvas');
   base.width=1600;base.height=480;
@@ -50,7 +54,7 @@ async function recognize(){
  await page.getByRole('button',{name:'Recognize text'}).click();
  await page.waitForFunction(()=>{
   const msg=document.querySelector('#status')?.textContent||'';
-  return msg.startsWith('Text recognized.')||msg.includes('could not load')||msg.includes('timed out')||msg.includes('failed');
+  return msg.startsWith('Text recognized')||msg.includes('could not load')||msg.includes('timed out')||msg.includes('failed');
  },{timeout:120000}).catch(()=>{});
  // Explicit timeout because language downloads and model initialization can be slow.
  const msg=await page.locator('#status').textContent();

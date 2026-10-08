@@ -135,7 +135,7 @@ test('source preview, progress, retry and cancellation controls are wired within
  assert.match(app,/cancel\.addEventListener\('click'/);
  assert.match(app,/activeController\.abort\(\)/);
  assert.match(app,/text\.readOnly=true/);
- assert.match(app,/clearOutputs\(\);\s*text\.value=recognized/);
+ assert.match(app,/clearOutputs\(\);\s*text\.value=combined/);
  assert.match(app,/role:'status','aria-live':'polite'/);
  assert.match(app,/\.webp,.heic,.heif/);
 });

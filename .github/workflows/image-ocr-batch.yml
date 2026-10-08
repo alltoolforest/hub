@@ -1,0 +1,66 @@
+name: Image OCR multi-image and DOCX PDF verification
+on:
+  pull_request:
+    paths:
+      - 'assets/js/image-to-text-ocr.js'
+      - 'assets/js/image-ocr-batch.js'
+      - 'assets/js/image-ocr-export.js'
+      - 'assets/css/image-to-text-ocr.css'
+      - 'tests/image-ocr-*.mjs'
+      - '.github/workflows/image-ocr-batch.yml'
+  workflow_dispatch:
+jobs:
+  multi-image-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax and pure logic regression
+        run: |
+          node --check assets/js/image-to-text-ocr.js
+          node --check assets/js/image-ocr-batch.js
+          node --check assets/js/image-ocr-export.js
+          node --test tests/image-ocr-batch.test.mjs tests/image-ocr-task1.test.mjs tests/image-ocr-task2.test.mjs
+      - name: Install Chromium and DOCX inspection dependency
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 fflate@0.8.2
+          npx playwright install --with-deps chromium
+      - name: Test sequential multi-image OCR, DOCX and PDF exports
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/image-ocr-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/image-to-text/ >/dev/null && break || sleep 1; done
+          node tests/image-ocr-batch-browser.mjs
+      - name: Recheck single-image failure and cancellation behavior
+        run: |
+          node tests/image-ocr-task1-browser.mjs
+          node tests/image-ocr-task2-browser.mjs
+  real-english-ocr:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Real OCR model accuracy and privacy regression
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/image-ocr-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/image-to-text/ >/dev/null && break || sleep 1; done
+          node tests/image-ocr-task3-real-engine.mjs

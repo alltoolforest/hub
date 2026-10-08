@@ -143,13 +143,14 @@ test('Image OCR routes independently; scanned PDF and PDF editors keep previous 
 test('recognition commits only on success and preserves edited text during failure',()=>{
  assert.match(imageUI,/text\.readOnly=true/);
  assert.match(imageUI,/progressActive=false;text\.readOnly=false;/);
- assert.match(imageUI,/if\(!recognized\.trim\(\)\)throw Error\(/);
- const sourceIdx=imageUI.indexOf('const {blob');
- const recognitionIdx=imageUI.indexOf("if(!recognized.trim())throw Error");
+ assert.match(imageUI,/if\(!recognized\.some\(i=>i\.text/);
+ const recognitionIdx=imageUI.indexOf("if(!recognized.some(i=>i.text");
  const clearIdx=imageUI.indexOf('clearOutputs();',recognitionIdx);
- const commitIdx=imageUI.indexOf('text.value=recognized',recognitionIdx);
+ const commitIdx=imageUI.indexOf('text.value=combined',recognitionIdx);
  assert.ok(recognitionIdx>=0&&clearIdx>recognitionIdx&&commitIdx>clearIdx);
+ assert.match(imageUI,/const combined=batchText\(recognized\)/);
+ assert.match(imageUI,/if\(signal\.aborted\|\|queueRevision!==startedRevision\)throw abortError\(\)/);
  assert.doesNotMatch(imageUI.slice(imageUI.indexOf("recognize.addEventListener('click'"),recognitionIdx),/text\.value\s*=\s*['"]{2}/);
- assert.match(imageUI,/if\(decoded!==image\)decoded\?\.close\?\.\(\)/);
+ assert.match(imageUI,/decoded\?\.close\?\.\(\)/);
  assert.match(imageUI,/window\.addEventListener\('pagehide'/);
 });
