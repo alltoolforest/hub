@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {cloneRows,transformRows,csvExportCheck,escapeForXlsx,CsvHistory} from '../assets/js/csv-cleaning.js';
+test('round-trip source untouched by no-op cleanup',()=>{const rows=[['a','b'],['  value  ','-125.50']];const result=transformRows(rows,'blank',{header:true});assert.deepEqual(result.rows,rows);assert.equal(result.removed,0);});
+test('whitespace trim explicit and header safe',()=>{const rows=[['  Header  '],[' a ']];const out=transformRows(rows,'trim',{header:true});assert.equal(out.changed,1);assert.deepEqual(out.rows,[['  Header  '],['a']]);assert.equal(rows[1][0],' a ');});
+test('blank row only removes rows without real content',()=>{const out=transformRows([['name'],[''],['  '],['0']],'blank',{header:true});assert.equal(out.removed,2);assert.deepEqual(out.rows,[['name'],['0']]);});
+test('exact duplicate cleanup leaves unique rows and header intact',()=>{const out=transformRows([['name'],['Alice'],['Alice'],['alice']],'duplicates',{header:true});assert.equal(out.removed,1);assert.deepEqual(out.rows,[['name'],['Alice'],['alice']]);});
+test('CSV export does not alter signed numbers and phone text',()=>{assert.deepEqual(csvExportCheck([['-125.50','+91 9876543210','000123']]),[]);});
+test('spreadsheet formula hazards reported with coordinates',()=>{assert.deepEqual(csvExportCheck([['ok','=1+1'],['@SUM(A1:A2)','-cmd']]),[[1,2],[2,1],[2,2]]);});
+test('XLSX literals preserved',()=>{assert.equal(escapeForXlsx('=1+1'),'=1+1');assert.equal(escapeForXlsx('-125.50'),'-125.50');});
+test('undo/redo restores exact prior state',()=>{const history=new CsvHistory();const a=[[' a ']],b=[['a']];history.record(a);assert.deepEqual(history.undo(b),a);assert.deepEqual(history.redo(a),b);});
+test('new edits clear redo',()=>{const history=new CsvHistory();history.record([['first']]);history.undo([['second']]);history.record([['third']]);assert.equal(history.redo([['fourth']]),null);});
