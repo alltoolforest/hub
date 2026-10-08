@@ -41,7 +41,7 @@ export function inspectCsv(parser,text,{delimiter='auto',header=false,encoding='
   const quoteError=errors.find(e=>e.type==='Quotes');
   if(quoteError) throw Error('Malformed quoted CSV field at row '+(Number.isInteger(quoteError.row)?quoteError.row+1:'unknown')+'. Check the original file.');
   const rows=result.data||[];
-  const width=rows.length?Math.max(...rows.map(r=>r.length)):0;
+  const width=rows.reduce((largest,r)=>Math.max(largest,r.length),0);
   const counts=new Map();
   for(const row of rows) counts.set(row.length,(counts.get(row.length)||0)+1);
   let expected=rows.length?rows[0].length:0;
