@@ -88,3 +88,30 @@ test('JPEG boundary cleanup reduces weak block error without altering strong edg
  for(let y=0;y<h;y+=33){const top=Math.max(0,y-PHOTO_HALO),n=Math.min(33,h-y),bottom=Math.min(h,y+n+PHOTO_HALO);assembled.set(enhancePhotoStrip(blocks.slice(top*w*4,bottom*w*4),w,bottom-top,y-top,n,p,{offsetY:top}),y*w*4);}
  assert.deepEqual(assembled,out,'block correction must preserve global phase across strips');
 });
+
+
+test('portrait protection preserves fine luminance texture while reducing chroma noise', async()=>{
+ const { portraitProtectionAt } = await import('../assets/js/image-enhancer-portrait.js');
+ const w=96,h=96,faces=[{x:20,y:20,width:55,height:55}];
+ assert.equal(portraitProtectionAt(20,20,faces),1);
+ assert.equal(portraitProtectionAt(75,75,faces),1);
+ assert.equal(portraitProtectionAt(0,0,faces),0);
+ assert.ok(portraitProtectionAt(16,40,faces)>portraitProtectionAt(12,40,faces));
+ assert.equal(portraitProtectionAt(40,40,[{x:0,y:0,width:NaN,height:5}]),0);
+ const data=rgba(w,h,(x,y)=>{const v=125+((x+y)%2?4:-4),n=(x*17+y*11)%9-4;return[v+n,v,v-n,255];});
+ const p=plan(data,w,h,{content:'portrait',sharpness:'off'});
+ p.noise=12;p.local=0;p.wb=[1,1,1];p.tone=Float32Array.from({length:256},(_,i)=>i);
+ const guarded=enhancePhotoStrip(data,w,h,0,h,p,{faces});
+ const normal=enhancePhotoStrip(data,w,h,0,h,p);
+ let guardedError=0,normalError=0,originalChroma=0,cleanChroma=0;
+ for(let y=24;y<70;y++)for(let x=24;x<70;x++){
+  const i=(y*w+x)*4,Y=d=>d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+  guardedError+=Math.abs(Y(guarded)-Y(data));normalError+=Math.abs(Y(normal)-Y(data));
+  originalChroma+=Math.abs(data[i]-data[i+2]);cleanChroma+=Math.abs(guarded[i]-guarded[i+2]);
+ }
+ assert.ok(guardedError<normalError*.6,`${guardedError} vs ${normalError}`);
+ assert.ok(cleanChroma<originalChroma);
+ const strips=new Uint8ClampedArray(data.length);
+ for(let y=0;y<h;y+=27){const top=Math.max(0,y-PHOTO_HALO),n=Math.min(27,h-y),bottom=Math.min(h,y+n+PHOTO_HALO);strips.set(enhancePhotoStrip(data.slice(top*w*4,bottom*w*4),w,bottom-top,y-top,n,p,{faces,offsetY:top}),y*w*4);}
+ assert.deepEqual(strips,guarded,'portrait boundaries must not create strip seams');
+});

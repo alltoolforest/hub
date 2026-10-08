@@ -1,3 +1,4 @@
+import { portraitProtectionAt } from './image-enhancer-portrait.js';
 import { faceSafetyAiLimitAt, createFaceRetentionMasks, faceRetentionLimitAt } from './image-enhancer-face-safety.js';
 import {
   resolveRegionRestorationPlan,
@@ -175,8 +176,8 @@ async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, 
           }
           // Both pre-existing face limits apply to the ORIGINAL reconstruction.
           // Do not multiply them: that repeatedly reintroduces source blur.
-          weight = clamp(weight, 0.54, Math.min(
-            0.98, faceLimit, faceRetentionLimitAt(x + cx, y + cy, retentionMasks)
+          weight = clamp(Math.max(weight, 0.54), 0, Math.min(
+            0.98, 1 - .75 * portraitProtectionAt(x + cx, y + cy, faces), faceLimit, faceRetentionLimitAt(x + cx, y + cy, retentionMasks)
           ));
 
           for (let channel = 0; channel < 3; channel++) {

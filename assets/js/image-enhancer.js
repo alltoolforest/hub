@@ -1532,12 +1532,24 @@ export async function mount(root, slug) {
     status('Analyzing native-resolution tone, color and noise…');
     // Non-generative processing never loads a reconstruction model. Skin-color
     // and edge masks are heuristics, not a semantic face/hair/text detector.
+    const content = read('enhancer-content');
+    // Detection locates regions only; it never generates or restores a face.
+    // An unlocalized portrait gets whole-frame texture protection, not a guessed face.
+    let faces = [];
+    let portraitNote = '';
+    if (content === 'portrait') {
+      faces = await faceSafetyEngine.detect(image, signal, message => status(message));
+      if (!faces.length) {
+        faces = [{ x: 0, y: 0, width, height, score: 0 }];
+        portraitNote = ' Face locations were uncertain; conservative texture protection was applied throughout.';
+      } else portraitNote = ' Portrait texture protection applied.';
+    }
     const result = await enhancePhotograph(image, {
       strength: read('enhancer-restoration'), sharpness: read('enhancer-sharpen'),
-      content: read('enhancer-content'), sourceMime: file.type
+      content, faces, sourceMime: file.type
     }, signal, message => status(message));
     output(result.blob, safeName(file.name, '-enhanced', 'png'));
-    status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(result.blob.size / 1024)} KB · photographic tone, color and texture processing. Significant blur requires Deblur.`);
+    status(`Enhanced · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(result.blob.size / 1024)} KB · photographic tone, color and texture processing.${portraitNote} Significant blur requires Deblur.`);
     return { aiUsed: false, backend: 'photographic-worker' };
   }
 
@@ -1554,6 +1566,7 @@ export async function mount(root, slug) {
       // Do not describe the GoPro motion model as validated defocus restoration.
       status(analysis?.likelyBlurred ? 'Blur evidence detected. Preparing restoration…' : 'Blur diagnosis is uncertain. Preparing a conservative restoration attempt…');
       const faceRegions = await resolveFaceSafety(signal, 'auto');
+      if (!faceSafetyEngine.lastAvailable) throw new Error('Face-safety detection is unavailable; please retry when the model can load');
       status('Running dedicated blur restoration…');
       result = await deblurEngine.process({
         image,
@@ -1569,29 +1582,12 @@ export async function mount(root, slug) {
         blended = await processor.adaptiveDeblurBlend(image, result.canvas, analysis, faceRegions, signal, 1);
       } catch (error) {
         if (error?.name === 'AbortError') throw error;
-        console.warn('Adaptive deblur fidelity blend unavailable; using verified global blend.', error);
+        throw new Error('Protected deblur blending failed; no unprotected result will be exported');
       }
 
-      const faceSafetyFused = !!blended;
-      if (!blended) {
-        const deblurBlend = Math.max(0.88, Math.min(0.96, 0.88 + (analysis.blurScore || 0) * 0.08));
-        blended = el('canvas', { width, height });
-        const blendCtx = blended.getContext('2d', { alpha: false });
-        if (!blendCtx) throw new Error('Deblur blend canvas is unavailable.');
-        blendCtx.drawImage(image, 0, 0, width, height);
-        blendCtx.globalAlpha = deblurBlend;
-        blendCtx.drawImage(result.canvas, 0, 0, width, height);
-        blendCtx.globalAlpha = 1;
-      }
-
+      if (!blended) throw new Error('Protected deblur blending returned no image');
       result.canvas.width = result.canvas.height = 0;
       result.canvas = blended;
-      // The worker already enforced both face ceilings against the original
-      // candidate. Keep the legacy overlay for the global-blend fallback only.
-      if (!faceSafetyFused) {
-        const faceGuard = applyFaceIdentityGuard(result.canvas, image, faceRegions, analysis, 'deblur');
-        result.canvas = faceGuard.canvas;
-      }
       const fidelityGuard = await applyFinalArtifactGuard(result.canvas, faceRegions, 'deblur', signal);
       result.canvas = fidelityGuard.canvas;
       if (!fidelityGuard.analysis?.safe || !(fidelityGuard.analysis.globalMae > 0)) {

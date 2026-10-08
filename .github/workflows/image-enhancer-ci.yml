@@ -7,6 +7,7 @@ on:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
       - 'assets/js/image-enhancer-photo*.js'
+      - 'assets/js/image-enhancer-portrait.js'
       - 'tests/image-enhancer-photo*.mjs'
       - 'tests/image-enhancer-reference-quality*.mjs'
       - 'assets/js/image-enhancer-budget.js'

@@ -39,6 +39,7 @@ try {
   await page.goto('http://127.0.0.1:4196/images/enhance/', { waitUntil: 'domcontentloaded' });
   const result = await page.evaluate(async () => {
     const { applyFaceIdentityGuard, faceSafetyAiLimitAt, createFaceRetentionMasks, faceRetentionLimitAt } = await import('/assets/js/image-enhancer-face-safety.js');
+    const { portraitProtectionAt } = await import('/assets/js/image-enhancer-portrait.js');
     const { applyArtifactFidelityGuard } = await import('/assets/js/image-enhancer-artifact-guard.js');
     const width = 300, height = 180; // Cross the worker's 256px tile boundary.
     const faces = [{ x: 180, y: 25, width: 100, height: 120, score: .99 }];
@@ -66,7 +67,7 @@ try {
       let violations = 0, regained = 0;
       for (let y=0;y<height;y++) for (let x=0;x<width;x++) {
         const value = pixels[(y*width+x)*4];
-        const ceiling = Math.min(faceSafetyAiLimitAt(x,y,faces),faceRetentionLimitAt(x,y,masks));
+        const ceiling = Math.min(1-.75*portraitProtectionAt(x,y,faces),faceSafetyAiLimitAt(x,y,faces),faceRetentionLimitAt(x,y,masks));
         if (value < 100 || value > Math.round(100+20*ceiling)) violations++;
         if (value > oldPixels[(y*width+x)*4]) regained++;
       }
