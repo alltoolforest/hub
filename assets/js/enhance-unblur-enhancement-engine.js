@@ -201,26 +201,99 @@ export class IdentityPreservingEnhancementEngine {
     this.loader = faceGuard?.loader || null;
     this.session = null;
     this.ort = null;
+    this.runtimePromise = null;
     this.nativeScale = 4;
     this.id = 'identity-preserving-enhancement';
     this.label = 'Image Enhancement';
     this.purpose = 'Improve an already usable photograph without reconstructing identity or changing geometry.';
   }
 
+  async loadEnhancementRuntime(signal, onProgress) {
+    if (this.ort?.InferenceSession && this.ort?.Tensor) return this.ort;
+    if (this.runtimePromise) return this.runtimePromise;
+    if (!this.loader) throw new Error('Enhancement runtime loader is unavailable.');
+
+    this.runtimePromise = (async () => {
+      const manifest = await this.loader.loadManifest(signal);
+      const config = manifest.runtime;
+      if (!config?.bundle) throw new Error('Enhancement runtime configuration is missing.');
+
+      let ort = globalThis.ort;
+      if (!ort?.InferenceSession || !ort?.Tensor) {
+        onProgress?.('Loading mobile-compatible AI runtime…');
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = config.bundle;
+          script.async = true;
+          script.crossOrigin = 'anonymous';
+          script.onload = () => {
+            script.remove();
+            resolve();
+          };
+          script.onerror = () => {
+            script.remove();
+            reject(new Error('The AI runtime script could not be loaded on this browser.'));
+          };
+          document.head.append(script);
+        });
+        abortIfNeeded(signal);
+        ort = globalThis.ort;
+      }
+
+      if (!ort?.InferenceSession || !ort?.Tensor) {
+        throw new Error('AI runtime loaded without the required ONNX APIs.');
+      }
+
+      // Android/Chromium compatibility: keep WASM on the page's main runtime
+      // instead of ORT's Blob-backed proxy worker. This avoids the mobile
+      // "no available backend found / [object Event]" proxy startup failure.
+      ort.env.logLevel = 'error';
+      ort.env.wasm.proxy = false;
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.initTimeout = 45000;
+
+      if (config.wasmModule && config.wasmBinary) {
+        ort.env.wasm.wasmPaths = {
+          mjs: config.wasmModule,
+          wasm: config.wasmBinary
+        };
+      } else if (config.wasmModule) {
+        try {
+          ort.env.wasm.wasmPaths = new URL('.', config.wasmModule).href;
+        } catch {}
+      }
+
+      return ort;
+    })();
+
+    try {
+      this.ort = await this.runtimePromise;
+      return this.ort;
+    } catch (error) {
+      this.runtimePromise = null;
+      this.ort = null;
+      throw error;
+    }
+  }
+
   async initializeRestoration(signal, onProgress) {
     if (this.session) return true;
     if (!this.loader) return false;
 
-    this.ort = await this.loader.loadRuntime(signal, onProgress);
+    this.ort = await this.loadEnhancementRuntime(signal, onProgress);
     const model = await this.loader.loadModel('general-x4', signal, onProgress);
     this.nativeScale = Number(model.config?.scale) || 4;
 
     onProgress?.('Preparing detail-restoration engine…');
-    this.session = await this.ort.InferenceSession.create(model.bytes, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
-      enableCpuMemArena: true
-    });
+    try {
+      this.session = await this.ort.InferenceSession.create(model.bytes, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
+        enableCpuMemArena: true
+      });
+    } catch (error) {
+      throw new Error(`WASM detail-restoration backend could not start. ${error?.message || error || 'Unknown runtime error.'}`);
+    }
     return true;
   }
 
@@ -530,6 +603,12 @@ export class IdentityPreservingEnhancementEngine {
     onProgress?.('Analyzing exposure, color and source detail…');
     const stats = analyze(image);
     const profile = correctionProfile(stats, settings);
+
+    // Initialize the enhancement runtime first. The face guard then reuses this
+    // verified non-proxy WASM runtime instead of bootstrapping the failing
+    // proxy-worker path on Android browsers.
+    await this.initializeRestoration(signal, onProgress);
+    abortIfNeeded(signal);
 
     let faces = [];
     if (this.faceGuard) faces = await this.faceGuard.detect(image, signal, onProgress);
