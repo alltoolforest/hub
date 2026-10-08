@@ -38,6 +38,74 @@ export async function docxBlob(text,engine){
  if(!blob?.size)throw Error('DOCX export returned an empty file.');
  return blob;
 }
+
+async function unicodePdfBlob(text,lib){
+ if(typeof document==='undefined')throw Error('This environment cannot render international PDF text. Download DOCX to preserve the complete text.');
+ const doc=await lib.PDFDocument.create();
+ const canvas=document.createElement('canvas');
+ canvas.width=1190;canvas.height=1684;
+ const context=canvas.getContext('2d');
+ if(!context)throw Error('PDF image rendering is unavailable. Download DOCX to preserve the complete text.');
+ const margin=86,limit=canvas.width-margin,top=100,bottom=100,lineHeight=34;
+ const maxPageCount=40;
+ let y=top,pageLines=0,pageCount=0;
+ const resetPage=()=>{
+  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
+  context.font='23px Arial, sans-serif';context.fillStyle='#172127';
+  context.textBaseline='top';y=top;pageLines=0;
+ };
+ async function flush(){
+  if(!pageLines)return;
+  if(++pageCount>maxPageCount)throw Error('International-text PDF exceeds 40 pages. Export a smaller batch or use DOCX.');
+  const png=await new Promise((resolve,reject)=>canvas.toBlob(
+   blob=>blob?resolve(blob):reject(Error('PDF image export failed. Download DOCX.')),'image/png'
+  ));
+  const img=await doc.embedPng(await png.arrayBuffer());
+  const page=doc.addPage([595.28,841.89]);
+  page.drawImage(img,{x:0,y:0,width:595.28,height:841.89});
+  resetPage();
+ }
+ async function drawLine(line){
+  if(y+lineHeight>canvas.height-bottom)await flush();
+  if(line)context.fillText(line,margin,y);
+  y+=lineHeight;pageLines++;
+ }
+ const maxWidth=limit-margin;
+ const segments=str=>{
+  if(typeof Intl!=='undefined'&&Intl.Segmenter)
+   return [...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(str)].map(x=>x.segment);
+  return Array.from(str);
+ };
+ try{
+  resetPage();
+  for(const line of normalizedLines(text)){
+   if(!line.trim()){await drawLine('');continue;}
+   let current='';
+   const parts=line.match(/\S+|\s+/gu)||[];
+   for(const part of parts){
+    if(context.measureText(current+part).width<=maxWidth){current+=part;continue;}
+    if(current.trim()){await drawLine(current.trimEnd());current='';}
+    if(context.measureText(part).width<=maxWidth){current=part.trimStart();continue;}
+    for(const segment of segments(part)){
+     if(current&&context.measureText(current+segment).width>maxWidth){
+      await drawLine(current);current='';
+     }
+     current+=segment;
+    }
+   }
+   if(current)await drawLine(current.trimEnd());
+  }
+  await flush();
+  const bytes=await doc.save();
+  const blob=new Blob([bytes],{type:'application/pdf'});
+  if(!blob.size||blob.size>40*1024*1024)
+   throw Error('International-text PDF exceeds the export size limit. Download DOCX instead.');
+  // Generated PDF preserves glyphs visually. The original text is fully editable in DOCX.
+  blob.ocrTextRasterized=true;
+  return blob;
+ }finally{canvas.width=0;canvas.height=0;}
+}
+
 export async function pdfBlob(text,lib){
  checkedText(text);
  if(!lib?.PDFDocument||!lib?.StandardFonts)throw Error('PDF export engine is unavailable.');
@@ -47,7 +115,12 @@ export async function pdfBlob(text,lib){
  const pageW=595.28,pageH=841.89,width=pageW-2*left;
  let lines;
  try{lines=wrappedPdfLines(text,font,size,width);for(const line of lines)font.encodeText(line);}
- catch(error){throw Error('This PDF font cannot represent every extracted character. Download DOCX to preserve the complete original text.');}
+ catch(error){
+  if(!/encod|WinAnsi|character/i.test(String(error?.message||error)))throw error;
+  // Standard PDF fonts cannot cover many languages. Preserve visible characters
+  // through a browser-rendered PDF, without pretending that its text is selectable.
+  return unicodePdfBlob(text,lib);
+ }
  let page=null,y=0,n=0;
  for(const line of lines){
   if(!page||y<bottom){

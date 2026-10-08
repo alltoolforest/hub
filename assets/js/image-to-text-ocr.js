@@ -47,23 +47,52 @@ export async function mount(root){
  const actions=el('div',{class:'actions'});
  const recognize=el('button',{type:'button',class:'primary',text:'Recognize text'});
  const cancel=el('button',{type:'button',text:'Cancel OCR','aria-label':'Cancel OCR and preserve current text',disabled:true});
+ // Unlike the shared action(), tool-local exports never re-enable unrelated controls
+ // while an OCR job still owns them.
+ function localAction(label,fn){
+  const button=el('button',{type:'button',text:label});
+  button.addEventListener('click',async()=>{
+   if(button.disabled)return;
+   button.disabled=true;
+   try{await fn();}
+   catch(error){status(error?.message||'Export failed. Please retry.',true);}
+   finally{button.disabled=false;}
+  });
+  return button;
+ }
+ const captureExport=()=>{
+  assertCurrentOrder();
+  return {value:text.value,revision:resultRevision};
+ };
+ const verifyExport=revision=>{
+  if(queueRevision!==revision||resultRevision!==revision)
+   throw Error('The OCR result changed during export. Run OCR again or retry with the current text.');
+ };
  actions.append(recognize,cancel,
-  action('Copy text',()=>copy(text.value)),
-  action('Download TXT',()=>{
+  localAction('Copy text',()=>copy(text.value)),
+  localAction('Download TXT',()=>{
    if(!text.value.trim())throw Error('Recognize or enter text first.');
-   assertCurrentOrder();output(new Blob([text.value],{type:'text/plain;charset=utf-8'}),'extracted-text.txt');
+   const snapshot=captureExport();
+   verifyExport(snapshot.revision);
+   output(new Blob([snapshot.value],{type:'text/plain;charset=utf-8'}),'extracted-text.txt');
   }),
-  action('Download DOCX',async()=>{
-   assertCurrentOrder();const engine=await load('docx');
-   const blob=await docxBlob(text.value,engine);
+  localAction('Download DOCX',async()=>{
+   const snapshot=captureExport();
+   const engine=await load('docx');
+   const blob=await docxBlob(snapshot.value,engine);
+   verifyExport(snapshot.revision);
    output(blob,'extracted-text.docx');
    status('DOCX ready. The file contains your editable, reviewed text.');
   }),
-  action('Download PDF',async()=>{
-   assertCurrentOrder();const engine=await load('pdf');
-   const blob=await pdfBlob(text.value,engine);
+  localAction('Download PDF',async()=>{
+   const snapshot=captureExport();
+   const engine=await load('pdf');
+   const blob=await pdfBlob(snapshot.value,engine);
+   verifyExport(snapshot.revision);
    output(blob,'extracted-text.pdf');
-   status('PDF ready. Text is selectable where supported by the bundled PDF font.');
+   status(blob.ocrTextRasterized?
+    'PDF ready. International text is preserved visually; use DOCX for editable and selectable text.':
+    'PDF ready. All text is selectable.');
   })
  );
  root.append(actions);
@@ -74,7 +103,15 @@ export async function mount(root){
  function dirty(reason){
   queueRevision++;
   if(text.value.trim()){
-   review.textContent=reason+' Your previous text and downloads remain available for reference. Run OCR again to export the newly ordered images.';
+   // Never delete a valid previous download, but label its old image order clearly.
+   for(const row of $('#downloads')?.querySelectorAll('.download-row')||[]){
+    row.classList.add('ocr-stale-download');
+    if(!row.querySelector('.ocr-stale-label')){
+     row.prepend(el('span',{class:'ocr-stale-label',
+      text:'Previous image order — this download is not the current arrangement.'}));
+    }
+   }
+   review.textContent=reason+' Existing downloads contain the previous image order. Run OCR again before generating exports for the current arrangement.';
   }
  }
  function showSelected(){
@@ -87,7 +124,7 @@ export async function mount(root){
   drawRotatedPreview(sourceCanvas,active.image,active.rotation,720);
   sourceCanvas.setAttribute('aria-label','Selected image '+active.name+' rotated '+active.rotation+' degrees.');
  }
- function renderQueue(){
+ function renderQueue(focusId=null,focusAction=null){
   queue.replaceChildren();
   items.forEach((item,index)=>{
    const li=el('li',{class:'ocr-batch-item', 'aria-label':'Image '+(index+1)+': '+item.name});
@@ -107,12 +144,12 @@ export async function mount(root){
     });
     buttons.append(btn);
    };
-   control('View',()=>{activeId=item.id;renderQueue();showSelected();});
+   control('View',()=>{activeId=item.id;renderQueue(item.id,'View');showSelected();});
    control('Move up',()=>{
-    items=moveBy(items,item.id,-1);dirty('Image order changed.');renderQueue();showSelected();
+    items=moveBy(items,item.id,-1);dirty('Image order changed.');renderQueue(item.id,'Move up');showSelected();
    },index===0);
    control('Move down',()=>{
-    items=moveBy(items,item.id,1);dirty('Image order changed.');renderQueue();showSelected();
+    items=moveBy(items,item.id,1);dirty('Image order changed.');renderQueue(item.id,'Move down');showSelected();
    },index===items.length-1);
    control('Rotate left',()=>rotate(item.id,-90));
    control('Rotate right',()=>rotate(item.id,90));
@@ -120,16 +157,26 @@ export async function mount(root){
     items=items.filter(i=>i.id!==item.id);
     item.image.close?.();
     if(activeId===item.id)activeId=items[0]?.id??null;
-    dirty('Image selection changed.');renderQueue();showSelected();
+    dirty('Image selection changed.');
+    renderQueue(items[Math.min(index,items.length-1)]?.id??null,'View');
+    showSelected();
    });
    li.append(thumb,info,buttons);queue.append(li);
   });
   queueHeading.textContent='Arrange images for OCR ('+items.length+')';
+  if(focusId!==null){
+   const position=items.findIndex(item=>item.id===focusId);
+   const buttons=position>=0?[...queue.children[position].querySelectorAll('button')]:[];
+   const target=buttons.find(b=>b.textContent===focusAction&&!b.disabled)||
+    buttons.find(b=>b.textContent==='View');
+   target?.focus();
+  }
  }
  function rotate(id,step){
   const item=items.find(i=>i.id===id);if(!item)return;
   item.rotation=rotateBy(item.rotation,step);
-  activeId=id;dirty('Image rotation changed.');renderQueue();showSelected();
+  activeId=id;dirty('Image rotation changed.');
+  renderQueue(id,step>0?'Rotate right':'Rotate left');showSelected();
   status(item.name+' rotated to '+item.rotation+'°. Preview updated.');
  }
  $('#ocr-rotate').addEventListener('change',()=>{
@@ -158,11 +205,18 @@ export async function mount(root){
      staged.push({id:++nextId,name:candidate.name,file:candidate,image:decoded,rotation:0,text:null});
     }catch(e){decoded?.close?.();throw e;}
    }
-   items.push(...staged);
-   // Show the newly added source immediately so rotation controls follow the upload.
-   activeId=staged[0]?.id??activeId;
+   const previousItems=items,previousActive=activeId;
+   // Preview the candidate queue before making the upload visible to OCR.
+   try{
+    items=[...items,...staged];
+    activeId=staged[0]?.id??activeId;
+    renderQueue();showSelected();
+   }catch(error){
+    items=previousItems;activeId=previousActive;
+    try{renderQueue();showSelected();}catch{}
+    throw error;
+   }
    dirty('New images added.');
-   renderQueue();showSelected();
    status(items.length+' image(s) ready. Set the order and rotation, then recognize.');
   }catch(error){for(const item of staged)item.image.close?.();throw error;}
  });

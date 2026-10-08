@@ -53,3 +53,12 @@ body[data-tool="image-to-text"] .ocr-batch-buttons button:focus-visible{
  body[data-tool="image-to-text"] .ocr-thumb{max-width:130px}
  body[data-tool="image-to-text"] .ocr-batch-buttons{grid-template-columns:1fr}
 }
+
+/* Correctly mark previous-order downloads without changing the shared download UI. */
+body[data-tool="image-to-text"] .ocr-stale-download{
+ border-left:3px solid #9d650f;padding-left:10px;flex-wrap:wrap
+}
+body[data-tool="image-to-text"] .ocr-stale-label{
+ display:block;flex-basis:100%;font-size:13px;line-height:1.4;
+ font-weight:650;color:#80540e;overflow-wrap:anywhere
+}

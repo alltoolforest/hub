@@ -97,7 +97,7 @@ test('PDF exports all text lines into bounded A4 pages',async()=>{
  assert.deepEqual(drawn.map(r=>r[0]),['First line','Second line']);
 });
 test('PDF export rejects unsupported Unicode explicitly rather than changing text',async()=>{
- const font={widthOfTextAtSize:s=>s.length*5,encodeText:s=>{if(s.includes('☃'))throw Error('not supported')}};
+ const font={widthOfTextAtSize:s=>s.length*5,encodeText:s=>{if(s.includes('☃'))throw Error('WinAnsi cannot encode character')}};
  const lib={StandardFonts:{Helvetica:'h'},
   rgb:()=>{},PDFDocument:{create:async()=>({embedFont:async()=>font,addPage:()=>({drawText(){}}),save:async()=>new Uint8Array([1])})}};
  await assert.rejects(()=>pdfBlob('Snowman ☃',lib),/Download DOCX/);
@@ -113,8 +113,8 @@ test('the isolated OCR module preserves per-image progress and user-corrected te
  assert.match(app,/resultRevision=queueRevision/);
  assert.match(app,/clearOutputs\(\)/);
  assert.match(app,/activeController.abort\(\)/);
- assert.match(app,/action\('Download DOCX'/);
- assert.match(app,/action\('Download PDF'/);
+ assert.match(app,/localAction\('Download DOCX'/);
+ assert.match(app,/localAction\('Download PDF'/);
  assert.match(css,/ocr-batch-item/);
  assert.match(css,/@media\(max-width:560px\)/);
 });
