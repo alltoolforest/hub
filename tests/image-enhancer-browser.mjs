@@ -288,7 +288,7 @@ async function runAiScale(scale, expected, content = 'general', profile = 'auto'
   await page.locator('#enhancer-run').click();
   const statusText = await waitForTerminal(scale);
   console.log(`DIAGNOSTIC scale=${scale} content=${content} profile=${profile} sharpen=${sharpen} terminal status=${statusText}`);
-  assert.match(statusText, requiredStatus, `Expected real AI output, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
+  assert.match(statusText, requiredStatus, `Expected selected processing engine, got terminal status: ${statusText}\n${diagnostics.join('\n')}`);
   const info = await latestOutputInfo();
   assert.deepEqual(info?.slice(0, 3), expected);
   return { statusText, info };
@@ -323,10 +323,8 @@ async function testUnsafeWebGpuIsNotSelected() {
       name: 'provider-audit.png', mimeType: 'image/png', buffer: png(160, 120)
     });
     await testPage.waitForFunction(() => (document.querySelector('#enhancer-source-info')?.textContent || '').includes('160 × 120'));
-    await testPage.locator('#enhancer-mode-enhance').click();
-    await testPage.locator('#enhancer-content').selectOption('general');
-    await testPage.locator('#enhancer-restoration').selectOption('balanced');
-    await testPage.locator('#enhancer-sharpen').selectOption('off');
+    await testPage.locator('#enhancer-mode-upscale').click();
+    await testPage.locator('#enhancer-scale').selectOption('2');
     await testPage.locator('#enhancer-run').click();
     await testPage.waitForFunction(() => {
       const text = document.querySelector('#status')?.textContent || '';
@@ -344,12 +342,18 @@ async function testUnsafeWebGpuIsNotSelected() {
 
 try {
   await page.goto('http://127.0.0.1:4173/images/enhance/', { waitUntil: 'networkidle' });
+  await page.waitForSelector('#enhancer-mode-deblur');
   await page.waitForSelector('#enhancer-mode-enhance');
   await page.waitForSelector('#enhancer-mode-upscale');
   await page.waitForSelector('#enhancer-scale', { state: 'attached' });
   await page.waitForSelector('#enhancer-content', { state: 'attached' });
   assert.equal(await page.locator('.fields').first().isHidden(), true, 'Task controls must stay hidden until Enhance or Upscale is chosen.');
+  await page.locator('#enhancer-mode-deblur').click();
+  assert.equal(await page.locator('#enhancer-mode-deblur').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('.fields').first().isHidden(), true);
+  assert.equal(await page.locator('#enhancer-run').textContent(), 'Deblur photo');
   await page.locator('#enhancer-mode-enhance').click();
+  assert.equal(await page.locator('#enhancer-mode-deblur').getAttribute('aria-pressed'), 'false');
   assert.equal(await page.locator('#enhancer-content').isVisible(), true, 'Enhance mode must show enhancement controls.');
   assert.equal(await page.locator('#enhancer-scale').isVisible(), false, 'Enhance mode must hide upscale controls.');
   await page.locator('#enhancer-mode-upscale').click();
@@ -361,9 +365,9 @@ try {
   assert.match(summary || '', /Analysis: .* profile recommended/);
 
   const originalHash = await sourcePreviewHash();
-  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /Enhanced · original size .*background AI/);
-  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /Enhanced · original size .*background AI/);
-  assert.notEqual(sharpOff.info?.[4], originalHash, '1× AI restoration must materially change the encoded pixels from the source.');
+  const sharpOff = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'off', /Enhanced · original size .*photographic tone/);
+  const sharpMedium = await runAiScale(1, [24, 16, 'core-test-enhanced.png'], 'high-fidelity', 'fidelity', 'medium', /Enhanced · original size .*photographic tone/);
+  assert.notEqual(sharpOff.info?.[4], originalHash, '1× photographic processing must materially change the encoded pixels from the source.');
   assert.notEqual(sharpOff.info?.[4], sharpMedium.info?.[4], 'Medium sharpening must materially change the encoded pixels compared with Off.');
 
   await runAiScale(2, [48, 32, 'core-test-upscaled-2x.png'], 'auto', 'auto', 'auto', /Upscaled 2× .*background AI/);
@@ -376,7 +380,7 @@ try {
   await page.locator('#enhancer-run').click();
   const textStatus = await waitForTerminal(1);
   console.log(`DIAGNOSTIC text/logo terminal status=${textStatus}`);
-  assert.match(textStatus, /Enhanced · original size .*background-safe local processing/);
+  assert.match(textStatus, /Enhanced · original size .*photographic tone/);
   assert.doesNotMatch(textStatus, /background AI/);
   const textInfo = await latestOutputInfo();
   assert.deepEqual(textInfo?.slice(0, 3), [24, 16, 'core-test-enhanced.png']);
@@ -390,11 +394,14 @@ try {
 
   await upload('tile-test.png', 500, 350);
   const realisticOriginalHash = await sourcePreviewHash();
-  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*background AI/);
+  const realistic1x = await runAiScale(1, [500, 350, 'tile-test-enhanced.png'], 'general', 'recovery', 'auto', /Enhanced · original size .*photographic tone/);
   assert.notEqual(realistic1x.info?.[4], realisticOriginalHash, 'Realistic 1× restoration must materially change pixels from the source.');
   const perceptual1x = await latestOutputPerceptualMetrics();
   console.log(`DIAGNOSTIC realistic-1x perceptual lumaMae=${perceptual1x?.lumaMae?.toFixed(3)} edgeRatio=${perceptual1x?.edgeRatio?.toFixed(3)} textureRatio=${perceptual1x?.textureRatio?.toFixed(3)} regionalMin=${perceptual1x?.regionalMinRatio?.toFixed(3)}`);
-  assert.ok((perceptual1x?.lumaMae || 0) >= 1.25, `1× restoration must be perceptually different, not merely hash-different: ${JSON.stringify(perceptual1x)}`);
+  // This generated source is already high contrast. Forcing a minimum pixel
+  // change rewards unnecessary edits; restoration benefit is tested against
+  // known degraded/clean pairs in the photographic and real-world audits.
+  assert.ok(perceptual1x?.lumaMae <= 8, `Clean structured input must not receive excessive tone edits: ${JSON.stringify(perceptual1x)}`);
   assert.ok((perceptual1x?.edgeRatio || 0) >= 0.92, `1× Enhance must retain at least 92% of source edge energy: ${JSON.stringify(perceptual1x)}`);
   assert.ok((perceptual1x?.textureRatio || 0) >= 0.90, `1× Enhance must retain at least 90% of source fine texture: ${JSON.stringify(perceptual1x)}`);
   assert.ok((perceptual1x?.regionalCount || 0) >= 8, `Regional detail gate must evaluate enough textured regions: ${JSON.stringify(perceptual1x)}`);
@@ -468,7 +475,7 @@ try {
   await testUnsafeWebGpuIsNotSelected();
 
   assert.equal(consoleErrors.length, 0, `Browser console errors:\n${consoleErrors.join('\n')}`);
-  console.log('PASS: separated Enhance/Upscale pipelines, global and regional source-detail preservation gates, real AI 1x/2x/4x, worker-backed pixel conversion/finishing, forced WASM proxy provider, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
+  console.log('PASS: separated Enhance/Upscale pipelines, global and regional source-detail preservation gates, photographic 1x and real AI 2x/4x, worker-backed pixel conversion/finishing, forced WASM proxy provider, adaptive memory retry, CSP isolation, reset and transparent upscale fallback verified.');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

@@ -6,6 +6,9 @@ on:
     paths:
       - 'assets/js/app.js'
       - 'assets/js/image-enhancer.js'
+      - 'assets/js/image-enhancer-photo*.js'
+      - 'tests/image-enhancer-photo*.mjs'
+      - 'tests/image-enhancer-reference-quality*.mjs'
       - 'assets/js/image-enhancer-budget.js'
       - 'tests/image-enhancer-budget.test.mjs'
       - 'assets/js/image-enhancer-deblur-validation.js'
@@ -25,6 +28,7 @@ on:
       - 'assets/models/image-enhancer/**'
       - 'docs/image-enhancer-model-benchmark.md'
       - 'tests/image-enhancer-browser.mjs'
+      - 'tests/image-enhancer-modes-browser.mjs'
       - 'tests/image-enhancer-fusion.test.mjs'
       - 'tests/image-enhancer-fusion-browser.mjs'
       - 'tests/image-enhancer-artifact-guard-browser.mjs'
@@ -78,6 +82,9 @@ jobs:
         run: |
           set -euo pipefail
           node --check assets/js/image-enhancer.js
+          node --check assets/js/image-enhancer-photo.js
+          node --check assets/js/image-enhancer-photo-worker.js
+          node --check assets/js/image-enhancer-photo-engine.js
           node --test tests/image-enhancer-budget.test.mjs
           node --test tests/image-enhancer-deblur-trial/validation.test.mjs
           node --check assets/js/image-enhancer-artifact-guard.js
@@ -150,12 +157,23 @@ jobs:
       - name: Verify hosted Chrome
         run: google-chrome --version
 
+      - name: Check independent photographic engine
+        run: node --test tests/image-enhancer-photo.test.mjs tests/image-enhancer-photo-lifecycle.test.mjs tests/image-enhancer-reference-quality.test.mjs
+
       - name: Run CSP + real AI browser smoke test
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-browser.mjs
 
+      - name: Run three-mode strict deblur audit
+        if: ${{ !cancelled() }}
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/image-enhancer-modes-browser.mjs
+
       - name: Run single-pass face fusion audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: |
@@ -163,61 +181,73 @@ jobs:
           node tests/image-enhancer-fusion-browser.mjs
 
       - name: Run artifact/fidelity guard audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-artifact-guard-browser.mjs
 
       - name: Run dedicated deblur ground-truth audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-deblur-browser.mjs
 
       - name: Run degradation diagnosis audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-diagnosis-browser.mjs
 
       - name: Run face identity safety audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-face-safety-browser.mjs
 
       - name: Run region-aware restoration audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-region-restoration-browser.mjs
 
       - name: Run Task 5 real-world benchmark
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-realworld-benchmark.mjs
 
       - name: Run realistic desktop responsiveness audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-responsiveness-browser.mjs
 
       - name: Run output planner browser audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-output-browser.mjs
 
       - name: Run inspection workspace browser audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-inspector-browser.mjs
 
       - name: Run export format browser audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-export-browser.mjs
 
       - name: Run input and mobile compatibility audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-compatibility-browser.mjs
 
       - name: Run deep resilience browser audit
+        if: ${{ !cancelled() }}
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: node tests/image-enhancer-resilience-browser.mjs
@@ -242,7 +272,9 @@ jobs:
         run: npm install --no-save --no-package-lock playwright@1.55.0
 
       - name: Run Firefox + WebKit real-WASM audit
+        if: ${{ !cancelled() }}
         run: node tests/image-enhancer-cross-browser.mjs
 
       - name: Run Firefox + WebKit dedicated deblur audit
+        if: ${{ !cancelled() }}
         run: node tests/image-enhancer-deblur-cross-browser.mjs

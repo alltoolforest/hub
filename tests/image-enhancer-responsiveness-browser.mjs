@@ -97,7 +97,7 @@ page.on('pageerror', error => errors.push(error.message));
 async function startHeartbeat() {
   await page.evaluate(() => {
     clearInterval(window.__enhancerResponsivenessTimer);
-    window.__enhancerResponsiveness = { count: 0, maxGap: 0, last: performance.now() };
+    window.__enhancerResponsiveness = { count: 0, maxGap: 0, started: performance.now(), last: performance.now() };
     window.__enhancerResponsivenessTimer = setInterval(() => {
       const now = performance.now();
       const state = window.__enhancerResponsiveness;
@@ -112,6 +112,8 @@ async function stopHeartbeat() {
   return page.evaluate(() => {
     clearInterval(window.__enhancerResponsivenessTimer);
     const state = window.__enhancerResponsiveness || { count: 0, maxGap: Infinity };
+    state.duration = performance.now() - state.started;
+    state.maxGap = Math.max(state.maxGap, performance.now() - state.last);
     delete window.__enhancerResponsivenessTimer;
     return state;
   });
@@ -160,8 +162,8 @@ try {
   const enhanced = await outputInfo();
   assert.deepEqual([enhanced?.width, enhanced?.height, enhanced?.type], [452, 678, 'image/png']);
   assert.match(enhanced?.name || '', /-enhanced\.png$/);
-  assert.match(enhanceStatus, /background AI|background-safe local processing/);
-  assert.ok(enhancePulse.count >= 5, `Enhance heartbeat too low: ${JSON.stringify(enhancePulse)}`);
+  assert.match(enhanceStatus, /photographic tone/);
+  assert.ok(enhancePulse.duration < 300 || enhancePulse.count >= 5, `Enhance heartbeat too low: ${JSON.stringify(enhancePulse)}`);
   assert.ok(enhancePulse.maxGap < 3000, `Enhance blocked the page too long: ${JSON.stringify(enhancePulse)}`);
 
   await page.locator('#enhancer-mode-upscale').click();

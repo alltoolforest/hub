@@ -70,10 +70,23 @@ try {
         if (value < 100 || value > Math.round(100+20*ceiling)) violations++;
         if (value > oldPixels[(y*width+x)*4]) regained++;
       }
+      const mildSource = await createImageBitmap(source), mildCandidate = await createImageBitmap(candidate);
+      const mildReply = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('mild fusion timed out')), 15000);
+        worker.onmessage = e => { clearTimeout(timeout); e.data.ok ? resolve(e.data) : reject(new Error(e.data.error)); };
+        worker.postMessage({id:2,type:'adaptive-deblur-blend',sourceBitmap:mildSource,deblurBitmap:mildCandidate,analysis,faces,strength:0.6},[mildSource,mildCandidate]);
+      });
+      const mild = make(0); mild.getContext('2d').drawImage(mildReply.bitmap,0,0); mildReply.bitmap.close();
+      const mildPixels = mild.getContext('2d').getImageData(0,0,width,height).data;
+      let mildViolations = 0;
+      for (let i=0;i<pixels.length;i+=4) {
+        if (mildPixels[i] < 100 || mildPixels[i] > pixels[i] || Math.abs((mildPixels[i]-100) - (pixels[i]-100)*0.6) > 1) mildViolations++;
+      }
       const guarded = await applyArtifactFidelityGuard({ canvas: fused, sourceImage: source, faces, mode: 'deblur', degradation: analysis });
-      return { violations, regained, width: guarded.canvas.width, height: guarded.canvas.height, safe: guarded.analysis.safe };
+      return { violations, mildViolations, regained, width: guarded.canvas.width, height: guarded.canvas.height, safe: guarded.analysis.safe };
     } finally { worker.terminate(); }
   });
+  assert.equal(result.mildViolations, 0, 'Optional fusion weight must remain bounded; Enhance does not call this helper');
   assert.equal(result.violations, 0, 'fusion exceeded a pre-existing face ceiling');
   assert.ok(result.regained > 100, 'the duplicate face blend is still erasing candidate detail');
   assert.equal(result.width, 300); assert.equal(result.height, 180);
