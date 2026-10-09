@@ -39,6 +39,20 @@ try{
  const download=page.waitForEvent('download');await page.locator('#downloads a[download]').click();
  const mergedBytes=new Uint8Array(await readFile(await (await download).path()));
  const evidence=await page.evaluate(async documents=>{
+  // The bundled PDF.js renderer expects a newer TC39 Map helper.
+  // Polyfill only inside this test page; do not modify production libraries.
+  for(const cls of [Map,WeakMap]){
+   if(typeof cls.prototype.getOrInsertComputed!=='function')
+    Object.defineProperty(cls.prototype,'getOrInsertComputed',{configurable:true,value:function(key,fn){
+     if(this.has(key))return this.get(key);
+     const value=fn(key);this.set(key,value);return value;
+    }});
+   if(typeof cls.prototype.getOrInsert!=='function')
+    Object.defineProperty(cls.prototype,'getOrInsert',{configurable:true,value:function(key,value){
+     if(this.has(key))return this.get(key);
+     this.set(key,value);return value;
+    }});
+  }
   const viewer=await import('/assets/vendor/pdf.mjs');
   viewer.GlobalWorkerOptions.workerSrc='/assets/vendor/pdf.worker.mjs';
   const load=async src=>viewer.getDocument({
