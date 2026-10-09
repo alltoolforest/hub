@@ -15,7 +15,7 @@ const create=async(label,width)=>{
  return {name:label,mimeType:'application/pdf',buffer:Buffer.from(await doc.save())};
 };
 const current=()=>page.locator('.file-list li');
-const labels=()=>page.locator('.file-list li span').allTextContents();
+const labels=()=>page.locator('.file-list li .pdf-merger-file-title').allTextContents();
 try{
  await page.goto('http://127.0.0.1:8765/documents/pdf-merger/',{waitUntil:'networkidle'});
  await page.locator('#file-input').waitFor();
@@ -25,7 +25,7 @@ try{
  assert.match((await labels())[0],/first.pdf.*1 page/);
  assert.match((await labels())[1],/second.pdf.*1 page/);
  // Preserve established ↑ ↓ file order behavior.
- await current().nth(1).getByRole('button',{name:'↑'}).click();
+ await current().nth(1).getByRole('button',{name:'Move up second.pdf'}).click();
  assert.match((await labels())[0],/second.pdf/);
  await page.getByRole('button',{name:'Create PDF'}).click();
  await page.waitForFunction(()=>document.querySelector('#downloads a[download]')!==null);
@@ -55,7 +55,7 @@ try{
  await page.waitForFunction(()=>document.querySelectorAll('.file-list li').length===3);
  assert.match((await labels())[2],/third.pdf/);
  assert.match(await page.locator('.pdf-merger-admission').textContent(),/3 PDF\(s\).*3 page/);
- await current().nth(2).getByRole('button',{name:'Remove'}).click();
+ await current().nth(2).getByRole('button',{name:'Remove third.pdf'}).click();
  assert.equal(await current().count(),2);
  // Wrong file extension is rejected before parsing, without disturbing prior inputs.
  await page.locator('#file-input').setInputFiles({name:'not-a-pdf.txt',mimeType:'text/plain',buffer:Buffer.from('not a pdf')});
