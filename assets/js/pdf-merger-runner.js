@@ -1,5 +1,5 @@
 // PDF Merger large-job dispatch. Shared PDF tools and existing short-job flow untouched.
-import {url} from './core.js';
+const workerScript=new URL('./pdf-merger-worker.js',import.meta.url).href;
 import {verifiedMerge,cancellationError} from './pdf-merger-verify.js';
 
 export function shouldUsePdfMergeWorker(entries){
@@ -33,7 +33,7 @@ export async function mergePdfBatch(entries,{isMobile=false,signal=null,onProgre
   };
   const onAbort=()=>finish(cancellationError());
   try{
-   worker=new Worker(url('assets/js/pdf-merger-worker.js'));
+   worker=new Worker(workerScript);
    signal?.addEventListener('abort',onAbort,{once:true});
    worker.onmessage=event=>{
     if(settled)return;
