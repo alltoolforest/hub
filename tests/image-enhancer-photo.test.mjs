@@ -145,3 +145,51 @@ test('isolated chroma noise is cleaned without erasing protected luminance struc
  for(let i=0;i<data.length;i+=4)error+=Math.abs((out[i]-data[i])*.2126+(out[i+1]-data[i+1])*.7152+(out[i+2]-data[i+2])*.0722);
  assert.ok(error/(w*h)<1,'preserve fine luminance signal in protected regions');
 });
+
+// Mixed-light exposure regression cases.
+{
+const w=240,h=120;
+const rgba=fn=>{const data=new Uint8ClampedArray(w*h*4);for(let y=0;y<h;y++)for(let x=0;x<w;x++)data.set(fn(x,y),(y*w+x)*4);return data;};
+const plan=(data,options={})=>{const s=photoStatistics();collectPhotoStatistics(data,w,h,s,2);return makePhotoPlan(s,{strength:'balanced',sharpness:'off',...options});};
+const process=(data,options={})=>enhancePhotoStrip(data,w,h,0,h,plan(data,options));
+const luma=(d,p)=>d[p]*.2126+d[p+1]*.7152+d[p+2]*.0722;
+const mixed=()=>rgba((x,y)=>{const v=x<85?38+y*.15:220+y*.15;return[v,v,v,255];});
+
+test('a bright background no longer causes the dark foreground to be darkened',()=>{
+ const source=mixed(),out=process(source);let before=0,after=0,count=0;
+ for(let y=10;y<h-10;y++)for(let x=10;x<70;x++){const p=(y*w+x)*4;before+=source[p];after+=out[p];count++;}
+ assert.ok(after/count>before/count+8,'foreground gets a visible bounded lift');
+ assert.ok(after/count<before/count+17,'no aggressive exposure change');
+ for(let y=10;y<h-10;y++)for(let x=110;x<w-10;x++){const p=(y*w+x)*4;assert.ok(Math.abs(out[p]-source[p])<=3,'preserve the bright background');}
+});
+
+test('strong shadow noise disables the additional shadow lift',()=>{
+ const s=photoStatistics();const source=mixed();collectPhotoStatistics(source,w,h,s,2);
+ const quiet=makePhotoPlan(s,{strength:'balanced'});
+ // Inject known shadow residual evidence to test tone-plan response independent of a noise estimator.
+ s.shadowResiduals.fill(0);s.shadowResiduals[32]=200;s.shadowCount=200;
+ const noisy=makePhotoPlan(s,{strength:'balanced'});
+ assert.ok(quiet.shadowLift>8);assert.equal(noisy.shadowLift,0);
+});
+
+test('full tonal gradients, sparse highlights and graphic content avoid new correction',()=>{
+ for(const source of [rgba(x=>{const v=x*255/(w-1);return[v,v,v,255];}),rgba(x=>{const v=x<220?45:235;return[v,v,v,255];})])assert.equal(plan(source).shadowLift,0);
+ assert.equal(plan(mixed(),{content:'text-logo'}).shadowLift,0);
+ assert.equal(plan(mixed(),{content:'illustration'}).shadowLift,0);
+});
+
+test('mixed-light tone curves remain monotonic and do not lift absolute black',()=>{
+ for(const strength of ['fidelity','balanced','recovery']){
+  const p=plan(mixed(),{strength});assert.equal(p.tone[0],0);
+  for(let i=1;i<256;i++)assert.ok(p.tone[i]>=p.tone[i-1],`nonmonotonic at ${i}`);
+ }
+});
+
+test('shadow exposure keeps skin-color ordering without prescribing a complexion',()=>{
+ const data=rgba((x,y)=>x<85?[58+y*.1,35+y*.1,28+y*.1,255]:[225,225,225,255]);
+ const out=process(data,{content:'portrait'});const p=(40*w+40)*4;
+ assert.ok(luma(out,p)>luma(data,p)+3);
+ assert.ok(out[p]>out[p+1]&&out[p+1]>out[p+2]);
+ assert.ok(out[p]-out[p+2]<(data[p]-data[p+2])*1.25,'no large chroma amplification');
+});
+}

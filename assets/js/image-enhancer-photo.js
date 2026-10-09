@@ -6,7 +6,7 @@ const Y = (d, p) => d[p] * .2126 + d[p + 1] * .7152 + d[p + 2] * .0722;
 export const PHOTO_HALO = 10;
 const blockAxis = () => ({ sum: new Float64Array(8), count: new Uint32Array(8) });
 export function photoStatistics() {
-  return { blocks: [blockAxis(), blockAxis()], histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, neutralBands: Array.from({length:3}, () => ({count:0, rgb:[0,0,0]})), residuals: [], chromaResiduals: new Uint32Array(256), chromaCount: 0 };
+  return { blocks: [blockAxis(), blockAxis()], histogram: new Uint32Array(256), count: 0, sum: 0, neutral: [0, 0, 0], neutrals: 0, neutralBands: Array.from({length:3}, () => ({count:0, rgb:[0,0,0]})), residuals: [], chromaResiduals: new Uint32Array(256), chromaCount: 0, shadowResiduals: new Uint32Array(256), shadowCount: 0 };
 }
 // Sample native pixels, not a resized preview: resizing conceals sensor noise.
 export function collectPhotoStatistics(data, width, height, stats, step = 4, offsetY = 0) {
@@ -46,7 +46,12 @@ export function collectPhotoStatistics(data, width, height, stats, step = 4, off
       const left = Y(data, p - 4), right = Y(data, p + 4);
       const up = Y(data, p - width * 4), down = Y(data, p + width * 4);
       if (Math.abs(left - right) + Math.abs(up - down) < 24 && l > 12 && l < 243 && stats.residuals.length < 100000) {
-        stats.residuals.push(Math.abs(l - (left + right + up + down) / 4));
+        const residual = Math.abs(l - (left + right + up + down) / 4);
+        stats.residuals.push(residual);
+        if (l < 80) {
+          stats.shadowResiduals[Math.min(255, Math.round(residual * 4))]++;
+          stats.shadowCount++;
+        }
         // Estimate color speckle separately: low luminance noise does not imply
         // clean chroma, especially in phone JPEG shadows.
         const neighborY = (left + right + up + down) / 4;
@@ -77,6 +82,12 @@ export function makePhotoPlan(stats, options = {}) {
     if (chromaCount > stats.chromaCount / 2) { chromaMedian = i / 4; break; }
   }
   const chromaNoise = clamp(chromaMedian / .754, 0, 16);
+  let shadowMedian = 0, shadowSamples = 0;
+  for (let i = 0; i < 256 && stats.shadowCount; i++) {
+    shadowSamples += stats.shadowResiduals[i];
+    if (shadowSamples > stats.shadowCount / 2) { shadowMedian = i / 4; break; }
+  }
+  const shadowNoise = stats.shadowCount >= 32 ? clamp(shadowMedian / .754, 0, 16) : noise;
   const mean = stats.count ? stats.sum / stats.count : 128;
   const p05 = percentile(.05), p95 = percentile(.95);
   const range = p95 - p05;
@@ -99,8 +110,20 @@ export function makePhotoPlan(stats, options = {}) {
     const target = stats.neutral.reduce((a, b) => a + b, 0) / 3;
     for (let c = 0; c < 3; c++) wb[c] = 1 + (clamp(target / stats.neutral[c], .92, 1.08) - 1) * strength * .75;
   }
+  // A bright background can dominate the mean and incorrectly darken an already
+  // dark foreground. Require two substantial tonal groups with a midtone valley,
+  // not just black hair, a few highlights, a night scene or a full-range gradient.
+  const fraction = (lo, hi) => stats.histogram.slice(lo, hi).reduce((a,b) => a+b, 0) / Math.max(1, stats.count);
+  const mixedLight = graphic ? 0 : clamp((fraction(12, 80) - .12) / .18, 0, 1)
+    * clamp((fraction(192, 256) - .12) / .18, 0, 1)
+    * clamp((.22 - fraction(96, 160)) / .12, 0, 1)
+    * clamp((mean - 80) / 30, 0, 1)
+    * clamp((range - 160) / 40, 0, 1);
+  const shadowLift = 16 * mixedLight * clamp((6 - shadowNoise) / 4, 0, 1);
   // Conservative scene-adaptive tone curve. Never promise clipped detail recovery.
-  const gamma = graphic ? 1 : mean < 100 ? clamp(Math.log(100 / 255) / Math.log(Math.max(mean, 20) / 255), .68, 1) : mean > 150 ? clamp(Math.log(150 / 255) / Math.log(Math.min(mean, 235) / 255), 1, 1.16) : 1;
+  const originalGamma = graphic ? 1 : mean < 100 ? clamp(Math.log(100 / 255) / Math.log(Math.max(mean, 20) / 255), .68, 1) : mean > 150 ? clamp(Math.log(150 / 255) / Math.log(Math.min(mean, 235) / 255), 1, 1.16) : 1;
+  // Only relax global darkening when a useful, noise-safe shadow correction exists.
+  const gamma = originalGamma > 1 ? 1 + (originalGamma - 1) * (1 - shadowLift / 16) : originalGamma;
   const contrast = graphic || range < Math.max(12, noise * 6) ? 0 : clamp((180 - range) / 130, 0, .65) * clamp((range - 50) / 50, 0, 1) * strength;
   const black = Math.min(45, p05 * .65) * contrast;
   const white = 255 - Math.min(35, (255 - p95) * .5) * contrast;
@@ -111,11 +134,13 @@ export function makePhotoPlan(stats, options = {}) {
     const toe = black > 0 ? black * (1 - Math.exp(-i / (4 * black))) : 0;
     const stretched = clamp((i - toe) / (white - black), 0, 1);
     const mapped = 255 * Math.pow(stretched, gamma);
+    const rise = clamp((i - 8) / 32, 0, 1), fall = clamp((144 - i) / 80, 0, 1);
+    const lift = shadowLift * rise * rise * (3 - 2 * rise) * fall * fall * (3 - 2 * fall);
     // Strength controls correction, not an extra processing pass.
-    tone[i] = clamp(i + (mapped - i) * Math.min(1, strength), 0, 255);
+    tone[i] = clamp(i + (mapped + lift - i) * Math.min(1, strength), 0, 255);
   }
   const sharp = ({ off: 0, low: .14, medium: .28, auto: .18 })[options.sharpness || 'auto'] ?? .18;
-  return { noise, chromaNoise, wb, tone, strength, graphic, portrait: options.content === 'portrait', blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
+  return { noise, chromaNoise, shadowNoise, shadowLift, wb, tone, strength, graphic, portrait: options.content === 'portrait', blocks, blockStrength, sharp: graphic ? 0 : sharp * (1 - blockStrength), local: graphic ? 0 : .10 * strength * (1 - blockStrength), mean, range };
 }
 
 // Strip input includes a 10px halo; returns RGBA for only the requested rows.
