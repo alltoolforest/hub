@@ -108,6 +108,7 @@ test('file upload UI uses validated batch result and retains old merge engine op
  const merger=readFileSync(new URL('../assets/js/pdf-merger.js',import.meta.url),'utf8');
  assert.match(merger,/const result=await preparePdfBatch\(files,selected/);
  assert.match(merger,/if\(result\.entries\.length\)files=\[\.\.\.files,\.\.\.result\.entries\]/);
- assert.match(merger,/for\(const page of await out\.copyPages\(source,source\.getPageIndices\(\)\)\)out\.addPage\(page\)/);
- assert.match(merger,/clearOutputs\(\);await process\(\)/);
+ assert.match(merger,/const result=await verifiedMerge\(snapshot,engine/);
+ assert.match(merger,/output\(result\.blob,'merged\.pdf'\)/);
+ assert.doesNotMatch(merger,/clearOutputs\(\);await (?:process|verifiedMerge)\(/);
 });
