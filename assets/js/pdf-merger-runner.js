@@ -8,13 +8,13 @@ export function shouldUsePdfMergeWorker(entries){
  const pages=entries.reduce((sum,e)=>sum+(e?.pageCount||0),0);
  return count>=13||bytes>=48*1024*1024||pages>=300;
 }
-export async function mergePdfBatch(entries,{isMobile=false,signal=null,onProgress=()=>{},loadEngine}={}){
+export async function mergePdfBatch(entries,{isMobile=false,signal=null,onProgress=()=>{},loadEngine,allowBookmarkLoss=false}={}){
  if(signal?.aborted)throw cancellationError();
  if(typeof loadEngine!=='function')throw Error('PDF merge engine loader is unavailable.');
  if(!shouldUsePdfMergeWorker(entries)||typeof Worker!=='function'){
   const lib=await loadEngine();
   if(signal?.aborted)throw cancellationError();
-  return verifiedMerge(entries,lib,{isMobile,signal,onProgress});
+  return verifiedMerge(entries,lib,{isMobile,signal,onProgress,allowBookmarkLoss});
  }
  return new Promise((resolve,reject)=>{
   let worker=null,settled=false;
@@ -55,7 +55,7 @@ export async function mergePdfBatch(entries,{isMobile=false,signal=null,onProgre
    worker.postMessage({
     type:'merge',
     entries:entries.map(entry=>({file:entry.file,pageCount:entry.pageCount})),
-    isMobile
+    isMobile,allowBookmarkLoss
    });
   }catch(error){
    finish(Error('The background PDF engine could not start on this browser. Try updating the browser or a smaller batch.'));

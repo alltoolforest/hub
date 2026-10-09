@@ -21,13 +21,16 @@ export function sameGeometry(a,b){
  return near(a.width,b.width)&&near(a.height,b.height)&&a.rotation===b.rotation&&
   ['x','y','width','height'].every(key=>near(a.crop[key],b.crop[key]));
 }
-export function checkComplexStructure(source,lib,name){
+export function checkComplexStructure(source,lib,name,{allowBookmarkLoss=false}={}){
  // Page-copy workflows cannot promise to preserve cross-document structures.
  // Reject known incompatible documents rather than silently stripping user data.
  const root=source.catalog;
+ // A copied-page merge does not retain document bookmarks.
+ // Require deliberate user consent before omitting them.
+ if(root.get(lib.PDFName.of('Outlines'))!==undefined&&!allowBookmarkLoss)
+  throw Error('"'+name+'" contains bookmarks / document outlines. To merge its pages, select "Merge pages only (remove bookmarks)" near Create PDF, then retry. Original PDFs stay unchanged.');
  const keys=[
   ['AcroForm','interactive form fields or signatures'],
-  ['Outlines','bookmarks / document outlines'],
   ['AF','associated document attachments'],
   ['Perms','document permissions or certification signatures'],
   ['OpenAction','document-level interactive actions'],
@@ -80,7 +83,7 @@ export function checkComplexStructure(source,lib,name){
   }
  }
 }
-export async function verifiedMerge(entries,lib,{signal=null,onProgress=()=>{},isMobile=false}={}){
+export async function verifiedMerge(entries,lib,{signal=null,onProgress=()=>{},isMobile=false,allowBookmarkLoss=false}={}){
  if(!Array.isArray(entries)||entries.length<2)throw Error('Choose at least two PDFs.');
  if(!lib?.PDFDocument?.load||!lib?.PDFDocument?.create||!lib?.PDFName?.of)
   throw Error('The PDF merge engine is unavailable. Reload and retry.');
@@ -106,7 +109,7 @@ export async function verifiedMerge(entries,lib,{signal=null,onProgress=()=>{},i
     const count=source.getPageCount();
     if(count!==entry.pageCount||count<1)
      throw Error('"'+entry.file.name+'" changed since selection. Remove the file and add it again.');
-    checkComplexStructure(source,lib,entry.file.name);
+    checkComplexStructure(source,lib,entry.file.name,{allowBookmarkLoss});
     const srcPages=source.getPages();
     for(const page of srcPages)expected.push(pdfPageGeometry(page));
     const copies=await output.copyPages(source,source.getPageIndices());
