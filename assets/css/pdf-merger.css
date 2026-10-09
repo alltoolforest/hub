@@ -16,6 +16,10 @@ body[data-tool="pdf-merger"] .pdf-merger-preview-frame{
  background:#f2f6f3;border:1px solid #d7e5db;border-radius:8px;
  padding:6px;gap:6px;overflow:hidden;
 }
+/* Explicitly respect the hidden attribute despite the thumbnail display rule. */
+body[data-tool="pdf-merger"] .pdf-merger-thumbnail[hidden],
+body[data-tool="pdf-merger"] .pdf-merger-jump[hidden]{display:none}
+body[data-tool="pdf-merger"] .pdf-merger-jump{display:inline-flex;min-height:44px;margin:6px 0 12px;align-items:center}
 body[data-tool="pdf-merger"] .pdf-merger-thumbnail{
  display:block;max-width:100%;height:auto;max-height:175px;
  background:#fff;box-shadow:0 1px 4px #0002
