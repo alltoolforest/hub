@@ -1,7 +1,7 @@
-// PDF Merger Task 1 only — non-destructive, bounded input admission.
+// PDF Merger input admission — Task 1 behavior retained; mobile/desktop limits aligned for multi-PDF workflows.
 // This module does not modify the PDF merging engine or other document tools.
 export const PDF_MERGER_LIMITS=Object.freeze({
- mobile:Object.freeze({maxFiles:12,maxTotalBytes:60*1024*1024,maxFileBytes:30*1024*1024,maxPages:250}),
+ mobile:Object.freeze({maxFiles:35,maxTotalBytes:200*1024*1024,maxFileBytes:100*1024*1024,maxPages:1200}),
  desktop:Object.freeze({maxFiles:35,maxTotalBytes:200*1024*1024,maxFileBytes:100*1024*1024,maxPages:1200})
 });
 export function limitsFor(isMobile){return isMobile?PDF_MERGER_LIMITS.mobile:PDF_MERGER_LIMITS.desktop;}
