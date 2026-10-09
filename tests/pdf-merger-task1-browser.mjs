@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {chromium} from 'playwright';
+import {chromium,firefox,webkit} from 'playwright';
 const require=createRequire(import.meta.url),PDFLib=require('../assets/vendor/pdf-lib.js');
-const browser=await chromium.launch({headless:true});
+const engine=process.env.BROWSER||'chromium';
+const browser=await {chromium,firefox,webkit}[engine].launch({headless:true});
 const page=await browser.newPage({viewport:{width:390,height:844},acceptDownloads:true});
 page.setDefaultTimeout(25000);
 const errors=[];page.on('pageerror',err=>errors.push(err.message));
@@ -64,5 +65,5 @@ try{
  assert.deepEqual(errors,[]);
  const width=await page.evaluate(()=>document.querySelector('#workspace').scrollWidth-document.querySelector('#workspace').clientWidth);
  assert.ok(width<=2,'Unexpected mobile horizontal overflow: '+width);
- console.log('PDF_MERGER_TASK1_BROWSER_PASS: multi-select, PDF page metadata, reorder and output, transactional error rollback, malformed/blank PDF, retry, mobile');
+ console.log('PDF_MERGER_TASK1_BROWSER_PASS '+engine+': multi-select, PDF page metadata, reorder and output, transactional error rollback, malformed/blank PDF, retry, mobile');
 }finally{await browser.close();}
