@@ -41,3 +41,6 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
           node tests/pdf-merger-task1-browser.mjs
           node tests/pdf-merger-task2-browser.mjs
+      - name: Verify rendered text and scanned-image fidelity (Chromium)
+        if: matrix.browser == 'chromium'
+        run: node tests/pdf-merger-task2-fidelity-browser.mjs
