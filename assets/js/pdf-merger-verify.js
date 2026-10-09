@@ -56,7 +56,7 @@ export async function verifiedMerge(entries,lib,{signal=null,onProgress=()=>{},i
  const promisedPages=entries.reduce((sum,e)=>sum+e.pageCount,0);
  if(combinedSize>limits.maxTotalBytes||promisedPages>limits.maxPages)
   throw Error('These PDFs exceed the safe merge limits for this device. Use a smaller batch.');
- const outputLimit=isMobile?90*1024*1024:250*1024*1024;
+ const outputLimit=250*1024*1024; // Same verified-output envelope across phone and desktop.
  let output=null;
  const expected=[];
  try{
