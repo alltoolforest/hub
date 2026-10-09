@@ -55,7 +55,13 @@ try{
  assert.equal(focus1.label,'Move down Beta.pdf');
  await page.keyboard.press('Enter');
  assert.match(await rows.nth(1).locator('.pdf-merger-file-title').textContent(),/Beta.pdf/);
+ assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'Move down Beta.pdf');
+ // The same focused control should support another move without restarting keyboard navigation.
+ await page.keyboard.press('Enter');
+ assert.match(await rows.nth(2).locator('.pdf-merger-file-title').textContent(),/Beta.pdf/);
  assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'Move up Beta.pdf');
+ // Restore the file order used for the existing output-order acceptance check.
+ await rows.nth(2).getByRole('button',{name:'Move up Beta.pdf'}).click();
  const removal=rows.nth(2).getByRole('button',{name:'Remove'});
  await removal.focus();await page.keyboard.press('Enter');
  assert.equal(await rows.count(),2);
