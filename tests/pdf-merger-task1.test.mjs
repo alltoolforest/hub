@@ -107,7 +107,7 @@ test('PDF Merger routing remains isolated from frozen document tools',()=>{
 test('file upload UI uses validated batch result and retains old merge engine operation',()=>{
  const merger=readFileSync(new URL('../assets/js/pdf-merger.js',import.meta.url),'utf8');
  assert.match(merger,/const result=await preparePdfBatch\(files,selected/);
- assert.match(merger,/if\(result\.entries\.length\)files=\[\.\.\.files,\.\.\.result\.entries\]/);
+ assert.match(merger,/if\(result\.entries\.length\)\{files=\[\.\.\.files,\.\.\.result\.entries\];changed\(\);\}/);
  assert.match(merger,/const result=await verifiedMerge\(snapshot,engine/);
  assert.match(merger,/output\(result\.blob,'merged\.pdf'\)/);
  assert.doesNotMatch(merger,/clearOutputs\(\);await (?:process|verifiedMerge)\(/);
