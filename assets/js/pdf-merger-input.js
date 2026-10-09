@@ -6,6 +6,20 @@ export const PDF_MERGER_LIMITS=Object.freeze({
 });
 export function limitsFor(isMobile){return isMobile?PDF_MERGER_LIMITS.mobile:PDF_MERGER_LIMITS.desktop;}
 export function duplicateKey(file){return JSON.stringify([file.name,file.size,file.lastModified]);}
+// Matching metadata is not proof that PDFs have the same bytes.
+// Read only small chunks on collisions, even when files are large.
+export async function samePdfContents(a,b){
+ if(a.size!==b.size)return false;
+ const chunkSize=256*1024;
+ for(let offset=0;offset<a.size;offset+=chunkSize){
+  const end=Math.min(a.size,offset+chunkSize);
+  const left=new Uint8Array(await a.slice(offset,end).arrayBuffer());
+  const right=new Uint8Array(await b.slice(offset,end).arrayBuffer());
+  if(left.length!==right.length)return false;
+  for(let i=0;i<left.length;i++)if(left[i]!==right[i])return false;
+ }
+ return true;
+}
 export function inputLimits(entries,files,isMobile){
  const limits=limitsFor(isMobile);
  const totalCount=entries.length+files.length;
@@ -67,12 +81,23 @@ export async function preparePdfBatch(existing,selected,{isMobile=false,loadPdf}
  if(typeof loadPdf!=='function')throw Error('PDF engine is unavailable for validation.');
  const previous=Array.isArray(existing)?existing:[];
  const incoming=Array.from(selected||[]);
- const known=new Set(previous.map(entry=>duplicateKey(entry.file)));
+ const known=new Map();
+ for(const entry of previous){
+  const key=duplicateKey(entry.file);
+  if(!known.has(key))known.set(key,[]);
+  known.get(key).push(entry.file);
+ }
  const staged=[],skipped=[];
  for(const file of incoming){
   const key=duplicateKey(file);
-  if(known.has(key)){skipped.push(file.name);continue;}
-  known.add(key);staged.push(file);
+  const candidates=known.get(key)||[];
+  let duplicate=false;
+  for(const candidate of candidates){
+   if(await samePdfContents(candidate,file)){duplicate=true;break;}
+  }
+  if(duplicate){skipped.push(file.name);continue;}
+  if(!known.has(key))known.set(key,[]);
+  known.get(key).push(file);staged.push(file);
  }
  // Preflight all prospective changes before accepting a single new file.
  const limits=inputLimits(previous,staged,isMobile);
