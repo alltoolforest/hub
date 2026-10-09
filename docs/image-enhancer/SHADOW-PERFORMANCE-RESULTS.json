@@ -1,0 +1,98 @@
+[
+  {
+    "kind": "12mp",
+    "mobile": false,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1849,
+    "bytes": 12658973,
+    "ticks": 73,
+    "maxGap": 26,
+    "engine": "baseline"
+  },
+  {
+    "kind": "12mp",
+    "mobile": true,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1962,
+    "bytes": 12658973,
+    "ticks": 78,
+    "maxGap": 26,
+    "engine": "baseline"
+  },
+  {
+    "kind": "12mp",
+    "mobile": false,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1907,
+    "bytes": 12658973,
+    "ticks": 76,
+    "maxGap": 25,
+    "engine": "candidate"
+  },
+  {
+    "kind": "12mp",
+    "mobile": true,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1838,
+    "bytes": 12658973,
+    "ticks": 73,
+    "maxGap": 26,
+    "engine": "candidate"
+  },
+  {
+    "kind": "12mp",
+    "mobile": false,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1889,
+    "bytes": 12658973,
+    "ticks": 75,
+    "maxGap": 26,
+    "engine": "candidate"
+  },
+  {
+    "kind": "12mp",
+    "mobile": true,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1881,
+    "bytes": 12658973,
+    "ticks": 75,
+    "maxGap": 28,
+    "engine": "candidate"
+  },
+  {
+    "kind": "12mp",
+    "mobile": false,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1970,
+    "bytes": 12658973,
+    "ticks": 78,
+    "maxGap": 26,
+    "engine": "baseline"
+  },
+  {
+    "kind": "12mp",
+    "mobile": true,
+    "width": 4000,
+    "height": 3000,
+    "valid": true,
+    "ms": 1865,
+    "bytes": 12658973,
+    "ticks": 74,
+    "maxGap": 26,
+    "engine": "baseline"
+  }
+]
