@@ -1,0 +1,45 @@
+name: PDF Merger Task 3 preview accessibility and mobile regression
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger.js'
+      - 'assets/js/pdf-merger-preview.js'
+      - 'assets/css/pdf-merger.css'
+      - 'documents/pdf-merger/index.html'
+      - 'tests/pdf-merger-task*.mjs'
+      - '.github/workflows/pdf-merger-task3.yml'
+  workflow_dispatch:
+jobs:
+  merger-task3-cross-browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and Task 1–3 unit regression
+        run: |
+          node --check assets/js/pdf-merger.js
+          node --check assets/js/pdf-merger-preview.js
+          node --check tests/pdf-merger-task3-browser.mjs
+          node --test tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs tests/pdf-merger-task3.test.mjs
+      - name: Install browser and accessibility engine
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Validate preview and keyboard UX with prior merge workflows
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-task3-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-task1-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
+          node tests/pdf-merger-task3-browser.mjs

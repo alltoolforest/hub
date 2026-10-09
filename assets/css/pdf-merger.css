@@ -1,0 +1,73 @@
+/* PDF Merger Task 3 only. These selectors never style other document tools. */
+body[data-tool="pdf-merger"] .pdf-merger-queue-hint{
+ font-size:14px;color:var(--muted);margin:12px 0;
+}
+body[data-tool="pdf-merger"] .pdf-merger-list{margin:12px 0 16px;padding:0;min-width:0}
+body[data-tool="pdf-merger"] .pdf-merger-list li.pdf-merger-item{
+ display:grid;grid-template-columns:145px minmax(0,1fr);
+ align-items:center;column-gap:15px;row-gap:8px;
+ min-width:0;padding:14px 10px;
+ border:1px solid var(--line);border-radius:10px;margin-bottom:10px;
+ background:var(--surface,#fff)
+}
+body[data-tool="pdf-merger"] .pdf-merger-preview-frame{
+ min-width:0;max-width:145px;min-height:105px;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ background:#f2f6f3;border:1px solid #d7e5db;border-radius:8px;
+ padding:6px;gap:6px;overflow:hidden;
+}
+body[data-tool="pdf-merger"] .pdf-merger-thumbnail{
+ display:block;max-width:100%;height:auto;max-height:175px;
+ background:#fff;box-shadow:0 1px 4px #0002
+}
+body[data-tool="pdf-merger"] .pdf-merger-preview-status{
+ display:block;min-width:0!important;max-width:100%;
+ flex:none!important;text-align:center;font-size:11px;
+ color:#425b4f;overflow-wrap:anywhere;
+}
+body[data-tool="pdf-merger"] .pdf-merger-item-info{min-width:0;overflow-wrap:anywhere}
+body[data-tool="pdf-merger"] .pdf-merger-file-title{
+ display:block;min-width:0!important;font-weight:650;font-size:14px;
+ flex:none!important;overflow-wrap:anywhere;line-height:1.5
+}
+body[data-tool="pdf-merger"] .pdf-merger-item-info small{
+ display:block;margin-top:5px;color:var(--muted);font-size:12px
+}
+body[data-tool="pdf-merger"] .pdf-merger-file-controls{
+ grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;min-width:0
+}
+body[data-tool="pdf-merger"] .pdf-merger-file-controls button{
+ min-height:44px;min-width:44px;padding:9px 15px;flex:1 1 90px;
+ font-size:14px
+}
+body[data-tool="pdf-merger"] .pdf-merger-file-controls button:focus-visible{
+ outline:3px solid #146cc1;outline-offset:2px
+}
+body[data-tool="pdf-merger"] .pdf-merger-queue-live{
+ font-size:13px;color:#21583d;line-height:1.5;
+}
+body[data-tool="pdf-merger"] .pdf-merger-old-order{
+ display:block!important;flex-basis:100%;min-width:0!important;
+ font-size:13px;font-weight:650;color:#855a12;overflow-wrap:anywhere
+}
+body[data-tool="pdf-merger"] .pdf-merger-admission,
+body[data-tool="pdf-merger"] .pdf-merger-result{overflow-wrap:anywhere}
+@media(max-width:560px){
+ body[data-tool="pdf-merger"] .pdf-merger-list li.pdf-merger-item{
+  grid-template-columns:106px minmax(0,1fr);gap:10px;padding:11px 8px
+ }
+ body[data-tool="pdf-merger"] .pdf-merger-preview-frame{max-width:106px}
+ body[data-tool="pdf-merger"] .pdf-merger-thumbnail{max-height:155px}
+ body[data-tool="pdf-merger"] .pdf-merger-file-controls{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr))
+ }
+ body[data-tool="pdf-merger"] .pdf-merger-file-controls button{
+  width:100%;min-width:0;padding:9px 5px
+ }
+ body[data-tool="pdf-merger"] .pdf-merger-file-title{font-size:13px}
+}
+@media(max-width:330px){
+ body[data-tool="pdf-merger"] .pdf-merger-list li.pdf-merger-item{grid-template-columns:1fr}
+ body[data-tool="pdf-merger"] .pdf-merger-preview-frame{justify-self:center;max-width:145px}
+ body[data-tool="pdf-merger"] .pdf-merger-file-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
