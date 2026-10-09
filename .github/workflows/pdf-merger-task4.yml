@@ -47,4 +47,6 @@ jobs:
         with:
           node-version: '22'
       - name: Stress source order and memory budget
-        run: node --max-old-space-size=768 tests/pdf-merger-task4-stress.mjs
+        run: |
+          node --check tests/pdf-merger-task4-stress.mjs
+          node --max-old-space-size=768 tests/pdf-merger-task4-stress.mjs
