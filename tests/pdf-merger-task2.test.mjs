@@ -119,7 +119,7 @@ test('all errors are source-specific, and do not echo source content',async()=>{
 test('Task 2 leaves Task 1 input validation untouched and shared PDF dispatcher isolated',()=>{
  const merger=readFileSync(new URL('../assets/js/pdf-merger.js',import.meta.url),'utf8');
  const dispatch=readFileSync(new URL('../assets/js/pdf.js',import.meta.url),'utf8');
- assert.match(merger,/verifiedMerge\(snapshot,engine/);
+ assert.match(merger,/mergePdfBatch\(snapshot,/);
  assert.match(merger,/output\(result\.blob,'merged\.pdf'\)/);
  assert.match(merger,/markOldResult\(\)/);
  assert.match(merger,/Cancel merge/);
