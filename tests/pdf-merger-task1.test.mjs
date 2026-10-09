@@ -57,9 +57,11 @@ test('encrypted/password errors have a file-specific actionable explanation',asy
  await assert.rejects(()=>preparePdfBatch([],[f],{loadPdf:()=>{throw Error('Input document is encrypted')}}),/locked.pdf.*password-protected.*Unlock/);
  assert.match(describePdfError(f,Error('password needed')).message,/locked.pdf/);
 });
-test('zero-page source is rejected before queue admission',async()=>{
- const empty=await pdf('no-pages.pdf',0);
- await assert.rejects(()=>preparePdfBatch([],[empty],{loadPdf}),/no-pages.pdf.*no usable PDF pages/);
+test('zero-page parser result is rejected before queue admission',async()=>{
+ const source=await pdf('no-pages.pdf');
+ await assert.rejects(()=>preparePdfBatch([],[source],{
+  loadPdf:async()=>({getPageCount:()=>0})
+ }),/no-pages.pdf.*no usable PDF pages/);
 });
 test('all input limits reject early, before trying to read large data',async()=>{
  let reads=0;const small=await pdf('small.pdf');
