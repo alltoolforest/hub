@@ -1,5 +1,5 @@
 // PDF Merger Task 1: isolated source validation. The merge engine remains unchanged.
-import {el,format,action,notice,setupStatus,status,fileInput,bindFile,pdfLib,output,downloads,clearOutputs,mobile} from './core.js';
+import {el,format,notice,setupStatus,status,errorMessage,fileInput,pdfLib,output,downloads,clearOutputs,mobile} from './core.js';
 import {preparePdfBatch,limitsFor} from './pdf-merger-input.js';
 import {mergePdfBatch} from './pdf-merger-runner.js';
 import {renderPdfMergerThumbnail,previewEligibility} from './pdf-merger-preview.js';
@@ -172,12 +172,26 @@ export async function mount(root){
    }else input.focus();
   }
  }
- bindFile(input,async selected=>{
-  if(busy)throw Error('Wait for the current merge to finish or cancel it before adding documents.');
-  if(uploading)throw Error('Wait for the current document upload to finish.');
-  uploading=true;
-  // Neither the queue nor the displayed order changes until every new PDF is verified.
+ // PDF Merger owns its upload controls. The generic bindFile helper re-enables
+ // intentionally disabled controls (Cancel, first Move up, last Move down).
+ // Preserve the existing admission/order logic while restoring each prior state.
+ input.addEventListener('change',async()=>{
+  const selected=[...input.files];
+  if(!selected.length)return;
+  const disabled=new Map();
+  for(const control of root.querySelectorAll('button,input,select')){
+   disabled.set(control,control.disabled);
+   control.disabled=true;
+  }
+  let info=input.parentElement.querySelector('.selected-files');
+  if(!info){info=el('p',{class:'selected-files'});input.after(info);}
+  status(selected.some(f=>f.size>5*1024**2)?
+   'Large file selected. Opening may take longer and use more memory…':'Opening file…');
   try{
+   if(busy)throw Error('Wait for the current merge to finish or cancel it before adding documents.');
+   if(uploading)throw Error('Wait for the current document upload to finish.');
+   uploading=true;
+   // The current queue and order change only after all new PDFs validate.
    const engine=await pdfLib();
    const result=await preparePdfBatch(files,selected,{
     isMobile,
@@ -191,13 +205,17 @@ export async function mount(root){
    const message=added+' PDF(s) added'+(skipped?' · '+skipped+' exact duplicate(s) skipped: '+result.skipped.join(', '):'')+
     '. The existing file order is preserved.';
    summary.textContent+=' '+message;
+   info.textContent='Selected: '+selected.map(f=>f.name).join(', ');
+   status('File ready.');
   }catch(error){
-   // Existing entries and their order remain unchanged; bindFile presents error status.
    summary.textContent='Upload rejected. Previously selected '+files.length+
     ' PDF(s) retained in the same order. '+String(error?.message||error);
-   throw error;
+   info.textContent='Could not open the selected file.';
+   status(errorMessage(error),true);
   }finally{
    uploading=false;
+   for(const [control,wasDisabled] of disabled)if(control.isConnected)control.disabled=wasDisabled;
+   input.value='';
    void drainPreviews();
   }
  });
@@ -316,12 +334,30 @@ export async function mount(root){
   previewQueue.length=0;
   files=[];revision++;outputRevision=-1;bookmarkConsent.checked=false;
   list.replaceChildren();clearOutputs();verified.textContent='';drawFiles();
+  const previousFiles=input.parentElement.querySelector('.selected-files');
+  if(previousFiles)previousFiles.textContent='';
+  status('');
   announce('All PDFs removed from the merge queue.');
  });
  setupStatus(root);downloads(root);
+ // The shared download helper revokes blob URLs on pagehide. A bfcache restore
+ // can otherwise display revoked download links. Safely clear stale results and
+ // rebuild first-page previews when the browser restores this same tool page.
  window.addEventListener('pagehide',()=>{
   for(const entry of files)releasePreview(entry);
   previewQueue.length=0;
   previewObserver?.disconnect();
- },{once:true});
+ });
+ window.addEventListener('pageshow',event=>{
+  if(!event.persisted)return;
+  const hadResult=!!root.querySelector('#downloads .download-row');
+  clearOutputs();
+  outputRevision=-1;
+  verified.textContent=hadResult?
+   'Previous download expired when this tab was restored. Create PDF again to get a fresh verified download.':'';
+  if(hadResult)status('Previous PDF download expired on browser return. Recreate the PDF.');
+  drawFiles();
+  announce('PDF Merger restored. Selected PDFs are retained; create a new download if needed.');
+  void drainPreviews();
+ });
 }
