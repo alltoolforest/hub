@@ -41,7 +41,7 @@ test('PDF Merger styles are scoped to its body and small screens',()=>{
 });
 test('the Task 1/2 verified workflow and no touching of generic core remain',()=>{
  assert.match(merger,/preparePdfBatch\(files,selected/);
- assert.match(merger,/verifiedMerge\(snapshot,engine/);
+ assert.match(merger,/mergePdfBatch\(snapshot,/);
  assert.match(merger,/output\(result\.blob,'merged\.pdf'\)/);
  assert.match(merger,/const oldRows=\[\.\.\.root\.querySelectorAll/);
  assert.match(merger,/if\(busy\|\|uploading\)return/);
