@@ -18,11 +18,11 @@ async function pdf(name,pages=1){
 const loadPdf=bytes=>PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
 
 test('device limits are conservative and include file, combined size, count and total pages',()=>{
- assert.equal(limitsFor(true).maxFiles,12);
+ assert.equal(limitsFor(true).maxFiles,35);
  assert.equal(limitsFor(false).maxFiles,35);
- assert.equal(PDF_MERGER_LIMITS.mobile.maxTotalBytes,60*1024*1024);
+ assert.equal(PDF_MERGER_LIMITS.mobile.maxTotalBytes,200*1024*1024);
  assert.equal(PDF_MERGER_LIMITS.desktop.maxTotalBytes,200*1024*1024);
- assert.equal(PDF_MERGER_LIMITS.mobile.maxPages,250);
+ assert.equal(PDF_MERGER_LIMITS.mobile.maxPages,1200);
  assert.equal(PDF_MERGER_LIMITS.desktop.maxPages,1200);
 });
 test('valid PDF returns correct parsed page count',async()=>{
@@ -65,25 +65,25 @@ test('zero-page parser result is rejected before queue admission',async()=>{
 });
 test('all input limits reject early, before trying to read large data',async()=>{
  let reads=0;const small=await pdf('small.pdf');
- const oversized={name:'large.pdf',size:31*1024*1024,lastModified:1,slice(){reads++;throw Error('should not read')}};
+ const oversized={name:'large.pdf',size:101*1024*1024,lastModified:1,slice(){reads++;throw Error('should not read')}};
  await assert.rejects(()=>preparePdfBatch([],[oversized],{loadPdf,isMobile:true}),/large.pdf.*per-file/);
  assert.equal(reads,0);
- const existing=Array.from({length:12},(_,i)=>({file:{...small,name:'item'+i+'.pdf',size:512,lastModified:i},pageCount:1}));
- await assert.rejects(()=>preparePdfBatch(existing,[small],{loadPdf,isMobile:true}),/up to 12/);
+ const existing=Array.from({length:35},(_,i)=>({file:{...small,name:'item'+i+'.pdf',size:512,lastModified:i},pageCount:1}));
+ await assert.rejects(()=>preparePdfBatch(existing,[small],{loadPdf,isMobile:true}),/up to 35/);
  assert.equal(reads,0);
 });
 test('over combined size keeps existing queue intact',async()=>{
  const original=await pdf('first.pdf');
- const previous=[{file:{...original,size:58*1024*1024},pageCount:1}];
+ const previous=[{file:{...original,size:198*1024*1024},pageCount:1}];
  const next={name:'valid.pdf',size:4*1024*1024,lastModified:20};
  await assert.rejects(()=>preparePdfBatch(previous,[next],{loadPdf,isMobile:true}),/Combined PDFs exceed/);
  assert.equal(previous.length,1);
  assert.equal(previous[0].file.name,'first.pdf');
 });
 test('over page limit rejects a batch without mutating existing entries',async()=>{
- const source=await pdf('over.pdf',3),previous=[{file:await pdf('keep.pdf'),pageCount:249}];
- await assert.rejects(()=>preparePdfBatch(previous,[source],{loadPdf,isMobile:true}),/page limit.*250/);
- assert.equal(previous[0].pageCount,249);
+ const source=await pdf('over.pdf',3),previous=[{file:await pdf('keep.pdf'),pageCount:1199}];
+ await assert.rejects(()=>preparePdfBatch(previous,[source],{loadPdf,isMobile:true}),/page limit.*1200/);
+ assert.equal(previous[0].pageCount,1199);
 });
 test('same name, size, timestamp duplicates are skipped but distinct files remain allowed',async()=>{
  const a=await pdf('a.pdf'),b=await pdf('b.pdf');
@@ -108,7 +108,7 @@ test('file upload UI uses validated batch result and retains old merge engine op
  const merger=readFileSync(new URL('../assets/js/pdf-merger.js',import.meta.url),'utf8');
  assert.match(merger,/const result=await preparePdfBatch\(files,selected/);
  assert.match(merger,/if\(result\.entries\.length\)\{files=\[\.\.\.files,\.\.\.result\.entries\];changed\(\);\}/);
- assert.match(merger,/const result=await verifiedMerge\(snapshot,engine/);
+ assert.match(merger,/const result=await mergePdfBatch\(snapshot,/);
  assert.match(merger,/output\(result\.blob,'merged\.pdf'\)/);
  assert.doesNotMatch(merger,/clearOutputs\(\);await (?:process|verifiedMerge)\(/);
 });
