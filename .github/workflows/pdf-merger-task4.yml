@@ -1,0 +1,50 @@
+name: PDF Merger Task 4 integrated release gate
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger*.js'
+      - 'tests/pdf-merger-task*.mjs'
+      - '.github/workflows/pdf-merger-task4.yml'
+  workflow_dispatch:
+jobs:
+  cross-browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 19
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Full unit regression
+        run: node --test tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs tests/pdf-merger-task3.test.mjs
+      - name: Install test runtime
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser integration tests
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-task1-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
+          node tests/pdf-merger-task3-browser.mjs
+          node tests/pdf-merger-task4-integrated-browser.mjs
+      - name: Digital and scanned page fidelity
+        if: matrix.browser == 'chromium'
+        run: node tests/pdf-merger-task2-fidelity-browser.mjs
+  mobile-batch-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Stress source order and memory budget
+        run: node --max-old-space-size=768 tests/pdf-merger-task4-stress.mjs
