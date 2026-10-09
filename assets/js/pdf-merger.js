@@ -1,7 +1,7 @@
 // PDF Merger Task 1: isolated source validation. The merge engine remains unchanged.
 import {el,format,action,notice,setupStatus,status,fileInput,bindFile,pdfLib,output,downloads,clearOutputs,mobile} from './core.js';
 import {preparePdfBatch,limitsFor} from './pdf-merger-input.js';
-import {verifiedMerge} from './pdf-merger-verify.js';
+import {mergePdfBatch} from './pdf-merger-runner.js';
 import {renderPdfMergerThumbnail,previewEligibility} from './pdf-merger-preview.js';
 
 export async function mount(root){
@@ -194,7 +194,7 @@ export async function mount(root){
    void drainPreviews();
   }
  });
- notice(root,'Add files in batches, then use the arrows to set their order. Exact duplicate selections are skipped. Invalid or oversized batches do not replace previously selected PDFs. Browser-based page copying may not preserve bookmarks, form fields, signatures, attachments or document-level actions; affected documents are rejected rather than silently losing those features.');
+ notice(root,'Add PDFs in batches. You can merge 20 or more on modern phones within the displayed size and page limits. Larger jobs run in a background worker where supported. Keep this tab open until the download is ready. Exact duplicate selections are skipped; invalid batches preserve earlier files. Browser-based page copying may not preserve bookmarks, form fields, signatures, attachments or document-level actions; affected documents are rejected rather than silently losing those features.');
  const mergeControls=el('div',{class:'actions'});
  const mergeButton=el('button',{type:'button',class:'primary',text:'Create PDF'});
  const cancelButton=el('button',{type:'button',text:'Cancel merge',disabled:true});
@@ -227,10 +227,9 @@ export async function mount(root){
   cancelButton.disabled=false;
   progress.hidden=false;progress.max=snapshot.length;progress.value=0;
   try{
-   const engine=await pdfLib();
-   if(abortController.signal.aborted)throw Error('Merge cancelled. Your previous download remains available.');
-   const result=await verifiedMerge(snapshot,engine,{
-    signal:abortController.signal,isMobile,
+   status('Preparing PDFs for verified merging…');
+   const result=await mergePdfBatch(snapshot,{
+    signal:abortController.signal,isMobile,loadEngine:pdfLib,
     onProgress:p=>{
      if(p.phase==='copying'){
       progress.value=p.index-1;
