@@ -1,0 +1,43 @@
+name: PDF Merger Task 2 verified output
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger.js'
+      - 'assets/js/pdf-merger-verify.js'
+      - 'tests/pdf-merger-task*.mjs'
+      - '.github/workflows/pdf-merger-task2.yml'
+  workflow_dispatch:
+jobs:
+  verified-merge:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and Task 1 plus Task 2 unit regression
+        run: |
+          node --check assets/js/pdf-merger.js
+          node --check assets/js/pdf-merger-input.js
+          node --check assets/js/pdf-merger-verify.js
+          node --check tests/pdf-merger-task2-browser.mjs
+          node --test tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs
+      - name: Install browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run actual PDF Merger browser regressions
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-task2-http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-task1-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
