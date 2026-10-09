@@ -57,10 +57,9 @@ try{
  assert.match(await page.locator('.pdf-merger-admission').textContent(),/3 PDF\(s\).*3 page/);
  await current().nth(2).getByRole('button',{name:'Remove'}).click();
  assert.equal(await current().count(),2);
- // Zero-page PDF rejected before admission.
- const blank=await PDFLib.PDFDocument.create();
- await page.locator('#file-input').setInputFiles({name:'blank.pdf',mimeType:'application/pdf',buffer:Buffer.from(await blank.save())});
- await page.waitForFunction(()=>document.querySelector('.pdf-merger-admission')?.textContent?.includes('no usable PDF pages'));
+ // Wrong file extension is rejected before parsing, without disturbing prior inputs.
+ await page.locator('#file-input').setInputFiles({name:'not-a-pdf.txt',mimeType:'text/plain',buffer:Buffer.from('not a pdf')});
+ await page.waitForFunction(()=>document.querySelector('.pdf-merger-admission')?.textContent?.includes('not-a-pdf.txt'));
  assert.equal(await current().count(),2);
  assert.deepEqual(errors,[]);
  const width=await page.evaluate(()=>document.querySelector('#workspace').scrollWidth-document.querySelector('#workspace').clientWidth);
