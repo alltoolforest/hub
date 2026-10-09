@@ -36,7 +36,7 @@ try{
  const initialLinks=await page.locator('#downloads a[download]').count();
  assert.equal(initialLinks,1);
  // Reordering must identify existing output as belonging to the old sequence.
- await rows().nth(1).getByRole('button',{name:'↑'}).click();
+ await rows().nth(1).getByRole('button',{name:'Move up b.pdf'}).click();
  assert.match(await page.locator('.pdf-merger-old-order').textContent(),/Previous file arrangement/);
  assert.equal(await page.locator('#downloads a[download]').count(),1);
  // Reparse fails for the second source while the earlier verified download survives.
