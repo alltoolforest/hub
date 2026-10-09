@@ -1,0 +1,56 @@
+name: PDF Merger mobile 20-file release gate
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger*.js'
+      - 'tests/pdf-merger-mobile20*.mjs'
+      - 'tests/pdf-merger-task*.mjs'
+      - '.github/workflows/pdf-merger-mobile20.yml'
+  workflow_dispatch:
+jobs:
+  mobile-20-cross-browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify new modules and old validation/output tests
+        run: |
+          node --check assets/js/pdf-merger-worker.js
+          node --check assets/js/pdf-merger-runner.js
+          node --check assets/js/pdf-merger.js
+          node --test tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs tests/pdf-merger-task3.test.mjs tests/pdf-merger-mobile20.test.mjs
+      - name: Install mobile-emulated browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Test 20 PDFs with real browser worker, plus previous regressions
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-mobile20.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-mobile20-browser.mjs
+          node tests/pdf-merger-task1-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
+          node tests/pdf-merger-task3-browser.mjs
+  image-heavy-medium-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test 20 actual medium-size, image-heavy PDFs
+        run: node --max-old-space-size=2048 tests/pdf-merger-mobile20-medium.mjs
