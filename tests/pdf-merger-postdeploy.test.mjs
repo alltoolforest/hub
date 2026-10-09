@@ -79,9 +79,9 @@ test('ordinary PDFs still merge with original geometry and page ordering',async(
 test('only merger styles and controls are scoped; global core is unchanged',()=>{
  const css=readFileSync(new URL('../assets/css/pdf-merger.css',import.meta.url),'utf8');
  const js=readFileSync(new URL('../assets/js/pdf-merger.js',import.meta.url),'utf8');
- assert.match(css,/\\.pdf-merger-thumbnail\\[hidden\\]/);
- assert.match(css,/\\.pdf-merger-jump\\[hidden\\]/);
- assert.match(js,/sharedShare\\.replaceWith\\(safeShare\\)/);
+ assert.ok(css.includes('.pdf-merger-thumbnail[hidden]'));
+ assert.ok(css.includes('.pdf-merger-jump[hidden]'));
+ assert.ok(js.includes('sharedShare.replaceWith(safeShare)'));
  assert.match(js,/Previous verified PDF: this download uses the earlier file arrangement/);
  assert.match(js,/id:'pdf-merger-actions'/);
 });
