@@ -62,7 +62,7 @@ try{
     canvas.width=canvas.height=0;
     p.cleanup();
     return {words,width:Math.round(viewport.width),height:Math.round(viewport.height),hash};
-   }finally{await pdf.destroy();}
+   }finally{await pdf.destroy?.();}
   }
   const a=await inspect(documents.a,1),aMerged=await inspect(documents.merged,1);
   const b=await inspect(documents.b,1),bMerged=await inspect(documents.merged,2);
