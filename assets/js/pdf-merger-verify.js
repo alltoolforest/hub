@@ -28,7 +28,7 @@ export function checkComplexStructure(source,lib,name,{allowBookmarkLoss=false}=
  // A copied-page merge does not retain document bookmarks.
  // Require deliberate user consent before omitting them.
  if(root.get(lib.PDFName.of('Outlines'))!==undefined&&!allowBookmarkLoss)
-  throw Error('"'+name+'" contains bookmarks / document outlines. To merge its pages, select "Merge pages only (remove bookmarks)" below Create PDF, then retry. Original PDFs stay unchanged.');
+  throw Error('"'+name+'" contains bookmarks / document outlines. To merge its pages, select "Merge pages only (remove bookmarks)" near Create PDF, then retry. Original PDFs stay unchanged.');
  const keys=[
   ['AcroForm','interactive form fields or signatures'],
   ['AF','associated document attachments'],
