@@ -33,6 +33,8 @@ export async function mount(root){
  }
  function changed(){
   revision++;
+  // Consent applies to the exact selected queue. A changed queue needs a fresh choice.
+  bookmarkConsent.checked=false;
   markOldResult();
   if(outputRevision>=0&&outputRevision!==revision)
    verified.textContent='Previous verified PDF: this download uses the earlier file arrangement. Create a new PDF for the current order.';
@@ -199,14 +201,21 @@ export async function mount(root){
    void drainPreviews();
   }
  });
- notice(root,'Add PDFs in batches. You can merge 20 or more on modern phones within the displayed size and page limits. Larger jobs run in a background worker where supported. Keep this tab open until the download is ready. Exact duplicate selections are skipped; invalid batches preserve earlier files. Browser-based page copying may not preserve bookmarks, form fields, signatures, attachments or document-level actions; affected documents are rejected rather than silently losing those features.');
+ notice(root,'Add PDFs in batches. You can merge 20 or more on modern phones within the displayed size and page limits. Larger jobs run in a background worker where supported. Keep this tab open until the download is ready. Exact duplicate selections are skipped; invalid batches preserve earlier files. Browser-based page copying may not preserve bookmarks, form fields, signatures, attachments or document-level actions. Bookmark removal requires your permission below; other unsupported features are rejected rather than silently lost.');
+ const bookmarkConsent=el('input',{type:'checkbox',id:'pdf-merger-bookmark-consent',
+  'aria-describedby':'pdf-merger-bookmark-info'});
+ const bookmarkLabel=el('label',{for:'pdf-merger-bookmark-consent',text:'Merge pages only (remove bookmarks)'});
+ const bookmarkInfo=el('p',{id:'pdf-merger-bookmark-info',
+  text:'Optional: select only if your PDF contains bookmarks and you accept that the merged COPY will omit them. Your original PDFs will not change. Forms, signatures and other unsupported features remain protected.'});
+ const bookmarkOption=el('div',{class:'pdf-merger-bookmark-option'});
+ bookmarkOption.append(bookmarkConsent,bookmarkLabel,bookmarkInfo);
  const mergeControls=el('div',{class:'actions',id:'pdf-merger-actions'});
  const mergeButton=el('button',{type:'button',class:'primary',text:'Create PDF'});
  const cancelButton=el('button',{type:'button',text:'Cancel merge',disabled:true});
  const progress=el('progress',{max:1,value:0,hidden:true,'aria-label':'PDF merge progress'});
  const verified=el('p',{class:'pdf-merger-result',role:'status','aria-live':'polite'});
  mergeControls.append(mergeButton,cancelButton,progress);
- root.append(mergeControls,verified);
+ root.append(bookmarkOption,mergeControls,verified);
  cancelButton.addEventListener('click',()=>{
   if(busy&&controller&&!controller.signal.aborted){
    controller.abort();
@@ -235,6 +244,7 @@ export async function mount(root){
    status('Preparing PDFs for verified merging…');
    const result=await mergePdfBatch(snapshot,{
     signal:abortController.signal,isMobile,loadEngine:pdfLib,
+    allowBookmarkLoss:bookmarkConsent.checked,
     onProgress:p=>{
      if(p.phase==='copying'){
       progress.value=p.index-1;
@@ -277,7 +287,8 @@ export async function mount(root){
    }
    outputRevision=revision;
    verified.textContent='Verified output: '+result.pageCount+' pages · '+
-    format(result.byteLength/1024)+' KB. Merge follows the selected document order.';
+    format(result.byteLength/1024)+' KB. Merge follows the selected document order.'+
+    (bookmarkConsent.checked?' Bookmarks were intentionally not copied.':'');
    status('Merged PDF verified and ready to download.');
   }catch(error){
    status(error?.name==='AbortError'?
@@ -303,7 +314,7 @@ export async function mount(root){
   if(busy){status('Cancel the merge before resetting.',true);return;}
   for(const entry of files)releasePreview(entry);
   previewQueue.length=0;
-  files=[];revision++;outputRevision=-1;
+  files=[];revision++;outputRevision=-1;bookmarkConsent.checked=false;
   list.replaceChildren();clearOutputs();verified.textContent='';drawFiles();
   announce('All PDFs removed from the merge queue.');
  });
