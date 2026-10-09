@@ -3,10 +3,13 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {deflateSync} from 'node:zlib';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {chromium} from 'playwright';
 const require=createRequire(import.meta.url),lib=require('../assets/vendor/pdf-lib.js');
 const MB=1024*1024;
+const temp=await mkdtemp(join(tmpdir(),'pdf-merger-heavy-'));
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:390,height:844},acceptDownloads:true,hasTouch:true});
 page.setDefaultTimeout(180000);
@@ -47,7 +50,9 @@ try{
    if(p===1)page.setRotation(lib.degrees(90));
   }
   const bytes=Buffer.from(await doc.save());
-  files.push({name:'medium-'+(i+1)+'.pdf',mimeType:'application/pdf',buffer:bytes});
+  const filePath=join(temp,'medium-'+(i+1)+'.pdf');
+  await writeFile(filePath,bytes);
+  files.push(filePath);
   sourceBytes+=bytes.length;
  }
  assert.ok(sourceBytes>65*MB,'Expected real multi-megabyte PDF fixtures, got '+Math.round(sourceBytes/MB)+'MB');
@@ -80,4 +85,4 @@ try{
  assert.ok(overflow<=2,'390px viewport horizontal overflow '+overflow);
  assert.deepEqual(errors,[]);
  console.log('PDF_MERGER_MOBILE20_MEDIUM_BROWSER_PASS: 20 genuine image-heavy PDFs, 400 verified pages, '+Math.round(sourceBytes/MB)+'MB source, '+Math.round(bytes.length/MB)+'MB output, '+((Date.now()-beforeMerge)/1000).toFixed(1)+'s background merge, '+((Date.now()-start)/1000).toFixed(1)+'s total in emulated mobile Chromium');
-}finally{await browser.close();}
+}finally{await browser.close();await rm(temp,{recursive:true,force:true});}
