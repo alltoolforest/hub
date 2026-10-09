@@ -6,9 +6,9 @@ self.onmessage=async event=>{
   importScripts('../vendor/pdf-lib.js');
   if(!self.PDFLib?.PDFDocument)throw Error('The local PDF engine could not start.');
   const {verifiedMerge}=await import('./pdf-merger-verify.js');
-  const {entries,isMobile}=event.data;
+  const {entries,isMobile,allowBookmarkLoss=false}=event.data;
   const result=await verifiedMerge(entries,self.PDFLib,{
-   isMobile,
+   isMobile,allowBookmarkLoss,
    onProgress:info=>self.postMessage({type:'progress',info})
   });
   // Blob is structured-cloned without exposing source file contents to any server.
