@@ -1,0 +1,42 @@
+name: PDF Merger final launch regression
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger.js'
+      - 'tests/pdf-merger-final-launch-browser.mjs'
+      - '.github/workflows/pdf-merger-final-launch.yml'
+  workflow_dispatch:
+jobs:
+  final-launch-scope:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and core merger unit regressions
+        run: |
+          node --check assets/js/pdf-merger.js
+          node --check tests/pdf-merger-final-launch-browser.mjs
+          node --test tests/pdf-merger-bookmarks.test.mjs tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs tests/pdf-merger-task3.test.mjs tests/pdf-merger-mobile20.test.mjs tests/pdf-merger-postdeploy.test.mjs
+      - name: Install browser and axe accessibility dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Final tool-only browser regression
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-final-launch.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-final-launch-browser.mjs
+          node tests/pdf-merger-bookmarks-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
+          node tests/pdf-merger-mobile20-browser.mjs
