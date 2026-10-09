@@ -25,46 +25,52 @@ async function fixture(name,pages,width){
 }
 const runStart=performance.now();
 const sources=[];
-for(let i=0;i<12;i++)sources.push(await fixture('batch-'+(i+1)+'.pdf',20,310+i*14));
+for(let i=0;i<20;i++)sources.push(await fixture('batch-'+(i+1)+'.pdf',20,310+i*14));
 const beforeAdmission=performance.now();
 const parsed=await preparePdfBatch([],sources,{
  isMobile:true,loadPdf:bytes=>lib.PDFDocument.load(bytes,{updateMetadata:false})
 });
-assert.equal(parsed.entries.length,12);
-assert.equal(parsed.totalPages,240);
+assert.equal(parsed.entries.length,20);
+assert.equal(parsed.totalPages,400);
 assert.deepEqual(parsed.entries.map(e=>e.file.name),sources.map(s=>s.name));
 const beforeMerge=performance.now(),events=[];
 const result=await verifiedMerge(parsed.entries,lib,{isMobile:true,onProgress:v=>events.push(v)});
-assert.equal(result.pageCount,240);
-assert.equal(events.filter(e=>e.phase==='copying').length,12);
+assert.equal(result.pageCount,400);
+assert.equal(events.filter(e=>e.phase==='copying').length,20);
 const merged=await lib.PDFDocument.load(await result.blob.arrayBuffer());
-assert.equal(merged.getPageCount(),240);
-for(let i=0;i<12;i++){
+assert.equal(merged.getPageCount(),400);
+for(let i=0;i<20;i++){
  const p=merged.getPage(i*20);
  assert.equal(Math.round(p.getWidth()),310+i*14);
  assert.equal(p.getRotation().angle,90);
 }
-// Attempt to push a 13th document or exceed the maximum total page count.
-// Neither may alter the accepted batch or silently discard the old output.
+// Verify the new 35-file count boundary and 1,200-page boundary without
+// ever mutating the successfully validated 20-file queue.
 const next=await fixture('overflow.pdf',20,600);
-await assert.rejects(()=>preparePdfBatch(parsed.entries,[next],{
+const atLimit=Array.from({length:35},(_,i)=>({
+ file:{...parsed.entries[i%20].file,name:'existing-'+i+'.pdf'},
+ pageCount:1
+}));
+await assert.rejects(()=>preparePdfBatch(atLimit,[next],{
  isMobile:true,loadPdf:bytes=>lib.PDFDocument.load(bytes,{updateMetadata:false})
-}),/up to 12 PDFs/);
-const prior=parsed.entries.slice(0,11);
+}),/up to 35 PDFs/);
+const prior=parsed.entries.slice(0,19).map((entry,i)=>({...entry,pageCount:i===0?1199-18*20:20}));
 const tooManyPages=await fixture('too-many-pages.pdf',40,700);
 await assert.rejects(()=>preparePdfBatch(prior,[tooManyPages],{
  isMobile:true,loadPdf:bytes=>lib.PDFDocument.load(bytes,{updateMetadata:false})
 }),/page limit/);
-assert.equal(parsed.entries.length,12);
-assert.equal(result.pageCount,240);
-// A separate 12-file desktop batch must obey same source sequence.
+assert.equal(parsed.entries.length,20);
+assert.equal(result.pageCount,400);
+// Desktop and mobile now share the same explicitly bounded limits.
 const desktopLimits=limitsFor(false);
 assert.equal(desktopLimits.maxPages,1200);
 assert.equal(desktopLimits.maxFiles,35);
+const mobileLimits=limitsFor(true);
+assert.deepEqual(mobileLimits,desktopLimits);
 const totalMs=Math.round(performance.now()-runStart);
 const parseMs=Math.round(beforeMerge-beforeAdmission),mergeMs=Math.round(performance.now()-beforeMerge);
 const rssMb=Math.round(process.memoryUsage().rss/1048576);
 const budget=process.env.CI?90_000:120_000;
 assert.ok(totalMs<budget,'Task 4 stress scenario exceeded '+budget+' ms ('+totalMs+' ms)');
 assert.ok(rssMb<700,'Task 4 stress resident memory exceeded 700 MB ('+rssMb+' MB)');
-console.log('PDF_MERGER_TASK4_STRESS_PASS: 12 PDFs, 240 pages, exact order/rotations, overflow rollback; parsing '+parseMs+'ms, merge '+mergeMs+'ms, total '+totalMs+'ms, process RSS '+rssMb+'MB');
+console.log('PDF_MERGER_TASK4_STRESS_PASS: 20 PDFs, 400 pages, exact order/rotations, overflow rollback; parsing '+parseMs+'ms, merge '+mergeMs+'ms, total '+totalMs+'ms, process RSS '+rssMb+'MB');
