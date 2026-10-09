@@ -38,14 +38,14 @@ export async function mount(root){
   for(const event of entries){
    if(!event.isIntersecting)continue;
    previewObserver.unobserve(event.target);
-   const holder=[...previewCache.entries()].find(([,view])=>view.canvas===event.target);
+   const holder=[...previewCache.entries()].find(([,view])=>view.canvas.parentElement===event.target);
    if(holder)enqueuePreview(holder[0]);
   }
  },{rootMargin:'120px'}):null;
  function releasePreview(entry){
   const view=previewCache.get(entry);
   if(!view)return;
-  previewObserver?.unobserve(view.canvas);
+  if(view.canvas.parentElement)previewObserver?.unobserve(view.canvas.parentElement);
   view.controller.abort();
   view.canvas.width=0;view.canvas.height=0;
   previewCache.delete(entry);
@@ -102,6 +102,9 @@ export async function mount(root){
  }
  function announce(message){queueLive.textContent=message;}
  function drawFiles(focusEntry=null,focusAction=null){
+  // Previously observed frames are about to be detached on reorder.
+  if(previewObserver)for(const view of previewCache.values())
+   if(view.canvas.parentElement)previewObserver.unobserve(view.canvas.parentElement);
   list.replaceChildren();
   for(const [i,entry] of files.entries()){
    const row=el('li',{class:'pdf-merger-item'});
@@ -145,7 +148,7 @@ export async function mount(root){
    });
    row.append(frame,info,controls);list.append(row);
    if(!view.done&&!view.started){
-    if(previewObserver)previewObserver.observe(view.canvas);
+    if(previewObserver)previewObserver.observe(frame);
     else enqueuePreview(entry);
    }
   }
