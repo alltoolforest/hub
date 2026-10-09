@@ -31,7 +31,13 @@ export function checkComplexStructure(source,lib,name){
   ['AF','associated document attachments'],
   ['Perms','document permissions or certification signatures'],
   ['OpenAction','document-level interactive actions'],
-  ['AA','document-level actions']
+  ['AA','document-level actions'],
+  ['StructTreeRoot','tagged accessibility structure'],
+  ['OCProperties','optional-content layers'],
+  ['PageLabels','custom page labels'],
+  ['Dests','named destinations'],
+  ['Threads','document threads'],
+  ['Collection','PDF portfolio structure']
  ];
  for(const [key,feature] of keys){
   if(root.get(lib.PDFName.of(key))!==undefined)
@@ -44,6 +50,34 @@ export function checkComplexStructure(source,lib,name){
   // document structure, which is not carried forward by copying pages alone.
   throw Error('"'+name+'" contains document-level named resources (such as attachments, scripts or destinations).'+
    ' Use a simplified copy from a trusted PDF application before merging.');
+ }
+ // Page-scoped destinations and actions can refer to objects/pages that
+ // copying pages into a new PDF does not reliably carry over.
+ for(const page of source.getPages()){
+  if(page.node.get(lib.PDFName.of('AA'))!==undefined)
+   throw Error('"'+name+'" contains page-level actions that cannot be preserved safely. Use a simplified copy.');
+  const raw=page.node.get(lib.PDFName.of('Annots'));
+  if(raw===undefined)continue;
+  const annotations=source.context.lookup(raw);
+  if(!annotations||typeof annotations.asArray!=='function')
+   throw Error('"'+name+'" contains unsupported annotations. Use a simplified copy.');
+  for(const ref of annotations.asArray()){
+   const annotation=source.context.lookup(ref);
+   if(!annotation||typeof annotation.get!=='function')
+    throw Error('"'+name+'" contains unsupported annotations. Use a simplified copy.');
+   if(annotation.get(lib.PDFName.of('Dest'))!==undefined)
+    throw Error('"'+name+'" contains internal page destinations that cannot be preserved safely. Use a simplified copy.');
+   if(annotation.get(lib.PDFName.of('AA'))!==undefined)
+    throw Error('"'+name+'" contains annotation actions that cannot be preserved safely. Use a simplified copy.');
+   const actionRef=annotation.get(lib.PDFName.of('A'));
+   if(actionRef!==undefined){
+    const action=source.context.lookup(actionRef);
+    // Ordinary external URI links remain supported. Other actions may
+    // point to missing pages/objects or trigger unsafe behavior.
+    if(action?.get?.(lib.PDFName.of('S'))?.toString()!=='/URI')
+     throw Error('"'+name+'" contains unsupported page links or actions. Use a simplified copy.');
+   }
+  }
  }
 }
 export async function verifiedMerge(entries,lib,{signal=null,onProgress=()=>{},isMobile=false}={}){
