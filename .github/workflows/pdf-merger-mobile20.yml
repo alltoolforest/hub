@@ -54,3 +54,22 @@ jobs:
           node-version: '22'
       - name: Test 20 actual medium-size, image-heavy PDFs
         run: node --max-old-space-size=2048 tests/pdf-merger-mobile20-medium.mjs
+  mobile-medium-browser-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium for image-heavy mobile emulation
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Merge 20 real medium-size PDFs using background worker
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-medium-browser.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node --max-old-space-size=2048 tests/pdf-merger-mobile20-medium-browser.mjs
