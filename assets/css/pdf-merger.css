@@ -75,3 +75,23 @@ body[data-tool="pdf-merger"] .pdf-merger-result{overflow-wrap:anywhere}
  body[data-tool="pdf-merger"] .pdf-merger-preview-frame{justify-self:center;max-width:145px}
  body[data-tool="pdf-merger"] .pdf-merger-file-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* PDF Merger only: optional, explicit consent for page-only bookmarked PDFs. */
+body[data-tool="pdf-merger"] .pdf-merger-bookmark-option{
+ display:grid;grid-template-columns:24px minmax(0,1fr);align-items:start;
+ column-gap:12px;row-gap:4px;padding:14px;margin:14px 0;
+ border:1px solid var(--line);border-radius:10px;
+}
+body[data-tool="pdf-merger"] .pdf-merger-bookmark-option input{
+ grid-row:1;grid-column:1;width:20px;height:20px;margin:3px 0 0;
+ accent-color:#145940;
+}
+body[data-tool="pdf-merger"] .pdf-merger-bookmark-option label{
+ grid-row:1;grid-column:2;font-weight:650;cursor:pointer;min-height:24px;
+}
+body[data-tool="pdf-merger"] #pdf-merger-bookmark-info{
+ grid-column:2;margin:0;color:var(--muted);font-size:13px;line-height:1.5
+}
+body[data-tool="pdf-merger"] .pdf-merger-bookmark-option input:focus-visible{
+ outline:3px solid #146cc1;outline-offset:3px;
+}
