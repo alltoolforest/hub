@@ -51,7 +51,8 @@ await assert.rejects(()=>preparePdfBatch(parsed.entries,[next],{
  isMobile:true,loadPdf:bytes=>lib.PDFDocument.load(bytes,{updateMetadata:false})
 }),/up to 12 PDFs/);
 const prior=parsed.entries.slice(0,11);
-await assert.rejects(()=>preparePdfBatch(prior,[await fixture('too-many-pages.pdf',40,700)],{
+const tooManyPages=await fixture('too-many-pages.pdf',40,700);
+await assert.rejects(()=>preparePdfBatch(prior,[tooManyPages],{
  isMobile:true,loadPdf:bytes=>lib.PDFDocument.load(bytes,{updateMetadata:false})
 }),/page limit/);
 assert.equal(parsed.entries.length,12);
