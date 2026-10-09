@@ -1,0 +1,47 @@
+name: PDF Merger post-deployment isolated regression
+on:
+  pull_request:
+    paths:
+      - 'assets/js/pdf-merger*.js'
+      - 'assets/css/pdf-merger.css'
+      - 'tests/pdf-merger-postdeploy*.mjs'
+      - '.github/workflows/pdf-merger-postdeploy.yml'
+  workflow_dispatch:
+jobs:
+  isolated-merger-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check and merger-only Node regression
+        run: |
+          node --check assets/js/pdf-merger-input.js
+          node --check assets/js/pdf-merger-verify.js
+          node --check assets/js/pdf-merger.js
+          node --check tests/pdf-merger-postdeploy-browser.mjs
+          node --test tests/pdf-merger-task1.test.mjs tests/pdf-merger-task2.test.mjs tests/pdf-merger-task3.test.mjs tests/pdf-merger-task4-stress.mjs tests/pdf-merger-mobile20.test.mjs tests/pdf-merger-postdeploy.test.mjs
+      - name: Install browser for merge regressions
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run existing browser tests and postdeploy scenarios
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/pdf-merger-postdeploy.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/pdf-merger/ >/dev/null && break || sleep 1; done
+          node tests/pdf-merger-task1-browser.mjs
+          node tests/pdf-merger-task2-browser.mjs
+          node tests/pdf-merger-task3-browser.mjs
+          node tests/pdf-merger-task4-integrated-browser.mjs
+          node tests/pdf-merger-mobile20-browser.mjs
+          node tests/pdf-merger-postdeploy-browser.mjs

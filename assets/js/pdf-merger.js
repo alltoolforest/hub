@@ -19,7 +19,9 @@ export async function mount(root){
  const summary=el('p',{class:'pdf-merger-admission',role:'status','aria-live':'polite',
   text:'No PDFs selected. Up to '+limits.maxFiles+' files, '+limits.maxPages+' pages and '+
    Math.round(limits.maxTotalBytes/(1024*1024))+' MB total on this device.'});
- root.append(queueHint,list,queueLive,summary);
+ const mergeJump=el('a',{class:'button pdf-merger-jump',href:'#pdf-merger-actions',
+  text:'Jump to Create PDF',hidden:true});
+ root.append(queueHint,list,queueLive,summary,mergeJump);
  function markOldResult(){
   if(outputRevision===revision)return;
   for(const row of root.querySelectorAll('#downloads .download-row')){
@@ -32,6 +34,8 @@ export async function mount(root){
  function changed(){
   revision++;
   markOldResult();
+  if(outputRevision>=0&&outputRevision!==revision)
+   verified.textContent='Previous verified PDF: this download uses the earlier file arrangement. Create a new PDF for the current order.';
  }
 
  const previewObserver=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
@@ -155,6 +159,7 @@ export async function mount(root){
   const pages=files.reduce((total,entry)=>total+entry.pageCount,0);
   summary.textContent=files.length+' PDF(s) · '+pages+' page(s) selected. Limits: '+limits.maxFiles+
    ' files, '+limits.maxPages+' pages, '+Math.round(limits.maxTotalBytes/(1024*1024))+' MB total.';
+  mergeJump.hidden=files.length<10;
   if(focusEntry){
    const index=files.indexOf(focusEntry);
    if(index>=0){
@@ -195,7 +200,7 @@ export async function mount(root){
   }
  });
  notice(root,'Add PDFs in batches. You can merge 20 or more on modern phones within the displayed size and page limits. Larger jobs run in a background worker where supported. Keep this tab open until the download is ready. Exact duplicate selections are skipped; invalid batches preserve earlier files. Browser-based page copying may not preserve bookmarks, form fields, signatures, attachments or document-level actions; affected documents are rejected rather than silently losing those features.');
- const mergeControls=el('div',{class:'actions'});
+ const mergeControls=el('div',{class:'actions',id:'pdf-merger-actions'});
  const mergeButton=el('button',{type:'button',class:'primary',text:'Create PDF'});
  const cancelButton=el('button',{type:'button',text:'Cancel merge',disabled:true});
  const progress=el('progress',{max:1,value:0,hidden:true,'aria-label':'PDF merge progress'});
@@ -245,6 +250,25 @@ export async function mount(root){
    // throughout parsing/saving/verification and every failure path.
    const oldRows=[...root.querySelectorAll('#downloads .download-row')];
    output(result.blob,'merged.pdf');
+   // The shared Share / Save helper reenables unrelated disabled controls.
+   // Replace only this PDF Merger result's share handler with a local one.
+   const latestRows=[...root.querySelectorAll('#downloads .download-row')];
+   const newRow=latestRows.find(row=>!oldRows.includes(row));
+   const sharedShare=newRow?.querySelector('button');
+   if(sharedShare&&sharedShare.textContent==='Share / Save'){
+    const safeShare=sharedShare.cloneNode(true);
+    sharedShare.replaceWith(safeShare);
+    safeShare.addEventListener('click',async()=>{
+     if(busy||safeShare.disabled)return;
+     safeShare.disabled=true;
+     try{
+      const shareFile=new File([result.blob],'merged.pdf',{type:'application/pdf'});
+      await navigator.share({files:[shareFile]});
+     }catch(error){
+      if(error?.name!=='AbortError')status('Sharing failed. You can still use Download.',true);
+     }finally{safeShare.disabled=false;}
+    });
+   }
    // Once a valid new download exists, release old object URLs and their blobs.
    for(const old of oldRows){
     for(const link of old.querySelectorAll('a[href^="blob:"]'))
