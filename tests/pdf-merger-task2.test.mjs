@@ -96,7 +96,7 @@ test('bad saved byte content never escapes to a download',async()=>{
    getPageCount:()=>2,copyPages:async()=>[],addPage(){},save:async()=>new Uint8Array([1,2,3])
   })
  }};
- await assert.rejects(()=>verifiedMerge([a,b],bogus),/Merged page count did not match/);
+ await assert.rejects(()=>verifiedMerge([a,b],bogus),/Merged PDF could not be verified.*No new download was created/);
 });
 test('safe page and file limits enforced even if UI is bypassed',async()=>{
  const a=await source('first.pdf',[300]);
