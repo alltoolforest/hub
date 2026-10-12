@@ -87,7 +87,11 @@ export async function readPdfFile(file, signal, onProgress = () => {}) {
       }
     };
     signal.addEventListener('abort', abort, {once: true});
-    if (signal.aborted) { abort(); return; }
+    if (signal.aborted) {
+      detach();
+      reject(Object.assign(Error('Operation cancelled.'), {name: 'AbortError'}));
+      return;
+    }
     try { reader.readAsArrayBuffer(file); } catch (error) { detach(); reject(error); }
   });
 }
@@ -169,8 +173,12 @@ export class OrganizerSession {
         this.active = null;
         if (this.phase === kind || this.phase === 'cancelling') {
           this.phase = this.record ? 'ready' : 'empty';
-          if (this.phase !== 'error' && this.message.startsWith('Cancel requested')) {
-            this.message = 'Operation cancelled. Your previous PDF is unchanged.';
+          if (this.message.startsWith('Cancel requested') ||
+              this.message.startsWith('Cancelling operation') ||
+              this.message.startsWith('Cancelling previous operation')) {
+            this.message = this.record ?
+              'Operation cancelled. Your previous PDF is unchanged.' :
+              'Operation cancelled. Ready to open a PDF.';
           }
         }
         this.onChange(this.snapshot());
