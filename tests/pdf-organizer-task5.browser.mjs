@@ -147,6 +147,32 @@ async function run(engineName, engine, viewport) {
       'Failed replacement discarded the previous valid document');
     trace.failedReplacement = 'PASS';
 
+    // Task 5 post-audit: final-page removal is prevented before export.
+    await page.getByRole('button', {name:'Remove original page 2'}).click();
+    await page.getByRole('button', {name:'Remove original page 4'}).click();
+    assert.equal(await page.getByRole('button', {name:'Remove original page 1'}).isDisabled(), true);
+    assert.match(await page.locator('.pdf-organizer-announcement').innerText(),
+      /At least one page must remain/);
+    await page.getByRole('button', {name:'Restore original page 3'}).click();
+    assert.equal(await page.getByRole('button', {name:'Remove original page 1'}).isEnabled(), true);
+    trace.lastPageGuard = 'PASS';
+
+    // Simulate BFCache PageTransitionEvent lifecycle in all browser engines.
+    // This confirms the event handlers; real browser cache eligibility remains
+    // browser/platform-dependent and needs physical-device verification.
+    await page.getByRole('button', {name:'Save the current organized PDF'}).click();
+    await page.locator('#downloads a[download]').waitFor({timeout: 30000});
+    await page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+      window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));
+    });
+    assert.equal(await page.locator('#downloads a[download]').count(), 0,
+      'Returned BFCache tab retained revoked download link');
+    assert.match(await page.locator('#status').innerText(), /Page restored.*PDF edits are intact/);
+    await page.getByRole('button', {name:'Rotate original page 1 clockwise 90 degrees'}).click();
+    assert.match(await page.locator('#status').innerText(), /Arrangement updated/);
+    trace.bfcacheLifecycle = 'PASS';
+
     if (viewport.width <= 400) {
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth > innerWidth + 2);
