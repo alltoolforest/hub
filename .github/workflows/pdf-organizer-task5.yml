@@ -9,6 +9,7 @@ on:
       - 'tests/pdf-organizer-task*.mjs'
       - 'tests/pdf-organizer-removal-regression.test.mjs'
       - 'tests/pdf-organizer-postaudit.test.mjs'
+      - 'tests/pdf-organizer-tagged-removal.test.mjs'
       - '.github/workflows/pdf-organizer-task5.yml'
   workflow_dispatch:
 
@@ -26,7 +27,7 @@ jobs:
         with:
           node-version: '22'
       - name: Run exact committed test suites
-        run: node --test tests/pdf-organizer-task1.test.mjs tests/pdf-organizer-task2.test.mjs tests/pdf-organizer-task3.test.mjs tests/pdf-organizer-task4.test.mjs tests/pdf-organizer-task5.test.mjs tests/pdf-organizer-removal-regression.test.mjs tests/pdf-organizer-postaudit.test.mjs
+        run: node --test tests/pdf-organizer-task1.test.mjs tests/pdf-organizer-task2.test.mjs tests/pdf-organizer-task3.test.mjs tests/pdf-organizer-task4.test.mjs tests/pdf-organizer-task5.test.mjs tests/pdf-organizer-removal-regression.test.mjs tests/pdf-organizer-postaudit.test.mjs tests/pdf-organizer-tagged-removal.test.mjs
 
   organizer-browser:
     name: Chromium Firefox WebKit integration / mobile viewport
