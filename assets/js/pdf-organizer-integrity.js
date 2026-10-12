@@ -167,6 +167,11 @@ function taggedRemovalStrategy(document, kept, PDF) {
   if (!root) return {mode:'none'};
   if (!(root instanceof PDF.PDFDict)) return {mode:'unsupported'};
   const pages = document.getPages();
+  // Reordering kept pages can invalidate logical reading order even if page
+  // references remain valid. Offer explicit untagging rather than claiming
+  // that the original structure order is still correct.
+  const originalOrder = kept.map(p=>p.index).slice().sort((a,b)=>a-b);
+  if(kept.some((p,i)=>p.index!==originalOrder[i])) return {mode:'unsupported'};
   const removedRefs = new Set(pages.filter((_,i)=>!kept.some(p=>p.index===i))
     .map(page=>String(page.ref)));
   const keptRefs = new Set(kept.map(p=>String(pages[p.index].ref)));
