@@ -1,0 +1,210 @@
+[
+  {
+    "id": "astronaut-original",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 512,
+      "height": 512,
+      "alphaPreserved": true,
+      "meanChange": 1.9079208374023438,
+      "meanLumaShift": -0.041482698060917755,
+      "newClippedLowChannels": 4936,
+      "newClippedHighChannels": 2865,
+      "maxRowShiftJump": 0.24531992187500035
+    }
+  },
+  {
+    "id": "astronaut-noise",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 512,
+      "height": 512,
+      "alphaPreserved": true,
+      "meanChange": 3.137237548828125,
+      "meanLumaShift": -0.03388245849697569,
+      "newClippedLowChannels": 472,
+      "newClippedHighChannels": 675,
+      "maxRowShiftJump": 0.437465624999999
+    }
+  },
+  {
+    "id": "astronaut-underexposure",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 512,
+      "height": 512,
+      "alphaPreserved": true,
+      "meanChange": 19.669347127278645,
+      "meanLumaShift": 19.263820190429172,
+      "newClippedLowChannels": 1794,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 1.0526101562500223
+    }
+  },
+  {
+    "id": "astronaut-jpeg",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 512,
+      "height": 512,
+      "alphaPreserved": true,
+      "meanChange": 1.933519999186198,
+      "meanLumaShift": -0.03997825701668489,
+      "newClippedLowChannels": 1851,
+      "newClippedHighChannels": 1988,
+      "maxRowShiftJump": 0.2625250000000001
+    }
+  },
+  {
+    "id": "coffee-original",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 600,
+      "height": 400,
+      "alphaPreserved": true,
+      "meanChange": 0.9635875,
+      "meanLumaShift": 0.7772514816846543,
+      "newClippedLowChannels": 428,
+      "newClippedHighChannels": 341,
+      "maxRowShiftJump": 0.12345300000000059
+    }
+  },
+  {
+    "id": "coffee-noise",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 600,
+      "height": 400,
+      "alphaPreserved": true,
+      "meanChange": 2.9350583333333335,
+      "meanLumaShift": 0.6750054716670575,
+      "newClippedLowChannels": 153,
+      "newClippedHighChannels": 75,
+      "maxRowShiftJump": 0.46731066666666554
+    }
+  },
+  {
+    "id": "coffee-underexposure",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 600,
+      "height": 400,
+      "alphaPreserved": true,
+      "meanChange": 28.19191111111111,
+      "meanLumaShift": 27.86539612751393,
+      "newClippedLowChannels": 7,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0.5108713333333306
+    }
+  },
+  {
+    "id": "coffee-jpeg",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 600,
+      "height": 400,
+      "alphaPreserved": true,
+      "meanChange": 0.8401986111111112,
+      "meanLumaShift": 0.7526264275138111,
+      "newClippedLowChannels": 117,
+      "newClippedHighChannels": 375,
+      "maxRowShiftJump": 0.1431409999999993
+    }
+  },
+  {
+    "id": "chelsea-original",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 451,
+      "height": 300,
+      "alphaPreserved": true,
+      "meanChange": 5.056494210396649,
+      "meanLumaShift": 2.446551788633473,
+      "newClippedLowChannels": 39,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0.41108647450110913
+    }
+  },
+  {
+    "id": "chelsea-noise",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 451,
+      "height": 300,
+      "alphaPreserved": true,
+      "meanChange": 4.865252525252525,
+      "meanLumaShift": 1.7948173865466672,
+      "newClippedLowChannels": 1,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0.48407804878048544
+    }
+  },
+  {
+    "id": "chelsea-underexposure",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 451,
+      "height": 300,
+      "alphaPreserved": true,
+      "meanChange": 18.237265336289727,
+      "meanLumaShift": 18.43527312047719,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0.3105835920177391
+    }
+  },
+  {
+    "id": "chelsea-jpeg",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 451,
+      "height": 300,
+      "alphaPreserved": true,
+      "meanChange": 5.145920177383592,
+      "meanLumaShift": 2.556579609783855,
+      "newClippedLowChannels": 36,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0.3703685144124158
+    }
+  },
+  {
+    "id": "alpha-diagnostic",
+    "baselineExact": true,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 129,
+      "height": 97,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    }
+  }
+]

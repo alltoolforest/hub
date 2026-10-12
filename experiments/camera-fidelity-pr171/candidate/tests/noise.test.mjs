@@ -1,0 +1,7 @@
+import test from'node:test';import assert from'node:assert/strict';import{createNoiseMap,collectNoise,finishNoise}from'../assets/js/photo-noise.js';
+function image(w,h,fn){return Uint8ClampedArray.from({length:w*h*4},(_,i)=>i%4===3?255:fn(Math.floor(i/4)%w,Math.floor(i/4/w),i%4));}
+function map(d,w,h,rows){const m=createNoiseMap(w,h);for(let y=0;y<h;y+=rows){const top=Math.max(0,y-2),n=Math.min(rows,h-y),bottom=Math.min(h,y+n+2);collectNoise(m,d.subarray(top*w*4,bottom*w*4),w,bottom-top,y-top,n,top);}return finishNoise(m);}
+test('map independent of strip partition',()=>{const d=image(129,151,(x,y,c)=>100+((x*97+y*23+c*13)%19));assert.deepEqual(map(d,129,151,17),map(d,129,151,96));assert.deepEqual(map(d,129,151,151),map(d,129,151,96));});
+test('flat clean map has zero noise, coherent stripes get uncertainty',()=>{const a=map(image(128,128,()=>100),128,128,96),b=map(image(128,128,x=>x%8<4?70:150),128,128,96);assert.ok(a.cells.filter(c=>c.samples).every(c=>c.noise===0));assert.ok(b.cells.some(c=>c.structuredFraction>.7));});
+test('random flat noise separated from clean wall',()=>{let seed=171;const rand=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/2**32;};const m=map(image(128,128,()=>100+(rand()-.5)*24),128,128,96),cells=m.cells.filter(c=>c.confidence>.3);assert.ok(cells.length>0);assert.ok(cells.every(c=>c.noise>1));});
+test('tiny or transparent inputs produce uncertainty',()=>{const d=image(8,8,()=>80);for(let p=3;p<d.length;p+=4)d[p]=0;assert.ok(map(d,8,8,3).cells.every(c=>c.confidence===0));});

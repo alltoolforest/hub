@@ -18,7 +18,7 @@ for(const scenario of ['success','cancel','worker-error','message-error','invali
           if(scenario==='cancel')controller.abort();
           else if(scenario==='worker-error')this.onerror({message:'worker failed'});
           else if(scenario==='message-error')this.onmessageerror();
-          else this.onmessage({data:{blob:new Blob(['PNG']),width:scenario==='invalid-size'?12:10,height:10}});
+          else this.onmessage({data:{blob:(()=>{const b=new Uint8Array(33);b.set([137,80,78,71,13,10,26,10]);const v=new DataView(b.buffer);v.setUint32(8,13);v.setUint32(12,0x49484452);v.setUint32(16,10);v.setUint32(20,10);return new Blob([b],{type:'image/png'});})(),width:scenario==='invalid-size'?12:10,height:10}});
         });
       }
     };

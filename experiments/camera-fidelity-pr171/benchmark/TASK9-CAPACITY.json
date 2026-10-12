@@ -1,0 +1,170 @@
+[
+  {
+    "width": 1000,
+    "height": 1000,
+    "pixels": 1000000,
+    "rows": 96,
+    "processedBytes": 4000000,
+    "hash": "9468209da4be551f45cdc82662e48303f038167a269fc8d5dd22907be79cdd5d",
+    "ms": 213.00982300000004,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 1000,
+      "height": 1000,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 96,
+      "estimatedBytes": 32489216,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  },
+  {
+    "width": 3000,
+    "height": 2000,
+    "pixels": 6000000,
+    "rows": 96,
+    "processedBytes": 24000000,
+    "hash": "706fe8221691faf5d6b9cd023763257932e0717ed467ac1769733034d8a90cb3",
+    "ms": 423.30888500000003,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 3000,
+      "height": 2000,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 96,
+      "estimatedBytes": 99913216,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  },
+  {
+    "width": 4000,
+    "height": 3000,
+    "pixels": 12000000,
+    "rows": 96,
+    "processedBytes": 48000000,
+    "hash": "5b5f13c45557786e259b44462f1bcdc7a1ef2a77a761769dede6b66815d9a08c",
+    "ms": 800.790142,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 4000,
+      "height": 3000,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 96,
+      "estimatedBytes": 175625216,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  },
+  {
+    "width": 6000,
+    "height": 4000,
+    "pixels": 24000000,
+    "rows": 96,
+    "processedBytes": 96000000,
+    "hash": "7dcfce34b317fa9df1a9d0079a2b0fa7dab02a41dff27fd7927f23e95d5a0455",
+    "ms": 1584.540228,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 6000,
+      "height": 4000,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 96,
+      "estimatedBytes": 327049216,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  },
+  {
+    "width": 6400,
+    "height": 5000,
+    "pixels": 32000000,
+    "rows": 96,
+    "processedBytes": 128000000,
+    "hash": "c79d079c6ea74a5db6f5e77309643e23d43c739f561a35880052938d0d8f78e5",
+    "ms": 2100.3661669999997,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 6400,
+      "height": 5000,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 96,
+      "estimatedBytes": 424534016,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  },
+  {
+    "width": 16384,
+    "height": 3,
+    "pixels": 49152,
+    "rows": 28,
+    "processedBytes": 196608,
+    "hash": "a5a08934bcd7e5fa60679423296b074aa445e03beb142121ce61f096708ec77a",
+    "ms": 3.0639259999998103,
+    "integrity": {
+      "passed": true,
+      "scope": "catastrophic faults only; visual review required",
+      "width": 16384,
+      "height": 3,
+      "alphaPreserved": true,
+      "meanChange": 0,
+      "meanLumaShift": 0,
+      "newClippedLowChannels": 0,
+      "newClippedHighChannels": 0,
+      "maxRowShiftJump": 0
+    },
+    "budget": {
+      "rows": 28,
+      "estimatedBytes": 42532864,
+      "budgetBytes": 536870912,
+      "qualification": "estimate only; browser/GPU/decoder allocations can exceed it"
+    },
+    "scope": "Node synthetic processing; output streamed into hash, no encoded image or phone test"
+  }
+]
