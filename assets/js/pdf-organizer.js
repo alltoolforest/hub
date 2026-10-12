@@ -6,8 +6,10 @@ import {
 } from './core.js';
 import {OrganizerSession, browserDeviceHints} from './pdf-organizer-lifecycle.js';
 import {OrganizerThumbnails} from './pdf-organizer-thumbnails.js';
+import {ensurePdfPreviewCompatibility} from './pdf-organizer-compat.js';
 
 async function openPreviewDocument(bytes) {
+  ensurePdfPreviewCompatibility();
   const pdfjs = await load('pdfjs');
   pdfjs.GlobalWorkerOptions.workerSrc = url('assets/vendor/pdf.worker.mjs');
   const task = pdfjs.getDocument({
