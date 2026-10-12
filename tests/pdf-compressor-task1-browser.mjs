@@ -17,9 +17,12 @@ async function upload(page,id){
   await page.locator('#workspace input[type=file]').setInputFiles({
     name:id+'.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)
   });
-  await page.waitForFunction(()=>
-    /File ready\.|could not open|corrupted|supported document|Invalid PDF|PDF header|Cannot read properties/i
-      .test(document.querySelector('#status')?.textContent||''),null,{timeout:20000});
+  // The file handler writes a deterministic selected-files outcome;
+  // status wording is deliberately not a contract for malformed PDFs.
+  const finished = id==='invalid'?'Could not open the selected file.':'Selected: '+id+'.pdf';
+  await page.waitForFunction(text =>
+    (document.querySelector('.selected-files')?.textContent||'').includes(text),
+    finished,{timeout:20000});
   return bytes;
 }
 async function download(page){
@@ -96,6 +99,7 @@ for(const [name,engine,viewport] of cases){
     record.failed=String(error?.stack||error).slice(0,1800);
     record.status=await page.locator('#status').textContent().catch(()=>null);
     report.push(record);
+    console.error('PDF COMPRESSOR TASK1 BASELINE FAILURE:',JSON.stringify(record));
     throw error;
   }finally{
     await context.close();await browser.close();
