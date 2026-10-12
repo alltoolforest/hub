@@ -175,3 +175,39 @@ test('original input bytes remain unchanged through export', async () => {
   await buildOrganizedPdf(bytes, changePlan(initialPlan(doc), 'down', 0), PDF);
   assert.deepEqual(bytes, before);
 });
+
+test('existing interactive form value survives page reorder', async () => {
+  const doc = await fixture(2);
+  const field = doc.getForm().createTextField('customer');
+  field.addToPage(doc.getPage(0));
+  field.setText('Kept value');
+  const loaded = await PDF.PDFDocument.load(await doc.save(), {updateMetadata: false});
+  const result = await exported(loaded, changePlan(initialPlan(loaded), 'down', 0));
+  assert.equal(result.getForm().getTextField('customer').getText(), 'Kept value');
+});
+
+test('external link annotation survives page reorder', async () => {
+  const doc = await fixture(2);
+  const annotation = doc.context.obj({
+    Type: PDF.PDFName.of('Annot'),
+    Subtype: PDF.PDFName.of('Link'),
+    A: doc.context.obj({
+      S: PDF.PDFName.of('URI'),
+      URI: PDF.PDFString.of('https://example.org')
+    })
+  });
+  const ref = doc.context.register(annotation);
+  doc.getPage(0).node.set(PDF.PDFName.of('Annots'), doc.context.obj([ref]));
+  const loaded = await PDF.PDFDocument.load(await doc.save(), {updateMetadata: false});
+  const result = await exported(loaded, changePlan(initialPlan(loaded), 'down', 0));
+  assert.ok(result.getPage(1).node.Annots()?.size());
+});
+
+test('document-level file attachments survive reordering', async () => {
+  const doc = await fixture(2);
+  await doc.attach(new Uint8Array([1, 2, 3, 4]), 'test.bin',
+    {mimeType: 'application/octet-stream', description: 'Fixture'});
+  const loaded = await PDF.PDFDocument.load(await doc.save(), {updateMetadata: false});
+  const result = await exported(loaded, changePlan(initialPlan(loaded), 'down', 0));
+  assert.ok(result.catalog.get(PDF.PDFName.of('Names')));
+});
