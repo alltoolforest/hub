@@ -1,0 +1,42 @@
+/* Organize PDF Pages — Task 3 only. No global/frozen-tool selectors. */
+.pdf-organizer .pdf-organizer-current{font-weight:650;margin:8px 0 6px;overflow-wrap:anywhere}
+.pdf-organizer .pdf-organizer-help{font-size:13px;line-height:1.5;color:var(--muted);margin:0 0 17px}
+.pdf-organizer .pdf-organizer-grid{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,186px),1fr));gap:14px;align-items:start;min-width:0}
+.pdf-organizer .pdf-page-card{position:relative;min-width:0;display:flex;flex-direction:column;gap:9px;padding:12px;background:#fff;border:1px solid #c7d8cd;border-radius:12px;box-shadow:0 2px 7px #15452c08;overflow-wrap:anywhere}
+.pdf-organizer .pdf-page-card:focus-within{border-color:#316f52;box-shadow:0 0 0 2px #b9dbc7}
+.pdf-organizer .pdf-page-card.is-removed{background:#f5f7f5;border-style:dashed}
+.pdf-organizer .pdf-page-card.is-removed .pdf-page-preview{opacity:.54}
+.pdf-organizer .pdf-page-card.is-dragging{opacity:.65;border-color:#166142}
+.pdf-organizer .pdf-page-card.is-drop-target{outline:3px solid #367957;outline-offset:1px}
+.pdf-organizer .pdf-page-grip{align-self:flex-start;touch-action:none;cursor:grab;width:48px;height:44px;padding:7px;font-size:23px;line-height:1}
+.pdf-organizer .pdf-page-grip:active{cursor:grabbing}
+.pdf-organizer .pdf-page-preview{display:flex;justify-content:center;align-items:center;min-height:150px;height:176px;background:#eef2ee;border:1px solid #e0e8e2;border-radius:8px;overflow:hidden;padding:7px;text-align:center;color:#50695b;font-size:12px}
+.pdf-organizer .pdf-page-preview canvas{display:block;max-width:100%;max-height:100%;object-fit:contain;background:white;box-shadow:0 1px 5px #10291a28}
+.pdf-organizer .pdf-page-caption{margin:0;font-size:12px;font-weight:650;line-height:1.45;min-height:36px}
+.pdf-organizer .pdf-page-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.pdf-organizer .pdf-page-controls button{min-width:0;min-height:44px;white-space:normal;padding:8px 5px;font-size:13px}
+.pdf-organizer .pdf-page-move{border-top:1px solid #dce6e0;padding-top:9px}
+.pdf-organizer .pdf-page-move summary{font-size:13px;font-weight:600;cursor:pointer;min-height:32px}
+.pdf-organizer .pdf-page-move label{display:block;font-size:12px;color:#425e4b;margin:8px 0 4px}
+.pdf-organizer .pdf-page-move input{margin-bottom:7px;width:100%;min-width:0}
+.pdf-organizer .pdf-page-move button{width:100%;min-height:44px}
+.pdf-organizer .pdf-organizer-announcement{font-size:13px;color:#21593d;min-height:22px;margin:10px 0}
+.pdf-organizer .actions{gap:10px}
+@media(max-width:700px){
+ .pdf-organizer .pdf-organizer-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,154px),1fr));gap:10px}
+ .pdf-organizer .pdf-page-card{padding:9px;gap:7px}
+ .pdf-organizer .pdf-page-preview{height:155px;min-height:130px}
+ .pdf-organizer .pdf-page-controls{gap:6px}
+ .pdf-organizer .pdf-organizer-help{font-size:12px}
+}
+@media(max-width:410px){
+ .pdf-organizer .pdf-organizer-grid{grid-template-columns:1fr}
+ .pdf-organizer .pdf-page-card{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;align-items:start}
+ .pdf-organizer .pdf-page-grip{grid-column:1;grid-row:1}
+ .pdf-organizer .pdf-page-preview{grid-column:1;grid-row:2;width:70px;height:104px;min-height:104px;padding:3px}
+ .pdf-organizer .pdf-page-caption{grid-column:2;grid-row:1 / span 2;align-self:center}
+ .pdf-organizer .pdf-page-controls,.pdf-organizer .pdf-page-move{grid-column:1 / -1}
+}
+@media(prefers-reduced-motion:reduce){
+ .pdf-organizer .pdf-page-card{transition:none}
+}
