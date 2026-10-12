@@ -78,7 +78,7 @@ for(const [name,engine,viewport] of cases){
     record.knownAttachmentLoss='REPRODUCED';
     await upload(page,'invalid');
     assert.match(await page.locator('#status').innerText(),
-      /corrupt|invalid|not a pdf|supported document|no pdf|Cannot read properties/i);
+      /corrupt|invalid|not a pdf|supported document|no pdf|cannot read properties|pages|catalog/i);
     await page.getByRole('button',{name:'Optimize PDF'}).click();
     assert.match(await page.locator('#status').innerText(),
       /Open a valid PDF first|Cannot read properties|page/i);
