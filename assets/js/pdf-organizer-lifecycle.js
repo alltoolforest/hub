@@ -125,6 +125,7 @@ export class OrganizerSession {
     this.limits = organizerBudget(device);
     this.record = null; // Holds only raw bytes + source page plan, not a parsed PDF.
     this.revision = 0;
+    this.documentId = 0; // Tracks PDF replacements separately from page edits.
     this.requestId = 0;
     this.active = null;
     this.disposed = false;
@@ -139,6 +140,7 @@ export class OrganizerSession {
       phase: this.phase, message: this.message, error: this.error,
       percent: this.percent, busy: Boolean(this.active),
       activity: this.active?.kind || null, revision: this.revision,
+      documentId: this.documentId,
       filename: this.record?.filename || null,
       pageCount: this.record?.pageCount || 0,
       plan: this.record?.plan.map(page => ({...page})) || [],
@@ -239,6 +241,7 @@ export class OrganizerSession {
       this.assertCurrent(id, signal);
       const next = {bytes, filename: file.name, pageCount, plan};
       this.record = next; // Atomic commit: old document remains until success.
+      this.documentId++;
       this.revision++;
       this.phase = 'ready';
       this.emit('PDF ready: ' + pageCount + ' pages.', false, 100);
@@ -253,6 +256,31 @@ export class OrganizerSession {
     this.revision++;
     this.phase = 'ready';
     this.emit('Arrangement updated. Create PDF to save these changes.', false, 0);
+    return true;
+  }
+
+  // Task 3 preview-only copy: PDF.js may transfer/detach its data buffer.
+  // Never expose the authoritative ArrayBuffer for worker transfer.
+  previewSource() {
+    return !this.disposed && this.record ? this.record.bytes.slice(0) : null;
+  }
+
+  // Direct visual movement uses the same authoritative state and one revision.
+  moveTo(from, to) {
+    if (this.disposed || this.active || !this.record) return false;
+    const plan = this.record.plan;
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) ||
+        from < 0 || to < 0 || from >= plan.length || to >= plan.length) {
+      return false;
+    }
+    if (from === to) return false;
+    const ordered = plan.slice();
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    this.record = {...this.record, plan: ordered};
+    this.revision++;
+    this.phase = 'ready';
+    this.emit('Page moved to position ' + (to + 1) + '.', false, 0);
     return true;
   }
 
@@ -297,6 +325,7 @@ export class OrganizerSession {
     this.requestId++;
     this.active?.controller.abort();
     this.record = null;
+    this.documentId++;
     this.revision++;
     this.phase = this.active ? 'cancelling' : 'empty';
     this.emit(this.active ? 'Cancelling operation and clearing the PDF…' :
@@ -307,6 +336,7 @@ export class OrganizerSession {
     this.requestId++;
     this.active?.controller.abort();
     this.record = null;
+    this.documentId++;
     this.disposed = true;
     this.onChange = () => {};
     this.onResult = () => {};
