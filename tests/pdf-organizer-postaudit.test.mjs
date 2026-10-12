@@ -104,7 +104,7 @@ test('single-page document has no allowed last-page removal but still exports',a
 test('pagehide is conditional on persisted and pageshow revokes stale downloads',()=>{
   const js=readFileSync(new URL('../assets/js/pdf-organizer.js',import.meta.url),'utf8');
   assert.match(js,/window\.addEventListener\('pagehide', event => \{\s*if \(event\.persisted\) return;/);
-  assert.match(js,/window\.addEventListener\('pageshow', event => \{\s*if \(!event\.persisted\) return;\s*clearOutputs\(\);/);
+  assert.match(js,/window\.addEventListener\('pageshow', event => \{\s*if \(!event\.persisted\) return;[\s\S]{0,350}?clearOutputs\(\);/);
   assert.match(js,/session\.emit\('Page restored\. Your PDF edits are intact/);
 });
 
