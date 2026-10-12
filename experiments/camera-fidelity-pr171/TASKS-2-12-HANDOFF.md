@@ -1,5 +1,7 @@
 # Camera-Fidelity Engine — Experimental checkpoint and release decision
 
+Continuation addendum, 2026-10-12: see `TONE-R2-REVIEW.md` and `benchmark/TONE-R2-EVIDENCE.json` for the subsequent supplied-portrait diagnostic and new restrained-tone research trial. It reduces excessive lift on that portrait but regresses three underexposure reference cases, so it remains offline and disabled. This does not change the active engine, private Site or release decision below.
+
 Date: 2026-10-12. Build: `cf-20261012-t11-r1`.
 Protected source: PR171 head `a672855f9c4047dafe31cd0823cfeb7de2bb04f7`.
 Scope: `experiments/camera-fidelity-pr171/` only in `alltoolforest/hub`, plus a separate owner-private comparison Site.

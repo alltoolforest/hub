@@ -1,0 +1,2327 @@
+{
+  "trial": {
+    "id": "restrained-tone-r2",
+    "correctionFraction": 0.65,
+    "maxLift": 18,
+    "maxShadowGain": 1.35,
+    "highlightHeadroomFraction": 0.3
+  },
+  "enabledInWorker": false,
+  "runnerSHA256": "b3b2375d3337c099f99a0044a053b5ac53bd256664c84da9255d63bc529bd882",
+  "moduleSHA256": "b1659bce0d536691ec63009a0adc3728c33adabcd062300618ba919d183b2c3b",
+  "runtime": "v24.19.0",
+  "limitations": [
+    "Three calibration scenes plus one user diagnostic are not representative or held-out",
+    "Uploaded output settings unknown; recreated baseline uses declared auto/balanced options and Pillow decode",
+    "High-frequency RMS combines genuine texture and noise; reducing it is not a detail/denoise quality pass",
+    "MSE and gradient errors are reference-based diagnostics, not preference scores",
+    "No browser/mobile qualification; single run timing is not a performance benchmark"
+  ],
+  "records": [
+    {
+      "id": "astronaut-original",
+      "split": "calibration",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "baseline_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+      "trial_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.70084147643759,
+          "meanLumaShift": 0,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 7.439269540922047,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.65935877837667,
+          "meanLumaShift": -0.041482698059102874,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 7.973980618440467,
+          "newClippedHighChannels": 2865
+        },
+        "trial": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.65935877837667,
+          "meanLumaShift": -0.041482698059102874,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 7.973980618440467,
+          "newClippedHighChannels": 2865
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.06235059288466,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.334908096289613,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.14268509090905,
+              "meanLumaShift": 0.08033449802371571,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.870116839119485,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.14268509090905,
+              "meanLumaShift": 0.08033449802371571,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.870116839119485,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.0934070295857,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 9.151556737816946,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.17357895857972,
+              "meanLumaShift": 0.08017192899408097,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 9.904480975010454,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.17357895857972,
+              "meanLumaShift": 0.08017192899408097,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 9.904480975010454,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 15400,
+              "meanLuma": 112.20655106493496,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 11.110679208404267,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.78721658441546,
+              "meanLumaShift": -0.41933448051951283,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 12.040460176051749,
+              "newClippedHighChannels": 79
+            },
+            "trial": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.78721658441546,
+              "meanLumaShift": -0.41933448051951283,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 12.040460176051749,
+              "newClippedHighChannels": 79
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 1.9079208374023438,
+        "meanLumaShift": -0.041482698060917755,
+        "newClippedLowChannels": 4936,
+        "newClippedHighChannels": 2865,
+        "maxRowShiftJump": 0.24531992187500035
+      },
+      "singleRunProcessingMs": 115.899776,
+      "plan": {
+        "noise": 1.6551724137931096,
+        "shadowNoise": 1.6578249336870026,
+        "chromaNoise": 2.320954907161804,
+        "mean": 113.13426901333266,
+        "range": 216
+      }
+    },
+    {
+      "id": "astronaut-noise",
+      "split": "calibration",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+      "baseline_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+      "trial_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 262144,
+          "meanLuma": 113.16380733719731,
+          "meanLumaShift": 0,
+          "referenceMSE": 58.248714447021484,
+          "referenceGradientMAE": 6.251698539792221,
+          "highFrequencyRMS": 9.739393274149915,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 262144,
+          "meanLuma": 113.12992487870034,
+          "meanLumaShift": -0.033882458496092546,
+          "referenceMSE": 33.22769546508789,
+          "referenceGradientMAE": 4.53745829181092,
+          "highFrequencyRMS": 8.653883480863307,
+          "newClippedHighChannels": 675
+        },
+        "trial": {
+          "opaquePixels": 262144,
+          "meanLuma": 113.12992487870034,
+          "meanLumaShift": -0.033882458496092546,
+          "referenceMSE": 33.22769546508789,
+          "referenceGradientMAE": 4.53745829181092,
+          "highFrequencyRMS": 8.653883480863307,
+          "newClippedHighChannels": 675
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.18977573122558,
+              "meanLumaShift": 0,
+              "referenceMSE": 62.9467720685112,
+              "referenceGradientMAE": 6.675110799737814,
+              "highFrequencyRMS": 9.912526696605173,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.2700926166007,
+              "meanLumaShift": 0.08031688537549388,
+              "referenceMSE": 37.01083003952569,
+              "referenceGradientMAE": 4.995097476237325,
+              "highFrequencyRMS": 8.246978467392195,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.2700926166007,
+              "meanLumaShift": 0.08031688537549388,
+              "referenceMSE": 37.01083003952569,
+              "referenceGradientMAE": 4.995097476237325,
+              "highFrequencyRMS": 8.246978467392195,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.28091526627242,
+              "meanLumaShift": 0,
+              "referenceMSE": 63.85357001972387,
+              "referenceGradientMAE": 6.770369878472233,
+              "highFrequencyRMS": 11.372137868817799,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.3984785562126,
+              "meanLumaShift": 0.11756328994082867,
+              "referenceMSE": 37.88777120315582,
+              "referenceGradientMAE": 5.363433792162695,
+              "highFrequencyRMS": 9.331932922628285,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.3984785562126,
+              "meanLumaShift": 0.11756328994082867,
+              "referenceMSE": 37.88777120315582,
+              "referenceGradientMAE": 5.363433792162695,
+              "highFrequencyRMS": 9.331932922628285,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 15400,
+              "meanLuma": 112.27886163636308,
+              "meanLumaShift": 0,
+              "referenceMSE": 62.17415584415584,
+              "referenceGradientMAE": 6.634363794954399,
+              "highFrequencyRMS": 12.85750828128927,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.9075946623385,
+              "meanLumaShift": -0.3712669740259733,
+              "referenceMSE": 36.105497835497836,
+              "referenceGradientMAE": 5.052799698067628,
+              "highFrequencyRMS": 12.069501911432585,
+              "newClippedHighChannels": 22
+            },
+            "trial": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.9075946623385,
+              "meanLumaShift": -0.3712669740259733,
+              "referenceMSE": 36.105497835497836,
+              "referenceGradientMAE": 5.052799698067628,
+              "highFrequencyRMS": 12.069501911432585,
+              "newClippedHighChannels": 22
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 3.137237548828125,
+        "meanLumaShift": -0.03388245849697569,
+        "newClippedLowChannels": 472,
+        "newClippedHighChannels": 675,
+        "maxRowShiftJump": 0.437465624999999
+      },
+      "singleRunProcessingMs": 172.65266399999996,
+      "plan": {
+        "noise": 6.485013262599513,
+        "shadowNoise": 6.962864721485411,
+        "chromaNoise": 14.257294429708223,
+        "mean": 113.59037800470607,
+        "range": 217
+      }
+    },
+    {
+      "id": "astronaut-underexposure",
+      "split": "calibration",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+      "baseline_sha256": "250f7e9693475c8fe55cc15317fe4ead887b8c9824740a2ba8e805a0434f0869",
+      "trial_sha256": "14a7d4513179aaa447d7312db95e116b2111e4e67fbfe6c949abae8fda281791",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 262144,
+          "meanLuma": 73.25736502076194,
+          "meanLumaShift": 0,
+          "referenceMSE": 2417.191446940104,
+          "referenceGradientMAE": 2.27920824221494,
+          "highFrequencyRMS": 4.840565519857096,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 262144,
+          "meanLuma": 92.52118521119111,
+          "meanLumaShift": 19.263820190434362,
+          "referenceMSE": 875.1016133626302,
+          "referenceGradientMAE": 1.9248790338333535,
+          "highFrequencyRMS": 5.724924155754445,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 262144,
+          "meanLuma": 85.29566525040008,
+          "meanLumaShift": 12.038300229639738,
+          "referenceMSE": 1305.2317860921223,
+          "referenceGradientMAE": 1.8733771841602351,
+          "highFrequencyRMS": 5.66444892388751,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 12650,
+              "meanLuma": 95.58659476679857,
+              "meanLumaShift": 0,
+              "referenceMSE": 3062.1060079051385,
+              "referenceGradientMAE": 3.1074849475582,
+              "highFrequencyRMS": 4.774774557067132,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 12650,
+              "meanLuma": 118.56028679841882,
+              "meanLumaShift": 22.973692031622555,
+              "referenceMSE": 1167.2357312252964,
+              "referenceGradientMAE": 2.717158882333699,
+              "highFrequencyRMS": 5.461492632697041,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 12650,
+              "meanLuma": 110.24143125691758,
+              "meanLumaShift": 14.65483649011952,
+              "referenceMSE": 1706.1401581027667,
+              "referenceGradientMAE": 2.6759789659128534,
+              "highFrequencyRMS": 5.466697459144722,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 8450,
+              "meanLuma": 83.9097416094674,
+              "meanLumaShift": 0,
+              "referenceMSE": 2212.410019723866,
+              "referenceGradientMAE": 3.7931652033730483,
+              "highFrequencyRMS": 5.953126542737557,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 8450,
+              "meanLuma": 107.78572814201164,
+              "meanLumaShift": 23.875986532543592,
+              "referenceMSE": 660.0467061143984,
+              "referenceGradientMAE": 3.0206031249999783,
+              "highFrequencyRMS": 6.914584319374693,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 8450,
+              "meanLuma": 99.28898037869808,
+              "meanLumaShift": 15.379238769229948,
+              "referenceMSE": 1075.1953846153847,
+              "referenceGradientMAE": 3.068569394841261,
+              "highFrequencyRMS": 6.861921090232043,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 15400,
+              "meanLuma": 72.93613629870119,
+              "meanLumaShift": 0,
+              "referenceMSE": 2326.4087878787877,
+              "referenceGradientMAE": 3.3051759728931724,
+              "highFrequencyRMS": 7.223014668223488,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 15400,
+              "meanLuma": 96.65428099999993,
+              "meanLumaShift": 23.718144701299668,
+              "referenceMSE": 584.7220562770563,
+              "referenceGradientMAE": 2.604035191894748,
+              "highFrequencyRMS": 8.334651231496752,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 15400,
+              "meanLuma": 88.14989271428563,
+              "meanLumaShift": 15.213756415585745,
+              "referenceMSE": 1034.3801515151515,
+              "referenceGradientMAE": 2.6374447597959727,
+              "highFrequencyRMS": 8.29898945911141,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 12.257303873697916,
+        "meanLumaShift": 12.03830022963814,
+        "newClippedLowChannels": 2853,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.7331449218750041
+      },
+      "singleRunProcessingMs": 60.43151999999998,
+      "plan": {
+        "noise": 1.1622679045092867,
+        "shadowNoise": 1.6578249336870026,
+        "chromaNoise": 1.6578249336870026,
+        "mean": 73.53889965803982,
+        "range": 140
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "split": "calibration",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+      "baseline_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+      "trial_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.76519542391381,
+          "meanLumaShift": 0,
+          "referenceMSE": 43.19472122192383,
+          "referenceGradientMAE": 3.8441720853518393,
+          "highFrequencyRMS": 6.8129963587225895,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.72521716689712,
+          "meanLumaShift": -0.03997825698854107,
+          "referenceMSE": 50.2151730855306,
+          "referenceGradientMAE": 3.905460446751161,
+          "highFrequencyRMS": 7.159417179235274,
+          "newClippedHighChannels": 1988
+        },
+        "trial": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.72521716689712,
+          "meanLumaShift": -0.03997825698854107,
+          "referenceMSE": 50.2151730855306,
+          "referenceGradientMAE": 3.905460446751161,
+          "highFrequencyRMS": 7.159417179235274,
+          "newClippedHighChannels": 1988
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.01728267194198,
+              "meanLumaShift": 0,
+              "referenceMSE": 49.54819499341239,
+              "referenceGradientMAE": 5.72038815142574,
+              "highFrequencyRMS": 5.980648541156732,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.01123562055227,
+              "meanLumaShift": -0.0060470513833994505,
+              "referenceMSE": 57.0365744400527,
+              "referenceGradientMAE": 5.781244944280531,
+              "highFrequencyRMS": 6.185685321725868,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.01123562055227,
+              "meanLumaShift": -0.0060470513833994505,
+              "referenceMSE": 57.0365744400527,
+              "referenceGradientMAE": 5.781244944280531,
+              "highFrequencyRMS": 6.185685321725868,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.03388631952328,
+              "meanLumaShift": 0,
+              "referenceMSE": 59.94086785009862,
+              "referenceGradientMAE": 7.410354265873047,
+              "highFrequencyRMS": 6.953486772088475,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.12039263905186,
+              "meanLumaShift": 0.0865063195266249,
+              "referenceMSE": 65.05124260355029,
+              "referenceGradientMAE": 7.495973511904816,
+              "highFrequencyRMS": 7.232286889255426,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.12039263905186,
+              "meanLumaShift": 0.0865063195266249,
+              "referenceMSE": 65.05124260355029,
+              "referenceGradientMAE": 7.495973511904816,
+              "highFrequencyRMS": 7.232286889255426,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 15400,
+              "meanLuma": 112.22697607791677,
+              "meanLumaShift": 0,
+              "referenceMSE": 92.28160173160173,
+              "referenceGradientMAE": 6.048875509930242,
+              "highFrequencyRMS": 10.068736852166044,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.84723623376797,
+              "meanLumaShift": -0.37973984415586615,
+              "referenceMSE": 102.85495670995671,
+              "referenceGradientMAE": 6.183660017444977,
+              "highFrequencyRMS": 10.748933231141457,
+              "newClippedHighChannels": 55
+            },
+            "trial": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.84723623376797,
+              "meanLumaShift": -0.37973984415586615,
+              "referenceMSE": 102.85495670995671,
+              "referenceGradientMAE": 6.183660017444977,
+              "highFrequencyRMS": 10.748933231141457,
+              "newClippedHighChannels": 55
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 1.933519999186198,
+        "meanLumaShift": -0.03997825701668489,
+        "newClippedLowChannels": 1851,
+        "newClippedHighChannels": 1988,
+        "maxRowShiftJump": 0.2625250000000001
+      },
+      "singleRunProcessingMs": 112.85194299999989,
+      "plan": {
+        "noise": 0.669628647214853,
+        "shadowNoise": 0.9946949602122016,
+        "chromaNoise": 0.6631299734748011,
+        "mean": 113.17053639527947,
+        "range": 216
+      }
+    },
+    {
+      "id": "coffee-original",
+      "split": "calibration",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "baseline_sha256": "0a7671733110929112e13890726c0eb26b86e92f983180a78d825cca64cdb487",
+      "trial_sha256": "98680c6eedca5510cdf57dd525422b52b6879ab653b19ad575a7b3975c393dcb",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 240000,
+          "meanLuma": 98.78887363247931,
+          "meanLumaShift": 0,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 9.946242755516586,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.56612511416395,
+          "meanLumaShift": 0.7772514816667976,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 10.519384533842429,
+          "newClippedHighChannels": 341
+        },
+        "trial": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.27811606249192,
+          "meanLumaShift": 0.4892424299997998,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 10.52842891033543,
+          "newClippedHighChannels": 341
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.48737977777887,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 20.907453814662393,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 18000,
+              "meanLuma": 115.25324627777883,
+              "meanLumaShift": 0.7658665000001085,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 21.89806219768992,
+              "newClippedHighChannels": 32
+            },
+            "trial": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.95872906666798,
+              "meanLumaShift": 0.4713492888889158,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 21.935221089739226,
+              "newClippedHighChannels": 32
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 14400,
+              "meanLuma": 162.86451484721965,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 3.596971190538767,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.60659677777414,
+              "meanLumaShift": 0.7420819305555589,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 3.810456435354656,
+              "newClippedHighChannels": 61
+            },
+            "trial": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.35115816666195,
+              "meanLumaShift": 0.48664331944446415,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 3.8198938328137677,
+              "newClippedHighChannels": 61
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.7968027777777777,
+        "meanLumaShift": 0.48924243001261103,
+        "newClippedLowChannels": 493,
+        "newClippedHighChannels": 341,
+        "maxRowShiftJump": 0.11636733333333338
+      },
+      "singleRunProcessingMs": 67.34550599999989,
+      "plan": {
+        "noise": 1.5595490716179976,
+        "shadowNoise": 1.3262599469496021,
+        "chromaNoise": 1.9893899204244032,
+        "mean": 98.79606756881661,
+        "range": 195
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "split": "calibration",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+      "baseline_sha256": "4ad48aa4cb503583ff303cf2dc6cf9cc5d6e6558f7841e0a2466ae5cfd13e3d9",
+      "trial_sha256": "73e525d843eb8cace4717830abf78bc4de34841b5e76b227e2ea1a802b299920",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 240000,
+          "meanLuma": 98.9239507424999,
+          "meanLumaShift": 0,
+          "referenceMSE": 60.91631388888889,
+          "referenceGradientMAE": 6.5854675568475916,
+          "highFrequencyRMS": 11.879883274434441,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.59895621416696,
+          "meanLumaShift": 0.6750054716666786,
+          "referenceMSE": 30.844377777777776,
+          "referenceGradientMAE": 4.813063231710335,
+          "highFrequencyRMS": 10.276513038011986,
+          "newClippedHighChannels": 75
+        },
+        "trial": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.34994148666554,
+          "meanLumaShift": 0.42599074416667615,
+          "referenceMSE": 30.312797222222223,
+          "referenceGradientMAE": 4.810007143157201,
+          "highFrequencyRMS": 10.282693077393663,
+          "newClippedHighChannels": 71
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.56425211111117,
+              "meanLumaShift": 0,
+              "referenceMSE": 62.17835185185185,
+              "referenceGradientMAE": 6.621426465872637,
+              "highFrequencyRMS": 21.87365025906178,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 18000,
+              "meanLuma": 115.20759917777771,
+              "meanLumaShift": 0.6433470666666722,
+              "referenceMSE": 39.31685185185185,
+              "referenceGradientMAE": 5.77057449038017,
+              "highFrequencyRMS": 20.325517489365147,
+              "newClippedHighChannels": 10
+            },
+            "trial": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.94933328888897,
+              "meanLumaShift": 0.38508117777777445,
+              "referenceMSE": 38.87085185185185,
+              "referenceGradientMAE": 5.7644208314246335,
+              "highFrequencyRMS": 20.355073196748023,
+              "newClippedHighChannels": 8
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 14400,
+              "meanLuma": 162.87143530555556,
+              "meanLumaShift": 0,
+              "referenceMSE": 62.44884259259259,
+              "referenceGradientMAE": 6.662805437284232,
+              "highFrequencyRMS": 7.555697486152286,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.51139452777738,
+              "meanLumaShift": 0.6399592222222231,
+              "referenceMSE": 26.946967592592593,
+              "referenceGradientMAE": 4.399296950517819,
+              "highFrequencyRMS": 5.513709387643281,
+              "newClippedHighChannels": 3
+            },
+            "trial": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.29377295833328,
+              "meanLumaShift": 0.42233765277777835,
+              "referenceMSE": 26.673171296296296,
+              "referenceGradientMAE": 4.406294037687006,
+              "highFrequencyRMS": 5.524548352888226,
+              "newClippedHighChannels": 3
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 2.8929638888888887,
+        "meanLumaShift": 0.4259907441656416,
+        "newClippedLowChannels": 167,
+        "newClippedHighChannels": 71,
+        "maxRowShiftJump": 0.4593749999999995
+      },
+      "singleRunProcessingMs": 60.13119800000004,
+      "plan": {
+        "noise": 6.620888594164469,
+        "shadowNoise": 6.29973474801061,
+        "chromaNoise": 13.925729442970821,
+        "mean": 98.9498029911676,
+        "range": 196
+      }
+    },
+    {
+      "id": "coffee-underexposure",
+      "split": "calibration",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+      "baseline_sha256": "9edcb1f5cd57cac264066085ac2270198dc1dc28a577be98709cd1b2cd9543d6",
+      "trial_sha256": "9943cdf64a89d107a74fee601bdaa42ea344934ad4d8b5bdf2861812ecb63991",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 240000,
+          "meanLuma": 64.22088394166919,
+          "meanLumaShift": 0,
+          "referenceMSE": 1863.3111666666666,
+          "referenceGradientMAE": 2.7033105162094353,
+          "highFrequencyRMS": 6.469733861148449,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 240000,
+          "meanLuma": 92.0862800691831,
+          "meanLumaShift": 27.865396127501118,
+          "referenceMSE": 368.0469166666667,
+          "referenceGradientMAE": 2.265799547066294,
+          "highFrequencyRMS": 7.369735827377045,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 240000,
+          "meanLuma": 78.76231349167445,
+          "meanLumaShift": 14.541429550002372,
+          "referenceMSE": 794.0024083333333,
+          "referenceGradientMAE": 2.2347674513874787,
+          "highFrequencyRMS": 7.323957442131994,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 18000,
+              "meanLuma": 74.42353902222226,
+              "meanLumaShift": 0,
+              "referenceMSE": 2158.26887037037,
+              "referenceGradientMAE": 7.176251969766552,
+              "highFrequencyRMS": 13.5946029924715,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 18000,
+              "meanLuma": 104.02988753333348,
+              "meanLumaShift": 29.606348511112103,
+              "referenceMSE": 373.67875925925927,
+              "referenceGradientMAE": 6.271469245305067,
+              "highFrequencyRMS": 14.619779492768464,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 18000,
+              "meanLuma": 90.2832013555566,
+              "meanLumaShift": 15.85966233333543,
+              "referenceMSE": 918.2255740740741,
+              "referenceGradientMAE": 6.050740620705699,
+              "highFrequencyRMS": 14.790175179990012,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 14400,
+              "meanLuma": 105.87466705555605,
+              "meanLumaShift": 0,
+              "referenceMSE": 3554.620138888889,
+              "referenceGradientMAE": 0.9538642692749941,
+              "highFrequencyRMS": 2.350505934893034,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 14400,
+              "meanLuma": 137.15315355555404,
+              "meanLumaShift": 31.27848650000001,
+              "referenceMSE": 976.9818518518518,
+              "referenceGradientMAE": 1.0474487629458726,
+              "highFrequencyRMS": 2.547381628613137,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 14400,
+              "meanLuma": 123.66416211111014,
+              "meanLumaShift": 17.78949505555551,
+              "referenceMSE": 1817.7239351851852,
+              "referenceGradientMAE": 1.026133680955085,
+              "highFrequencyRMS": 2.6323822188789365,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 14.634108333333334,
+        "meanLumaShift": 14.54142955000527,
+        "newClippedLowChannels": 41,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.470985999999991
+      },
+      "singleRunProcessingMs": 62.00991299999987,
+      "plan": {
+        "noise": 1.2318302387267939,
+        "shadowNoise": 1.3262599469496021,
+        "chromaNoise": 1.6578249336870026,
+        "mean": 64.2240002949988,
+        "range": 127
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "split": "calibration",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+      "baseline_sha256": "8d09d5ec5d7153d08c27b361a16ba4e1fc79ddef189bd8a2986b5358e0592710",
+      "trial_sha256": "9d46d6a9d8a66ee75d0ef961a0647034406c1d88a267b62890066b7eb1104bfc",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 240000,
+          "meanLuma": 98.8236744799885,
+          "meanLumaShift": 0,
+          "referenceMSE": 61.50852638888889,
+          "referenceGradientMAE": 5.555558967496687,
+          "highFrequencyRMS": 8.225001409079855,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.57630090750231,
+          "meanLumaShift": 0.7526264275001181,
+          "referenceMSE": 63.823566666666665,
+          "referenceGradientMAE": 5.628819497151636,
+          "highFrequencyRMS": 8.545453063200167,
+          "newClippedHighChannels": 375
+        },
+        "trial": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.29696461250307,
+          "meanLumaShift": 0.47329013249971597,
+          "referenceMSE": 63.29501805555556,
+          "referenceGradientMAE": 5.624986454429767,
+          "highFrequencyRMS": 8.554481486548731,
+          "newClippedHighChannels": 348
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.47209082222423,
+              "meanLumaShift": 0,
+              "referenceMSE": 166.60414814814814,
+              "referenceGradientMAE": 13.208180193540842,
+              "highFrequencyRMS": 18.540778531708366,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 18000,
+              "meanLuma": 115.25439167777537,
+              "meanLumaShift": 0.7823008555556442,
+              "referenceMSE": 171.52144444444446,
+              "referenceGradientMAE": 13.429101901053519,
+              "highFrequencyRMS": 19.242495510076978,
+              "newClippedHighChannels": 49
+            },
+            "trial": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.96071122222064,
+              "meanLumaShift": 0.4886204000000137,
+              "referenceMSE": 171.2322037037037,
+              "referenceGradientMAE": 13.437118672698114,
+              "highFrequencyRMS": 19.278372183779606,
+              "newClippedHighChannels": 41
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 14400,
+              "meanLuma": 162.98936502777903,
+              "meanLumaShift": 0,
+              "referenceMSE": 22.033078703703705,
+              "referenceGradientMAE": 2.239323935558138,
+              "highFrequencyRMS": 2.726191034221811,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.65451038889034,
+              "meanLumaShift": 0.665145361111138,
+              "referenceMSE": 22.677083333333332,
+              "referenceGradientMAE": 2.25323482451095,
+              "highFrequencyRMS": 2.8119936370067298,
+              "newClippedHighChannels": 59
+            },
+            "trial": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.42490497222644,
+              "meanLumaShift": 0.4355399444444218,
+              "referenceMSE": 22.27037037037037,
+              "referenceGradientMAE": 2.2472900604142882,
+              "highFrequencyRMS": 2.8089128847373024,
+              "newClippedHighChannels": 58
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.6363583333333334,
+        "meanLumaShift": 0.47329013251457364,
+        "newClippedLowChannels": 170,
+        "newClippedHighChannels": 348,
+        "maxRowShiftJump": 0.13035499999999972
+      },
+      "singleRunProcessingMs": 28.570330000000013,
+      "plan": {
+        "noise": 0.8763262599469592,
+        "shadowNoise": 0.6631299734748011,
+        "chromaNoise": 0.6631299734748011,
+        "mean": 98.81755275534584,
+        "range": 193
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "split": "calibration",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "baseline_sha256": "f90a73c8dce85299ca6ae3676d3550dea2f7333fecfb8440a7dc3802e4a7b7e8",
+      "trial_sha256": "f6366b4d4f08a58ae542fa6b2caa660a23f9a6fbc3ff435636d747381c242f2d",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 135300,
+          "meanLuma": 117.3671953954004,
+          "meanLumaShift": 0,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 5.024494702953903,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.81374718403387,
+          "meanLumaShift": 2.4465517886181654,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 5.928760121588376,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.04640433998462,
+          "meanLumaShift": 1.6792089445688538,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 5.811945333944589,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 7700,
+              "meanLuma": 103.67757415584357,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 6.994141371864034,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.88964010389579,
+              "meanLumaShift": 1.212065948051936,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 8.065132325082114,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.44310194805165,
+              "meanLumaShift": 0.7655277922077875,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.960395628913993,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 5600,
+              "meanLuma": 96.7612756428573,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 6.320931419391259,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 5600,
+              "meanLuma": 98.04802053571456,
+              "meanLumaShift": 1.28674489285716,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.362412463003442,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.52605428571442,
+              "meanLumaShift": 0.7647786428571544,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 7.232284043939994,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 4.838642522788864,
+        "meanLumaShift": 1.6792089445842189,
+        "newClippedLowChannels": 40,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3337263858093118
+      },
+      "singleRunProcessingMs": 29.817306000000144,
+      "plan": {
+        "noise": 1.1630636604774451,
+        "shadowNoise": 1.6578249336870026,
+        "chromaNoise": 1.3262599469496021,
+        "mean": 117.17354947407082,
+        "range": 107
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "split": "calibration",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+      "baseline_sha256": "e8c56ad0618ebc7f96da4cf7888d10a95d211e085faade8e4ad926446cebfc35",
+      "trial_sha256": "2b747e626de74c1b2da84077d08dc3431700858fe47d24c81ad2b26cc29818e2",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 135300,
+          "meanLuma": 117.38664075683802,
+          "meanLumaShift": 0,
+          "referenceMSE": 63.97109632914511,
+          "referenceGradientMAE": 6.77022631201334,
+          "highFrequencyRMS": 8.390494762700044,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.18145814338469,
+          "meanLumaShift": 1.7948173865483996,
+          "referenceMSE": 54.6250110864745,
+          "referenceGradientMAE": 5.102821640184777,
+          "highFrequencyRMS": 6.575690164587358,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 135300,
+          "meanLuma": 118.48272303917344,
+          "meanLumaShift": 1.096082282335571,
+          "referenceMSE": 50.412049765952204,
+          "referenceGradientMAE": 5.003690876070575,
+          "highFrequencyRMS": 6.436488649195285,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 7700,
+              "meanLuma": 103.78932137662359,
+              "meanLumaShift": 0,
+              "referenceMSE": 64.1238961038961,
+              "referenceGradientMAE": 6.792546623093636,
+              "highFrequencyRMS": 9.729814951727159,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.44392833766224,
+              "meanLumaShift": 0.6546069610389629,
+              "referenceMSE": 50.25099567099567,
+              "referenceGradientMAE": 5.44391409313727,
+              "highFrequencyRMS": 8.149122746366062,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.04012987012969,
+              "meanLumaShift": 0.25080849350649354,
+              "referenceMSE": 48.72961038961039,
+              "referenceGradientMAE": 5.379704643246155,
+              "highFrequencyRMS": 8.037030660665806,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 5600,
+              "meanLuma": 96.88581914285704,
+              "meanLumaShift": 0,
+              "referenceMSE": 62.62809523809524,
+              "referenceGradientMAE": 6.710539800150814,
+              "highFrequencyRMS": 9.165821780904963,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.65246475000019,
+              "meanLumaShift": 0.7666456071428568,
+              "referenceMSE": 47.952559523809526,
+              "referenceGradientMAE": 5.244167647058825,
+              "highFrequencyRMS": 7.609247768157612,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.17791278571424,
+              "meanLumaShift": 0.29209364285714284,
+              "referenceMSE": 46.14083333333333,
+              "referenceGradientMAE": 5.1728333333333385,
+              "highFrequencyRMS": 7.486057669012644,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 4.648142399605814,
+        "meanLumaShift": 1.0960822823354168,
+        "newClippedLowChannels": 1,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.5151942350332603
+      },
+      "singleRunProcessingMs": 33.58089699999982,
+      "plan": {
+        "noise": 6.646949602121989,
+        "shadowNoise": 7.294429708222812,
+        "chromaNoise": 14.257294429708223,
+        "mean": 117.1982407901175,
+        "range": 109
+      }
+    },
+    {
+      "id": "chelsea-underexposure",
+      "split": "calibration",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+      "baseline_sha256": "fea36237ec74a8e56f57d669af513b6b4ff14c07d0e8df625e8d7ba627fa32a3",
+      "trial_sha256": "688a2292c3bb920e4d1fa9f68231717e973c5fd2e3d7a6b7fcde7ff760e4e340",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 135300,
+          "meanLuma": 76.28818736436692,
+          "meanLumaShift": 0,
+          "referenceMSE": 1847.659709288002,
+          "referenceGradientMAE": 1.929584917265507,
+          "highFrequencyRMS": 3.2740476858998036,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 135300,
+          "meanLuma": 94.72346048484411,
+          "meanLumaShift": 18.43527312046647,
+          "referenceMSE": 628.5363291451097,
+          "referenceGradientMAE": 1.5333551912526986,
+          "highFrequencyRMS": 3.8789730440907912,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 135300,
+          "meanLuma": 88.26334691056205,
+          "meanLumaShift": 11.97515954618103,
+          "referenceMSE": 975.1748041389504,
+          "referenceGradientMAE": 1.6208886914992724,
+          "highFrequencyRMS": 3.7869735806322464,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 7700,
+              "meanLuma": 67.38733215584475,
+              "meanLumaShift": 0,
+              "referenceMSE": 1438.061341991342,
+              "referenceGradientMAE": 3.3852784177560036,
+              "highFrequencyRMS": 4.556110049672157,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 7700,
+              "meanLuma": 85.25959548051921,
+              "meanLumaShift": 17.872263324675643,
+              "referenceMSE": 426.0106493506494,
+              "referenceGradientMAE": 2.4677371868191904,
+              "highFrequencyRMS": 5.4595891449750065,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 7700,
+              "meanLuma": 79.00898651948049,
+              "meanLumaShift": 11.621654363636397,
+              "referenceMSE": 704.2938961038961,
+              "referenceGradientMAE": 2.6810400462963155,
+              "highFrequencyRMS": 5.282995806665111,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 5600,
+              "meanLuma": 62.893965857142994,
+              "meanLumaShift": 0,
+              "referenceMSE": 1350.536607142857,
+              "referenceGradientMAE": 3.081869607843153,
+              "highFrequencyRMS": 4.111546613657422,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 5600,
+              "meanLuma": 79.5338264285714,
+              "meanLumaShift": 16.639860571428258,
+              "referenceMSE": 428.1959523809524,
+              "referenceGradientMAE": 2.233328506787353,
+              "highFrequencyRMS": 4.943403288459722,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 5600,
+              "meanLuma": 73.63714064285698,
+              "meanLumaShift": 10.743174785714103,
+              "referenceMSE": 682.6017261904761,
+              "referenceGradientMAE": 2.41524283559583,
+              "highFrequencyRMS": 4.801316308193016,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 11.841140675043114,
+        "meanLumaShift": 11.975159546195131,
+        "newClippedLowChannels": 4,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.1918257206208427
+      },
+      "singleRunProcessingMs": 15.58560599999987,
+      "plan": {
+        "noise": 0.9521220159151385,
+        "shadowNoise": 0.9946949602122016,
+        "chromaNoise": 0.9946949602122016,
+        "mean": 76.16361971624353,
+        "range": 70
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "split": "calibration",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+      "baseline_sha256": "2dcf5a7ec036b5d74448b588c7df1013e9a5eb816da072ef52bcc930a24fc342",
+      "trial_sha256": "47e4b4b9eb7210e95a6b8bc4b7425645ee635233a6f188fdf0b8fdd4e07d6ae8",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 135300,
+          "meanLuma": 117.3729645395396,
+          "meanLumaShift": 0,
+          "referenceMSE": 28.557213599408723,
+          "referenceGradientMAE": 3.8458658046967145,
+          "highFrequencyRMS": 3.970324051814049,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.92954414932345,
+          "meanLumaShift": 2.5565796097562967,
+          "referenceMSE": 65.4480610987928,
+          "referenceGradientMAE": 4.042826492130747,
+          "highFrequencyRMS": 4.505515219729286,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.1618771692778,
+          "meanLumaShift": 1.7889126297132516,
+          "referenceMSE": 60.12575511209658,
+          "referenceGradientMAE": 3.997783735669528,
+          "highFrequencyRMS": 4.415728415982848,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 7700,
+              "meanLuma": 103.66011885713957,
+              "meanLumaShift": 0,
+              "referenceMSE": 48.98510822510823,
+              "referenceGradientMAE": 6.083040373093689,
+              "highFrequencyRMS": 6.141719973660462,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.96366444155966,
+              "meanLumaShift": 1.3035455844155799,
+              "referenceMSE": 82.05294372294372,
+              "referenceGradientMAE": 6.4587036628540275,
+              "highFrequencyRMS": 6.8909166316383,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.5098756883127,
+              "meanLumaShift": 0.8497568311688248,
+              "referenceMSE": 79.69701298701298,
+              "referenceGradientMAE": 6.395221514161221,
+              "highFrequencyRMS": 6.794315976937775,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 5600,
+              "meanLuma": 96.71692342857227,
+              "meanLumaShift": 0,
+              "referenceMSE": 49.67452380952381,
+              "referenceGradientMAE": 5.389354468325783,
+              "highFrequencyRMS": 5.372236576127289,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 5600,
+              "meanLuma": 98.08461003571466,
+              "meanLumaShift": 1.3676866071428742,
+              "referenceMSE": 76.64744047619048,
+              "referenceGradientMAE": 5.683612311463044,
+              "highFrequencyRMS": 6.0729072165895355,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.55811557142914,
+              "meanLumaShift": 0.8411921428571454,
+              "referenceMSE": 73.9627380952381,
+              "referenceGradientMAE": 5.627118853695331,
+              "highFrequencyRMS": 5.964910778865284,
+              "newClippedHighChannels": 0
+            },
+            "observed": null
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 4.928408474993841,
+        "meanLumaShift": 1.788912629738205,
+        "newClippedLowChannels": 36,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.2932532150776044
+      },
+      "singleRunProcessingMs": 21.653220000000147,
+      "plan": {
+        "noise": 0.9946949602122016,
+        "shadowNoise": 1.3262599469496021,
+        "chromaNoise": 0.6631299734748011,
+        "mean": 117.13567100048529,
+        "range": 107
+      }
+    },
+    {
+      "id": "alpha-diagnostic",
+      "split": "diagnostic",
+      "width": 129,
+      "height": 97,
+      "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "baseline_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "trial_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "observed_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "faces": []
+      },
+      "baselineReused": true,
+      "metrics": {
+        "input": {
+          "opaquePixels": 0,
+          "meanLuma": null,
+          "meanLumaShift": null,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": null,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 0,
+          "meanLuma": null,
+          "meanLumaShift": null,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": null,
+          "newClippedHighChannels": 0
+        },
+        "trial": {
+          "opaquePixels": 0,
+          "meanLuma": null,
+          "meanLumaShift": null,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": null,
+          "newClippedHighChannels": 0
+        },
+        "observed": null
+      },
+      "rois": [],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 129,
+        "height": 97,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      },
+      "singleRunProcessingMs": 9.507407000000057,
+      "plan": {
+        "noise": 0,
+        "shadowNoise": 0,
+        "chromaNoise": 0,
+        "mean": 128,
+        "range": 0
+      }
+    },
+    {
+      "id": "user-print-portrait",
+      "split": "diagnostic",
+      "width": 1102,
+      "height": 1470,
+      "input_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+      "baseline_sha256": "680e1e305893d5059308a737817751ccf1d4668e7bae4f9a430d64ed4083955a",
+      "trial_sha256": "f73eae057659098c647ae9847c95ea6a815fd2ff2409d893a225cfbe20e274e2",
+      "observed_sha256": "e5717b698a2e1500576cfdb35a86a0fcea766a49afcbaa4127a9f8c9b4dab0fe",
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "baselineReused": false,
+      "metrics": {
+        "input": {
+          "opaquePixels": 1619940,
+          "meanLuma": 53.0737759525519,
+          "meanLumaShift": 0,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 0.9726347947354087,
+          "newClippedHighChannels": 0
+        },
+        "baseline": {
+          "opaquePixels": 1619940,
+          "meanLuma": 81.41756499223376,
+          "meanLumaShift": 28.343789039611284,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 1.0604932992496723,
+          "newClippedHighChannels": 34
+        },
+        "trial": {
+          "opaquePixels": 1619940,
+          "meanLuma": 67.0104290926223,
+          "meanLumaShift": 13.93665314012776,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 1.0549571002813316,
+          "newClippedHighChannels": 8
+        },
+        "observed": {
+          "opaquePixels": 1619940,
+          "meanLuma": 81.41189528966598,
+          "meanLumaShift": 28.338119337730998,
+          "referenceMSE": null,
+          "referenceGradientMAE": null,
+          "highFrequencyRMS": 1.0742229883442669,
+          "newClippedHighChannels": 34
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            300,
+            340,
+            430,
+            420
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 180600,
+              "meanLuma": 52.57536957254223,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.6419111012974589,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 180600,
+              "meanLuma": 80.94737913839265,
+              "meanLumaShift": 28.372009565895056,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7692103420367258,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 180600,
+              "meanLuma": 66.5178588438679,
+              "meanLumaShift": 13.942489271323279,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.723731517632406,
+              "newClippedHighChannels": 0
+            },
+            "observed": {
+              "opaquePixels": 180600,
+              "meanLuma": 80.95051533997771,
+              "meanLumaShift": 28.375145767439008,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7793788985978664,
+              "newClippedHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            290,
+            60,
+            440,
+            220
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 96800,
+              "meanLuma": 8.020653347105387,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.38699221667054284,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 96800,
+              "meanLuma": 17.444124411153027,
+              "meanLumaShift": 9.42347106404927,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7770608707795058,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 96800,
+              "meanLuma": 10.774602295455216,
+              "meanLumaShift": 2.7539489483444584,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.5103505916365931,
+              "newClippedHighChannels": 0
+            },
+            "observed": {
+              "opaquePixels": 96800,
+              "meanLuma": 17.471217165292458,
+              "meanLumaShift": 9.450563818185158,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7908566501954696,
+              "newClippedHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "background",
+          "kind": "mixed-grain-print-jpeg",
+          "box": [
+            30,
+            320,
+            165,
+            360
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 59400,
+              "meanLuma": 27.59791148483977,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.5362329307648819,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 59400,
+              "meanLuma": 52.404561515149695,
+              "meanLumaShift": 24.80665003029179,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7473714933755624,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 59400,
+              "meanLuma": 37.26279349494724,
+              "meanLumaShift": 9.664882010099287,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7182122761778874,
+              "newClippedHighChannels": 0
+            },
+            "observed": {
+              "opaquePixels": 59400,
+              "meanLuma": 52.399821094278536,
+              "meanLumaShift": 24.801909609446643,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7587675501675468,
+              "newClippedHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "fabric",
+          "kind": "texture",
+          "box": [
+            190,
+            1030,
+            200,
+            260
+          ],
+          "metrics": {
+            "input": {
+              "opaquePixels": 52000,
+              "meanLuma": 87.15438575384762,
+              "meanLumaShift": 0,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.8267626850536232,
+              "newClippedHighChannels": 0
+            },
+            "baseline": {
+              "opaquePixels": 52000,
+              "meanLuma": 121.23951394232182,
+              "meanLumaShift": 34.085128188470904,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7908863979848938,
+              "newClippedHighChannels": 0
+            },
+            "trial": {
+              "opaquePixels": 52000,
+              "meanLuma": 105.11327701153529,
+              "meanLumaShift": 17.95889125768691,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.7856225283624566,
+              "newClippedHighChannels": 0
+            },
+            "observed": {
+              "opaquePixels": 52000,
+              "meanLuma": 121.21348519997193,
+              "meanLumaShift": 34.05909944614157,
+              "referenceMSE": null,
+              "referenceGradientMAE": null,
+              "highFrequencyRMS": 0.8158934316698133,
+              "newClippedHighChannels": 0
+            }
+          }
+        }
+      ],
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 1102,
+        "height": 1470,
+        "alphaPreserved": true,
+        "meanChange": 14.725941701544501,
+        "meanLumaShift": 13.936653140070405,
+        "newClippedLowChannels": 849,
+        "newClippedHighChannels": 8,
+        "maxRowShiftJump": 0.39277114337551566
+      },
+      "singleRunProcessingMs": 209.69836799999985,
+      "plan": {
+        "noise": 0.427718832891244,
+        "shadowNoise": 0.33156498673740054,
+        "chromaNoise": 0.33156498673740054,
+        "mean": 53.078606054357174,
+        "range": 90
+      }
+    }
+  ],
+  "decision": "NO-GO as automatic default: underexposure reference error regressed in all three scenes. Offline manual-review treatment only.",
+  "tests": {
+    "newTargetedTests": 3,
+    "passed": 3,
+    "calibrationAndDiagnosticIntegrityCases": 14,
+    "retainedBaselinesReused": 13,
+    "protectedBaselineVerification": "PASS before and after work"
+  }
+}
