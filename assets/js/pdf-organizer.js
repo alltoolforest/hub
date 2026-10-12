@@ -10,13 +10,20 @@ import {OrganizerThumbnails} from './pdf-organizer-thumbnails.js';
 async function openPreviewDocument(bytes) {
   const pdfjs = await load('pdfjs');
   pdfjs.GlobalWorkerOptions.workerSrc = url('assets/vendor/pdf.worker.mjs');
-  return pdfjs.getDocument({
+  const task = pdfjs.getDocument({
     data: new Uint8Array(bytes),
     isEvalSupported: false,
     cMapUrl: url('assets/vendor/cmaps/'), cMapPacked: true,
     standardFontDataUrl: url('assets/vendor/standard_fonts/'),
     wasmUrl: url('assets/vendor/wasm/')
-  }).promise;
+  });
+  try {
+    return await task.promise;
+  } catch (error) {
+    // A rejected preview load must not retain worker/transport resources.
+    try { await task.destroy(); } catch {}
+    throw error;
+  }
 }
 
 export async function mount(root) {
