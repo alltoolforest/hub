@@ -1,0 +1,24 @@
+name: PDF Compressor Task 5 isolated candidate
+on:
+  push:
+    branches:
+      - pdf-compressor-task5-image-pipeline-20261012
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Task 5 candidate tests
+        run: node --test tests/pdf-compressor-task5-image-candidate.test.mjs
+      - name: Task 4 contract regression
+        run: node --test tests/pdf-compressor-task4-lossless.test.mjs
+      - name: Task 3 policy regression
+        run: node --test tests/pdf-compressor-task3-policy.test.mjs
+      - name: Task 1 baseline regression
+        run: node --test tests/pdf-compressor-task1-baseline.test.mjs
