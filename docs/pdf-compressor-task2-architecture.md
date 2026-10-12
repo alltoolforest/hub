@@ -18,8 +18,8 @@
 | Candidate | Browser integration | Structure preservation | Embedded image savings | Footprint / licensing | Decision |
 | --- | --- | --- | --- | --- | --- |
 | A. Existing pdf-lib `copyPages` rebuild | Already shipped | **Fails** forms, attachments, bookmarks, tags, metadata | No downsample / re-encode | Existing JS dependency, MIT upstream | **Reject** as primary engine; retain as negative-control benchmark |
-| B. Existing pdf-lib `PDFDocument.load` → **in-place** save | Already shipped, no new dependency | Likely stronger because document catalog is preserved; subject to file-specific verification | No automatic image downsample | No new browser payload; MIT upstream | **Select provisionally as document-preserving structural baseline**, only behind Task 3 capability checks / Task 7 validation |
-| C. Native qpdf structural optimization | Native CLI; browser requires separate vetted WASM build | QPDF designed as content-preserving transformer; still independently test | Current versions optionally recompress supported images, no image resampling | Apache-2.0 upstream, WASM distribution size/maintenance yet unmeasured | **Keep conditional option** for structural backend if compatible, tested WASM is better than B |
+| B. Existing pdf-lib in-place save | Already shipped | 9/9 synthetic structures preserved | No automatic image downsample; 0% measured savings | 525 KB existing JS, MIT upstream | Retain as preservation/no-op fallback, not primary compressor |
+| C. qpdf-family native + browser-WASM | Native CLI and browser ESM/WASM synthetic trials passed | Native 9/9 + browser 36/36 measured structural profiles preserved | Flate stream compression: ~19% size reduction on synthetic raster, not scan downsampling | Apache-2.0 upstream; old community build 1.76 MB unpacked, security/maintenance approval pending | **Selected preferred structural engine family**, conditional on Task 3/4/7/9/10 gates |
 | D. MuPDF.js WebAssembly | Browser and Node APIs supported by publisher | Potentially broad document support, but independent preservation study needed | Specialized image operations possible; exact requirements unverified | AGPL-3.0-or-later or paid commercial license; substantial WASM runtime | **Do not select** for distribution without licensing decision and measured benefit |
 | E. Ghostscript/pdfwrite | Native reference; browser deployment requires separate WASM integration | May change, flatten or rewrite complex structures; loss must be tested | Strong image reprocessing possible | AGPL/commercial licensing and potential functional loss | **Not selected** for privacy-first static-site initial launch |
 | F. Browser Canvas / OffscreenCanvas + Worker + selective resource processing | Native JPEG/PNG (WebP conditional), no service | **Not itself PDF-aware**; only encode an image independently | Real JPEG/WebP re-encoding is feasible; safe PDF resource replacement not yet proven | No new library for codecs, but possible main-thread/image memory spikes | **Select provisionally as isolated image codec path**, not a full PDF writer |
@@ -31,11 +31,11 @@ Official source references, reviewed October 2026:
 - Ghostscript: https://ghostscript.com/faq/ (AGPL/commercial).
 - Community qpdf WASM packaging: https://github.com/neslinesli93/qpdf-wasm and https://github.com/sharevb/qpdf-wasm-esm (not certified or shipped).
 
-## Selected design: privacy-first, preservation-first, modular hybrid (conditional)
+## Selected design: qpdf-family browser-WASM structural optimizer plus selective local image codecs (conditional)
 
-**Core document layer (provisional):** Start from a full source PDF and preserve its object graph and document catalog, rather than reconstructing the PDF from copied pages. Existing pdf-lib in-place save is the **measured minimal-dependency candidate**; qpdf/WASM remains a comparison option, NOT a required dependency.
+**Core document layer:** Select a **qpdf-family browser-WASM structural optimizer**, with independent structural inspection, preservation-first export checks and an unchanged-original fallback if savings are absent. A temporary pinned community ESM/WASM build passed synthetic feasibility; it is **NOT an approved production binary**. Task 4 must select or build a maintainable, version-pinned, license/security-reviewed qpdf-WASM distribution before any actual integration. The existing pdf-lib in-place pathway remains a structural preservation reference and possible safe no-op fallback, but it achieved 0% savings. Never substitute page-copy reconstruction.
 
-**Image processing layer (provisional):** Browser-local canvas codecs inside an isolated worker when supported; no page flattening. Controlled image re-encoding/downsampling will require a future PDF image resource layer with filter/color-space/mask/ICC correctness. **This is an architecture decision, not implementation.**
+**Image processing layer:** Use browser-local JPEG/Flate-compatible encoding in isolated workers where supported, and only selectively replace PDF image resources after Task 5 validates masks, transparency, color profiles, shared references and OCR/text preservation. WebP may be useful for temporary previews but is **not a standard PDF-embedded image codec**. No such resource transformation was implemented in Task 2; do not flatten entire PDF pages.
 
 **Integrity gate:** If any document's structural invariants cannot be confidently preserved, stop/fail without an altered downloadable PDF. Do not silently remove bookmarks, forms, tags, links, attachments, metadata or invalidated digital signatures. Signed PDFs must be explicitly detected and rejected or have a separately authorized safe no-op policy before processing.
 
@@ -85,7 +85,9 @@ The native qpdf image-heavy benchmark took roughly **0.65 s** on a CI runner ver
 
 **Security/licensing dependency:** No additional package was placed in repository production dependencies. Community qpdf-WASM packages need maintenance, supply-chain, version and browser compatibility assessment; MuPDF/Ghostscript cannot be selected without determining a legally compatible AGPL or commercial licensing approach.
 
-**Research-only conclusion from measurements:** It is feasible to preserve measured PDF structures in-place, and to obtain genuine structural savings through a PDF-aware qpdf-type optimizer on suitable files. Browser-native image encoding and workers are available on the tested engines. **No end-to-end browser PDF compressor or preservation of arbitrary real PDFs was implemented or proven in Task 2.** Browser qpdf-WASM trial is a separate candidate feasibility check; do not interpret a failed or absent trial as an approved engine.
+**Full browser qpdf-WASM candidate trial:** [CI run 38267216185](https://github.com/alltoolforest/hub/actions/runs/38267216185) installed `qpdf-wasm-esm-embedded@1.1.1` in the **temporary CI environment only**, then imported it from the local test server. In Chromium desktop, Chromium mobile viewport, Firefox desktop and WebKit mobile viewport, all **36/36** exports (nine valid synthetic PDF types × four browser configurations) reopened and preserved the measured page count, title/author, form field names, bookmark root, associated files, tag root, MarkInfo and synthetic signature marker. All four produced **19.10% smaller** scanned-like PDFs, **19.34% smaller** image-heavy and **18.81% smaller** mixed PDFs; some other fixtures grew by **5–9%**. This is genuine browser-WASM *synthetic structural feasibility*, not proof of real-world signature validity, PDF/A conformance, text/OCR equivalence, image downsampling, physical-device limits or safe deployment of this older package.
+
+**Feasibility decision:** **Task 2 PASS (conditional architecture approval only).** A browser-local qpdf-family optimizer demonstrably produced a smaller synthetic scanned document while preserving the measured structure fingerprints across four browser environments. The exact third-party WASM artifact remains unapproved for production, and PDF image downsampling, output-validation infrastructure, resilient UI processing and real-world compatibility have not been implemented.
 
 ## Risks, stop conditions and downstream dependencies
 
@@ -93,18 +95,19 @@ The native qpdf image-heavy benchmark took roughly **0.65 s** on a CI runner ver
 2. Browser raster encoding alone does **not** prove safe in-PDF image recompression; validate transparency, masks, color profiles and shared resources before approving Task 5 export.
 3. Real cryptographic signature and encryption tests remain missing; the synthetic `/Perms` test proves *only* a marker persists, not signature validity.
 4. Static CI desktop browser emulation does not prove Android/iOS physical performance, worker stability or memory consumption; those are explicit downstream gates.
-5. WASM package size/maintenance, startup cost and legal review are unresolved for qpdf variants; no package selected for deployment.
+5. Published package size/version/license metadata and synthetic startup timing are measured, but the community qpdf-WASM package is an older release and **not approved for production**. Before Task 4 integration, vet maintainers, source provenance, license notices, security updates, audited upstream qpdf version and CSP/worker compatibility. If it fails review, consider a maintained pinned WASM rebuild from upstream or stop for architecture reconsideration.
 6. Structural profiles are basic indicators, not byte-perfect text/OCR or visible-fidelity proof; independent validation remains Task 7.
 7. If measured results show neither preservation nor practical mobile feasibility, **STOP** for architecture review. Do not pre-build Task 3/4/5.
 
 ## Task 2 completion gate
 
 - At least the shipped legacy negative control and an in-place preservation candidate are measured on all synthetic fixture types.
-- qpdf structural CLI benchmark recorded when available, labeled *native reference only*.
+- Native qpdf 9/9 and browser qpdf-WASM 36/36 synthetic preservation benchmarks recorded, both with limitations and no production binary approval.
 - Browser native codec, WASM and worker probes pass across four CI configurations, with device caveats.
 - Structural losses and compression limitations compared transparently.
 - A provisional architecture is selected with clearly assigned downstream feasibility gates.
-- Task 1 baseline tests remain green and ONLY these four Task 2 research files differ from Task 1.
-- CI results and benchmark figures added after execution; otherwise Task 2 remains **IN PROGRESS**.
+- Task 1 baseline tests remain green and ONLY five Task 2 research files differ from Task 1.
+- All synthetic feasibility, codec, worker, size, licensing and measured-profile checks recorded.
+- **Task 2 completed in isolation; no production integration or Task 3 work started.**
 
 **Do not start Task 3 without explicit user approval.**
