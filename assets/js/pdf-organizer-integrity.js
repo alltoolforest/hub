@@ -3,7 +3,7 @@
 export function initialPlan(document) {
   return document.getPages().map((page, index) => ({
     index,
-    rotation: page.getRotation().angle,
+    rotation: ((page.getRotation().angle % 360) + 360) % 360,
     keep: true
   }));
 }
