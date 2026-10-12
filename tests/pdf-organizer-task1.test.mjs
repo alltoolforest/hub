@@ -117,11 +117,12 @@ test('removing pages from outline-bearing PDFs fails closed', async () => {
     /Outlines/);
 });
 
-test('removing pages from form-bearing PDFs fails closed', async () => {
+test('removing a page retains an unplaced document form field', async () => {
   const doc = await fixture(2);
   doc.getForm().createTextField('person.name');
-  await assert.rejects(exported(doc, changePlan(initialPlan(doc), 'toggle', 1)),
-    /AcroForm/);
+  const output = await exported(doc, changePlan(initialPlan(doc), 'toggle', 1));
+  assert.equal(output.getPageCount(), 1);
+  assert.ok(output.getForm().getTextField('person.name'));
 });
 
 test('custom page labels cannot be silently mismatched by reordering', async () => {
