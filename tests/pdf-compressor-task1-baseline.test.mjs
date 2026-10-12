@@ -124,9 +124,9 @@ test('mixed-content output retains pages and page geometry',async()=>{
   assert.equal(after.getPageCount(),before.getPageCount());
   assert.equal(after.getPage(1).getWidth(),before.getPage(1).getWidth());
 });
-test('KNOWN-DEFECT: malformed PDF-looking header is accepted as zero pages',async()=>{
+test('KNOWN-DEFECT: malformed PDF may pass load then fail on first page access',async()=>{
   const pdf=await PDF.PDFDocument.load((await buildFixture('invalid')).bytes);
-  assert.equal(pdf.getPageCount(),0);
+  assert.throws(()=>pdf.getPageCount(),/Pages|page/i);
 });
 test('the legacy baseline reports actual bytes rather than guaranteed savings',async()=>{
   const {original,optimized}=await compare('digital');
