@@ -141,6 +141,26 @@ test('internal links to other pages still block unsafe removal', async () => {
   await assert.rejects(remove(doc,[0]),/internal page links/);
 });
 
+test('kept-page internal link to another kept page survives a deletion', async () => {
+  const doc = await source();
+  const target = doc.context.obj([doc.getPage(2).ref, key('Fit')]);
+  const link = doc.context.obj({Type: key('Annot'), Subtype: key('Link'), Dest: target});
+  const ref = doc.context.register(link);
+  doc.getPage(0).node.set(key('Annots'), doc.context.obj([ref]));
+  const {result} = await remove(doc,[1]);
+  assert.equal(result.getPageCount(),2);
+  assert.equal(result.getPage(0).node.Annots().size(),1);
+});
+
+test('internal link on a page being deleted cannot block deletion', async () => {
+  const doc=await source();
+  const link=doc.context.obj({Dest:doc.context.obj([doc.getPage(2).ref,key('Fit')])});
+  const ref=doc.context.register(link);
+  doc.getPage(1).node.set(key('Annots'),doc.context.obj([ref]));
+  const {result}=await remove(doc,[1]);
+  assert.equal(result.getPageCount(),2);
+});
+
 test('page removal and reorder/rotation work in the same export', async () => {
   const doc=await source();
   const bytes=await doc.save();
