@@ -79,6 +79,21 @@ function analyzeFormWidgets(document, kept, PDF) {
     .filter((_, i) => !kept.some(p => p.index === i))
     .map(p => p.ref.toString()));
   if (!removed.size) return [];
+  // /P is optional for widget annotations. Identify owner pages from their
+  // /Annots membership when absent, without guessing if membership is missing
+  // or ambiguous. Key by the same PDFDict instance pdf-lib uses for widgets.
+  const owners = new Map();
+  for (const page of document.getPages()) {
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    for (let i = 0; i < annots.size(); i++) {
+      const dict = document.context.lookup(annots.get(i));
+      if (!(dict instanceof PDF.PDFDict)) continue;
+      const pages = owners.get(dict) || new Set();
+      pages.add(page.ref.toString());
+      owners.set(dict, pages);
+    }
+  }
   const form = document.getForm();
   const discard = [];
   for (const field of form.getFields()) {
@@ -86,11 +101,19 @@ function analyzeFormWidgets(document, kept, PDF) {
     if (!widgets.length) continue; // Logical field without page widgets.
     let deleted = 0;
     for (const widget of widgets) {
-      const page = widget.dict.get(name('P'));
-      if (!page || !('toString' in page)) {
-        throw Error('This PDF form has a widget without a page reference; page removal cannot safely update it.');
+      const referenced = widget.dict.get(name('P'));
+      const membership = owners.get(widget.dict);
+      // A missing direct /P is normal in PDFs. Resolve from /Annots instead.
+      // An explicit /P must not conflict with a known page owner.
+      if (membership && membership.size !== 1) {
+        throw Error('This PDF form widget belongs to multiple pages; page removal cannot safely update it.');
       }
-      if (removed.has(page.toString())) deleted++;
+      const pageRef = referenced?.toString() || (membership?.size === 1 ?
+        [...membership][0] : null);
+      if (!pageRef || (referenced && membership && !membership.has(pageRef))) {
+        throw Error('This PDF form has a widget with an unresolved page reference; page removal cannot safely update it.');
+      }
+      if (removed.has(pageRef)) deleted++;
     }
     if (deleted && deleted !== widgets.length) {
       throw Error('A PDF form field spans both kept and removed pages. Remove its widgets using a full PDF form editor.');

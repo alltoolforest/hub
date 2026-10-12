@@ -250,6 +250,12 @@ export class OrganizerSession {
 
   change(operation, index) {
     if (this.disposed || this.active || !this.record) return false;
+    const selected = this.record.plan[index];
+    if (operation === 'toggle' && selected?.keep &&
+        this.record.plan.filter(page => page.keep).length === 1) {
+      this.emit('Keep at least one page. Restore another page before removing this one.', true, 0);
+      return false;
+    }
     const updated = changePlan(this.record.plan, operation, index);
     if (updated === this.record.plan) return false;
     this.record = {...this.record, plan: updated};
