@@ -1,0 +1,37 @@
+// Task 4 only: isolated preservation-first, lossless PDF compressor core.
+// Provider is injected: no unapproved WASM binary is bundled or fetched.
+// No image downsampling, rasterization, UI wiring or production imports.
+export class LosslessCompressionError extends Error {
+  constructor(code){super(code);this.name='LosslessCompressionError';this.code=code;}
+}
+const asBytes = v => v instanceof Uint8Array ? v : null;
+export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes=80*1024*1024}={}){
+  const input=asBytes(original);
+  if(!input||input.length<8||input.length>maximumBytes)
+    throw new LosslessCompressionError('invalid-or-oversize-input');
+  if(typeof inspect!=='function'||typeof optimize!=='function')
+    throw new LosslessCompressionError('unapproved-or-unavailable-engine');
+  const before=await inspect(input);
+  if(!before||before.valid!==true)
+    throw new LosslessCompressionError('invalid-pdf');
+  if(before.signed||before.encrypted||before.unknownSecurity)
+    throw new LosslessCompressionError('restricted-pdf');
+  if(!before.fingerprint||typeof before.fingerprint!=='string')
+    throw new LosslessCompressionError('unverifiable-original');
+  // Provider must perform structural, *lossless* recompression only.
+  // Defensive copy avoids a provider accidentally mutating caller's data.
+  let candidate;
+  try { candidate=asBytes(await optimize(input.slice())); }
+  catch { throw new LosslessCompressionError('optimizer-failed'); }
+  if(!candidate||candidate.length<8||candidate.length>maximumBytes)
+    throw new LosslessCompressionError('invalid-output');
+  if(candidate.length>=input.length)
+    return {bytes:input.slice(),status:'original-retained',inputBytes:input.length,
+      outputBytes:input.length,savedBytes:0};
+  const after=await inspect(candidate);
+  if(!after||after.valid!==true||after.signed||after.encrypted||after.unknownSecurity||
+     after.fingerprint!==before.fingerprint)
+    throw new LosslessCompressionError('preservation-check-failed');
+  return {bytes:candidate,status:'compressed',inputBytes:input.length,
+    outputBytes:candidate.length,savedBytes:input.length-candidate.length};
+}
