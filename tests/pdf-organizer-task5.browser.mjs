@@ -29,7 +29,9 @@ async function run(engineName, engine, viewport) {
     isMobile: engineName === 'chromium' && viewport.width <= 400
   });
   const page = await context.newPage();
-  const errors = [], external = [], requests = [];
+  const errors = [], external = [], requests = [], consoleMessages = [], failedRequests = [];
+  page.on('console', msg => { if (['warning', 'error'].includes(msg.type())) consoleMessages.push(msg.text()); });
+  page.on('requestfailed', req => failedRequests.push({url:req.url(),failure:req.failure()}));
   page.on('pageerror', e => errors.push(e.message));
   page.on('request', req => {
     const reqUrl = req.url();
@@ -50,7 +52,13 @@ async function run(engineName, engine, viewport) {
       document.querySelectorAll('.pdf-organizer-grid > li').length === 4, {timeout: 30000});
     trace.upload = 'PASS';
     const preview = page.locator('.pdf-page-preview canvas');
-    await preview.first().waitFor({timeout: 30000});
+    await preview.first().waitFor({state: 'attached', timeout: 12000});
+    const previewGeometry = await preview.first().evaluate(c => ({
+      width:c.width,height:c.height,cssWidth:getComputedStyle(c).width,
+      cssHeight:getComputedStyle(c).height
+    }));
+    assert.ok(previewGeometry.width > 0 && previewGeometry.height > 0,
+      'PDF thumbnail had no rasterized pixels');
     trace.pdfjsThumbnail = 'PASS';
 
     // All four original pages must begin in original order.
@@ -130,7 +138,20 @@ async function run(engineName, engine, viewport) {
   } catch (error) {
     trace.failure = String(error?.stack || error).slice(0,2400);
     trace.consoleErrors = errors;
+    trace.consoleWarnings = consoleMessages.slice(-15);
+    trace.failedRequests = failedRequests.slice(-15);
     trace.externalRequests = external;
+    try {
+      trace.debugUI = await page.evaluate(() => ({
+        status:document.querySelector('#status')?.textContent,
+        feedback:document.querySelector('.pdf-organizer-announcement')?.textContent,
+        previews:[...document.querySelectorAll('.pdf-page-preview')].slice(0,2).map(n=>({
+          text:n.textContent,html:n.innerHTML.slice(0,180),
+          rect:n.getBoundingClientRect().toJSON()
+        })),
+        canvases:document.querySelectorAll('.pdf-page-preview canvas').length
+      }));
+    } catch (ignore) {}
     report.push(trace);
     throw error;
   } finally {
