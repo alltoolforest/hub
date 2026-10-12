@@ -1,5 +1,7 @@
 # Camera-Fidelity Engine — Experimental checkpoint and release decision
 
+Latest continuation, 2026-10-12: `FINISH-R3-REVIEW.md` records the user's requested brighter/higher-contrast finishing experiment on retained R2 detail. Two optional offline presets and full-size review outputs are ready; 4 targeted tests and 28 integrity checks pass. Unconditional application over-brightens normal-exposure references, so no automatic default or deployment changed.
+
 Continuation addendum, 2026-10-12: see `TONE-R2-REVIEW.md` and `benchmark/TONE-R2-EVIDENCE.json` for the subsequent supplied-portrait diagnostic and new restrained-tone research trial. It reduces excessive lift on that portrait but regresses three underexposure reference cases, so it remains offline and disabled. This does not change the active engine, private Site or release decision below.
 
 Date: 2026-10-12. Build: `cf-20261012-t11-r1`.

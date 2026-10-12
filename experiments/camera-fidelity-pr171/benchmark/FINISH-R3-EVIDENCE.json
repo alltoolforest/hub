@@ -1,0 +1,2084 @@
+{
+  "status": "Opt-in research presets; not an automatic quality replacement",
+  "limits": [
+    "One supplied original/output portrait pair; uploaded output is not a clean reference",
+    "Calibration consists of only three independent scenes; no held-out quality evidence",
+    "Percentile range measures tonal contrast, not recovered detail",
+    "No mobile/browser validation"
+  ],
+  "records": [
+    {
+      "id": "astronaut-original",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.65935877838135,
+          "p95MinusP05": 216.63379999999998,
+          "whitePixels": 445,
+          "newHighChannels": 2865
+        },
+        "balanced": {
+          "opaquePixels": 262144,
+          "meanLuma": 129.8037286781311,
+          "p95MinusP05": 238.37419999999997,
+          "whitePixels": 1931,
+          "newHighChannels": 16994
+        },
+        "brighter": {
+          "opaquePixels": 262144,
+          "meanLuma": 134.71478199310303,
+          "p95MinusP05": 243.10999999999999,
+          "whitePixels": 2191,
+          "newHighChannels": 31217
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.14268509090908,
+              "p95MinusP05": 190.83146,
+              "whitePixels": 2,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 12650,
+              "meanLuma": 169.25464485375494,
+              "p95MinusP05": 210.21826,
+              "whitePixels": 2,
+              "newHighChannels": 931
+            },
+            "brighter": {
+              "opaquePixels": 12650,
+              "meanLuma": 175.2552695019763,
+              "p95MinusP05": 211.83146,
+              "whitePixels": 2,
+              "newHighChannels": 1941
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.17357895857987,
+              "p95MinusP05": 149.52611,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 8450,
+              "meanLuma": 151.54399315976332,
+              "p95MinusP05": 170.52611,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 8450,
+              "meanLuma": 158.14115292307696,
+              "p95MinusP05": 173.09691,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "suit",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.78721658441559,
+              "p95MinusP05": 114.45378,
+              "whitePixels": 22,
+              "newHighChannels": 79
+            },
+            "balanced": {
+              "opaquePixels": 15400,
+              "meanLuma": 132.6460844025974,
+              "p95MinusP05": 138.79435999999998,
+              "whitePixels": 28,
+              "newHighChannels": 1216
+            },
+            "brighter": {
+              "opaquePixels": 15400,
+              "meanLuma": 139.2948637922078,
+              "p95MinusP05": 143.59615999999997,
+              "whitePixels": 42,
+              "newHighChannels": 4088
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "astronaut-noise",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 262144,
+          "meanLuma": 113.12992487869263,
+          "p95MinusP05": 215.29491,
+          "whitePixels": 151,
+          "newHighChannels": 675,
+          "referenceRGBMSE": 33.22769546508789
+        },
+        "balanced": {
+          "opaquePixels": 262144,
+          "meanLuma": 130.29649062118528,
+          "p95MinusP05": 236.91093999999998,
+          "whitePixels": 322,
+          "newHighChannels": 14056,
+          "referenceRGBMSE": 453.2115122477214
+        },
+        "brighter": {
+          "opaquePixels": 262144,
+          "meanLuma": 135.25166922836303,
+          "p95MinusP05": 241.50134,
+          "whitePixels": 1017,
+          "newHighChannels": 27446,
+          "referenceRGBMSE": 714.0005302429199
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.27009261660078,
+              "p95MinusP05": 190.13257,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 37.01083003952569
+            },
+            "balanced": {
+              "opaquePixels": 12650,
+              "meanLuma": 169.41710343083002,
+              "p95MinusP05": 208.18133999999998,
+              "whitePixels": 0,
+              "newHighChannels": 936,
+              "referenceRGBMSE": 589.8773386034255
+            },
+            "brighter": {
+              "opaquePixels": 12650,
+              "meanLuma": 175.42414626086955,
+              "p95MinusP05": 210.95532,
+              "whitePixels": 0,
+              "newHighChannels": 1902,
+              "referenceRGBMSE": 924.4554940711463
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.398478556213,
+              "p95MinusP05": 150.73967,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 37.88777120315582
+            },
+            "balanced": {
+              "opaquePixels": 8450,
+              "meanLuma": 151.7988335857988,
+              "p95MinusP05": 171.73966999999996,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 589.821301775148
+            },
+            "brighter": {
+              "opaquePixels": 8450,
+              "meanLuma": 158.40386442603548,
+              "p95MinusP05": 173.73967,
+              "whitePixels": 0,
+              "newHighChannels": 2,
+              "referenceRGBMSE": 945.1805128205128
+            }
+          }
+        },
+        {
+          "id": "suit",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.90759466233766,
+              "p95MinusP05": 115.79796000000002,
+              "whitePixels": 5,
+              "newHighChannels": 22,
+              "referenceRGBMSE": 36.105497835497836
+            },
+            "balanced": {
+              "opaquePixels": 15400,
+              "meanLuma": 132.80717776623376,
+              "p95MinusP05": 140.1098999999999,
+              "whitePixels": 7,
+              "newHighChannels": 1609,
+              "referenceRGBMSE": 500.9116017316017
+            },
+            "brighter": {
+              "opaquePixels": 15400,
+              "meanLuma": 139.46253493506492,
+              "p95MinusP05": 144.84880999999996,
+              "whitePixels": 24,
+              "newHighChannels": 3961,
+              "referenceRGBMSE": 843.9143939393939
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "astronaut-underexposure",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 262144,
+          "meanLuma": 85.29566525039672,
+          "p95MinusP05": 155.5564,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 1305.2317860921223
+        },
+        "balanced": {
+          "opaquePixels": 262144,
+          "meanLuma": 101.17447994766235,
+          "p95MinusP05": 184.5564,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 337.6156311035156
+        },
+        "brighter": {
+          "opaquePixels": 262144,
+          "meanLuma": 106.36196468887329,
+          "p95MinusP05": 192.5564,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 200.2012939453125
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 12650,
+              "meanLuma": 110.24143125691698,
+              "p95MinusP05": 132.8034,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 1706.1401581027667
+            },
+            "balanced": {
+              "opaquePixels": 12650,
+              "meanLuma": 131.1207197944664,
+              "p95MinusP05": 159.8034,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 388.8284057971014
+            },
+            "brighter": {
+              "opaquePixels": 12650,
+              "meanLuma": 137.67115457707507,
+              "p95MinusP05": 165.8034,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 206.1991304347826
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 8450,
+              "meanLuma": 99.28898037869823,
+              "p95MinusP05": 101.4588,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 1075.1953846153847
+            },
+            "balanced": {
+              "opaquePixels": 8450,
+              "meanLuma": 117.98720523076923,
+              "p95MinusP05": 124.45879999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 201.79499013806705
+            },
+            "brighter": {
+              "opaquePixels": 8450,
+              "meanLuma": 124.36815197633136,
+              "p95MinusP05": 129.4588,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 102.60859960552268
+            }
+          }
+        },
+        {
+          "id": "suit",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 15400,
+              "meanLuma": 88.14989271428571,
+              "p95MinusP05": 81.48500999999993,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 1034.3801515151515
+            },
+            "balanced": {
+              "opaquePixels": 15400,
+              "meanLuma": 104.45463297402597,
+              "p95MinusP05": 100.5350099999992,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 376.3251948051948
+            },
+            "brighter": {
+              "opaquePixels": 15400,
+              "meanLuma": 110.4522953116883,
+              "p95MinusP05": 105.48500999999992,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 291.2003896103896
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "astronaut-jpeg",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 262144,
+          "meanLuma": 112.72521716690063,
+          "p95MinusP05": 216.22979999999998,
+          "whitePixels": 536,
+          "newHighChannels": 1988,
+          "referenceRGBMSE": 50.2151730855306
+        },
+        "balanced": {
+          "opaquePixels": 262144,
+          "meanLuma": 129.92246696472168,
+          "p95MinusP05": 238.2206,
+          "whitePixels": 1073,
+          "newHighChannels": 16425,
+          "referenceRGBMSE": 472.700922648112
+        },
+        "brighter": {
+          "opaquePixels": 262144,
+          "meanLuma": 134.84831570358276,
+          "p95MinusP05": 242.98680000000002,
+          "whitePixels": 1703,
+          "newHighChannels": 28417,
+          "referenceRGBMSE": 733.8926188151041
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 12650,
+              "meanLuma": 147.01123562055335,
+              "p95MinusP05": 189.55625999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 57.0365744400527
+            },
+            "balanced": {
+              "opaquePixels": 12650,
+              "meanLuma": 169.1740782450593,
+              "p95MinusP05": 208.00385999999997,
+              "whitePixels": 0,
+              "newHighChannels": 971,
+              "referenceRGBMSE": 607.0326482213438
+            },
+            "brighter": {
+              "opaquePixels": 12650,
+              "meanLuma": 175.1878705770751,
+              "p95MinusP05": 210.65606,
+              "whitePixels": 0,
+              "newHighChannels": 1953,
+              "referenceRGBMSE": 942.4639262187088
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 8450,
+              "meanLuma": 129.12039263905325,
+              "p95MinusP05": 148.58350999999996,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 65.05124260355029
+            },
+            "balanced": {
+              "opaquePixels": 8450,
+              "meanLuma": 151.5284157633136,
+              "p95MinusP05": 169.58350999999993,
+              "whitePixels": 0,
+              "newHighChannels": 1,
+              "referenceRGBMSE": 613.1998422090729
+            },
+            "brighter": {
+              "opaquePixels": 8450,
+              "meanLuma": 158.12675609467453,
+              "p95MinusP05": 171.76039999999998,
+              "whitePixels": 0,
+              "newHighChannels": 8,
+              "referenceRGBMSE": 966.594358974359
+            }
+          }
+        },
+        {
+          "id": "suit",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 15400,
+              "meanLuma": 111.84723623376624,
+              "p95MinusP05": 116.00215999999998,
+              "whitePixels": 2,
+              "newHighChannels": 55,
+              "referenceRGBMSE": 102.85495670995671
+            },
+            "balanced": {
+              "opaquePixels": 15400,
+              "meanLuma": 132.80210899999997,
+              "p95MinusP05": 140.23315999999997,
+              "whitePixels": 7,
+              "newHighChannels": 1886,
+              "referenceRGBMSE": 569.2507575757576
+            },
+            "brighter": {
+              "opaquePixels": 15400,
+              "meanLuma": 139.47301694805196,
+              "p95MinusP05": 145.04534999999993,
+              "whitePixels": 23,
+              "newHighChannels": 3995,
+              "referenceRGBMSE": 910.2927489177489
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "coffee-original",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.2781160625,
+          "p95MinusP05": 196.14873999999995,
+          "whitePixels": 180,
+          "newHighChannels": 341
+        },
+        "balanced": {
+          "opaquePixels": 240000,
+          "meanLuma": 115.55208499666666,
+          "p95MinusP05": 220.05059999999997,
+          "whitePixels": 263,
+          "newHighChannels": 25608
+        },
+        "brighter": {
+          "opaquePixels": 240000,
+          "meanLuma": 120.90699863999998,
+          "p95MinusP05": 225.71359999999999,
+          "whitePixels": 825,
+          "newHighChannels": 35382
+        }
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.95872906666665,
+              "p95MinusP05": 182.70179999999996,
+              "whitePixels": 19,
+              "newHighChannels": 32
+            },
+            "balanced": {
+              "opaquePixels": 18000,
+              "meanLuma": 135.05944106666666,
+              "p95MinusP05": 209.38512999999995,
+              "whitePixels": 20,
+              "newHighChannels": 2270
+            },
+            "brighter": {
+              "opaquePixels": 18000,
+              "meanLuma": 141.1991982222222,
+              "p95MinusP05": 215.03526,
+              "whitePixels": 22,
+              "newHighChannels": 3314
+            }
+          }
+        },
+        {
+          "id": "cup",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.35115816666666,
+              "p95MinusP05": 166.21746000000002,
+              "whitePixels": 17,
+              "newHighChannels": 61
+            },
+            "balanced": {
+              "opaquePixels": 14400,
+              "meanLuma": 187.29306497222223,
+              "p95MinusP05": 165.37505999999996,
+              "whitePixels": 57,
+              "newHighChannels": 3158
+            },
+            "brighter": {
+              "opaquePixels": 14400,
+              "meanLuma": 193.65797215277777,
+              "p95MinusP05": 161.88165999999995,
+              "whitePixels": 253,
+              "newHighChannels": 5901
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "coffee-noise",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.34994148666667,
+          "p95MinusP05": 194.26191999999995,
+          "whitePixels": 27,
+          "newHighChannels": 71,
+          "referenceRGBMSE": 30.312797222222223
+        },
+        "balanced": {
+          "opaquePixels": 240000,
+          "meanLuma": 115.66243931666666,
+          "p95MinusP05": 218.27326,
+          "whitePixels": 61,
+          "newHighChannels": 22384,
+          "referenceRGBMSE": 423.4894027777778
+        },
+        "brighter": {
+          "opaquePixels": 240000,
+          "meanLuma": 121.03798236166665,
+          "p95MinusP05": 223.01525999999998,
+          "whitePixels": 240,
+          "newHighChannels": 31741,
+          "referenceRGBMSE": 701.3866583333333
+        }
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.94933328888888,
+              "p95MinusP05": 178.47707999999997,
+              "whitePixels": 2,
+              "newHighChannels": 8,
+              "referenceRGBMSE": 38.87085185185185
+            },
+            "balanced": {
+              "opaquePixels": 18000,
+              "meanLuma": 135.2004149888889,
+              "p95MinusP05": 205.51239999999999,
+              "whitePixels": 2,
+              "newHighChannels": 1903,
+              "referenceRGBMSE": 563.6153148148148
+            },
+            "brighter": {
+              "opaquePixels": 18000,
+              "meanLuma": 141.37401971111112,
+              "p95MinusP05": 211.24479999999997,
+              "whitePixels": 7,
+              "newHighChannels": 3029,
+              "referenceRGBMSE": 914.9567777777778
+            }
+          }
+        },
+        {
+          "id": "cup",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.29377295833334,
+              "p95MinusP05": 166.24140999999997,
+              "whitePixels": 0,
+              "newHighChannels": 3,
+              "referenceRGBMSE": 26.673171296296296
+            },
+            "balanced": {
+              "opaquePixels": 14400,
+              "meanLuma": 187.22867573611111,
+              "p95MinusP05": 165.37671999999998,
+              "whitePixels": 5,
+              "newHighChannels": 2868,
+              "referenceRGBMSE": 679.617662037037
+            },
+            "brighter": {
+              "opaquePixels": 14400,
+              "meanLuma": 193.60494194444445,
+              "p95MinusP05": 161.74551999999997,
+              "whitePixels": 51,
+              "newHighChannels": 4938,
+              "referenceRGBMSE": 1079.9043287037036
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "coffee-underexposure",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 240000,
+          "meanLuma": 78.76231349166666,
+          "p95MinusP05": 142.97199999999998,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 794.0024083333333
+        },
+        "balanced": {
+          "opaquePixels": 240000,
+          "meanLuma": 92.79630099166666,
+          "p95MinusP05": 171.972,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 248.9461486111111
+        },
+        "brighter": {
+          "opaquePixels": 240000,
+          "meanLuma": 97.94657599166666,
+          "p95MinusP05": 178.972,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 202.11903194444446
+        }
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 18000,
+              "meanLuma": 90.28320135555556,
+              "p95MinusP05": 134.53248999999994,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 918.2255740740741
+            },
+            "balanced": {
+              "opaquePixels": 18000,
+              "meanLuma": 107.05381246666667,
+              "p95MinusP05": 162.53248999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 244.2318148148148
+            },
+            "brighter": {
+              "opaquePixels": 18000,
+              "meanLuma": 112.91886802222223,
+              "p95MinusP05": 169.53249,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 183.35712962962964
+            }
+          }
+        },
+        {
+          "id": "cup",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 14400,
+              "meanLuma": 123.66416211111111,
+              "p95MinusP05": 110.0428,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 1817.7239351851852
+            },
+            "balanced": {
+              "opaquePixels": 14400,
+              "meanLuma": 147.1549954444444,
+              "p95MinusP05": 130.0428,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 444.311712962963
+            },
+            "brighter": {
+              "opaquePixels": 14400,
+              "meanLuma": 154.25131488888886,
+              "p95MinusP05": 132.0428,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 279.6444675925926
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "coffee-jpeg",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 240000,
+          "meanLuma": 99.29696461249999,
+          "p95MinusP05": 194.2251999999999,
+          "whitePixels": 40,
+          "newHighChannels": 348,
+          "referenceRGBMSE": 63.29501805555556
+        },
+        "balanced": {
+          "opaquePixels": 240000,
+          "meanLuma": 115.64255532,
+          "p95MinusP05": 218.7698,
+          "whitePixels": 116,
+          "newHighChannels": 22537,
+          "referenceRGBMSE": 464.92358333333334
+        },
+        "brighter": {
+          "opaquePixels": 240000,
+          "meanLuma": 121.02117002083334,
+          "p95MinusP05": 224.6426,
+          "whitePixels": 329,
+          "newHighChannels": 32092,
+          "referenceRGBMSE": 745.1922402777777
+        }
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 18000,
+              "meanLuma": 114.9607112222222,
+              "p95MinusP05": 179.95731999999998,
+              "whitePixels": 1,
+              "newHighChannels": 41,
+              "referenceRGBMSE": 171.2322037037037
+            },
+            "balanced": {
+              "opaquePixels": 18000,
+              "meanLuma": 135.25363834444443,
+              "p95MinusP05": 207.22951999999998,
+              "whitePixels": 1,
+              "newHighChannels": 2184,
+              "referenceRGBMSE": 726.7310925925926
+            },
+            "brighter": {
+              "opaquePixels": 18000,
+              "meanLuma": 141.43507465555555,
+              "p95MinusP05": 213.96191999999996,
+              "whitePixels": 1,
+              "newHighChannels": 3067,
+              "referenceRGBMSE": 1083.9514259259258
+            }
+          }
+        },
+        {
+          "id": "cup",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 14400,
+              "meanLuma": 163.4249049722222,
+              "p95MinusP05": 166.27894999999995,
+              "whitePixels": 21,
+              "newHighChannels": 58,
+              "referenceRGBMSE": 22.27037037037037
+            },
+            "balanced": {
+              "opaquePixels": 14400,
+              "meanLuma": 187.40215736111108,
+              "p95MinusP05": 165.19322999999997,
+              "whitePixels": 52,
+              "newHighChannels": 2797,
+              "referenceRGBMSE": 684.0109027777778
+            },
+            "brighter": {
+              "opaquePixels": 14400,
+              "meanLuma": 193.79030133333333,
+              "p95MinusP05": 161.62762999999995,
+              "whitePixels": 116,
+              "newHighChannels": 5653,
+              "referenceRGBMSE": 1090.0428472222222
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chelsea-original",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.04640433998522,
+          "p95MinusP05": 115.98470999999996,
+          "whitePixels": 0,
+          "newHighChannels": 0
+        },
+        "balanced": {
+          "opaquePixels": 135300,
+          "meanLuma": 141.56279040798225,
+          "p95MinusP05": 137.98470999999995,
+          "whitePixels": 0,
+          "newHighChannels": 1
+        },
+        "brighter": {
+          "opaquePixels": 135300,
+          "meanLuma": 148.46185688248335,
+          "p95MinusP05": 139.98470999999995,
+          "whitePixels": 0,
+          "newHighChannels": 2
+        }
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.44310194805195,
+              "p95MinusP05": 108.75820999999999,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 7700,
+              "meanLuma": 124.1902448051948,
+              "p95MinusP05": 131.75821,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 7700,
+              "meanLuma": 130.73271233766235,
+              "p95MinusP05": 135.75820999999996,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "eye",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.52605428571431,
+              "p95MinusP05": 144.64595,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 5600,
+              "meanLuma": 115.67302482142857,
+              "p95MinusP05": 173.64595,
+              "whitePixels": 0,
+              "newHighChannels": 1
+            },
+            "brighter": {
+              "opaquePixels": 5600,
+              "meanLuma": 121.63011303571427,
+              "p95MinusP05": 179.64595,
+              "whitePixels": 0,
+              "newHighChannels": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chelsea-noise",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 135300,
+          "meanLuma": 118.4827230391722,
+          "p95MinusP05": 114.30887,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 50.412049765952204
+        },
+        "balanced": {
+          "opaquePixels": 135300,
+          "meanLuma": 140.91045815816705,
+          "p95MinusP05": 136.30886999999998,
+          "whitePixels": 0,
+          "newHighChannels": 2,
+          "referenceRGBMSE": 640.3427272727273
+        },
+        "brighter": {
+          "opaquePixels": 135300,
+          "meanLuma": 147.80657349593497,
+          "p95MinusP05": 138.30886999999998,
+          "whitePixels": 0,
+          "newHighChannels": 2,
+          "referenceRGBMSE": 1021.5955530918945
+        }
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.04012987012987,
+              "p95MinusP05": 106.65789999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 48.72961038961039
+            },
+            "balanced": {
+              "opaquePixels": 7700,
+              "meanLuma": 123.72142857142858,
+              "p95MinusP05": 129.65789999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 493.38761904761907
+            },
+            "brighter": {
+              "opaquePixels": 7700,
+              "meanLuma": 130.26324675324676,
+              "p95MinusP05": 133.65789999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 812.4754112554112
+            }
+          }
+        },
+        {
+          "id": "eye",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.17791278571428,
+              "p95MinusP05": 142.33545999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 46.14083333333333
+            },
+            "balanced": {
+              "opaquePixels": 5600,
+              "meanLuma": 115.28148278571429,
+              "p95MinusP05": 170.33546,
+              "whitePixels": 0,
+              "newHighChannels": 2,
+              "referenceRGBMSE": 483.1945238095238
+            },
+            "brighter": {
+              "opaquePixels": 5600,
+              "meanLuma": 121.22397828571428,
+              "p95MinusP05": 177.33546,
+              "whitePixels": 0,
+              "newHighChannels": 2,
+              "referenceRGBMSE": 780.50875
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chelsea-underexposure",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 135300,
+          "meanLuma": 88.2633469105691,
+          "p95MinusP05": 74.16713,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 975.1748041389504
+        },
+        "balanced": {
+          "opaquePixels": 135300,
+          "meanLuma": 104.58339864745011,
+          "p95MinusP05": 92.16712999999999,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 232.06620842572062
+        },
+        "brighter": {
+          "opaquePixels": 135300,
+          "meanLuma": 110.65471424242423,
+          "p95MinusP05": 96.16713000000001,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 111.7339960581424
+        }
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 7700,
+              "meanLuma": 79.00898651948053,
+              "p95MinusP05": 71.20445999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 704.2938961038961
+            },
+            "balanced": {
+              "opaquePixels": 7700,
+              "meanLuma": 93.03742807792207,
+              "p95MinusP05": 88.20445999999995,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 169.18363636363637
+            },
+            "brighter": {
+              "opaquePixels": 7700,
+              "meanLuma": 98.63366184415584,
+              "p95MinusP05": 92.20445999999995,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 84.12636363636364
+            }
+          }
+        },
+        {
+          "id": "eye",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 5600,
+              "meanLuma": 73.63714064285715,
+              "p95MinusP05": 100.37987000000001,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 682.6017261904761
+            },
+            "balanced": {
+              "opaquePixels": 5600,
+              "meanLuma": 86.70767635714286,
+              "p95MinusP05": 122.37987,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 169.68952380952382
+            },
+            "brighter": {
+              "opaquePixels": 5600,
+              "meanLuma": 91.87106921428571,
+              "p95MinusP05": 128.37986999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 93.88613095238095
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chelsea-jpeg",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 135300,
+          "meanLuma": 119.1618771692535,
+          "p95MinusP05": 114.99903999999998,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 60.12575511209658
+        },
+        "balanced": {
+          "opaquePixels": 135300,
+          "meanLuma": 141.7059939467849,
+          "p95MinusP05": 136.99903999999998,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 675.6124735156443
+        },
+        "brighter": {
+          "opaquePixels": 135300,
+          "meanLuma": 148.61226150036953,
+          "p95MinusP05": 138.99903999999992,
+          "whitePixels": 0,
+          "newHighChannels": 0,
+          "referenceRGBMSE": 1064.3719167282582
+        }
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 7700,
+              "meanLuma": 104.50987568831168,
+              "p95MinusP05": 107.70805999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 79.69701298701298
+            },
+            "balanced": {
+              "opaquePixels": 7700,
+              "meanLuma": 124.26610945454544,
+              "p95MinusP05": 130.70806,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 546.7615584415585
+            },
+            "brighter": {
+              "opaquePixels": 7700,
+              "meanLuma": 130.82221335064935,
+              "p95MinusP05": 134.70806,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 871.9984415584415
+            }
+          }
+        },
+        {
+          "id": "eye",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 5600,
+              "meanLuma": 97.55811557142859,
+              "p95MinusP05": 143.18690999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 73.9627380952381
+            },
+            "balanced": {
+              "opaquePixels": 5600,
+              "meanLuma": 115.72686557142856,
+              "p95MinusP05": 172.18690999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 527.7131547619048
+            },
+            "brighter": {
+              "opaquePixels": 5600,
+              "meanLuma": 121.67168699999999,
+              "p95MinusP05": 178.18690999999998,
+              "whitePixels": 0,
+              "newHighChannels": 0,
+              "referenceRGBMSE": 829.6708333333333
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "alpha-diagnostic",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 0
+        },
+        "balanced": {
+          "opaquePixels": 0
+        },
+        "brighter": {
+          "opaquePixels": 0
+        }
+      },
+      "rois": []
+    },
+    {
+      "id": "user-print-portrait",
+      "metrics": {
+        "previous": {
+          "opaquePixels": 1619940,
+          "meanLuma": 67.0104290928059,
+          "p95MinusP05": 106.024,
+          "whitePixels": 5,
+          "newHighChannels": 8
+        },
+        "uploaded": {
+          "opaquePixels": 1619940,
+          "meanLuma": 81.41189528994902,
+          "p95MinusP05": 116.01879999999998,
+          "whitePixels": 12,
+          "newHighChannels": 34
+        },
+        "balanced": {
+          "opaquePixels": 1619940,
+          "meanLuma": 78.55263445189327,
+          "p95MinusP05": 128.024,
+          "whitePixels": 5,
+          "newHighChannels": 22
+        },
+        "brighter": {
+          "opaquePixels": 1619940,
+          "meanLuma": 83.2824771947109,
+          "p95MinusP05": 135.024,
+          "whitePixels": 6,
+          "newHighChannels": 33
+        }
+      },
+      "rois": [
+        {
+          "id": "face",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 180600,
+              "meanLuma": 66.51785884385382,
+              "p95MinusP05": 102.6416,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "uploaded": {
+              "opaquePixels": 180600,
+              "meanLuma": 80.95051533997785,
+              "p95MinusP05": 107.86879999999994,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 180600,
+              "meanLuma": 77.96558863344407,
+              "p95MinusP05": 124.64160000000001,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 180600,
+              "meanLuma": 82.65893304097453,
+              "p95MinusP05": 130.6416,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "hair",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 96800,
+              "meanLuma": 10.774602295454546,
+              "p95MinusP05": 40.6736,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "uploaded": {
+              "opaquePixels": 96800,
+              "meanLuma": 17.471217165289254,
+              "p95MinusP05": 56.0906,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 96800,
+              "meanLuma": 11.693207667355372,
+              "p95MinusP05": 45.6736,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 96800,
+              "meanLuma": 12.549044444214877,
+              "p95MinusP05": 48.67359999999999,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "background",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 59400,
+              "meanLuma": 37.2627934949495,
+              "p95MinusP05": 8.349000000000004,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "uploaded": {
+              "opaquePixels": 59400,
+              "meanLuma": 52.39982109427609,
+              "p95MinusP05": 8.845200000000013,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 59400,
+              "meanLuma": 41.48237261952862,
+              "p95MinusP05": 10.348999999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 59400,
+              "meanLuma": 44.443113360269365,
+              "p95MinusP05": 10.348999999999997,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        },
+        {
+          "id": "fabric",
+          "metrics": {
+            "previous": {
+              "opaquePixels": 52000,
+              "meanLuma": 105.11327701153846,
+              "p95MinusP05": 20.65119999999999,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "uploaded": {
+              "opaquePixels": 52000,
+              "meanLuma": 121.2134852,
+              "p95MinusP05": 20.883229999999983,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "balanced": {
+              "opaquePixels": 52000,
+              "meanLuma": 125.6860462423077,
+              "p95MinusP05": 25.651200000000003,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            },
+            "brighter": {
+              "opaquePixels": 52000,
+              "meanLuma": 132.6360654730769,
+              "p95MinusP05": 26.651200000000003,
+              "whitePixels": 0,
+              "newHighChannels": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "render": {
+    "enabledInWorker": false,
+    "records": [
+      {
+        "id": "astronaut-original",
+        "variant": "balanced",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+        "r2_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+        "output_sha256": "cb88a7371d189c5b8a02155e2e29748037dcf9abc91e9d8ee53dad12f893debe",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 16.961283365885418,
+          "meanLumaShift": 17.102887201690223,
+          "newClippedLowChannels": 4366,
+          "newClippedHighChannels": 16994,
+          "maxRowShiftJump": 1.2087062499999934
+        },
+        "finishOnlyMs": 38.781386999999995
+      },
+      {
+        "id": "astronaut-original",
+        "variant": "brighter",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+        "r2_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+        "output_sha256": "6d9155a5ab741da955e42d8e43d3d899e70ec501cbce103a05f53cd31e9ee6c0",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 21.82563018798828,
+          "meanLumaShift": 22.013940516670473,
+          "newClippedLowChannels": 4137,
+          "newClippedHighChannels": 31217,
+          "maxRowShiftJump": 1.501388671875013
+        },
+        "finishOnlyMs": 21.067943
+      },
+      {
+        "id": "astronaut-noise",
+        "variant": "balanced",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+        "r2_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+        "output_sha256": "1af80b6bc19ac831efa14a6418ffd4f1bdf261151b4237c24cc8abb7e061be47",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 17.363658905029297,
+          "meanLumaShift": 17.13268328399488,
+          "newClippedLowChannels": 419,
+          "newClippedHighChannels": 14056,
+          "maxRowShiftJump": 1.1231984375000224
+        },
+        "finishOnlyMs": 18.633470999999986
+      },
+      {
+        "id": "astronaut-noise",
+        "variant": "brighter",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+        "r2_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+        "output_sha256": "1164cb4d69858b942b17011ea40681fda4671add4e3c9fdd624c7cfb7b5c7f2c",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 22.170913696289062,
+          "meanLumaShift": 22.087861891175493,
+          "newClippedLowChannels": 384,
+          "newClippedHighChannels": 27446,
+          "maxRowShiftJump": 1.4292285156250202
+        },
+        "finishOnlyMs": 17.359380000000016
+      },
+      {
+        "id": "astronaut-underexposure",
+        "variant": "balanced",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+        "r2_sha256": "14a7d4513179aaa447d7312db95e116b2111e4e67fbfe6c949abae8fda281791",
+        "output_sha256": "406a1326a8443c900b7bf381e8404d6f652c7fa7daac4ae16e1531bcff155f66",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 28.136085510253906,
+          "meanLumaShift": 27.91711492690945,
+          "newClippedLowChannels": 2853,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.6003769531249894
+        },
+        "finishOnlyMs": 14.462952000000001
+      },
+      {
+        "id": "astronaut-underexposure",
+        "variant": "brighter",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+        "r2_sha256": "14a7d4513179aaa447d7312db95e116b2111e4e67fbfe6c949abae8fda281791",
+        "output_sha256": "5d00f6112475ce2c153dda70780bb67db602c78de27ffcddfd2a769d82d57e6f",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 33.323097229003906,
+          "meanLumaShift": 33.104599668122006,
+          "newClippedLowChannels": 2821,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.852330078125
+        },
+        "finishOnlyMs": 14.262699999999995
+      },
+      {
+        "id": "astronaut-jpeg",
+        "variant": "balanced",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+        "r2_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+        "output_sha256": "b97453809ecd26a4a81f94e9a791cdd3cfdb2cab1e6a9bb89373c29969e46b5e",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 16.995812733968098,
+          "meanLumaShift": 17.15727154080841,
+          "newClippedLowChannels": 1700,
+          "newClippedHighChannels": 16425,
+          "maxRowShiftJump": 0.9733257812499971
+        },
+        "finishOnlyMs": 12.88502299999999
+      },
+      {
+        "id": "astronaut-jpeg",
+        "variant": "brighter",
+        "width": 512,
+        "height": 512,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+        "r2_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+        "output_sha256": "7543fb1fac795c4bd7d2531c9601f12de178258fe86d83d948757522e510b717",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 512,
+          "height": 512,
+          "alphaPreserved": true,
+          "meanChange": 21.874568939208984,
+          "meanLumaShift": 22.083120279681566,
+          "newClippedLowChannels": 1632,
+          "newClippedHighChannels": 28417,
+          "maxRowShiftJump": 1.2519410156249933
+        },
+        "finishOnlyMs": 12.620864000000012
+      },
+      {
+        "id": "coffee-original",
+        "variant": "balanced",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+        "r2_sha256": "98680c6eedca5510cdf57dd525422b52b6879ab653b19ad575a7b3975c393dcb",
+        "output_sha256": "d8d543f960e9471a753e968db51ee706ae2c046e40b71be473dcb1809d98ac66",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 16.921434722222223,
+          "meanLumaShift": 16.76321136418806,
+          "newClippedLowChannels": 171,
+          "newClippedHighChannels": 25608,
+          "maxRowShiftJump": 1.2138390000000108
+        },
+        "finishOnlyMs": 13.331646000000006
+      },
+      {
+        "id": "coffee-original",
+        "variant": "brighter",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+        "r2_sha256": "98680c6eedca5510cdf57dd525422b52b6879ab653b19ad575a7b3975c393dcb",
+        "output_sha256": "7c8207069af958e1a205b777e43a167e1ca32722020e9f2d7fc8ceaf38b3444d",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 22.379,
+          "meanLumaShift": 22.118125007516284,
+          "newClippedLowChannels": 42,
+          "newClippedHighChannels": 35382,
+          "maxRowShiftJump": 1.4012986666666194
+        },
+        "finishOnlyMs": 13.377034000000009
+      },
+      {
+        "id": "coffee-noise",
+        "variant": "balanced",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+        "r2_sha256": "73e525d843eb8cace4717830abf78bc4de34841b5e76b227e2ea1a802b299920",
+        "output_sha256": "7a1ccabdd41681ee8689a9643f1aa0dfbe65f9401aae6369ebb2c7ce02ed7336",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 17.10221111111111,
+          "meanLumaShift": 16.738488574163522,
+          "newClippedLowChannels": 70,
+          "newClippedHighChannels": 22384,
+          "maxRowShiftJump": 1.4390813333333394
+        },
+        "finishOnlyMs": 15.999177999999972
+      },
+      {
+        "id": "coffee-noise",
+        "variant": "brighter",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+        "r2_sha256": "73e525d843eb8cace4717830abf78bc4de34841b5e76b227e2ea1a802b299920",
+        "output_sha256": "47df7f879b14ad7d4f4fbc216551a9633ac4c13e8fd22752c9806de1c8135349",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 22.473247222222223,
+          "meanLumaShift": 22.11403161916191,
+          "newClippedLowChannels": 23,
+          "newClippedHighChannels": 31741,
+          "maxRowShiftJump": 1.6018513333333253
+        },
+        "finishOnlyMs": 15.108546000000047
+      },
+      {
+        "id": "coffee-underexposure",
+        "variant": "balanced",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+        "r2_sha256": "9943cdf64a89d107a74fee601bdaa42ea344934ad4d8b5bdf2861812ecb63991",
+        "output_sha256": "2b760999d2c064a005137e335ce17c34f2c7b673dcc04c00ca02d1499fe5e1af",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 28.66809027777778,
+          "meanLumaShift": 28.57541704999332,
+          "newClippedLowChannels": 41,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.3659860000000101
+        },
+        "finishOnlyMs": 11.616814999999974
+      },
+      {
+        "id": "coffee-underexposure",
+        "variant": "brighter",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+        "r2_sha256": "9943cdf64a89d107a74fee601bdaa42ea344934ad4d8b5bdf2861812ecb63991",
+        "output_sha256": "68261c5d690508421503b78ab8acb180fef1fa12283a79f688ea1404985e5e09",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 33.818240277777775,
+          "meanLumaShift": 33.72569204998879,
+          "newClippedLowChannels": 36,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.6193193333333085
+        },
+        "finishOnlyMs": 10.760357999999997
+      },
+      {
+        "id": "coffee-jpeg",
+        "variant": "balanced",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+        "r2_sha256": "9d46d6a9d8a66ee75d0ef961a0647034406c1d88a267b62890066b7eb1104bfc",
+        "output_sha256": "876b1000a12591b8ce9a2845b1e145ecad12e0ff267f662e0a0752819b95beb7",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 16.9853125,
+          "meanLumaShift": 16.818880840022597,
+          "newClippedLowChannels": 24,
+          "newClippedHighChannels": 22537,
+          "maxRowShiftJump": 1.1430503333333473
+        },
+        "finishOnlyMs": 12.77861200000001
+      },
+      {
+        "id": "coffee-jpeg",
+        "variant": "brighter",
+        "width": 600,
+        "height": 400,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+        "r2_sha256": "9d46d6a9d8a66ee75d0ef961a0647034406c1d88a267b62890066b7eb1104bfc",
+        "output_sha256": "b9d1e705beb96f82d4ecc5748f07a3488ee45f5de5ff50af35b566faeee2fc5f",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 600,
+          "height": 400,
+          "alphaPreserved": true,
+          "meanChange": 22.458275,
+          "meanLumaShift": 22.197495540856103,
+          "newClippedLowChannels": 9,
+          "newClippedHighChannels": 32092,
+          "maxRowShiftJump": 1.3254529999999995
+        },
+        "finishOnlyMs": 12.095942000000036
+      },
+      {
+        "id": "chelsea-original",
+        "variant": "balanced",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+        "r2_sha256": "f6366b4d4f08a58ae542fa6b2caa660a23f9a6fbc3ff435636d747381c242f2d",
+        "output_sha256": "af967ecfc3c0667c9c7431200440a42281defb4c7d0b593c2a650a1b3be9d017",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 23.221167775314118,
+          "meanLumaShift": 24.195595012594357,
+          "newClippedLowChannels": 11,
+          "newClippedHighChannels": 1,
+          "maxRowShiftJump": 1.105345011086449
+        },
+        "finishOnlyMs": 5.807798999999989
+      },
+      {
+        "id": "chelsea-original",
+        "variant": "brighter",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+        "r2_sha256": "f6366b4d4f08a58ae542fa6b2caa660a23f9a6fbc3ff435636d747381c242f2d",
+        "output_sha256": "dff350346cd3e4859e5810668f6010fd69f1f10f96936dcb8e3bf2d2620e537b",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 30.066846513919685,
+          "meanLumaShift": 31.094661487100243,
+          "newClippedLowChannels": 5,
+          "newClippedHighChannels": 2,
+          "maxRowShiftJump": 1.2250789356984235
+        },
+        "finishOnlyMs": 6.132519000000002
+      },
+      {
+        "id": "chelsea-noise",
+        "variant": "balanced",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+        "r2_sha256": "2b747e626de74c1b2da84077d08dc3431700858fe47d24c81ad2b26cc29818e2",
+        "output_sha256": "56b9ada73340e91bc6a265978f23ac54ab049e9a28a8a8b4d6c516daa4214520",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 22.891330376940132,
+          "meanLumaShift": 23.52381740132929,
+          "newClippedLowChannels": 1,
+          "newClippedHighChannels": 2,
+          "maxRowShiftJump": 0.8912745011086329
+        },
+        "finishOnlyMs": 7.552319000000011
+      },
+      {
+        "id": "chelsea-noise",
+        "variant": "brighter",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+        "r2_sha256": "2b747e626de74c1b2da84077d08dc3431700858fe47d24c81ad2b26cc29818e2",
+        "output_sha256": "66f17ee7cf81665a61490aa5b7ff660af1ffcaa15b7816fdbb7820889e537345",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 29.72148558758315,
+          "meanLumaShift": 30.41993273909689,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 2,
+          "maxRowShiftJump": 0.9555760532150579
+        },
+        "finishOnlyMs": 7.1246849999999995
+      },
+      {
+        "id": "chelsea-underexposure",
+        "variant": "balanced",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+        "r2_sha256": "688a2292c3bb920e4d1fa9f68231717e973c5fd2e3d7a6b7fcde7ff760e4e340",
+        "output_sha256": "1983893785d483faf1bc1d355c5dece149f3f4d846e695c6c3e01fa63b4e1ee9",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 28.16119241192412,
+          "meanLumaShift": 28.295211283074373,
+          "newClippedLowChannels": 4,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0.7247011086474586
+        },
+        "finishOnlyMs": 6.734076000000016
+      },
+      {
+        "id": "chelsea-underexposure",
+        "variant": "brighter",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+        "r2_sha256": "688a2292c3bb920e4d1fa9f68231717e973c5fd2e3d7a6b7fcde7ff760e4e340",
+        "output_sha256": "53d748c2f280e8f78e5223a1f879a4f82d3ef1f0169a28361085db5d74e0a554",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 34.23250800689825,
+          "meanLumaShift": 34.36652687804812,
+          "newClippedLowChannels": 4,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0.8510869179600604
+        },
+        "finishOnlyMs": 7.034478999999976
+      },
+      {
+        "id": "chelsea-jpeg",
+        "variant": "balanced",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+        "r2_sha256": "47e4b4b9eb7210e95a6b8bc4b7425645ee635233a6f188fdf0b8fdd4e07d6ae8",
+        "output_sha256": "2bf9ea79658e810ed8f949e1445e6dc8bdc383102e04ebca8c9f484b33239228",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 23.32740576496674,
+          "meanLumaShift": 24.333029407274037,
+          "newClippedLowChannels": 7,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.0050554323724619
+        },
+        "finishOnlyMs": 5.91260699999998
+      },
+      {
+        "id": "chelsea-jpeg",
+        "variant": "brighter",
+        "width": 451,
+        "height": 300,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+        "r2_sha256": "47e4b4b9eb7210e95a6b8bc4b7425645ee635233a6f188fdf0b8fdd4e07d6ae8",
+        "output_sha256": "3ecb299724230483f428fb1fbae90c42e302cd7ec3d3279eac8ca4fc3bded009",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 451,
+          "height": 300,
+          "alphaPreserved": true,
+          "meanChange": 30.183823601872383,
+          "meanLumaShift": 31.23929696086841,
+          "newClippedLowChannels": 7,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 1.164700665188434
+        },
+        "finishOnlyMs": 6.720774999999946
+      },
+      {
+        "id": "alpha-diagnostic",
+        "variant": "balanced",
+        "width": 129,
+        "height": 97,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "r2_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "output_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 129,
+          "height": 97,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        },
+        "finishOnlyMs": 2.0439630000000193
+      },
+      {
+        "id": "alpha-diagnostic",
+        "variant": "brighter",
+        "width": 129,
+        "height": 97,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "r2_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "output_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 129,
+          "height": 97,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        },
+        "finishOnlyMs": 0.5896189999999706
+      },
+      {
+        "id": "user-print-portrait",
+        "variant": "balanced",
+        "width": 1102,
+        "height": 1470,
+        "settings": {
+          "brightness": 0.1,
+          "contrast": 0.38
+        },
+        "input_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+        "r2_sha256": "f73eae057659098c647ae9847c95ea6a815fd2ff2409d893a225cfbe20e274e2",
+        "output_sha256": "4b55849b37df504269735e49b4e374862c4a27008e6669553e633925c1e37ff9",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 26.268147585713052,
+          "meanLumaShift": 25.47885849910948,
+          "newClippedLowChannels": 849,
+          "newClippedHighChannels": 22,
+          "maxRowShiftJump": 0.5842411978220667
+        },
+        "finishOnlyMs": 90.49700099999995
+      },
+      {
+        "id": "user-print-portrait",
+        "variant": "brighter",
+        "width": 1102,
+        "height": 1470,
+        "settings": {
+          "brightness": 0.13,
+          "contrast": 0.42
+        },
+        "input_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+        "r2_sha256": "f73eae057659098c647ae9847c95ea6a815fd2ff2409d893a225cfbe20e274e2",
+        "output_sha256": "e67e14febd022f14843da370834920968edf0e4bf4c6ef05c9c48858d60037cf",
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 30.997994987468672,
+          "meanLumaShift": 30.20870124191725,
+          "newClippedLowChannels": 849,
+          "newClippedHighChannels": 33,
+          "maxRowShiftJump": 0.6777076225046628
+        },
+        "finishOnlyMs": 79.81033300000001
+      }
+    ]
+  },
+  "tests": {
+    "targetedPassed": 4,
+    "integrityOutputsPassed": 28
+  }
+}
