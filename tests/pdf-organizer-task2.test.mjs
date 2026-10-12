@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {
   OrganizerSession, organizerBudget, browserDeviceHints,
-  validatePdfSelection, validatePdfSignature, readPdfFile
+  validatePdfSelection, validatePdfSignature, readPdfFile, organizerErrorMessage
 } from '../assets/js/pdf-organizer-lifecycle.js';
 import {buildOrganizedPdf} from '../assets/js/pdf-organizer-integrity.js';
 
@@ -294,4 +294,45 @@ test('cancel is inert while idle and reset clears a finished document', async ()
   session.reset();
   assert.equal(session.snapshot().phase, 'empty');
   assert.equal(session.snapshot().plan.length, 0);
+});
+
+test('encrypted, damaged and memory errors have actionable messages', () => {
+  assert.match(organizerErrorMessage(Error('Input document to PDFDocument.load is encrypted')),
+    /password-protected or encrypted/);
+  assert.match(organizerErrorMessage(Error('Failed to parse PDF document')),
+    /damaged or unsupported/);
+  assert.match(organizerErrorMessage(Error('Out of memory')),
+    /more device memory/);
+  assert.match(organizerErrorMessage(Error('This file does not have a valid PDF header.')),
+    /valid PDF header/);
+});
+
+test('FileReader cancellation aborts reading and rejects safely', async () => {
+  const existing = globalThis.FileReader;
+  let aborted = false;
+  globalThis.FileReader = class {
+    readAsArrayBuffer(file) {
+      this.timer = setTimeout(async () => {
+        this.result = await file.arrayBuffer();
+        this.onload?.();
+      }, 20);
+    }
+    abort() {
+      aborted = true;
+      clearTimeout(this.timer);
+      this.onabort?.();
+    }
+  };
+  try {
+    const controller = new AbortController();
+    const file = await fixture(2);
+    const reading = readPdfFile(file, controller.signal);
+    await new Promise(resolve => setTimeout(resolve, 1));
+    controller.abort();
+    await assert.rejects(reading, /cancelled/);
+    assert.equal(aborted, true);
+  } finally {
+    if (existing === undefined) delete globalThis.FileReader;
+    else globalThis.FileReader = existing;
+  }
 });
