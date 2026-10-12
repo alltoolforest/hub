@@ -51,10 +51,88 @@ export function changePlan(plan, operation, index) {
   return next;
 }
 
-const riskyRemovalEntries = [
-  'AcroForm', 'Outlines', 'Names', 'Dests', 'StructTreeRoot',
-  'PageLabels', 'OpenAction', 'Threads', 'AF', 'AA'
+// /Names commonly holds EmbeddedFiles and /AF associates those attachments
+// with the document; neither necessarily points to a PDF page.
+const unsupportedRemovalEntries = [
+  'Dests', 'StructTreeRoot', 'PageLabels', 'Threads', 'AA'
 ];
+
+function assertSafeNameTrees(document, PDF) {
+  const name = PDF.PDFName.of;
+  const entries = document.context.lookup(document.catalog.get(name('Names')));
+  if (!entries) return;
+  if (typeof entries.keys !== 'function') {
+    throw Error('This PDF has an unsupported named-object tree.');
+  }
+  const unsafe = [...entries.keys()].map(k => k.toString()).filter(k =>
+    k !== '/EmbeddedFiles');
+  if (unsafe.length) {
+    throw Error('Removing pages with named destinations or document scripts (' +
+      unsafe.join(', ') + ') is not supported safely.');
+  }
+}
+
+function analyzeFormWidgets(document, kept, PDF) {
+  const name = PDF.PDFName.of;
+  if (!document.catalog.AcroForm()) return [];
+  const removed = new Set(document.getPages()
+    .filter((_, i) => !kept.some(p => p.index === i))
+    .map(p => p.ref.toString()));
+  if (!removed.size) return [];
+  const form = document.getForm();
+  const discard = [];
+  for (const field of form.getFields()) {
+    const widgets = field.acroField.getWidgets();
+    if (!widgets.length) continue; // Logical field without page widgets.
+    let deleted = 0;
+    for (const widget of widgets) {
+      const page = widget.dict.get(name('P'));
+      if (!page || !('toString' in page)) {
+        throw Error('This PDF form has a widget without a page reference; page removal cannot safely update it.');
+      }
+      if (removed.has(page.toString())) deleted++;
+    }
+    if (deleted && deleted !== widgets.length) {
+      throw Error('A PDF form field spans both kept and removed pages. Remove its widgets using a full PDF form editor.');
+    }
+    if (deleted === widgets.length) discard.push(field);
+  }
+  return discard;
+}
+
+// pdf-lib's page-tree removal unlinks a page but keeps its indirect objects in
+// PDFContext. Remove unreachable objects so deleted content streams do not
+// remain hidden in the exported PDF. Live objects are traced from trailer roots.
+function pruneUnreachablePdfObjects(document, PDF) {
+  const context = document.context;
+  const objects = context.enumerateIndirectObjects();
+  const byRef = new Map(objects.map(([ref, obj]) => [ref.toString(), obj]));
+  const seenRefs = new Set();
+  const seenObjects = new Set();
+  const walk = obj => {
+    if (!obj || typeof obj !== 'object') return;
+    if (obj instanceof PDF.PDFRef) {
+      const id = obj.toString();
+      if (seenRefs.has(id)) return;
+      seenRefs.add(id);
+      walk(byRef.get(id));
+      return;
+    }
+    if (seenObjects.has(obj)) return;
+    seenObjects.add(obj);
+    if (obj instanceof PDF.PDFDict) {
+      for (const key of obj.keys()) walk(obj.get(key));
+    } else if (obj instanceof PDF.PDFArray) {
+      for (const entry of obj.asArray()) walk(entry);
+    } else if (obj instanceof PDF.PDFStream) {
+      walk(obj.dict);
+    }
+  };
+  for (const value of Object.values(context.trailerInfo)) walk(value);
+  for (const [ref] of objects) {
+    if (!seenRefs.has(ref.toString())) context.delete(ref);
+  }
+}
 
 function containsSignature(document, PDF) {
   const name = PDF.PDFName.of;
@@ -87,22 +165,35 @@ function containsSignature(document, PDF) {
   return false;
 }
 
-function containsInternalDestinations(document, PDF) {
+function containsInternalDestinations(document, kept, PDF) {
   const name = PDF.PDFName.of;
-  for (const page of document.getPages()) {
+  const pages = document.getPages();
+  const keptIndices = new Set(kept.map(item => item.index));
+  const retainedRefs = new Set(kept.map(item => pages[item.index].ref.toString()));
+  const invalidDestination = target => {
+    const destination = document.context.lookup(target);
+    // Explicit page destinations contain a PDF page ref as their first item.
+    if (destination instanceof PDF.PDFArray && destination.size() > 0) {
+      return !retainedRefs.has(destination.get(0).toString());
+    }
+    // Unknown named/remote destinations need a full destination resolver.
+    return true;
+  };
+  for (const [index, page] of pages.entries()) {
+    if (!keptIndices.has(index)) continue; // The entire page and its links go away.
     const annots = page.node.Annots();
     if (!annots) continue;
     for (let i = 0; i < annots.size(); i++) {
       const annot = document.context.lookup(annots.get(i));
       if (!annot || typeof annot.get !== 'function') continue;
-      if (annot.get(name('Dest'))) return true;
-      const action = document.context.lookup(annot.get(name('A')));
-      if (action && typeof action.get === 'function') {
-        const type = action.get(name('S'));
-        if (type && (type.toString() === '/GoTo' || type.toString() === '/Named')) {
-          return true;
-        }
+      if (annot.get(name('Dest')) && invalidDestination(annot.get(name('Dest')))) {
+        return true;
       }
+      const action = document.context.lookup(annot.get(name('A')));
+      if (!action || typeof action.get !== 'function') continue;
+      const type = action.get(name('S'))?.toString();
+      if (type === '/Named') return true;
+      if (type === '/GoTo' && invalidDestination(action.get(name('D')))) return true;
     }
   }
   return false;
@@ -121,12 +212,16 @@ export function assertSupportedTransformation(document, plan, PDF) {
   }
   const removed = kept.length !== plan.length;
   if (removed) {
-    const features = riskyRemovalEntries.filter(item => Boolean(document.catalog.get(name(item))));
-    if (containsInternalDestinations(document, PDF)) features.push('internal page links');
+    assertSafeNameTrees(document, PDF);
+    const features = unsupportedRemovalEntries.filter(item => Boolean(document.catalog.get(name(item))));
+    // Outlines and document-level opening actions can reference pages by
+    // destination arrays or names. Preserve these until targeted repair exists.
+    if (document.catalog.get(name('Outlines'))) features.push('Outlines');
+    if (document.catalog.get(name('OpenAction'))) features.push('OpenAction');
+    if (containsInternalDestinations(document, kept, PDF)) features.push('internal page links');
     if (features.length) {
-      throw Error('Removing pages could break existing document navigation or form data (' +
-        [...new Set(features)].join(', ') +
-        '). Keep all pages or use a PDF editor that supports these structures.');
+      throw Error('Cannot safely remove pages because this document has page navigation or tagging (' +
+        [...new Set(features)].join(', ') + '). Use an editor that can repair these references.');
     }
   }
   const orderedOriginal = [...kept].sort((a, b) => a.index - b.index);
@@ -178,8 +273,16 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
   const sourcePages = doc.getPages().slice();
   const sourceRefs = sourcePages.map(page => page.ref.toString());
   const sourceDimensions = sourcePages.map(page => [page.getWidth(), page.getHeight()]);
+  const removed = kept.length < sourcePages.length;
+  const obsoleteFormFields = removed ? analyzeFormWidgets(doc, kept, PDF) : [];
   // Capture inherited attributes BEFORE detaching pages from their page trees.
   for (const page of sourcePages) pinInheritedPageAttributes(page, PDF);
+  // Remove form fields whose *all* widgets are on deleted pages. Fields on
+  // retained pages remain untouched, including their values and appearances.
+  if (obsoleteFormFields.length) {
+    const form = doc.getForm();
+    for (const field of obsoleteFormFields) form.removeField(field);
+  }
   for (let i = sourcePages.length - 1; i >= 0; i--) {
     doc.removePage(i);
     await checkpoint(sourcePages.length - i - 1, sourcePages.length, 20, 23,
@@ -193,6 +296,7 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
     await checkpoint(i, kept.length, 44, 26, 'Organizing PDF pages…');
   }
   check();
+  if (removed) pruneUnreachablePdfObjects(doc, PDF);
   progress(73, 'Saving organized PDF…');
   const bytes = await doc.save({updateFieldAppearances: false});
   check();
