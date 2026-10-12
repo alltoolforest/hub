@@ -1,7 +1,7 @@
 # Camera-fidelity experiment boundaries
 
 - Source of truth: user-provided Master Engineering Blueprint V1.0, Tasks 0–12.
-- Only Task 0 is authorized in this checkpoint. Stop before Task 1.
+- User authorized Tasks 1–12 in order on 2026-10-12. Advance only after the preceding acceptance gate is met; report missing inputs. Production promotion still requires separate explicit approval.
 - Never edit baseline/ or manifest.json. They preserve PR #171 head a672855f9c4047dafe31cd0823cfeb7de2bb04f7.
 - Future authorized engine changes belong only in candidate/. Never change repository-root assets, tools, main, the original PR branch, or production URLs.
 - Run python experiments/camera-fidelity-pr171/verify-baseline.py before and after work. --task0 additionally requires the candidate to remain identical.

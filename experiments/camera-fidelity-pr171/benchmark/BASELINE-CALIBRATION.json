@@ -1,0 +1,1422 @@
+{
+  "engine": "PR171 unchanged baseline",
+  "sourceCommit": "a672855f9c4047dafe31cd0823cfeb7de2bb04f7",
+  "runnerCommit": "4c2e5fcb60cb55211706065e694ce72199e474ab",
+  "runnerSHA256": "2026c4264b3d781aa990fe9dfc39bf61b3c6b50c40df77f1bfd52956408e6a0f",
+  "runtime": {
+    "node": "v24.19.0",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "corpusGenerator": {
+    "numpy": "2.3.5",
+    "Pillow": "12.3.0",
+    "seed": 171,
+    "noise": "PCG64 Gaussian sigma 8 encoded RGB",
+    "jpeg": "Pillow quality45 subsampling2",
+    "underexposure": "encoded RGB multiplication .65, not physical camera noise"
+  },
+  "limitations": [
+    "Calibration samples only; no held-out evaluation",
+    "No confirmed phone Auto-editor comparison",
+    "Synthetic degradation is not sensor/optical ground truth",
+    "No browser encode/decode, memory or physical-phone qualification",
+    "changeMAE is not a photographic quality score",
+    "No genuine face detection tested; face ROIs are for review only"
+  ],
+  "records": [
+    {
+      "id": "astronaut-original",
+      "source_id": "astronaut",
+      "split": "calibration",
+      "variant": "original",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "output_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+      "reference_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        89.00873200000001,
+        92.28352899999999,
+        71.49503100000004
+      ],
+      "medianMs": 89.00873200000001,
+      "metrics": {
+        "opaquePixels": 262144,
+        "alphaMismatch": 0,
+        "changeMAE": 1.9079208374023438,
+        "meanLumaShift": -0.041482698059102874,
+        "newClippedLowChannels": 4936,
+        "newClippedHighChannels": 2865,
+        "referenceMSE": null,
+        "inputReferenceMSE": null,
+        "referencePSNR": null,
+        "referenceGradientMAE": null
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "opaquePixels": 12650,
+            "alphaMismatch": 0,
+            "changeMAE": 2.340105401844532,
+            "meanLumaShift": 0.08033449802371571,
+            "newClippedLowChannels": 86,
+            "newClippedHighChannels": 0,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "opaquePixels": 8450,
+            "alphaMismatch": 0,
+            "changeMAE": 2.0280473372781067,
+            "meanLumaShift": 0.08017192899408097,
+            "newClippedLowChannels": 12,
+            "newClippedHighChannels": 0,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "opaquePixels": 15400,
+            "alphaMismatch": 0,
+            "changeMAE": 1.928939393939394,
+            "meanLumaShift": -0.41933448051951283,
+            "newClippedLowChannels": 39,
+            "newClippedHighChannels": 79,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        }
+      ],
+      "plan": {
+        "noise": 1.6551724137931096,
+        "chromaNoise": 2.320954907161804,
+        "shadowNoise": 1.6578249336870026,
+        "shadowLift": 0,
+        "wb": [
+          0.9765798413879463,
+          1.0069302698416085,
+          1.0179491592465062
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 113.13426901333266,
+        "range": 216
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "astronaut-noise",
+      "source_id": "astronaut",
+      "split": "calibration",
+      "variant": "noise",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+      "output_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+      "reference_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        72.74165399999993,
+        70.5609300000001,
+        75.01705000000004
+      ],
+      "medianMs": 72.74165399999993,
+      "metrics": {
+        "opaquePixels": 262144,
+        "alphaMismatch": 0,
+        "changeMAE": 3.137237548828125,
+        "meanLumaShift": -0.033882458496092546,
+        "newClippedLowChannels": 472,
+        "newClippedHighChannels": 675,
+        "referenceMSE": 33.22769546508789,
+        "inputReferenceMSE": 58.248714447021484,
+        "referencePSNR": 32.915801394056956,
+        "referenceGradientMAE": 4.539083449435392
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "opaquePixels": 12650,
+            "alphaMismatch": 0,
+            "changeMAE": 3.4402371541501977,
+            "meanLumaShift": 0.08031688537549388,
+            "newClippedLowChannels": 9,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 37.01083003952569,
+            "inputReferenceMSE": 62.9467720685112,
+            "referencePSNR": 32.44751535768921,
+            "referenceGradientMAE": 4.996560566554023
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "opaquePixels": 8450,
+            "alphaMismatch": 0,
+            "changeMAE": 3.373214990138067,
+            "meanLumaShift": 0.11756328994082867,
+            "newClippedLowChannels": 2,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 37.88777120315582,
+            "inputReferenceMSE": 63.85357001972387,
+            "referencePSNR": 32.34581302772667,
+            "referenceGradientMAE": 5.358407509689915
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "opaquePixels": 15400,
+            "alphaMismatch": 0,
+            "changeMAE": 3.2982251082251084,
+            "meanLumaShift": -0.3712669740259733,
+            "newClippedLowChannels": 10,
+            "newClippedHighChannels": 22,
+            "referenceMSE": 36.105497835497836,
+            "inputReferenceMSE": 62.17415584415584,
+            "referencePSNR": 32.55507023288507,
+            "referenceGradientMAE": 5.045806243812275
+          }
+        }
+      ],
+      "plan": {
+        "noise": 6.485013262599513,
+        "chromaNoise": 14.257294429708223,
+        "shadowNoise": 6.962864721485411,
+        "shadowLift": 0,
+        "wb": [
+          0.9790564120562893,
+          1.0064364517617042,
+          1.0156582754858619
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 113.59037800470607,
+        "range": 217
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "astronaut-underexposure",
+      "source_id": "astronaut",
+      "split": "calibration",
+      "variant": "underexposure",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+      "output_sha256": "250f7e9693475c8fe55cc15317fe4ead887b8c9824740a2ba8e805a0434f0869",
+      "reference_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        69.9434379999999,
+        68.897107,
+        68.37462799999992
+      ],
+      "medianMs": 68.897107,
+      "metrics": {
+        "opaquePixels": 262144,
+        "alphaMismatch": 0,
+        "changeMAE": 19.669347127278645,
+        "meanLumaShift": 19.263820190434362,
+        "newClippedLowChannels": 1794,
+        "newClippedHighChannels": 0,
+        "referenceMSE": 875.1016133626302,
+        "inputReferenceMSE": 2417.191446940104,
+        "referencePSNR": 18.710218763479165,
+        "referenceGradientMAE": 1.9228026236880893
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "opaquePixels": 12650,
+            "alphaMismatch": 0,
+            "changeMAE": 22.571884057971015,
+            "meanLumaShift": 22.973692031622555,
+            "newClippedLowChannels": 22,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 1167.2357312252964,
+            "inputReferenceMSE": 3062.1060079051385,
+            "referencePSNR": 17.459217872288654,
+            "referenceGradientMAE": 2.7183670931917305
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "opaquePixels": 8450,
+            "alphaMismatch": 0,
+            "changeMAE": 23.147692307692306,
+            "meanLumaShift": 23.875986532543592,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 660.0467061143984,
+            "inputReferenceMSE": 2212.410019723866,
+            "referencePSNR": 19.93505692765339,
+            "referenceGradientMAE": 2.9911585029069503
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "opaquePixels": 15400,
+            "alphaMismatch": 0,
+            "changeMAE": 24.711277056277055,
+            "meanLumaShift": 23.718144701299668,
+            "newClippedLowChannels": 9,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 584.7220562770563,
+            "inputReferenceMSE": 2326.4087878787877,
+            "referencePSNR": 20.461308847170443,
+            "referenceGradientMAE": 2.5879600818427306
+          }
+        }
+      ],
+      "plan": {
+        "noise": 1.1622679045092867,
+        "chromaNoise": 1.6578249336870026,
+        "shadowNoise": 1.6578249336870026,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 73.53889965803982,
+        "range": 140
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "astronaut-jpeg",
+      "source_id": "astronaut",
+      "split": "calibration",
+      "variant": "jpeg",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+      "output_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+      "reference_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        38.53607299999999,
+        36.711726,
+        37.124671000000035
+      ],
+      "medianMs": 37.124671000000035,
+      "metrics": {
+        "opaquePixels": 262144,
+        "alphaMismatch": 0,
+        "changeMAE": 1.933519999186198,
+        "meanLumaShift": -0.03997825698854107,
+        "newClippedLowChannels": 1851,
+        "newClippedHighChannels": 1988,
+        "referenceMSE": 50.2151730855306,
+        "inputReferenceMSE": 43.19472122192383,
+        "referencePSNR": 31.1224539687708,
+        "referenceGradientMAE": 3.899840545953702
+      },
+      "rois": [
+        {
+          "id": "face",
+          "kind": "identity-review",
+          "box": [
+            175,
+            60,
+            110,
+            115
+          ],
+          "metrics": {
+            "opaquePixels": 12650,
+            "alphaMismatch": 0,
+            "changeMAE": 2.337812911725955,
+            "meanLumaShift": -0.0060470513833994505,
+            "newClippedLowChannels": 16,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 57.0365744400527,
+            "inputReferenceMSE": 49.54819499341239,
+            "referencePSNR": 30.569269265356127,
+            "referenceGradientMAE": 5.818148157089921
+          }
+        },
+        {
+          "id": "hair",
+          "kind": "texture",
+          "box": [
+            160,
+            15,
+            130,
+            65
+          ],
+          "metrics": {
+            "opaquePixels": 8450,
+            "alphaMismatch": 0,
+            "changeMAE": 1.9935305719921104,
+            "meanLumaShift": 0.0865063195266249,
+            "newClippedLowChannels": 5,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 65.05124260355029,
+            "inputReferenceMSE": 59.94086785009862,
+            "referencePSNR": 29.998247640331673,
+            "referenceGradientMAE": 7.395302991763622
+          }
+        },
+        {
+          "id": "suit",
+          "kind": "fabric",
+          "box": [
+            95,
+            280,
+            140,
+            110
+          ],
+          "metrics": {
+            "opaquePixels": 15400,
+            "alphaMismatch": 0,
+            "changeMAE": 2.0156060606060606,
+            "meanLumaShift": -0.37973984415586615,
+            "newClippedLowChannels": 37,
+            "newClippedHighChannels": 55,
+            "referenceMSE": 102.85495670995671,
+            "inputReferenceMSE": 92.28160173160173,
+            "referencePSNR": 28.008551351345737,
+            "referenceGradientMAE": 6.157748775658366
+          }
+        }
+      ],
+      "plan": {
+        "noise": 0.669628647214853,
+        "chromaNoise": 0.6631299734748011,
+        "shadowNoise": 0.9946949602122016,
+        "shadowLift": 0,
+        "wb": [
+          0.9764139652675141,
+          1.0068337617961893,
+          1.0182381676317378
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0.4121054319872186,
+        "sharp": 0.10582102224230065,
+        "local": 0.04997103828108642,
+        "mean": 113.17053639527947,
+        "range": 216
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "coffee-original",
+      "source_id": "coffee",
+      "split": "calibration",
+      "variant": "original",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "output_sha256": "0a7671733110929112e13890726c0eb26b86e92f983180a78d825cca64cdb487",
+      "reference_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        64.40170799999987,
+        66.61438900000007,
+        65.31056000000012
+      ],
+      "medianMs": 65.31056000000012,
+      "metrics": {
+        "opaquePixels": 240000,
+        "alphaMismatch": 0,
+        "changeMAE": 0.9635875,
+        "meanLumaShift": 0.7772514816667976,
+        "newClippedLowChannels": 428,
+        "newClippedHighChannels": 341,
+        "referenceMSE": null,
+        "inputReferenceMSE": null,
+        "referencePSNR": null,
+        "referenceGradientMAE": null
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "opaquePixels": 18000,
+            "alphaMismatch": 0,
+            "changeMAE": 1.1317407407407407,
+            "meanLumaShift": 0.7658665000001085,
+            "newClippedLowChannels": 38,
+            "newClippedHighChannels": 32,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "opaquePixels": 14400,
+            "alphaMismatch": 0,
+            "changeMAE": 0.7466203703703703,
+            "meanLumaShift": 0.7420819305555589,
+            "newClippedLowChannels": 1,
+            "newClippedHighChannels": 61,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        }
+      ],
+      "plan": {
+        "noise": 1.5595490716179976,
+        "chromaNoise": 1.9893899204244032,
+        "shadowNoise": 1.3262599469496021,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 98.79606756881661,
+        "range": 195
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "coffee-noise",
+      "source_id": "coffee",
+      "split": "calibration",
+      "variant": "noise",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+      "output_sha256": "4ad48aa4cb503583ff303cf2dc6cf9cc5d6e6558f7841e0a2466ae5cfd13e3d9",
+      "reference_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        66.046783,
+        66.155847,
+        62.33656800000017
+      ],
+      "medianMs": 66.046783,
+      "metrics": {
+        "opaquePixels": 240000,
+        "alphaMismatch": 0,
+        "changeMAE": 2.9350583333333335,
+        "meanLumaShift": 0.6750054716666786,
+        "newClippedLowChannels": 153,
+        "newClippedHighChannels": 75,
+        "referenceMSE": 30.844377777777776,
+        "inputReferenceMSE": 60.91631388888889,
+        "referencePSNR": 33.239043472022665,
+        "referenceGradientMAE": 4.813927862226419
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "opaquePixels": 18000,
+            "alphaMismatch": 0,
+            "changeMAE": 2.9565,
+            "meanLumaShift": 0.6433470666666722,
+            "newClippedLowChannels": 6,
+            "newClippedHighChannels": 10,
+            "referenceMSE": 39.31685185185185,
+            "inputReferenceMSE": 62.17835185185185,
+            "referencePSNR": 32.18501624803059,
+            "referenceGradientMAE": 5.764890310755124
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "opaquePixels": 14400,
+            "alphaMismatch": 0,
+            "changeMAE": 2.9082175925925924,
+            "meanLumaShift": 0.6399592222222231,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 3,
+            "referenceMSE": 26.946967592592593,
+            "inputReferenceMSE": 62.44884259259259,
+            "referencePSNR": 33.82570460803459,
+            "referenceGradientMAE": 4.400121941912213
+          }
+        }
+      ],
+      "plan": {
+        "noise": 6.620888594164469,
+        "chromaNoise": 13.925729442970821,
+        "shadowNoise": 6.29973474801061,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 98.9498029911676,
+        "range": 196
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "coffee-underexposure",
+      "source_id": "coffee",
+      "split": "calibration",
+      "variant": "underexposure",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+      "output_sha256": "9edcb1f5cd57cac264066085ac2270198dc1dc28a577be98709cd1b2cd9543d6",
+      "reference_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        64.08836399999996,
+        63.15637700000002,
+        68.05425400000013
+      ],
+      "medianMs": 64.08836399999996,
+      "metrics": {
+        "opaquePixels": 240000,
+        "alphaMismatch": 0,
+        "changeMAE": 28.19191111111111,
+        "meanLumaShift": 27.865396127501118,
+        "newClippedLowChannels": 7,
+        "newClippedHighChannels": 0,
+        "referenceMSE": 368.0469166666667,
+        "inputReferenceMSE": 1863.3111666666666,
+        "referencePSNR": 22.47177177110975,
+        "referenceGradientMAE": 2.2680259869203936
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "opaquePixels": 18000,
+            "alphaMismatch": 0,
+            "changeMAE": 29.68640740740741,
+            "meanLumaShift": 29.606348511112103,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 373.67875925925927,
+            "inputReferenceMSE": 2158.26887037037,
+            "referencePSNR": 22.40581948591373,
+            "referenceGradientMAE": 6.306416936439452
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "opaquePixels": 14400,
+            "alphaMismatch": 0,
+            "changeMAE": 30.809814814814814,
+            "meanLumaShift": 31.27848650000001,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 976.9818518518518,
+            "inputReferenceMSE": 3554.620138888889,
+            "referencePSNR": 18.231938644099365,
+            "referenceGradientMAE": 1.067727241890985
+          }
+        }
+      ],
+      "plan": {
+        "noise": 1.2318302387267939,
+        "chromaNoise": 1.6578249336870026,
+        "shadowNoise": 1.3262599469496021,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 64.2240002949988,
+        "range": 127
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "coffee-jpeg",
+      "source_id": "coffee",
+      "split": "calibration",
+      "variant": "jpeg",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+      "output_sha256": "8d09d5ec5d7153d08c27b361a16ba4e1fc79ddef189bd8a2986b5358e0592710",
+      "reference_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        36.998229999999694,
+        40.81723800000009,
+        35.55136399999992
+      ],
+      "medianMs": 36.998229999999694,
+      "metrics": {
+        "opaquePixels": 240000,
+        "alphaMismatch": 0,
+        "changeMAE": 0.8401986111111112,
+        "meanLumaShift": 0.7526264275001181,
+        "newClippedLowChannels": 117,
+        "newClippedHighChannels": 375,
+        "referenceMSE": 63.823566666666665,
+        "inputReferenceMSE": 61.50852638888889,
+        "referencePSNR": 30.080992905564827,
+        "referenceGradientMAE": 5.6315084819732
+      },
+      "rois": [
+        {
+          "id": "wood",
+          "kind": "texture",
+          "box": [
+            0,
+            200,
+            120,
+            150
+          ],
+          "metrics": {
+            "opaquePixels": 18000,
+            "alphaMismatch": 0,
+            "changeMAE": 0.9661851851851851,
+            "meanLumaShift": 0.7823008555556442,
+            "newClippedLowChannels": 11,
+            "newClippedHighChannels": 49,
+            "referenceMSE": 171.52144444444446,
+            "inputReferenceMSE": 166.60414814814814,
+            "referencePSNR": 25.787619354881038,
+            "referenceGradientMAE": 13.464795031301014
+          }
+        },
+        {
+          "id": "cup",
+          "kind": "tonal",
+          "box": [
+            200,
+            25,
+            160,
+            90
+          ],
+          "metrics": {
+            "opaquePixels": 14400,
+            "alphaMismatch": 0,
+            "changeMAE": 0.6688194444444444,
+            "meanLumaShift": 0.665145361111138,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 59,
+            "referenceMSE": 22.677083333333332,
+            "inputReferenceMSE": 22.033078703703705,
+            "referencePSNR": 34.57493164866384,
+            "referenceGradientMAE": 2.3001804112783772
+          }
+        }
+      ],
+      "plan": {
+        "noise": 0.8763262599469592,
+        "chromaNoise": 0.6631299734748011,
+        "shadowNoise": 0.6631299734748011,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0.33546371488513055,
+        "sharp": 0.11961653132067651,
+        "local": 0.056485584234763915,
+        "mean": 98.81755275534584,
+        "range": 193
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "chelsea-original",
+      "source_id": "chelsea",
+      "split": "calibration",
+      "variant": "original",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "output_sha256": "f90a73c8dce85299ca6ae3676d3550dea2f7333fecfb8440a7dc3802e4a7b7e8",
+      "reference_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        34.775592999999844,
+        36.19527700000026,
+        35.23026200000004
+      ],
+      "medianMs": 35.23026200000004,
+      "metrics": {
+        "opaquePixels": 135300,
+        "alphaMismatch": 0,
+        "changeMAE": 5.056494210396649,
+        "meanLumaShift": 2.4465517886181654,
+        "newClippedLowChannels": 39,
+        "newClippedHighChannels": 0,
+        "referenceMSE": null,
+        "inputReferenceMSE": null,
+        "referencePSNR": null,
+        "referenceGradientMAE": null
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 7700,
+            "alphaMismatch": 0,
+            "changeMAE": 4.338311688311689,
+            "meanLumaShift": 1.212065948051936,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 5600,
+            "alphaMismatch": 0,
+            "changeMAE": 4.159226190476191,
+            "meanLumaShift": 1.28674489285716,
+            "newClippedLowChannels": 8,
+            "newClippedHighChannels": 0,
+            "referenceMSE": null,
+            "inputReferenceMSE": null,
+            "referencePSNR": null,
+            "referenceGradientMAE": null
+          }
+        }
+      ],
+      "plan": {
+        "noise": 1.1630636604774451,
+        "chromaNoise": 1.3262599469496021,
+        "shadowNoise": 1.6578249336870026,
+        "shadowLift": 0,
+        "wb": [
+          0.9490000000000001,
+          1.023503019293353,
+          1.0395824567063137
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 117.17354947407082,
+        "range": 107
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "chelsea-noise",
+      "source_id": "chelsea",
+      "split": "calibration",
+      "variant": "noise",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+      "output_sha256": "e8c56ad0618ebc7f96da4cf7888d10a95d211e085faade8e4ad926446cebfc35",
+      "reference_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        38.27071599999999,
+        37.0338670000001,
+        38.04412300000013
+      ],
+      "medianMs": 38.04412300000013,
+      "metrics": {
+        "opaquePixels": 135300,
+        "alphaMismatch": 0,
+        "changeMAE": 4.865252525252525,
+        "meanLumaShift": 1.7948173865483996,
+        "newClippedLowChannels": 1,
+        "newClippedHighChannels": 0,
+        "referenceMSE": 54.6250110864745,
+        "inputReferenceMSE": 63.97109632914511,
+        "referencePSNR": 30.756888227467464,
+        "referenceGradientMAE": 5.102648722408049
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 7700,
+            "alphaMismatch": 0,
+            "changeMAE": 4.333679653679654,
+            "meanLumaShift": 0.6546069610389629,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 50.25099567099567,
+            "inputReferenceMSE": 64.1238961038961,
+            "referencePSNR": 31.119356895985625,
+            "referenceGradientMAE": 5.437563940965319
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 5600,
+            "alphaMismatch": 0,
+            "changeMAE": 4.30375,
+            "meanLumaShift": 0.7666456071428568,
+            "newClippedLowChannels": 1,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 47.952559523809526,
+            "inputReferenceMSE": 62.62809523809524,
+            "referencePSNR": 31.32268567767899,
+            "referenceGradientMAE": 5.258298257200512
+          }
+        }
+      ],
+      "plan": {
+        "noise": 6.646949602121989,
+        "chromaNoise": 14.257294429708223,
+        "shadowNoise": 7.294429708222812,
+        "shadowLift": 0,
+        "wb": [
+          0.9561296624248109,
+          1.0160388378568603,
+          1.0331010983333906
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 117.1982407901175,
+        "range": 109
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "chelsea-underexposure",
+      "source_id": "chelsea",
+      "split": "calibration",
+      "variant": "underexposure",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+      "output_sha256": "fea36237ec74a8e56f57d669af513b6b4ff14c07d0e8df625e8d7ba627fa32a3",
+      "reference_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        19.436673000000155,
+        20.086385000000064,
+        19.84887600000002
+      ],
+      "medianMs": 19.84887600000002,
+      "metrics": {
+        "opaquePixels": 135300,
+        "alphaMismatch": 0,
+        "changeMAE": 18.237265336289727,
+        "meanLumaShift": 18.43527312046647,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "referenceMSE": 628.5363291451097,
+        "inputReferenceMSE": 1847.659709288002,
+        "referencePSNR": 20.14749976075406,
+        "referenceGradientMAE": 1.5312021828316191
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 7700,
+            "alphaMismatch": 0,
+            "changeMAE": 17.57069264069264,
+            "meanLumaShift": 17.872263324675643,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 426.0106493506494,
+            "inputReferenceMSE": 1438.061341991342,
+            "referencePSNR": 21.83659905200836,
+            "referenceGradientMAE": 2.4597841643398626
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 5600,
+            "alphaMismatch": 0,
+            "changeMAE": 16.120416666666667,
+            "meanLumaShift": 16.639860571428258,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 428.1959523809524,
+            "inputReferenceMSE": 1350.536607142857,
+            "referencePSNR": 21.814378031568644,
+            "referenceGradientMAE": 2.2514936341955862
+          }
+        }
+      ],
+      "plan": {
+        "noise": 0.9521220159151385,
+        "chromaNoise": 0.9946949602122016,
+        "shadowNoise": 0.9946949602122016,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.085,
+        "mean": 76.16361971624353,
+        "range": 70
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "chelsea-jpeg",
+      "source_id": "chelsea",
+      "split": "calibration",
+      "variant": "jpeg",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+      "output_sha256": "2dcf5a7ec036b5d74448b588c7df1013e9a5eb816da072ef52bcc930a24fc342",
+      "reference_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "options": {
+        "sourceMime": "image/jpeg",
+        "content": "auto",
+        "strength": "balanced",
+        "sharpness": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        20.820944000000054,
+        20.559118000000126,
+        20.14976999999999
+      ],
+      "medianMs": 20.559118000000126,
+      "metrics": {
+        "opaquePixels": 135300,
+        "alphaMismatch": 0,
+        "changeMAE": 5.145920177383592,
+        "meanLumaShift": 2.5565796097562967,
+        "newClippedLowChannels": 36,
+        "newClippedHighChannels": 0,
+        "referenceMSE": 65.4480610987928,
+        "inputReferenceMSE": 28.557213599408723,
+        "referencePSNR": 29.97183575780495,
+        "referenceGradientMAE": 4.037561577852698
+      },
+      "rois": [
+        {
+          "id": "fur",
+          "kind": "texture",
+          "box": [
+            220,
+            10,
+            110,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 7700,
+            "alphaMismatch": 0,
+            "changeMAE": 4.388614718614718,
+            "meanLumaShift": 1.3035455844155799,
+            "newClippedLowChannels": 5,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 82.05294372294372,
+            "inputReferenceMSE": 48.98510822510823,
+            "referencePSNR": 28.989861944952786,
+            "referenceGradientMAE": 6.449527682489031
+          }
+        },
+        {
+          "id": "eye",
+          "kind": "edge",
+          "box": [
+            110,
+            75,
+            80,
+            70
+          ],
+          "metrics": {
+            "opaquePixels": 5600,
+            "alphaMismatch": 0,
+            "changeMAE": 4.188154761904762,
+            "meanLumaShift": 1.3676866071428742,
+            "newClippedLowChannels": 9,
+            "newClippedHighChannels": 0,
+            "referenceMSE": 76.64744047619048,
+            "inputReferenceMSE": 49.67452380952381,
+            "referencePSNR": 29.28582704034026,
+            "referenceGradientMAE": 5.747400605393511
+          }
+        }
+      ],
+      "plan": {
+        "noise": 0.9946949602122016,
+        "chromaNoise": 0.6631299734748011,
+        "shadowNoise": 1.3262599469496021,
+        "shadowLift": 0,
+        "wb": [
+          0.9490000000000001,
+          1.0247900915855888,
+          1.0400827207895063
+        ],
+        "strength": 0.85,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0.3006317441185373,
+        "sharp": 0.12588628605866328,
+        "local": 0.05944630174992433,
+        "mean": 117.13567100048529,
+        "range": 107
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    },
+    {
+      "id": "alpha-diagnostic",
+      "source_id": "synthetic-alpha",
+      "split": "diagnostic",
+      "variant": "synthetic",
+      "width": 129,
+      "height": 97,
+      "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "output_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "reference_sha256": null,
+      "options": {
+        "sourceMime": "image/png",
+        "content": "auto",
+        "faces": []
+      },
+      "repeatable": true,
+      "runtimeMs": [
+        6.257864000000154,
+        3.5240340000000288,
+        3.0178890000001957
+      ],
+      "medianMs": 3.5240340000000288,
+      "metrics": {
+        "opaquePixels": 0,
+        "alphaMismatch": 0,
+        "changeMAE": null,
+        "meanLumaShift": null,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "referenceMSE": null,
+        "inputReferenceMSE": null,
+        "referencePSNR": null,
+        "referenceGradientMAE": null
+      },
+      "rois": [],
+      "plan": {
+        "noise": 0,
+        "chromaNoise": 0,
+        "shadowNoise": 0,
+        "shadowLift": 0,
+        "wb": [
+          1,
+          1,
+          1
+        ],
+        "strength": 1,
+        "graphic": false,
+        "portrait": false,
+        "blockStrength": 0,
+        "sharp": 0.18,
+        "local": 0.1,
+        "mean": 128,
+        "range": 0
+      },
+      "phoneComparison": null,
+      "physicalDeviceTest": false
+    }
+  ]
+}

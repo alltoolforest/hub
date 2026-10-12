@@ -1,0 +1,102 @@
+[
+  {
+    "id": "astronaut",
+    "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/astronaut.png",
+    "rights": "NASA / public domain",
+    "rights_documentation": "https://scikit-image.org/docs/0.20.x/api/skimage.data.html",
+    "sha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+    "split": "calibration",
+    "rois": [
+      {
+        "id": "face",
+        "kind": "identity-review",
+        "box": [
+          175,
+          60,
+          110,
+          115
+        ]
+      },
+      {
+        "id": "hair",
+        "kind": "texture",
+        "box": [
+          160,
+          15,
+          130,
+          65
+        ]
+      },
+      {
+        "id": "suit",
+        "kind": "fabric",
+        "box": [
+          95,
+          280,
+          140,
+          110
+        ]
+      }
+    ]
+  },
+  {
+    "id": "coffee",
+    "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/coffee.png",
+    "rights": "Rachel Michetti / CC0",
+    "rights_documentation": "https://scikit-image.org/docs/0.20.x/api/skimage.data.html",
+    "sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+    "split": "calibration",
+    "rois": [
+      {
+        "id": "wood",
+        "kind": "texture",
+        "box": [
+          0,
+          200,
+          120,
+          150
+        ]
+      },
+      {
+        "id": "cup",
+        "kind": "tonal",
+        "box": [
+          200,
+          25,
+          160,
+          90
+        ]
+      }
+    ]
+  },
+  {
+    "id": "chelsea",
+    "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/chelsea.png",
+    "rights": "Stefan van der Walt / CC0",
+    "rights_documentation": "https://scikit-image.org/docs/0.20.x/api/skimage.data.html",
+    "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+    "split": "calibration",
+    "rois": [
+      {
+        "id": "fur",
+        "kind": "texture",
+        "box": [
+          220,
+          10,
+          110,
+          70
+        ]
+      },
+      {
+        "id": "eye",
+        "kind": "edge",
+        "box": [
+          110,
+          75,
+          80,
+          70
+        ]
+      }
+    ]
+  }
+]

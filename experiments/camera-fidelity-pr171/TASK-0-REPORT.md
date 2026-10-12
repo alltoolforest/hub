@@ -23,3 +23,5 @@ Remaining: Task 1 quality benchmark; 2 safety instrumentation; 3 noise intellige
 ## Remote persistence blocker
 
 The experimental branch push was rejected by automatic approval review, which interpreted Task 0 as local-only authorization and flagged publication of source to the remote. No retry was attempted. This checkpoint is committed locally; remote persistence requires explicit user approval. Implementation and verification are complete locally, but GitHub publication is not complete.
+
+Update: user approved remote saving on 2026-10-12. Shell push lacked credentials; the authenticated GitHub connection saved the exact checkpoint at f803e10eb018dcfff995dec0feca69c06b59a6c6 on experiment/camera-fidelity-pr171-task0. Remote persistence blocker resolved.
