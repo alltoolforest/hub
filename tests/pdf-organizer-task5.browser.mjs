@@ -18,6 +18,11 @@ async function fixture() {
     page.drawText('ORIGINAL-PAGE-' + (i + 1), {x: 30, y: 300, size: 17});
   }
   document.setTitle('Task 5 browser fixture');
+  // Real /Names + /AF attachment structures reproduce the reported
+  // production page-removal bug in a full browser UI workflow.
+  await document.attach(new Uint8Array([5, 8, 13, 21]), 'browser-attachment.xml', {
+    mimeType: 'application/xml', description: 'Attached fixture'
+  });
   const bytes = await document.save();
   return {name: 'organizer-fixture.pdf', mimeType: 'application/pdf', buffer: Buffer.from(bytes)};
 }
@@ -122,6 +127,10 @@ async function run(engineName, engine, viewport) {
     assert.deepEqual(organized.getPages().map(p => p.getWidth()), [470,390,350]);
     assert.deepEqual(organized.getPages().map(p => p.getRotation().angle), [0,0,90]);
     assert.equal(organized.getTitle(), 'Task 5 browser fixture');
+    assert.ok(organized.catalog.get(PDF.PDFName.of('Names')),
+      'Attached file name tree disappeared after page removal');
+    assert.ok(organized.catalog.get(PDF.PDFName.of('AF')),
+      'Document-associated attachment disappeared after page removal');
     trace.export = 'PASS';
 
     // Any subsequent change must invalidate the previously downloaded result.
