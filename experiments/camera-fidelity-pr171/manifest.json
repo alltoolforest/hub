@@ -1,0 +1,57 @@
+{
+  "repository": "https://github.com/alltoolforest/hub",
+  "pr": 171,
+  "source_commit": "a672855f9c4047dafe31cd0823cfeb7de2bb04f7",
+  "merge_commit": "ff5db8817c138df648969340f4009ecee0a44560",
+  "files": [
+    {
+      "path": "assets/js/image-enhancer-photo-engine.js",
+      "role": "engine",
+      "bytes": 2036,
+      "sha256": "ac300e24ef31732ea9c2c61391bb417e55d5032d80e7906b367aa658bc43eb9a",
+      "git_blob": "af2ff1ce23245ede56e96d21e3ccf92481a3aa78"
+    },
+    {
+      "path": "assets/js/image-enhancer-photo-worker.js",
+      "role": "engine",
+      "bytes": 2505,
+      "sha256": "f6517152d88c2634d0258ba4a37e876ee00cb77ebe3469d7a9ba0a0cd3cb7f1f",
+      "git_blob": "b684273b12624ec6f7578a95d53b1976df0756ff"
+    },
+    {
+      "path": "assets/js/image-enhancer-photo.js",
+      "role": "engine",
+      "bytes": 16210,
+      "sha256": "6c66053ef931d532da6201f71ffc0cdb0088990f0ecb13eac412c5fd92b92ab3",
+      "git_blob": "92c931f3f464c116969ceb0b4c98d070d4a40071"
+    },
+    {
+      "path": "assets/js/image-enhancer-portrait.js",
+      "role": "engine",
+      "bytes": 766,
+      "sha256": "ad8b357f0506ad821b7204a47fb0863b33b4aed41c2f7b3fb9e9898c95695a2f",
+      "git_blob": "58a368490eb60d06bfc23753ec475935aa10f45c"
+    },
+    {
+      "path": "assets/js/image-enhancer.js",
+      "role": "integration-reference-only",
+      "bytes": 72384,
+      "sha256": "1a42cc8a486e2c10f181f55d0af38441b49f32cf73fe4b71ac114acbfbb7ce37",
+      "git_blob": "91c38bb1b37ff396e82110fff0ebc21c94a6df51"
+    },
+    {
+      "path": "tests/image-enhancer-photo.test.mjs",
+      "role": "test",
+      "bytes": 12473,
+      "sha256": "2832abaf4d5be5c44420957a3995686dc90e1b504828a4db5c99051667474236",
+      "git_blob": "33588a5cfff157256fa01500f13aab1eb24f5842"
+    },
+    {
+      "path": "tests/image-enhancer-photo-lifecycle.test.mjs",
+      "role": "test",
+      "bytes": 2172,
+      "sha256": "0709268759ce7d6e17356cdf7254f145824a5541973efc38dca265239e73f86e",
+      "git_blob": "45437e2f8d8b74b2544b2dfe0d066ed08fadc3c1"
+    }
+  ]
+}
