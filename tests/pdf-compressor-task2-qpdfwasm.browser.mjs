@@ -1,12 +1,14 @@
 // Task 2 research ONLY: trial third-party qpdf WASM inside disposable CI
 // browsers. Package lives only in CI node_modules; NOT production/repository.
 // Candidate failure is reported, not hidden or transformed into a success.
-import {chromium,webkit} from 'playwright';
+import {chromium,firefox,webkit} from 'playwright';
 import assert from 'node:assert/strict';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 const BASE=process.env.PDF_COMPRESSOR_BASE_URL||'http://127.0.0.1:8765/';
 const trials=[
-  ['chromium',chromium,{width:1280,height:800}],
+  ['chromium-desktop',chromium,{width:1280,height:800}],
+  ['chromium-mobile-viewport',chromium,{width:360,height:780}],
+  ['firefox-desktop',firefox,{width:1280,height:800}],
   ['webkit-mobile-viewport',webkit,{width:390,height:844}]
 ];
 const results=[];
