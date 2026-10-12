@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {chromium, firefox, webkit} from 'playwright';
+import axe from 'axe-core';
 
 const require = createRequire(import.meta.url);
 const PDF = require('../assets/vendor/pdf-lib.js');
@@ -60,6 +61,23 @@ async function run(engineName, engine, viewport) {
     assert.ok(previewGeometry.width > 0 && previewGeometry.height > 0,
       'PDF thumbnail had no rasterized pixels');
     trace.pdfjsThumbnail = 'PASS';
+
+    // Automated WCAG A/AA scan of this tool only — not the unrelated site shell.
+    await page.addScriptTag({content: axe.source});
+    const violations = await page.evaluate(async () => {
+      const result = await window.axe.run(document.querySelector('#workspace'), {
+        runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']}
+      });
+      return result.violations.map(item => ({
+        id: item.id, impact: item.impact,
+        nodes: item.nodes.slice(0, 3).map(node => ({
+          target: node.target, summary: node.failureSummary
+        }))
+      }));
+    });
+    assert.deepEqual(violations, [], 'Organizer accessibility scanner violations: ' +
+      JSON.stringify(violations));
+    trace.wcagWorkspace = 'PASS';
 
     // All four original pages must begin in original order.
     const keys = () => page.locator('.pdf-organizer-grid > li')
