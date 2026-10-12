@@ -149,23 +149,54 @@ function pinInheritedPageAttributes(page, PDF) {
   }
 }
 
-export async function buildOrganizedPdf(sourceBytes, plan, PDF) {
+export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
+  // Cooperative cancellation is optional so existing Task 1 callers remain unchanged.
+  const signal = options.signal;
+  const progress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const check = () => {
+    if (signal?.aborted) {
+      const error = Error('Operation cancelled.');
+      error.name = 'AbortError';
+      throw error;
+    }
+  };
+  const checkpoint = async (index, total, start, span, message) => {
+    if (index % 16 !== 0 && index !== total - 1) return;
+    progress(start + Math.round(span * (index + 1) / Math.max(total, 1)), message);
+    // Yield to the browser event loop so the Cancel control can respond.
+    if (typeof setTimeout === 'function') await new Promise(resolve => setTimeout(resolve, 0));
+    check();
+  };
+  check();
+  progress(5, 'Checking PDF integrity…');
   // Load a fresh copy for each export. All changes happen within the same PDF,
   // retaining original PDF page refs and document-level objects where supported.
   const doc = await PDF.PDFDocument.load(sourceBytes, {updateMetadata: false});
+  check();
   const kept = assertSupportedTransformation(doc, plan, PDF);
+  progress(16, 'Preparing original PDF pages…');
   const sourcePages = doc.getPages().slice();
   const sourceRefs = sourcePages.map(page => page.ref.toString());
   const sourceDimensions = sourcePages.map(page => [page.getWidth(), page.getHeight()]);
   // Capture inherited attributes BEFORE detaching pages from their page trees.
   for (const page of sourcePages) pinInheritedPageAttributes(page, PDF);
-  for (let i = sourcePages.length - 1; i >= 0; i--) doc.removePage(i);
-  for (const item of kept) {
+  for (let i = sourcePages.length - 1; i >= 0; i--) {
+    doc.removePage(i);
+    await checkpoint(sourcePages.length - i - 1, sourcePages.length, 20, 23,
+      'Preparing page order…');
+  }
+  for (let i = 0; i < kept.length; i++) {
+    const item = kept[i];
     const page = sourcePages[item.index];
     doc.insertPage(doc.getPageCount(), page);
     page.setRotation(PDF.degrees(item.rotation));
+    await checkpoint(i, kept.length, 44, 26, 'Organizing PDF pages…');
   }
+  check();
+  progress(73, 'Saving organized PDF…');
   const bytes = await doc.save({updateFieldAppearances: false});
+  check();
+  progress(87, 'Verifying organized PDF…');
   // Fail closed if the PDF writer produces a different order, shape or rotation.
   const output = await PDF.PDFDocument.load(bytes, {updateMetadata: false});
   const outputPages = output.getPages();
@@ -186,5 +217,7 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF) {
       throw Error('Export validation failed: document metadata was not preserved.');
     }
   }
+  check();
+  progress(100, 'Organized PDF verified.');
   return bytes;
 }
