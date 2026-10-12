@@ -98,6 +98,7 @@ export async function readPdfFile(file, signal, onProgress = () => {}) {
 
 export function organizerErrorMessage(error) {
   const message = String(error?.message || 'Unable to process this PDF.');
+  if (message.startsWith('This file does not have a valid PDF header')) return message;
   if (/encrypted|password|EncryptedPDFError/i.test(message)) {
     return 'This PDF is password-protected or encrypted. Open an unlocked copy in a trusted PDF application, then try again.';
   }
