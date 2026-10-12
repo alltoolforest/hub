@@ -60,6 +60,33 @@ Run `node tests/pdf-compressor-task2-browser.mjs` against the existing PDF Optim
 
 The CI output is the **evidence record** and should be attached by run URL. These experiments do not prove real-world PDF compression performance; synthetic samples and one-trial elapsed times are insufficient. Do not interpret qpdf native availability as a working qpdf-WASM candidate.
 
+## Measured feasibility results — GitHub Actions on 2026-10-12
+
+**Benchmark provenance:** CI run [38266049932](https://github.com/alltoolforest/hub/actions/runs/38266049932); Node v22.23.3, Ubuntu Linux x64, qpdf CLI **11.9.0**. Tested nine Task 1 **synthetic** well-formed PDFs, one timed trial per reference. Every output was reopened with the vendored pdf-lib; the comparison profile checked pages, geometry, metadata, form fields/values, outlines, attachments, tagging and the synthetic signature permission marker.
+
+| Reference variant | Sample PDFs preserving all measured profile fields | Average byte-size change vs source | Representative scanned-like and image-heavy results |
+| --- | ---: | ---: | --- |
+| Existing page-copy rebuild | **0/9** | **−8.49%** (misleading due to field loss) | Approximately 0% change; metadata still lost |
+| Existing pdf-lib, in-place save with object streams | **9/9** | **0.00%** | 0% change — safe *synthetic baseline*, NOT compression |
+| Existing pdf-lib, in-place classic serialization | **9/9** | **+46.21%** | Larger files on most document types; reject as default |
+| Native qpdf CLI (object streams, flate recompression level 9) | **9/9** | **−4.44%** (not guaranteed) | Scanned-like **−19.10%**, image-heavy **−19.34%**, mixed **−18.81%**; some text/bookmark PDFs became larger |
+
+The native qpdf image-heavy benchmark took roughly **0.65 s** on a CI runner versus a few milliseconds for in-place pdf-lib serialization; this is **not** directly comparable computational cost because subprocess startup and aggressive flate recompression differ. The qpdf CLI proof does **not** constitute an approved JavaScript/WASM implementation. It optimizes Flate streams on synthetic generated raster inputs and **does not demonstrate downsampling of genuine scans**.
+
+**Browser codec and off-thread probe:** CI run [38265911380](https://github.com/alltoolforest/hub/actions/runs/38265911380), Chromium desktop + 360 px mobile viewport, Firefox desktop, WebKit 390 px mobile viewport. **4/4** supported minimal WASM instantiation, Blob Workers, worker WASM, PNG/JPEG encoding and decoding, and OffscreenCanvas in worker. All four also encoded WebP in the tested environment, **but WebP is not a standard PDF embedded-image format and is not a directly selectable PDF output codec**. A synthetic 640 × 900 px page-like raster required **2,304,000 bytes** before encoding; JPEG was actually **larger than PNG** for this mostly text-line synthetic input in all four browsers. This proves why the future pipeline must choose transformations based on content and real measured output size.
+
+**Performance caveat:** CI WebKit took roughly 255 ms for PNG and 161 ms for JPEG on that test raster, compared with approximately 16 ms/11 ms on Chromium desktop in the same infrastructure. CI device emulation has desktop-class memory and is **not** physical iOS/Android profiling. Scaling decoded images to 8 MP would use at least 32 MB for a single RGBA surface before copies and PDF object buffers. All future memory/cancellation limits remain Task 10 work.
+
+**Package metadata (unpacked published npm size, not true downloaded bytes or runtime heap):**
+- Existing vendored pdf-lib JS asset: **525,099 bytes**.
+- `@neslinesli93/qpdf-wasm@0.3.0`: **1,381,642 bytes** (wrapper ISC; upstream qpdf Apache-2.0).
+- `qpdf-wasm-esm-embedded@1.1.1`: **1,763,814 bytes** (Apache-2.0, older community build).
+- `mupdf@1.28.1`: **14,324,000 bytes** (AGPL-3.0-or-later / commercial).
+
+**Security/licensing dependency:** No additional package was placed in repository production dependencies. Community qpdf-WASM packages need maintenance, supply-chain, version and browser compatibility assessment; MuPDF/Ghostscript cannot be selected without determining a legally compatible AGPL or commercial licensing approach.
+
+**Research-only conclusion from measurements:** It is feasible to preserve measured PDF structures in-place, and to obtain genuine structural savings through a PDF-aware qpdf-type optimizer on suitable files. Browser-native image encoding and workers are available on the tested engines. **No end-to-end browser PDF compressor or preservation of arbitrary real PDFs was implemented or proven in Task 2.** Browser qpdf-WASM trial is a separate candidate feasibility check; do not interpret a failed or absent trial as an approved engine.
+
 ## Risks, stop conditions and downstream dependencies
 
 1. If in-place pdf-lib loses structural content on representative PDFs or a qpdf WASM candidate cannot be licensed/supported, reject that path before it is shipped; do not force a workaround by dropping PDF features.
