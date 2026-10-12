@@ -7,6 +7,7 @@ on:
     paths:
       - 'tests/pdf-compressor-task2-benchmark.mjs'
       - 'tests/pdf-compressor-task2-browser.mjs'
+      - 'tests/pdf-compressor-task2-qpdfwasm.browser.mjs'
       - 'docs/pdf-compressor-task2-architecture.md'
       - '.github/workflows/pdf-compressor-task2.yml'
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              tests/pdf-compressor-task2-benchmark.mjs|tests/pdf-compressor-task2-browser.mjs|docs/pdf-compressor-task2-architecture.md|.github/workflows/pdf-compressor-task2.yml) ;;
+              tests/pdf-compressor-task2-benchmark.mjs|tests/pdf-compressor-task2-browser.mjs|tests/pdf-compressor-task2-qpdfwasm.browser.mjs|docs/pdf-compressor-task2-architecture.md|.github/workflows/pdf-compressor-task2.yml) ;;
               *) echo "TASK 2 OUT-OF-SCOPE: $path"; exit 1 ;;
             esac
           done <<< "$changed"
@@ -46,6 +47,7 @@ jobs:
         run: |
           node --check tests/pdf-compressor-task2-benchmark.mjs
           node --check tests/pdf-compressor-task2-browser.mjs
+          node --check tests/pdf-compressor-task2-qpdfwasm.browser.mjs
       - name: Install native qpdf reference binary in CI only
         run: |
           sudo apt-get update -qq
@@ -65,8 +67,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install temporary browser-test dependency only
-        run: npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1
+      - name: Install temporary browser-test and qpdf WASM research dependencies only
+        run: npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1 qpdf-wasm-esm-embedded@1.1.1
       - name: Install browser binaries in CI only
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Start local nonproduction static server
@@ -82,3 +84,7 @@ jobs:
         env:
           PDF_COMPRESSOR_BASE_URL: http://127.0.0.1:8765/
         run: node tests/pdf-compressor-task2-browser.mjs
+      - name: Trial isolated third-party qpdf WASM candidate with synthetic inputs
+        env:
+          PDF_COMPRESSOR_BASE_URL: http://127.0.0.1:8765/
+        run: node tests/pdf-compressor-task2-qpdfwasm.browser.mjs
