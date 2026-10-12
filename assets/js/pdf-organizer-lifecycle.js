@@ -238,9 +238,9 @@ export class OrganizerSession {
           this.limits.maxPages + '. Split the PDF into smaller documents.');
       }
       const plan = initialPlan(doc);
+      const tagged = Boolean(doc.catalog.get(PDF.PDFName.of('StructTreeRoot')));
       doc = null; // Do not retain the parsed PDF for the whole session.
       this.assertCurrent(id, signal);
-      const tagged = Boolean(doc.catalog.get(PDF.PDFName.of('StructTreeRoot')));
       const next = {bytes, filename: file.name, pageCount, plan, tagged};
       this.record = next; // Atomic commit: old document remains until success.
       this.documentId++;
