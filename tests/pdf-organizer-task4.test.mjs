@@ -218,8 +218,8 @@ test('rejected preview loading task releases worker transport', async () => {
       return loading;
     }
   });
-  const open = new Function('load', 'url', expression +
-    '; return openPreviewDocument;')(load, name => '/hub/' + name);
+  const open = new Function('load', 'url', 'ensurePdfPreviewCompatibility', expression +
+    '; return openPreviewDocument;')(load, name => '/hub/' + name, () => {});
   await assert.rejects(open(new ArrayBuffer(8)), /Broken PDF preview/);
   assert.equal(destroyed, 1);
   assert.equal(usedLocalData, true);

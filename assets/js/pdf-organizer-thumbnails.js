@@ -221,6 +221,10 @@ export class OrganizerThumbnails {
       if (valid()) {
         slot.state = 'error';
         slot.holder.textContent = 'Preview unavailable';
+        // Diagnostic text is kept out of the UI and does not include PDF data.
+        // Task 5: identify browser-specific PDF.js/canvas failures.
+        console.warn('PDF Organizer preview render failure:', String(error?.name || 'Error'),
+          String(error?.message || 'Unknown error').slice(0, 180));
         this.onError('Some page previews could not be displayed. PDF export is unaffected.');
       }
     } finally {
