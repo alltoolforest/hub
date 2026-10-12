@@ -14,12 +14,20 @@ test('bounded opaque RGB raster yields candidate, not committed PDF',async()=>{
 test('alpha, unsafe profiles, and lack of savings preserve original',async()=>{
   const transparent=rgba.slice();transparent[3]=0;
   assert.equal((await encodeRasterCandidate({descriptor,rgba:transparent})).status,'preserve');
+  let calls=0;
+  const preserved=await encodeRasterCandidate({descriptor,rgba:transparent,
+    encodeJpeg:async()=>{calls++;throw new Error('must not encode alpha');}});
+  assert.equal(preserved.reason,'alpha-detected');
+  assert.equal(calls,0);
+  assert.equal(transparent[3],0);
   assert.equal((await encodeRasterCandidate({descriptor:{...descriptor,colorSpace:'/ICCBased'},rgba})).status,'preserve');
   const r=await encodeRasterCandidate({descriptor:{...descriptor,streamBytes:4},
     rgba,encodeJpeg:async()=>fakeJpeg});
   assert.equal(r.status,'preserve');
 });
 test('codec errors, malformed buffer, cancel fail closed',async()=>{
+  await assert.rejects(encodeRasterCandidate({descriptor,rgba}),
+    e=>e.code==='codec-unavailable');
   await assert.rejects(encodeRasterCandidate({descriptor,rgba:new Uint8Array(2)}),
     e=>e.code==='invalid-rgba-buffer');
   await assert.rejects(encodeRasterCandidate({descriptor,rgba,encodeJpeg:async()=>new Uint8Array(4)}),

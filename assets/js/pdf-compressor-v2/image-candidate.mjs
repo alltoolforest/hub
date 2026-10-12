@@ -12,12 +12,12 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
   if(!(rgba instanceof Uint8Array||rgba instanceof Uint8ClampedArray)||
     rgba.byteLength!==decision.pixels*4)
     throw new ImageCandidateError('invalid-rgba-buffer');
-  if(typeof encodeJpeg!=='function')throw new ImageCandidateError('codec-unavailable');
   // JPEG loses detail; transparent input or decode failures must never be
   // mistaken for valid PDF image replacement candidates.
   for(let i=3;i<rgba.length;i+=4){
     if(rgba[i]!==255)return {status:'preserve',reason:'alpha-detected'};
   }
+  if(typeof encodeJpeg!=='function')throw new ImageCandidateError('codec-unavailable');
   const inputBytes=descriptor.streamBytes;
   if(!Number.isSafeInteger(inputBytes)||inputBytes<1)
     throw new ImageCandidateError('invalid-source-size');

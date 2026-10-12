@@ -39,7 +39,8 @@ function profile(bytes){
 const contexts=[['chromium',chromium],['firefox',firefox],['webkit',webkit]];
 const report=[];
 for(const [name,engine] of contexts){
-  const browser=await engine.launch({headless:true});
+  console.log(JSON.stringify({event:'browser-start',browser:name}));
+  const browser=await engine.launch({headless:true,timeout:30000});
   try{
     const page=await browser.newPage();
     await page.goto('http://127.0.0.1:8765/documents/pdf-compressor/');
@@ -57,11 +58,16 @@ for(const [name,engine] of contexts){
         },Array.from(input));
         return new Uint8Array(raw);
       };
+      const started=performance.now();
       const result=await optimizeLosslessly(bytes,{optimize,inspect:profile});
       assert.ok(result.outputBytes<=bytes.length);
       const checked=await profile(result.bytes);
       assert.equal(checked.fingerprint,(await profile(bytes)).fingerprint);
-      report.push({browser:name,fixture:id,status:result.status,savedBytes:result.savedBytes});
+      const row={browser:name,fixture:id,status:result.status,
+        inputBytes:bytes.length,outputBytes:result.outputBytes,
+        savedBytes:result.savedBytes,elapsedMs:Math.round(performance.now()-started)};
+      report.push(row);
+      console.log(JSON.stringify({event:'fixture-verified',...row}));
       await page.reload();
     }
     const signed=await buildFixture('signed-marker');
