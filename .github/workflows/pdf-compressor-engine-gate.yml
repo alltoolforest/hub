@@ -1,0 +1,27 @@
+name: PDF Compressor experimental browser engine gate
+on:
+  push:
+    branches:
+      - pdf-compressor-engine-validation-20261012
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experimental-browser-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install disposable browser test dependencies
+        run: npm install --no-save --no-package-lock playwright@1.56.1 qpdf-wasm-esm-embedded@1.1.1
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start isolated static server
+        run: python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-pdf-gate.log 2>&1 &
+      - name: Run actual browser WASM output gate
+        run: node tests/pdf-compressor-engine-browser-gate.mjs
+      - name: Preservation regression
+        run: node --test tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
