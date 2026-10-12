@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install isolated QA-only browser dependency
-        run: npm install --no-save --ignore-scripts playwright@1.56.1
+        run: npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
       - name: Install supported test browsers
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Start local nonproduction static host
