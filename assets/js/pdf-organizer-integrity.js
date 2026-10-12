@@ -165,22 +165,35 @@ function containsSignature(document, PDF) {
   return false;
 }
 
-function containsInternalDestinations(document, PDF) {
+function containsInternalDestinations(document, kept, PDF) {
   const name = PDF.PDFName.of;
-  for (const page of document.getPages()) {
+  const pages = document.getPages();
+  const keptIndices = new Set(kept.map(item => item.index));
+  const retainedRefs = new Set(kept.map(item => pages[item.index].ref.toString()));
+  const invalidDestination = target => {
+    const destination = document.context.lookup(target);
+    // Explicit page destinations contain a PDF page ref as their first item.
+    if (destination instanceof PDF.PDFArray && destination.size() > 0) {
+      return !retainedRefs.has(destination.get(0).toString());
+    }
+    // Unknown named/remote destinations need a full destination resolver.
+    return true;
+  };
+  for (const [index, page] of pages.entries()) {
+    if (!keptIndices.has(index)) continue; // The entire page and its links go away.
     const annots = page.node.Annots();
     if (!annots) continue;
     for (let i = 0; i < annots.size(); i++) {
       const annot = document.context.lookup(annots.get(i));
       if (!annot || typeof annot.get !== 'function') continue;
-      if (annot.get(name('Dest'))) return true;
-      const action = document.context.lookup(annot.get(name('A')));
-      if (action && typeof action.get === 'function') {
-        const type = action.get(name('S'));
-        if (type && (type.toString() === '/GoTo' || type.toString() === '/Named')) {
-          return true;
-        }
+      if (annot.get(name('Dest')) && invalidDestination(annot.get(name('Dest')))) {
+        return true;
       }
+      const action = document.context.lookup(annot.get(name('A')));
+      if (!action || typeof action.get !== 'function') continue;
+      const type = action.get(name('S'))?.toString();
+      if (type === '/Named') return true;
+      if (type === '/GoTo' && invalidDestination(action.get(name('D')))) return true;
     }
   }
   return false;
@@ -205,7 +218,7 @@ export function assertSupportedTransformation(document, plan, PDF) {
     // destination arrays or names. Preserve these until targeted repair exists.
     if (document.catalog.get(name('Outlines'))) features.push('Outlines');
     if (document.catalog.get(name('OpenAction'))) features.push('OpenAction');
-    if (containsInternalDestinations(document, PDF)) features.push('internal page links');
+    if (containsInternalDestinations(document, kept, PDF)) features.push('internal page links');
     if (features.length) {
       throw Error('Cannot safely remove pages because this document has page navigation or tagging (' +
         [...new Set(features)].join(', ') + '). Use an editor that can repair these references.');
