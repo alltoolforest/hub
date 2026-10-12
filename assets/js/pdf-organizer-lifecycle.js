@@ -143,6 +143,7 @@ export class OrganizerSession {
       documentId: this.documentId,
       filename: this.record?.filename || null,
       tagged: this.record?.tagged === true,
+      bookmarked: this.record?.bookmarked === true,
       pageCount: this.record?.pageCount || 0,
       plan: this.record?.plan.map(page => ({...page})) || [],
       limits: this.limits
@@ -239,9 +240,10 @@ export class OrganizerSession {
       }
       const plan = initialPlan(doc);
       const tagged = Boolean(doc.catalog.get(PDF.PDFName.of('StructTreeRoot')));
+      const bookmarked = Boolean(doc.catalog.get(PDF.PDFName.of('Outlines')));
       doc = null; // Do not retain the parsed PDF for the whole session.
       this.assertCurrent(id, signal);
-      const next = {bytes, filename: file.name, pageCount, plan, tagged};
+      const next = {bytes, filename: file.name, pageCount, plan, tagged, bookmarked};
       this.record = next; // Atomic commit: old document remains until success.
       this.documentId++;
       this.revision++;
@@ -292,7 +294,7 @@ export class OrganizerSession {
     return true;
   }
 
-  async exportPdf({allowUntagged = false} = {}) {
+  async exportPdf({allowUntagged = false, allowBookmarkDiscard = false} = {}) {
     if (this.disposed || this.active || !this.record) {
       this.emit('Open a PDF and finish any current operation before exporting.', true);
       return false;
@@ -306,8 +308,11 @@ export class OrganizerSession {
       const PDF = await this.loadPdfLibrary();
       this.assertCurrent(id, signal);
       let accessibilityTagsRemoved = false;
+      let bookmarksChanged = 0;
       const bytes = await this.exporter(record.bytes, plan, PDF, {
         signal, allowUntagged: allowUntagged === true,
+        allowBookmarkDiscard: allowBookmarkDiscard === true,
+        onBookmarkCleanupApplied: count => { bookmarksChanged = count; },
         onTagFallbackApplied: () => { accessibilityTagsRemoved = true; },
         onProgress: (p, message) => this.progress(id, signal, p, message)
       });
@@ -318,9 +323,11 @@ export class OrganizerSession {
       this.onResult(new Blob([bytes], {type: 'application/pdf'}),
         record.filename, revision);
       this.phase = 'ready';
-      this.emit(accessibilityTagsRemoved ?
-        'PDF created. Accessibility tagging was removed with your permission; review the result before using it.' :
-        'Organized PDF ready. Review the result before using it.', false, 100);
+      const notices = [];
+      if (accessibilityTagsRemoved) notices.push('Accessibility tagging was removed with your permission.');
+      if (bookmarksChanged < 0) notices.push('Unsupported bookmarks were removed with your permission.');
+      else if(bookmarksChanged > 0) notices.push(bookmarksChanged + ' bookmark(s) pointing to removed pages were removed.');
+      this.emit('Organized PDF ready. ' + notices.join(' ') + ' Review the result before using it.', false, 100);
     });
   }
 
