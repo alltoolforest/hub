@@ -16,5 +16,7 @@ jobs:
           node-version: '22'
       - name: Run Task 3 image inventory probe
         run: node --test tests/pdf-compressor-task3-image-inventory.test.mjs
+      - name: Task 3 eligibility policy tests
+        run: node --test tests/pdf-compressor-task3-policy.test.mjs
       - name: Task 1 regression
         run: node --test tests/pdf-compressor-task1-baseline.test.mjs
