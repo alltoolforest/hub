@@ -39,7 +39,7 @@ export async function mount(root) {
   const grid = el('ul', {class: 'pdf-organizer-grid', 'aria-label': 'PDF pages', 'aria-describedby': 'pdf-organizer-help'});
   const feedback = el('p', {class: 'pdf-organizer-announcement', role: 'status', 'aria-live': 'polite'});
   root.append(current, help, grid, feedback);
-  notice(root, 'Your PDF stays in this browser. Original page content is used for export. Some documents with forms, bookmarks, internal navigation, or digital signatures cannot be changed safely.');
+  notice(root, 'Your PDF stays in this browser. Pages are removed from the exported file. Bookmarks targeting removed pages are repaired where possible; complex navigation, forms, or digital signatures may require special handling.');
 
   const tagOption = el('div', {class: 'pdf-organizer-tag-option', hidden: true});
   const tagLabel = el('label', {class: 'check-row'});
@@ -57,6 +57,23 @@ export async function mount(root) {
     status(allowUntagged.checked ?
       'If required, accessibility tags may be removed from the exported PDF.' :
       'Accessibility tags will be preserved or export will stop safely.');
+  });
+  const bookmarkOption = el('div', {class: 'pdf-organizer-tag-option', hidden: true});
+  const bookmarkLabel = el('label', {class: 'check-row'});
+  const allowBookmarkDiscard = el('input', {type:'checkbox',
+    'aria-describedby':'pdf-organizer-bookmark-disclosure'});
+  bookmarkLabel.append(allowBookmarkDiscard, el('strong', {
+    text:'Allow removing unsupported bookmarks if they cannot be repaired'
+  }));
+  bookmarkOption.append(bookmarkLabel, el('p',{
+    id:'pdf-organizer-bookmark-disclosure',
+    text:'We keep bookmarks pointing to remaining pages and remove bookmarks pointing to deleted pages. For complex bookmark structures that cannot be repaired, this option allows exporting without bookmarks. The original PDF stays unchanged.'
+  }));
+  allowBookmarkDiscard.addEventListener('change', () => {
+    clearOutputs();
+    status(allowBookmarkDiscard.checked ?
+      'Complex bookmarks may be omitted in the exported PDF.' :
+      'Bookmarks will be repaired or export will stop for your review.');
   });
   const actions = el('div', {class: 'actions'});
   const makeButton = (label, onClick, primary = false, accessibleName = label) => {
@@ -79,12 +96,12 @@ export async function mount(root) {
 
   const exportButton = makeButton('Create PDF', () => {
     clearOutputs();
-    void session.exportPdf({allowUntagged: allowUntagged.checked});
+    void session.exportPdf({allowUntagged: allowUntagged.checked, allowBookmarkDiscard: allowBookmarkDiscard.checked});
   }, true, 'Save the current organized PDF');
   const resetButton = makeButton('Reset', () => session.reset());
   const cancelButton = makeButton('Cancel processing', () => session.cancel());
   actions.append(exportButton, resetButton, cancelButton);
-  root.append(tagOption, actions);
+  root.append(tagOption, bookmarkOption, actions);
   setupStatus(root);
   downloads(root);
 
@@ -227,6 +244,7 @@ export async function mount(root) {
     if (view.documentId !== documentId) {
       documentId = view.documentId;
       allowUntagged.checked = false;
+      allowBookmarkDiscard.checked = false;
       cards.clear();
       renderer.close();
       if (view.filename) {
@@ -294,6 +312,7 @@ export async function mount(root) {
       draw(view);
     }
     tagOption.hidden = !(view.tagged && view.plan.some(page => !page.keep));
+    bookmarkOption.hidden = !(view.bookmarked && view.plan.some(page => !page.keep));
     current.textContent = view.filename ?
       'Selected: ' + view.filename + ' · ' + view.pageCount + ' original pages' :
       'No PDF selected.';
