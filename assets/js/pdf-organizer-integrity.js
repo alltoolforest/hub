@@ -337,6 +337,127 @@ function applyTaggedRemoval(document, strategy, PDF) {
   return false;
 }
 
+// PDF outlines are a doubly linked tree. Page removal cannot simply delete
+// /Outlines: preserve bookmarks targeting retained pages, splice away deleted
+// destinations, and promote any still-valid children to their former level.
+// Unknown/named targets require explicit permission to discard bookmarks.
+function planOutlineRemoval(document, kept, PDF, allowDiscard = false) {
+  const N=PDF.PDFName.of,C=document.context;
+  const rootRef=document.catalog.get(N('Outlines'));
+  if(!rootRef)return {mode:'none',removed:0};
+  const all=new Set(document.getPages().map(p=>p.ref.toString()));
+  const retained=new Set(kept.map(k=>document.getPage(k.index).ref.toString()));
+  const removed=new Set([...all].filter(x=>!retained.has(x)));
+  const fail=() => {throw Error('unsupported PDF outline structure');};
+  const resolve=obj=>obj instanceof PDF.PDFRef?C.lookup(obj):obj;
+  const visited=new Set();
+  let dropped=0, root=null, top=[];
+  const destinationKind=value=>{
+    const array=resolve(value);
+    if(!(array instanceof PDF.PDFArray)||array.size()<1)return 'unknown';
+    const page=array.get(0);
+    if(!(page instanceof PDF.PDFRef))return 'unknown';
+    const id=page.toString();
+    if(removed.has(id))return 'deleted';
+    return retained.has(id)?'kept':'unknown';
+  };
+  const kind=node=>{
+    const dest=node.get(N('Dest')),action=node.get(N('A'));
+    if(dest!==undefined && action!==undefined)return 'unknown';
+    if(dest!==undefined)return destinationKind(dest);
+    if(action!==undefined){
+      const dict=resolve(action);
+      if(!(dict instanceof PDF.PDFDict))return 'unknown';
+      const type=dict.get(N('S'))?.toString();
+      if(type==='/GoTo')return destinationKind(dict.get(N('D')));
+      // External URI / GoToR destinations do not point into this PDF.
+      if(type==='/URI'||type==='/GoToR')return 'kept';
+      return 'unknown';
+    }
+    return 'kept'; // Section headings without a direct destination.
+  };
+  try{
+    if(!(rootRef instanceof PDF.PDFRef))fail();
+    root=resolve(rootRef);
+    if(!(root instanceof PDF.PDFDict))fail();
+    if(root.get(N('First'))===undefined && root.get(N('Last'))!==undefined)fail();
+    const parse=(first,depth)=>{
+      if(depth>64)fail();
+      const items=[];
+      let ref=first, siblings=0;
+      while(ref!==undefined){
+        if(++siblings>10000 || !(ref instanceof PDF.PDFRef))fail();
+        const id=ref.toString();
+        if(visited.has(id))fail();
+        visited.add(id);
+        const node=resolve(ref);
+        if(!(node instanceof PDF.PDFDict))fail();
+        const children=node.get(N('First'))===undefined?[]:
+          parse(node.get(N('First')),depth+1);
+        if(node.get(N('Last'))!==undefined && node.get(N('First'))===undefined)fail();
+        const target=kind(node);
+        if(target==='unknown')fail();
+        if(target==='deleted'){
+          dropped++;
+          items.push(...children); // Promote still-valid nested bookmarks.
+        }else{
+          items.push({ref,node,children});
+        }
+        ref=node.get(N('Next'));
+      }
+      return items;
+    };
+    top=root.get(N('First'))===undefined?[]:parse(root.get(N('First')),0);
+  }catch {
+    if(allowDiscard)return {mode:'discard',removed:null};
+    throw Error('Some bookmarks use destinations or structures that cannot be updated safely. Enable "Allow removing unsupported bookmarks" to create the PDF without those bookmarks.');
+  }
+  return {mode:dropped?'repair':'preserve',removed:dropped,rootRef,root,top};
+}
+function applyOutlineRemoval(document,strategy,PDF){
+  if(strategy.mode==='none'||strategy.mode==='preserve')return 0;
+  const N=PDF.PDFName.of,C=document.context;
+  if(strategy.mode==='discard'){
+    document.catalog.delete(N('Outlines'));
+    if(document.catalog.get(N('PageMode'))?.toString()==='/UseOutlines')
+      document.catalog.set(N('PageMode'),N('UseNone'));
+    return -1;
+  }
+  // Rebuild only surviving linked references, removing stale Prev, Next,
+  // Parent, First, Last and Count entries from the reachable outline tree.
+  const descendants=items=>items.reduce((n,item)=>1+descendants(item.children)+n,0);
+  const visible=items=>items.reduce((n,item)=>{
+    const old=item.node.get(N('Count'));
+    const open=!(old instanceof PDF.PDFNumber)||old.asNumber()>=0;
+    return n+1+(open?visible(item.children):0);
+  },0);
+  const link=(parentRef,parent,items)=>{
+    if(!items.length){
+      for(const k of ['First','Last','Count'])parent.delete(N(k));
+      return;
+    }
+    parent.set(N('First'),items[0].ref);
+    parent.set(N('Last'),items[items.length-1].ref);
+    for(let i=0;i<items.length;i++){
+      const item=items[i];
+      item.node.set(N('Parent'),parentRef);
+      if(i)item.node.set(N('Prev'),items[i-1].ref);
+      else item.node.delete(N('Prev'));
+      if(i+1<items.length)item.node.set(N('Next'),items[i+1].ref);
+      else item.node.delete(N('Next'));
+      if(item.children.length){
+        const wasClosed=item.node.get(N('Count'))?.asNumber?.()<0;
+        link(item.ref,item.node,item.children);
+        item.node.set(N('Count'),PDF.PDFNumber.of(
+          wasClosed?-descendants(item.children):visible(item.children)));
+      }else for(const k of ['First','Last','Count'])item.node.delete(N(k));
+    }
+    parent.set(N('Count'),PDF.PDFNumber.of(visible(items)));
+  };
+  link(strategy.rootRef,strategy.root,strategy.top);
+  return strategy.removed;
+}
+
 function containsSignature(document, PDF) {
   const name = PDF.PDFName.of;
   if (document.catalog.get(name('Perms'))) return true;
@@ -417,9 +538,9 @@ export function assertSupportedTransformation(document, plan, PDF) {
   if (removed) {
     assertSafeNameTrees(document, PDF);
     const features = unsupportedRemovalEntries.filter(item => Boolean(document.catalog.get(name(item))));
-    // Outlines and document-level opening actions can reference pages by
-    // destination arrays or names. Preserve these until targeted repair exists.
-    if (document.catalog.get(name('Outlines'))) features.push('Outlines');
+    // Bookmark destinations are validated and repaired by the organizer's
+    // outline reconciler; an /Outlines catalog entry is not itself unsafe.
+    // Document-level OpenAction still needs separate destination repair.
     if (document.catalog.get(name('OpenAction'))) features.push('OpenAction');
     if (containsInternalDestinations(document, kept, PDF)) features.push('internal page links');
     if (features.length) {
@@ -473,6 +594,11 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
   check();
   const kept = assertSupportedTransformation(doc, plan, PDF);
   const removedSome=kept.length < doc.getPageCount();
+  let bookmarkChanges=0;
+  if(removedSome && doc.catalog.get(PDF.PDFName.of('Outlines'))) {
+    const bookmarkStrategy=planOutlineRemoval(doc,kept,PDF,options.allowBookmarkDiscard===true);
+    bookmarkChanges=applyOutlineRemoval(doc,bookmarkStrategy,PDF);
+  }
   let droppedAccessibilityTags=false;
   if(removedSome && doc.catalog.get(PDF.PDFName.of('StructTreeRoot'))) {
     const strategy=taggedRemovalStrategy(doc,kept,PDF);
@@ -528,6 +654,17 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
         Math.abs(page.getHeight() - height) > 0.01) {
       throw Error('Export validation failed: page order, dimensions or rotation changed unexpectedly.');
     }
+  }
+  if(bookmarkChanges!==0) {
+    const outputStrategy=planOutlineRemoval(output,
+      output.getPages().map((_,index)=>({index})),PDF);
+    if(outputStrategy.mode!=='preserve' && outputStrategy.mode!=='none') {
+      throw Error('Export validation failed: invalid bookmark references remain.');
+    }
+    if(bookmarkChanges<0 && output.catalog.get(PDF.PDFName.of('Outlines'))) {
+      throw Error('Export validation failed: bookmark cleanup is incomplete.');
+    }
+    options.onBookmarkCleanupApplied?.(bookmarkChanges);
   }
   // Document-level metadata must not be silently discarded.
   for (const method of ['getTitle', 'getAuthor', 'getSubject', 'getCreator', 'getKeywords']) {
