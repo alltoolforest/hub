@@ -1,0 +1,1040 @@
+{
+  "status": "offline opt-in; not deployed or accepted",
+  "records": [
+    {
+      "id": "astronaut-original",
+      "kind": "baseline",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "3779ab4a6a6de0adb4454fb2ad176627e842cf7b9ea551203931fb8898aa6709",
+      "source_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "output_sha256": "e10a77b5000c515a0e1cee9875d672f661fe9731ec650471ad5839b9f45597b4",
+      "noise": 1.6551724137931096,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 53236,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.4800300598144531,
+        "meanLumaShift": 0.0392189025878622,
+        "newClippedLowChannels": 571,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.28710937500000017
+      },
+      "processingMs": 112.215294,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "astronaut-original",
+      "kind": "brighter",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "6d9155a5ab741da955e42d8e43d3d899e70ec501cbce103a05f53cd31e9ee6c0",
+      "source_sha256": "0df3c62c654dd5432e753a8d273e73ad3fb7d5826848b395afaead620b89bdd0",
+      "output_sha256": "fb9e241f35d53d90e18932340ed32c266ab71ad5659d903b37a1006072beb913",
+      "noise": 1.5,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 49576,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.4806175231933594,
+        "meanLumaShift": 0.002780914306526938,
+        "newClippedLowChannels": 144,
+        "newClippedHighChannels": 677,
+        "maxRowShiftJump": 0.3730468749999998
+      },
+      "processingMs": 156.89347199999997,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "astronaut-noise",
+      "kind": "baseline",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "69d7e1bf60e7ed8a266463f9eebe58ffd5f221bfcb3dcf541b646e62de5e698c",
+      "source_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+      "output_sha256": "019d09dfd7d6f067dace6ab42009b58dffb19a5f1fd4c84d01d2c66ad2031d53",
+      "noise": 6.485013262599513,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 29960,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.29067230224609375,
+        "meanLumaShift": 0.007553100585909078,
+        "newClippedLowChannels": 341,
+        "newClippedHighChannels": 8,
+        "maxRowShiftJump": 0.30859374999999944
+      },
+      "processingMs": 63.850393999999994,
+      "referenceMetrics": {
+        "before": {
+          "mse": 33.22769546508789,
+          "gradientMAE": 4.538121669367661
+        },
+        "after": {
+          "mse": 34.66934076944987,
+          "gradientMAE": 4.653470167257828
+        }
+      }
+    },
+    {
+      "id": "astronaut-noise",
+      "kind": "brighter",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "1164cb4d69858b942b17011ea40681fda4671add4e3c9fdd624c7cfb7b5c7f2c",
+      "source_sha256": "825c2049872c094465660ee0c2012f2cfcbf1a4820d1a9c899ba8f96d54512f4",
+      "output_sha256": "3afa361c29936e6e6d04a78900b5c7aaea640fe00a4c9ac58a7750f8692adee6",
+      "noise": 1.5,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 35706,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.36565399169921875,
+        "meanLumaShift": -0.007484436035269937,
+        "newClippedLowChannels": 90,
+        "newClippedHighChannels": 412,
+        "maxRowShiftJump": 0.29882812499999944
+      },
+      "processingMs": 57.841990999999894,
+      "referenceMetrics": {
+        "before": {
+          "mse": 714.0005302429199,
+          "gradientMAE": 5.170333967175268
+        },
+        "after": {
+          "mse": 720.7513364156088,
+          "gradientMAE": 5.352010343918176
+        }
+      }
+    },
+    {
+      "id": "astronaut-underexposure",
+      "kind": "baseline",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "250f7e9693475c8fe55cc15317fe4ead887b8c9824740a2ba8e805a0434f0869",
+      "source_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+      "output_sha256": "dc19156b92bd5e1a778257890524c6b22df953c369cb5920ad272aa309ce2153",
+      "noise": 1.1622679045092867,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 47712,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.4055900573730469,
+        "meanLumaShift": 0.036891937255859375,
+        "newClippedLowChannels": 31,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3515624999999997
+      },
+      "processingMs": 60.49645300000009,
+      "referenceMetrics": {
+        "before": {
+          "mse": 875.1016133626302,
+          "gradientMAE": 1.9213182022841244
+        },
+        "after": {
+          "mse": 867.109910329183,
+          "gradientMAE": 1.9260082509020302
+        }
+      }
+    },
+    {
+      "id": "astronaut-underexposure",
+      "kind": "brighter",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "5d00f6112475ce2c153dda70780bb67db602c78de27ffcddfd2a769d82d57e6f",
+      "source_sha256": "3148107f4330a7a72d6bd32c7fa3c59316379bd415dbe619dcc61d02f0d48674",
+      "output_sha256": "d9488ed0be7c9ae4c6413a2df03994e4a74889523219be6221e76f93ae0694ae",
+      "noise": 1.5,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 47236,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.43866729736328125,
+        "meanLumaShift": 0.053085327148352235,
+        "newClippedLowChannels": 38,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3281250000000001
+      },
+      "processingMs": 58.90239599999995,
+      "referenceMetrics": {
+        "before": {
+          "mse": 200.2012939453125,
+          "gradientMAE": 1.2096419272107393
+        },
+        "after": {
+          "mse": 198.7555923461914,
+          "gradientMAE": 1.3921299905974807
+        }
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "kind": "baseline",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "6aea86d1e3a4aaf2a3e4fdad707f734504ae032cd6649e7fa99e500a8613cc2a",
+      "source_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+      "output_sha256": "f7f130bee345a484ed4c35da50e028150620645d2c27d73571bf53097ba4fcbe",
+      "noise": 0.669628647214853,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 54812,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.47777557373046875,
+        "meanLumaShift": 0.03945922851573869,
+        "newClippedLowChannels": 477,
+        "newClippedHighChannels": 39,
+        "maxRowShiftJump": 0.337890625
+      },
+      "processingMs": 60.840431999999964,
+      "referenceMetrics": {
+        "before": {
+          "mse": 50.2151730855306,
+          "gradientMAE": 3.898148044581702
+        },
+        "after": {
+          "mse": 52.07597986857096,
+          "gradientMAE": 3.990075400562622
+        }
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "kind": "brighter",
+      "width": 512,
+      "height": 512,
+      "input_sha256": "7543fb1fac795c4bd7d2531c9601f12de178258fe86d83d948757522e510b717",
+      "source_sha256": "6df72c9e82076e03de5572d925f09596ed68adba3ac51d8095d12baa18aa80d8",
+      "output_sha256": "9c210d568c5920268e0c59dd1b8ff851e09ae92319a1bff382345bda8597067e",
+      "noise": 1.5,
+      "faceAnnotations": [
+        {
+          "x": 160,
+          "y": 50,
+          "width": 135,
+          "height": 145
+        }
+      ],
+      "changedPixels": 49349,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.4631805419921875,
+        "meanLumaShift": -0.008529663085994343,
+        "newClippedLowChannels": 423,
+        "newClippedHighChannels": 509,
+        "maxRowShiftJump": 0.39648437499999994
+      },
+      "processingMs": 65.948755,
+      "referenceMetrics": {
+        "before": {
+          "mse": 733.8926188151041,
+          "gradientMAE": 4.387870382445572
+        },
+        "after": {
+          "mse": 741.4337972005209,
+          "gradientMAE": 4.534181295483734
+        }
+      }
+    },
+    {
+      "id": "coffee-original",
+      "kind": "baseline",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "0a7671733110929112e13890726c0eb26b86e92f983180a78d825cca64cdb487",
+      "source_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "output_sha256": "f241d9773d3cd55cf6340e67abbceda7a1a281b33087af8931fe283990064096",
+      "noise": 1.5595490716179976,
+      "faceAnnotations": [],
+      "changedPixels": 39787,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.3788666666666667,
+        "meanLumaShift": -0.041075,
+        "newClippedLowChannels": 729,
+        "newClippedHighChannels": 86,
+        "maxRowShiftJump": 0.3149999999999996
+      },
+      "processingMs": 72.80057199999999,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "coffee-original",
+      "kind": "brighter",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "7c8207069af958e1a205b777e43a167e1ca32722020e9f2d7fc8ceaf38b3444d",
+      "source_sha256": "2c9022e5a85bd6baa1679a11f91fa94fd1d69ba879414f5da7c55066ea3b28fc",
+      "output_sha256": "39d53626ce4ca5a46f4d3d3b05974f909543007fef3ecbf4bd90884d8eb29cc8",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 35592,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.3489041666666667,
+        "meanLumaShift": -0.1104458333333799,
+        "newClippedLowChannels": 201,
+        "newClippedHighChannels": 459,
+        "maxRowShiftJump": 0.3099999999999995
+      },
+      "processingMs": 57.57498899999996,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "coffee-noise",
+      "kind": "baseline",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "4ad48aa4cb503583ff303cf2dc6cf9cc5d6e6558f7841e0a2466ae5cfd13e3d9",
+      "source_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+      "output_sha256": "583bc49ac1cc93322069f18d6452e3d74b446fb66368a7834b58673c3ab91b13",
+      "noise": 6.620888594164469,
+      "faceAnnotations": [],
+      "changedPixels": 19969,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.207075,
+        "meanLumaShift": -0.024433333333379898,
+        "newClippedLowChannels": 389,
+        "newClippedHighChannels": 152,
+        "maxRowShiftJump": 0.28166666666666657
+      },
+      "processingMs": 50.959486999999854,
+      "referenceMetrics": {
+        "before": {
+          "mse": 30.844377777777776,
+          "gradientMAE": 4.814766621758556
+        },
+        "after": {
+          "mse": 31.5885,
+          "gradientMAE": 4.887112785900129
+        }
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "kind": "brighter",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "47df7f879b14ad7d4f4fbc216551a9633ac4c13e8fd22752c9806de1c8135349",
+      "source_sha256": "169f713df855c16a933fa0a7f67f2fad8fd15b3c9e46ccdb774c59219a0f19ab",
+      "output_sha256": "4031068827c19bf1f9f0873000afe27f50294501876e6c2ab879e2957f867b8f",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 22355,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.23568333333333333,
+        "meanLumaShift": -0.08018333333331781,
+        "newClippedLowChannels": 73,
+        "newClippedHighChannels": 314,
+        "maxRowShiftJump": 0.3266666666666661
+      },
+      "processingMs": 93.95273600000019,
+      "referenceMetrics": {
+        "before": {
+          "mse": 701.3866583333333,
+          "gradientMAE": 5.747852513100711
+        },
+        "after": {
+          "mse": 700.2968833333333,
+          "gradientMAE": 5.865415348272252
+        }
+      }
+    },
+    {
+      "id": "coffee-underexposure",
+      "kind": "baseline",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "9edcb1f5cd57cac264066085ac2270198dc1dc28a577be98709cd1b2cd9543d6",
+      "source_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+      "output_sha256": "bc32e93bd54f77007c9ff949d57cda57faa2c0258f5f9623d232c2e0e31f9c0c",
+      "noise": 1.2318302387267939,
+      "faceAnnotations": [],
+      "changedPixels": 33674,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.3083416666666667,
+        "meanLumaShift": -0.02425833333330229,
+        "newClippedLowChannels": 12,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3016666666666662
+      },
+      "processingMs": 54.3099380000001,
+      "referenceMetrics": {
+        "before": {
+          "mse": 368.0469166666667,
+          "gradientMAE": 2.2683233158884972
+        },
+        "after": {
+          "mse": 363.63648611111114,
+          "gradientMAE": 2.275300042220884
+        }
+      }
+    },
+    {
+      "id": "coffee-underexposure",
+      "kind": "brighter",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "68261c5d690508421503b78ab8acb180fef1fa12283a79f688ea1404985e5e09",
+      "source_sha256": "ddcffdb737744c95ecc4914ef49ab6bcf0f43c6d3ae96b45545b81498f252b1c",
+      "output_sha256": "ba109aa7206843644d8a2ea65fd5facc89fb10c8bf33f95971b050a8caf47b21",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 33720,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.3358791666666667,
+        "meanLumaShift": -0.028462499999968957,
+        "newClippedLowChannels": 54,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.31999999999999984
+      },
+      "processingMs": 48.61875699999996,
+      "referenceMetrics": {
+        "before": {
+          "mse": 202.11903194444446,
+          "gradientMAE": 1.4044514128350931
+        },
+        "after": {
+          "mse": 201.16174166666667,
+          "gradientMAE": 1.5262884391383302
+        }
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "kind": "baseline",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "8d09d5ec5d7153d08c27b361a16ba4e1fc79ddef189bd8a2986b5358e0592710",
+      "source_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+      "output_sha256": "c5037fe3d89708dd08d95ee23bc60cc55576def654be54c10e3f219f2d09939d",
+      "noise": 0.8763262599469592,
+      "faceAnnotations": [],
+      "changedPixels": 39715,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.357525,
+        "meanLumaShift": -0.0228416666667598,
+        "newClippedLowChannels": 669,
+        "newClippedHighChannels": 352,
+        "maxRowShiftJump": 0.3083333333333332
+      },
+      "processingMs": 50.29653099999996,
+      "referenceMetrics": {
+        "before": {
+          "mse": 63.823566666666665,
+          "gradientMAE": 5.6334451576764675
+        },
+        "after": {
+          "mse": 65.51957222222222,
+          "gradientMAE": 5.693157144674429
+        }
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "kind": "brighter",
+      "width": 600,
+      "height": 400,
+      "input_sha256": "b9d1e705beb96f82d4ecc5748f07a3488ee45f5de5ff50af35b566faeee2fc5f",
+      "source_sha256": "a1db7a6d3fcac55cfdc8863b625d3f9039bd4e134d06be3bbe2d04b8877ed079",
+      "output_sha256": "450794505dbd0ef2c6d25cbba825ed0cb4741f8fe75346d51bddc38e3903a9f6",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 36111,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.33918333333333334,
+        "meanLumaShift": -0.08599999999993792,
+        "newClippedLowChannels": 680,
+        "newClippedHighChannels": 396,
+        "maxRowShiftJump": 0.32666666666666655
+      },
+      "processingMs": 66.32162100000005,
+      "referenceMetrics": {
+        "before": {
+          "mse": 745.1922402777777,
+          "gradientMAE": 6.215818046656708
+        },
+        "after": {
+          "mse": 745.3681986111111,
+          "gradientMAE": 6.325700687981083
+        }
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "kind": "baseline",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "f90a73c8dce85299ca6ae3676d3550dea2f7333fecfb8440a7dc3802e4a7b7e8",
+      "source_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "output_sha256": "26ececd3288e282e450993a45537d8264dff1f90ff0eac085f75c6493752c910",
+      "noise": 1.1630636604774451,
+      "faceAnnotations": [],
+      "changedPixels": 26701,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.3822690317812269,
+        "meanLumaShift": 0.0077383592017876025,
+        "newClippedLowChannels": 77,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3924611973392459
+      },
+      "processingMs": 33.10129400000005,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "chelsea-original",
+      "kind": "brighter",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "dff350346cd3e4859e5810668f6010fd69f1f10f96936dcb8e3bf2d2620e537b",
+      "source_sha256": "64fe24103e06b43e8610a29557ae4ffb479e8ed4d420c82d7a144f4c688270f7",
+      "output_sha256": "eee0516fe2711c52999304c9df2e0f55756f9495afcf819b59b9a883a2287e5a",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 27174,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.42046563192904657,
+        "meanLumaShift": 0.016474501108702518,
+        "newClippedLowChannels": 29,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.39024390243902474
+      },
+      "processingMs": 31.57742200000007,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "chelsea-noise",
+      "kind": "baseline",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "e8c56ad0618ebc7f96da4cf7888d10a95d211e085faade8e4ad926446cebfc35",
+      "source_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+      "output_sha256": "08054ad5fb37df02ed638584acd5d508bb29f087ccf8b3bc4f018a1969828e0d",
+      "noise": 6.646949602121989,
+      "faceAnnotations": [],
+      "changedPixels": 7367,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.11331116038433112,
+        "meanLumaShift": -0.001958610495209628,
+        "newClippedLowChannels": 26,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.23946784922394643
+      },
+      "processingMs": 29.359224999999924,
+      "referenceMetrics": {
+        "before": {
+          "mse": 54.6250110864745,
+          "gradientMAE": 5.102865111464554
+        },
+        "after": {
+          "mse": 55.23843064794284,
+          "gradientMAE": 5.14502193582608
+        }
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "kind": "brighter",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "66f17ee7cf81665a61490aa5b7ff660af1ffcaa15b7816fdbb7820889e537345",
+      "source_sha256": "0c6c345abe9d9e4e3c2ca270797b6c2f9cf9308ce22dddc5d8a5d679732459e3",
+      "output_sha256": "3e95cabbdb0924d1e73e248fe994fecc2716de8117f2c1caa44bde9f6f059587",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 13113,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.21300073909830008,
+        "meanLumaShift": 0.00503325942353086,
+        "newClippedLowChannels": 7,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.2860310421286029
+      },
+      "processingMs": 29.849351999999953,
+      "referenceMetrics": {
+        "before": {
+          "mse": 1021.5955530918945,
+          "gradientMAE": 6.033643072621782
+        },
+        "after": {
+          "mse": 1025.459049026854,
+          "gradientMAE": 6.149854724320178
+        }
+      }
+    },
+    {
+      "id": "chelsea-underexposure",
+      "kind": "baseline",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "fea36237ec74a8e56f57d669af513b6b4ff14c07d0e8df625e8d7ba627fa32a3",
+      "source_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+      "output_sha256": "e6ddbe349991a3e4be86d116b24f6e2d5b48257dba6b05384e6fb8bb0b24d696",
+      "noise": 0.9521220159151385,
+      "faceAnnotations": [],
+      "changedPixels": 18647,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.24239467849223947,
+        "meanLumaShift": 0.00882483370285495,
+        "newClippedLowChannels": 7,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.2594235033259426
+      },
+      "processingMs": 30.583887999999888,
+      "referenceMetrics": {
+        "before": {
+          "mse": 628.5363291451097,
+          "gradientMAE": 1.5291064723420082
+        },
+        "after": {
+          "mse": 626.3590539541759,
+          "gradientMAE": 1.5087129338208474
+        }
+      }
+    },
+    {
+      "id": "chelsea-underexposure",
+      "kind": "brighter",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "53d748c2f280e8f78e5223a1f879a4f82d3ef1f0169a28361085db5d74e0a554",
+      "source_sha256": "3c92fd64477a811bc769c3eb7dd626e1e9ae02e9856390eb3fce4528dde0faf8",
+      "output_sha256": "6c008e6b6f7a854b6db2bcdbfc00d1549be6efbfa0784bc64ac05a2d7c71662b",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 18298,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.2679970436067997,
+        "meanLumaShift": 0.010243902439051924,
+        "newClippedLowChannels": 3,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3059866962305981
+      },
+      "processingMs": 30.71781800000008,
+      "referenceMetrics": {
+        "before": {
+          "mse": 111.7339960581424,
+          "gradientMAE": 0.8200238811374814
+        },
+        "after": {
+          "mse": 111.760007390983,
+          "gradientMAE": 0.9867349210036032
+        }
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "kind": "baseline",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "2dcf5a7ec036b5d74448b588c7df1013e9a5eb816da072ef52bcc930a24fc342",
+      "source_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+      "output_sha256": "f47c026b263bf80acb472eb732ef3b71055e0fc78f79617b3a8d410e1248ec6e",
+      "noise": 0.9946949602122016,
+      "faceAnnotations": [],
+      "changedPixels": 28937,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.39000739098300075,
+        "meanLumaShift": 0.02301552106434285,
+        "newClippedLowChannels": 148,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3281596452328169
+      },
+      "processingMs": 32.05282599999987,
+      "referenceMetrics": {
+        "before": {
+          "mse": 65.4480610987928,
+          "gradientMAE": 4.030729016634574
+        },
+        "after": {
+          "mse": 68.38573540280858,
+          "gradientMAE": 4.188015323015168
+        }
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "kind": "brighter",
+      "width": 451,
+      "height": 300,
+      "input_sha256": "3ecb299724230483f428fb1fbae90c42e302cd7ec3d3279eac8ca4fc3bded009",
+      "source_sha256": "11439735811bc62470258878b523ba4571f98eb5d6105021cd730a21174273b6",
+      "output_sha256": "2f7f2b19b83e87256c785511e64908cec19ecfe863245b6b68afe56a187860db",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 28856,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.42692535107169255,
+        "meanLumaShift": 0.022342941611316895,
+        "newClippedLowChannels": 153,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.3237250554323721
+      },
+      "processingMs": 36.06207799999993,
+      "referenceMetrics": {
+        "before": {
+          "mse": 1064.3719167282582,
+          "gradientMAE": 4.604235427054167
+        },
+        "after": {
+          "mse": 1072.988824833703,
+          "gradientMAE": 4.798042748730731
+        }
+      }
+    },
+    {
+      "id": "alpha-diagnostic",
+      "kind": "baseline",
+      "width": 129,
+      "height": 97,
+      "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "source_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "output_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "noise": 0,
+      "faceAnnotations": [],
+      "changedPixels": 0,
+      "maxDelta": 0,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 129,
+        "height": 97,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      },
+      "processingMs": 3.701667999999927,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "alpha-diagnostic",
+      "kind": "brighter",
+      "width": 129,
+      "height": 97,
+      "input_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "source_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "output_sha256": "a1bdf032a0c832ee94486ee63795aef97ecfb81fe1ca82b1e6a8fa4d140b2817",
+      "noise": 1.5,
+      "faceAnnotations": [],
+      "changedPixels": 0,
+      "maxDelta": 0,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 129,
+        "height": 97,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      },
+      "processingMs": 1.5988450000002103,
+      "referenceMetrics": {}
+    },
+    {
+      "id": "user-print-portrait",
+      "kind": "brighter",
+      "width": 1102,
+      "height": 1470,
+      "input_sha256": "e67e14febd022f14843da370834920968edf0e4bf4c6ef05c9c48858d60037cf",
+      "source_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+      "output_sha256": "26b926741485a93314cb2d771107a9732b8755aee7a512cbf5c028e5c56d805a",
+      "noise": 1.5,
+      "faceAnnotations": [
+        {
+          "x": 205,
+          "y": 230,
+          "width": 535,
+          "height": 575
+        }
+      ],
+      "changedPixels": 6621,
+      "maxDelta": 4,
+      "protectedPixelsChanged": 0,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 1102,
+        "height": 1470,
+        "alphaPreserved": true,
+        "meanChange": 0.006300233341975629,
+        "meanLumaShift": -0.002119831598756378,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.04809437386569872
+      },
+      "processingMs": 361.398641,
+      "referenceMetrics": {}
+    }
+  ],
+  "limits": [
+    "Source guide coherence is heuristic and may mistake JPEG/print artifacts for structure",
+    "Face regions are manually annotated for these known diagnostic cases, not detected",
+    "No held-out, phone-editor, mobile or blinded quality validation"
+  ],
+  "controlledSoftness": {
+    "generator": "Pillow GaussianBlur encoded RGB, radii 0.8 and 1.6; calibration not optical ground truth",
+    "limitations": "Synthetic blur on three calibration scenes; not proof of recovered facial detail or real-photo preference",
+    "results": [
+      {
+        "id": "astronaut-blur-0-8",
+        "input_sha256": "f85fa30dc872fd54546fd4c08d8d0520aed54230eec8e70fb23732199e1e57a9",
+        "output_sha256": "a9b79c17ff979cb06892788f903797de86940f027b3aa596e1a49c49cb96ecf0",
+        "beforeMSE": 40.878335316975914,
+        "afterMSE": 34.35916010538737
+      },
+      {
+        "id": "astronaut-blur-1-6",
+        "input_sha256": "cbd9219dee35dffb65bbf40c84d8b85c900e2fdfbd779ea1cb1c0c1ae30b012f",
+        "output_sha256": "3603782f0072b8aaedbb81a0e0ce1cdffcb071b544ef873174448951a4a1a915",
+        "beforeMSE": 156.65913772583008,
+        "afterMSE": 144.02409744262695
+      },
+      {
+        "id": "coffee-blur-0-8",
+        "input_sha256": "d3a81f39a18ea04da6783dafb5ad10241f9831de8a079dba6a7fb1473a2a95d4",
+        "output_sha256": "46369fe2687060966444223ba4f78c8a41ad459d8a8583077c5813fd8e2de317",
+        "beforeMSE": 55.786947222222224,
+        "afterMSE": 50.372822222222226
+      },
+      {
+        "id": "coffee-blur-1-6",
+        "input_sha256": "5d50c53ca5d74990fc64d239179e5d3881ea096e6f7b5c02d94caf78ce85da71",
+        "output_sha256": "daaa075410fdf6958908a40607187013f3cfe8e533519fa49a8f053fa523077c",
+        "beforeMSE": 150.75389583333333,
+        "afterMSE": 144.7615236111111
+      },
+      {
+        "id": "chelsea-blur-0-8",
+        "input_sha256": "675dea365212f914f548a0310fa53eda39f4dfecffd403ce2461ff779be3b83b",
+        "output_sha256": "20f21f8b414bf06ad5928e907f85b1c9157761f8d3ee8a059feab1bd76678a6a",
+        "beforeMSE": 16.764949494949494,
+        "afterMSE": 14.675809312638581
+      },
+      {
+        "id": "chelsea-blur-1-6",
+        "input_sha256": "1b606f014e8693568bce3d10074f2b214a0c704392ac83bc15d21dfe6b6c0d5b",
+        "output_sha256": "6d6f831d4982c9d4b8cb954ce7dc32b90fc3b7fb3efcbb0891f8a551e8682372",
+        "beforeMSE": 53.78228874106923,
+        "afterMSE": 51.466215816703624
+      }
+    ]
+  },
+  "newTargetedTestsPassed": 4
+}
