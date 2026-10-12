@@ -24,7 +24,7 @@ for(const [name,engine,viewport,isMobile] of contexts){
       externalRequests.push(r.url());
   });
   try{
-    await page.goto(new URL('documents/pdf-compressor/',BASE),{
+    await page.goto(new URL('documents/pdf-compressor/',BASE).href,{
       waitUntil:'domcontentloaded',timeout:30000
     });
     const data=await page.evaluate(async()=>{
