@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - pdf-compressor-engine-validation-20261012
+      - pdf-compressor-engine-gate-hardening-20261012
   workflow_dispatch:
 permissions:
   contents: read
