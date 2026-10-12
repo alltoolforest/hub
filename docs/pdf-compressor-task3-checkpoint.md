@@ -26,3 +26,9 @@ No user-file data used or committed. No production changes. No claims about mobi
 
 ## Unresolved issue
 Architectural sequence is inconsistent if Task 3 is required to fully implement image-resource replacement **before** Tasks 4 and 5. Defer its completion gate instead of introducing unsafe production processing or working ahead.
+
+## Continuation checkpoint (2026-10-12)
+- Added inactive isolated `assets/js/pdf-compressor-v2/image-policy.mjs` for strict quality-mode resource eligibility and memory limits, with no production imports.
+- Added `tests/pdf-compressor-task3-policy.test.mjs` with eligible candidate, unsafe mask, profiles, unsupported formats, malformed dimensions, image-bomb and signed/encrypted assertions.
+- CI workflow was extended to execute the policy tests. CI runtime results not yet verified, and no physical-device tests were performed.
+- **Still incomplete:** actual stream decoding, image recompression and reinsertion into PDF, independently verified preservation, measured PDF byte savings, quality metrics and device profiling. Do not merge/deploy or claim Task 3 PASS.
