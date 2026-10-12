@@ -12,11 +12,26 @@ function profile(bytes){
     const fields=doc.getForm().getFields().map(f=>({
       name:f.getName(),value:f.getText?.()??null
     }));
+    // Structural image invariant: qpdf may change stream compression,
+    // but must never drop image objects or alter pixel semantics metadata.
+    const images=[];
+    for(const [,stream] of doc.context.enumerateIndirectObjects()){
+      if(!(stream instanceof PDF.PDFRawStream))continue;
+      if(String(stream.dict.get(N('Subtype')))!=='/Image')continue;
+      const property=k=>String(stream.dict.get(N(k))??'');
+      images.push({
+        width:property('Width'),height:property('Height'),
+        depth:property('BitsPerComponent'),color:property('ColorSpace'),
+        mask:property('Mask'),softMask:property('SMask'),
+        decode:property('Decode'),interpolate:property('Interpolate')
+      });
+    }
+    images.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
     return {valid:true,signed:present('Perms'),encrypted:doc.isEncrypted,
       fingerprint:JSON.stringify({
         geometry:doc.getPages().map(p=>[p.getWidth(),p.getHeight(),p.getRotation().angle]),
         title:doc.getTitle(),author:doc.getAuthor(),subject:doc.getSubject(),
-        fields,outline:present('Outlines'),attachments:present('AF'),
+        fields,images,outline:present('Outlines'),attachments:present('AF'),
         names:present('Names'),tags:present('StructTreeRoot'),mark:present('MarkInfo')
       })};
   }).catch(()=>({valid:false}));
@@ -55,5 +70,11 @@ for(const [name,engine] of contexts){
   }finally{await browser.close();}
 }
 assert.equal(report.length,24);
+const compressed=report.filter(row=>row.status==='compressed');
+assert.ok(compressed.length>0,'No synthetic PDF was actually reduced in any browser');
+for(const browserName of contexts.map(x=>x[0])){
+  assert.ok(report.some(x=>x.browser===browserName&&x.savedBytes>0),
+    'No lossless reduction demonstrated in '+browserName);
+}
 console.log(JSON.stringify({scope:'Task 3–5 dependency: experimental WASM lossless integration',
   productionApproved:false,report},null,2));
