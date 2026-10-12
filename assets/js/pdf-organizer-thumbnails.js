@@ -13,6 +13,7 @@ export class OrganizerThumbnails {
     this.documentId = null;
     this.document = null;
     this.slots = new Map();
+    this.slotByHolder = new WeakMap(); // O(1) visibility lookup for long PDFs.
     this.queue = [];
     this.active = 0;
     this.clock = 0;
@@ -30,9 +31,11 @@ export class OrganizerThumbnails {
     }
     this.renderTasks.clear();
     for (const slot of this.slots.values()) {
+      this.releaseCanvas(slot);
       slot.holder.replaceChildren();
     }
     this.slots.clear();
+    this.slotByHolder = new WeakMap();
     this.queue.length = 0;
     this.active = 0; // The old generation's workers are discarded on completion.
     const previous = this.document;
@@ -65,6 +68,11 @@ export class OrganizerThumbnails {
     }
   }
 
+  releaseCanvas(slot) {
+    const canvas = slot.holder.querySelector?.('canvas');
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
+  }
+
   createObserver() {
     if (this.observer || this.disposed) return;
     const make = this.observerFactory || (typeof IntersectionObserver !== 'undefined' ?
@@ -72,10 +80,18 @@ export class OrganizerThumbnails {
     if (!make) return;
     this.observer = make(entries => {
       for (const entry of entries) {
-        const slot = [...this.slots.values()].find(s => s.holder === entry.target);
+        const slot = this.slotByHolder.get(entry.target);
         if (!slot) continue;
         slot.visible = Boolean(entry.isIntersecting);
-        if (slot.visible) this.enqueue(slot);
+        if (slot.visible) {
+          if (slot.state === 'ready') slot.lastUsed = ++this.clock;
+          else this.enqueue(slot);
+        } else if (slot.state === 'rendering') {
+          // Do not spend CPU/GPU finishing a preview that just moved offscreen.
+          slot.token++;
+          try { slot.task?.cancel(); } catch {}
+          slot.state = 'pending';
+        }
       }
       this.evict();
     }, {rootMargin: '240px 0px', threshold: 0});
@@ -90,6 +106,7 @@ export class OrganizerThumbnails {
     };
     holder.textContent = 'Preview loading…';
     this.slots.set(originalIndex, slot);
+    this.slotByHolder.set(holder, slot);
     if (this.observer) this.observer.observe(holder);
     else {
       // Modern supported browsers implement IntersectionObserver. If absent,
@@ -116,6 +133,7 @@ export class OrganizerThumbnails {
     }
     slot.task = null;
     slot.state = 'pending';
+    this.releaseCanvas(slot);
     slot.holder.textContent = 'Updating preview…';
     if (slot.visible) this.enqueue(slot);
   }
@@ -157,12 +175,26 @@ export class OrganizerThumbnails {
       if (!valid()) return;
       const rotation = slot.rotation;
       const basis = page.getViewport({scale: 1, rotation});
+      // A valid PDF can still contain extreme aspect ratios or dimensions.
+      // Enforce both a pixel-area and a per-side ceiling before allocating.
+      if (!Number.isFinite(basis.width) || !Number.isFinite(basis.height) ||
+          basis.width <= 0 || basis.height <= 0) {
+        throw Error('Invalid preview dimensions');
+      }
       const available = Math.max(100, Math.min(260,
         slot.holder.getBoundingClientRect?.().width || 180));
       const density = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
-      const scale = Math.min(available * density / Math.max(basis.width, 1),
-        Math.sqrt(400000 / Math.max(basis.width * basis.height, 1)));
+      const scale = Math.min(
+        available * density / basis.width,
+        Math.sqrt(260000 / (basis.width * basis.height)),
+        2048 / Math.max(basis.width, basis.height)
+      );
+      if (!Number.isFinite(scale) || scale <= 0) throw Error('Invalid preview scale');
       const viewport = page.getViewport({scale, rotation});
+      if (!Number.isFinite(viewport.width) || !Number.isFinite(viewport.height) ||
+          viewport.width <= 0 || viewport.height <= 0) {
+        throw Error('Invalid preview viewport');
+      }
       canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.ceil(viewport.width));
       canvas.height = Math.max(1, Math.ceil(viewport.height));
@@ -200,10 +232,9 @@ export class OrganizerThumbnails {
   evict() {
     const rendered = [...this.slots.values()].filter(s => s.state === 'ready');
     if (rendered.length <= this.maxCached) return;
-    rendered.sort((a, b) => a.lastUsed - b.lastUsed);
+    rendered.sort((a, b) => Number(a.visible) - Number(b.visible) || a.lastUsed - b.lastUsed);
     for (const slot of rendered.slice(0, rendered.length - this.maxCached)) {
-      const canvas = slot.holder.querySelector('canvas');
-      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      this.releaseCanvas(slot);
       slot.holder.textContent = 'Preview available when visible';
       slot.state = 'pending';
     }
