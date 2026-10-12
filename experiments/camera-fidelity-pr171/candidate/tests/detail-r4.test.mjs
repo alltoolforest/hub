@@ -19,5 +19,6 @@ test('strip partitions match; face interior, alpha and input are preserved',()=>
  for(let p=0;p<d.length;p+=4){assert.equal(o[p+3],d[p+3]);if(d[p+3]!==255)assert.deepEqual(o.slice(p,p+4),d.slice(p,p+4));}
 });
 test('unreviewed faces and malformed inputs are rejected',()=>{
- const d=image(()=>80);assert.throws(()=>detailStrip(d,d,w,h,0,h));assert.throws(()=>run(d,h,{noise:NaN}));assert.throws(()=>run(d,h,{faces:[{x:0,y:0,width:-1,height:3}]}));
+ const d=image(()=>80);assert.throws(()=>detailStrip(d,d,w,h,0,h));assert.throws(()=>run(d,h,{noise:NaN}));assert.throws(()=>run(d,h,{amount:2}));assert.throws(()=>run(d,h,{faces:[{x:0,y:0,width:-1,height:3}]}));
 });
+test('zero detail strength preserves every pixel',()=>{const d=image(x=>60+100/(1+Math.exp(-(x-40)/2)));assert.deepEqual(run(d,h,{amount:0}),d);});

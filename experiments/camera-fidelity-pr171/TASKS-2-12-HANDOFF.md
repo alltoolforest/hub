@@ -1,5 +1,7 @@
 # Camera-Fidelity Engine — Experimental checkpoint and release decision
 
+**Current development checkpoint:** `CONTROLS-R5-HANDOFF.md` supersedes earlier runtime-status statements below. PR171 defaults remain exact; adjustable R3 tone and guarded opt-in R4 detail are now integrated in the experimental worker/UI. JPEG detail remains withheld. Build `cf-20261012-controls-r5` is saved on the development branch but NOT deployed; the hosted page remains the previous build. 36 targeted tests and 27 retained-output comparisons pass. Photographic/device acceptance and production release remain NO-GO.
+
 Latest detail continuation, 2026-10-12: `DETAIL-R4-REVIEW.md` documents a new opt-in source-guided multiscale sharpening stage, with 4 targeted tests, 27 integrity outputs and 6 controlled-softness comparisons. It improves synthetic mild-softness error but regresses noise/JPEG references and makes only subtle changes to the supplied portrait. It remains offline; no automatic activation or production promotion.
 
 Latest continuation, 2026-10-12: `FINISH-R3-REVIEW.md` records the user's requested brighter/higher-contrast finishing experiment on retained R2 detail. Two optional offline presets and full-size review outputs are ready; 4 targeted tests and 28 integrity checks pass. Unconditional application over-brightens normal-exposure references, so no automatic default or deployment changed.

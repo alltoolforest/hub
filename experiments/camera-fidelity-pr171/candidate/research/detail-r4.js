@@ -16,12 +16,13 @@ function protection(x,y,faces){
     const t=clamp(Math.hypot(dx,dy)/12,0,1);result=Math.max(result,1-t*t*(3-2*t));}
   return result;
 }
-export function detailStrip(data,source,w,h,start,rows,{offsetY=0,noise=1,faces=[],faceReviewComplete=false}={}){
+export function detailStrip(data,source,w,h,start,rows,{offsetY=0,noise=1,faces=[],faceReviewComplete=false,amount=1}={}){
   if(!faceReviewComplete)throw new Error('Review face regions before running this offline trial');
   if(![w,h,start,rows,offsetY].every(Number.isInteger)||w<1||h<1||start<0||rows<1||offsetY<0||start+rows>h||
     !(data instanceof Uint8ClampedArray)||!(source instanceof Uint8ClampedArray)||data.length!==w*h*4||source.length!==data.length)
     throw new RangeError('Invalid aligned RGBA strips');
   if(!Number.isFinite(noise)||noise<0||noise>32)throw new RangeError('Invalid noise estimate');
+  if(!Number.isFinite(amount)||amount<0||amount>1)throw new RangeError('Invalid detail strength');
   if(!Array.isArray(faces)||faces.length>64||faces.some(f=>![f.x,f.y,f.width,f.height].every(Number.isFinite)||f.x<0||f.y<0||f.width<=0||f.height<=0))throw new RangeError('Invalid face rectangles');
   const n=w*h,lum=new Float32Array(n),guide=new Float32Array(n),alpha=new Float32Array(n);
   for(let i=0;i<n;i++){lum[i]=luminance(data,i*4);guide[i]=luminance(source,i*4);alpha[i]=data[i*4+3]===255&&source[i*4+3]===255?1:0;}
@@ -48,7 +49,7 @@ export function detailStrip(data,source,w,h,start,rows,{offsetY=0,noise=1,faces=
     // not detail. Limit total adjustment and stay inside the local envelope.
     const fineTerm=Math.sign(f)*Math.max(0,Math.abs(f)-floor*1.5);
     const edgeGate=clamp((28-Math.abs(m))/16,0,1);
-    let delta=clamp((.30*fineTerm+.40*m*edgeGate)*confidence,-4,4);
+    let delta=clamp((.30*fineTerm+.40*m*edgeGate)*confidence*amount,-4,4);
     let lo=l,hi=l;for(const j of [i-1,i+1,i-w,i+w]){lo=Math.min(lo,lum[j]);hi=Math.max(hi,lum[j]);}
     delta=clamp(delta,Math.max(lo-l,-Math.min(data[p],data[p+1],data[p+2])),Math.min(hi-l,255-Math.max(data[p],data[p+1],data[p+2])));
     for(let c=0;c<3;c++)out[q+c]=data[p+c]+delta;

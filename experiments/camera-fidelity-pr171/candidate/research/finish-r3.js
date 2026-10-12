@@ -1,4 +1,4 @@
-// Opt-in, offline photographic finishing experiment. Operates AFTER the retained
+// Opt-in photographic finishing experiment, composed by R5 controls. Operates AFTER
 // R2 output: no spatial filtering, sharpening, denoising or face reconstruction.
 export const FINISH_R3 = Object.freeze({
   balanced: Object.freeze({brightness: .10, contrast: .38}),

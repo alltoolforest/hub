@@ -1,4 +1,4 @@
-// Offline, opt-in research only. Not imported by the worker or private preview.
+// Opt-in research. R5 worker exposes this only through explicit tone controls.
 // Reduce unsupported exposure changes before rendering, not by blending finished
 // images (which would also undo denoising). No detail/denoise/geometry changes.
 export const TONE_R2 = Object.freeze({

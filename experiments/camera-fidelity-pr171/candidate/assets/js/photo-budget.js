@@ -1,10 +1,11 @@
 import {assertDimensions} from './photo-integrity.js';
-export function memoryPlan(w,h,{memoryBudgetMiB=256,retainedBytes=0}={}){
+export function memoryPlan(w,h,{memoryBudgetMiB=256,retainedBytes=0,experimentalDetail=false}={}){
  assertDimensions(w,h);
  if(!Number.isFinite(memoryBudgetMiB)||memoryBudgetMiB<64||memoryBudgetMiB>1024||!Number.isSafeInteger(retainedBytes)||retainedBytes<0)throw new Error('Invalid memory budget');
- const rows=Math.max(16,Math.min(96,Math.floor(24*1024*1024/(w*32))-20));
+ const stripBytes=experimentalDetail?80:32,haloRows=experimentalDetail?28:20;
+ const rows=Math.max(16,Math.min(96,Math.floor(24*1024*1024/(w*stripBytes))-haloRows));
  // Decode, output canvas, encoding reserve + strip floats + diagnostics + retained blobs.
- const estimatedBytes=w*h*12+w*(rows+20)*32+16*1024*1024+retainedBytes;
+ const estimatedBytes=w*h*12+w*(rows+haloRows)*stripBytes+16*1024*1024+retainedBytes;
  if(estimatedBytes>memoryBudgetMiB*1024*1024)throw new Error('This image exceeds the conservative memory budget. Try a smaller original or a device with more memory; resolution will not be silently reduced.');
  return {rows,estimatedBytes,budgetBytes:memoryBudgetMiB*1024*1024,qualification:'estimate only; browser/GPU/decoder allocations can exceed it'};
 }
