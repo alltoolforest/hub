@@ -40,3 +40,10 @@
 @media(prefers-reduced-motion:reduce){
  .pdf-organizer .pdf-page-card{transition:none}
 }
+
+/* Organizer-only tagged PDF export consent, never pre-checked. */
+.pdf-organizer .pdf-organizer-tag-option{margin:14px 0;padding:14px 16px;border:1px solid #d1dfd6;border-radius:10px;background:#f7faf7}
+.pdf-organizer .pdf-organizer-tag-option[hidden]{display:none}
+.pdf-organizer .pdf-organizer-tag-option label{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.5;cursor:pointer}
+.pdf-organizer .pdf-organizer-tag-option input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:#176147}
+.pdf-organizer .pdf-organizer-tag-option p{margin:8px 0 0 30px;font-size:13px;line-height:1.5;color:#3d5b4d}
