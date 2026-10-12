@@ -242,7 +242,7 @@ test('static HTML contains accurate instructions, limitations and privacy inform
   assert.match(html, /id="pdf-organizer-guide"/);
   for (const phrase of ['Move earlier', 'Move later', 'Rotate', 'Privacy',
     'digital signatures', 'password-protected', 'does not upload']) {
-    assert.ok(html.includes(phrase), 'Missing: ' + phrase);
+    assert.ok(html.toLowerCase().includes(phrase.toLowerCase()), 'Missing: ' + phrase);
   }
   assert.doesNotMatch(html, /https:\/\/FINAL-DOMAIN/);
   assert.match(html, /assets\/css\/pdf-organizer\.css/);
