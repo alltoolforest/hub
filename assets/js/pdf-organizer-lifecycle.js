@@ -142,6 +142,7 @@ export class OrganizerSession {
       activity: this.active?.kind || null, revision: this.revision,
       documentId: this.documentId,
       filename: this.record?.filename || null,
+      tagged: this.record?.tagged === true,
       pageCount: this.record?.pageCount || 0,
       plan: this.record?.plan.map(page => ({...page})) || [],
       limits: this.limits
@@ -237,9 +238,10 @@ export class OrganizerSession {
           this.limits.maxPages + '. Split the PDF into smaller documents.');
       }
       const plan = initialPlan(doc);
+      const tagged = Boolean(doc.catalog.get(PDF.PDFName.of('StructTreeRoot')));
       doc = null; // Do not retain the parsed PDF for the whole session.
       this.assertCurrent(id, signal);
-      const next = {bytes, filename: file.name, pageCount, plan};
+      const next = {bytes, filename: file.name, pageCount, plan, tagged};
       this.record = next; // Atomic commit: old document remains until success.
       this.documentId++;
       this.revision++;
@@ -290,7 +292,7 @@ export class OrganizerSession {
     return true;
   }
 
-  async exportPdf() {
+  async exportPdf({allowUntagged = false} = {}) {
     if (this.disposed || this.active || !this.record) {
       this.emit('Open a PDF and finish any current operation before exporting.', true);
       return false;
@@ -303,8 +305,11 @@ export class OrganizerSession {
       this.progress(id, signal, 0, 'Preparing organized PDF…');
       const PDF = await this.loadPdfLibrary();
       this.assertCurrent(id, signal);
+      let accessibilityTagsRemoved = false;
       const bytes = await this.exporter(record.bytes, plan, PDF, {
-        signal, onProgress: (p, message) => this.progress(id, signal, p, message)
+        signal, allowUntagged: allowUntagged === true,
+        onTagFallbackApplied: () => { accessibilityTagsRemoved = true; },
+        onProgress: (p, message) => this.progress(id, signal, p, message)
       });
       this.assertCurrent(id, signal);
       if (revision !== this.revision || record !== this.record) {
@@ -313,7 +318,9 @@ export class OrganizerSession {
       this.onResult(new Blob([bytes], {type: 'application/pdf'}),
         record.filename, revision);
       this.phase = 'ready';
-      this.emit('Organized PDF ready. Review the result before using it.', false, 100);
+      this.emit(accessibilityTagsRemoved ?
+        'PDF created. Accessibility tagging was removed with your permission; review the result before using it.' :
+        'Organized PDF ready. Review the result before using it.', false, 100);
     });
   }
 

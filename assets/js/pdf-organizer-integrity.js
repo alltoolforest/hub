@@ -54,7 +54,7 @@ export function changePlan(plan, operation, index) {
 // /Names commonly holds EmbeddedFiles and /AF associates those attachments
 // with the document; neither necessarily points to a PDF page.
 const unsupportedRemovalEntries = [
-  'Dests', 'StructTreeRoot', 'PageLabels', 'Threads', 'AA'
+  'Dests', 'PageLabels', 'Threads', 'AA'
 ];
 
 function assertSafeNameTrees(document, PDF) {
@@ -155,6 +155,186 @@ function pruneUnreachablePdfObjects(document, PDF) {
   for (const [ref] of objects) {
     if (!seenRefs.has(ref.toString())) context.delete(ref);
   }
+}
+
+// Tagged-PDF removal. Only the narrow, verifiable case of page-independent
+// structure subtrees and flat number trees is repaired in preserve mode.
+// Mixed-page structure, ID trees, ambiguous MCIDs and nested number trees
+// require an EXPLICIT untagged fallback; never guess or silently strip tags.
+function taggedRemovalStrategy(document, kept, PDF) {
+  const N = PDF.PDFName.of, C = document.context;
+  const root = C.lookup(document.catalog.get(N('StructTreeRoot')));
+  if (!root) return {mode:'none'};
+  if (!(root instanceof PDF.PDFDict)) return {mode:'unsupported'};
+  const pages = document.getPages();
+  // Reordering kept pages can invalidate logical reading order even if page
+  // references remain valid. Offer explicit untagging rather than claiming
+  // that the original structure order is still correct.
+  const originalOrder = kept.map(p=>p.index).slice().sort((a,b)=>a-b);
+  if(kept.some((p,i)=>p.index!==originalOrder[i])) return {mode:'unsupported'};
+  const removedRefs = new Set(pages.filter((_,i)=>!kept.some(p=>p.index===i))
+    .map(page=>String(page.ref)));
+  const keptRefs = new Set(kept.map(p=>String(pages[p.index].ref)));
+  if (root.get(N('IDTree')) || root.get(N('Namespaces')) ||
+      root.get(N('PronunciationLexicon'))) return {mode:'unsupported'};
+  const parentTree = C.lookup(root.get(N('ParentTree')));
+  if (parentTree && (!(parentTree instanceof PDF.PDFDict) ||
+      parentTree.get(N('Kids')) || parentTree.get(N('Limits')))) return {mode:'unsupported'};
+  const pairs = parentTree ? C.lookup(parentTree.get(N('Nums'))) : null;
+  if (parentTree && (!(pairs instanceof PDF.PDFArray) || pairs.size()%2)) {
+    return {mode:'unsupported'};
+  }
+  const discardedKeys = new Set(), retainedKeys = new Set();
+  for (const [i,page] of pages.entries()) {
+    const destination = kept.some(p=>p.index===i) ? retainedKeys : discardedKeys;
+    const n = page.node.get(N('StructParents'));
+    if (n !== undefined) {
+      if (!(n instanceof PDF.PDFNumber)) return {mode:'unsupported'};
+      destination.add(n.asNumber());
+    }
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    for(let j=0;j<annots.size();j++) {
+      const annot = C.lookup(annots.get(j));
+      const index = annot?.get?.(N('StructParent'));
+      if(index !== undefined) {
+        if (!(index instanceof PDF.PDFNumber)) return {mode:'unsupported'};
+        destination.add(index.asNumber());
+      }
+    }
+  }
+  for (const key of discardedKeys) if(retainedKeys.has(key)) return {mode:'unsupported'};
+  const allPages = new Set([...keptRefs,...removedRefs]);
+  const deref = value => value instanceof PDF.PDFRef ? C.lookup(value) : value;
+  const visiting = new Set(), retainedStructure = new Set();
+  // Returns page references used by marked content for one /K subtree.
+  // Empty subtrees are allowed only if they do not claim removed page content.
+  const footprint = (item,inheritedPg) => {
+    const obj=deref(item);
+    if(obj === undefined || obj === null) throw Error('Unknown structure entry');
+    if(typeof obj !== 'object') throw Error('Malformed structure item');
+    if(visiting.has(obj)) throw Error('Cyclic tagged structure');
+    if(obj instanceof PDF.PDFNumber) {
+      if(!inheritedPg || !allPages.has(inheritedPg)) throw Error('Unresolved marked content page');
+      return new Set([inheritedPg]);
+    }
+    visiting.add(obj);
+    let pagesUsed = new Set();
+    const append = set => {for (const id of set) pagesUsed.add(id);};
+    if(obj instanceof PDF.PDFArray) {
+      for (const item of obj.asArray()) append(footprint(item,inheritedPg));
+    } else if(obj instanceof PDF.PDFDict) {
+      const pg = obj.get(N('Pg'));
+      const pageRef = pg ? String(pg) : inheritedPg;
+      if(pg && !allPages.has(pageRef)) throw Error('Unknown tagged page reference');
+      const type=obj.get(N('Type'))?.toString();
+      if(type==='/MCR' || type==='/OBJR') {
+        if(!pageRef) throw Error('Unknown marked content page');
+        if(type==='/MCR' && !obj.get(N('MCID'))) throw Error('Missing MCID');
+        if(type==='/OBJR' && !obj.get(N('Obj'))) throw Error('Missing tagged object');
+        pagesUsed.add(pageRef);
+      } else if(obj.get(N('S'))) {
+        const kids=obj.get(N('K'));
+        if(kids!==undefined) append(footprint(kids,pageRef));
+        // A structure node without /K carries no marked content.
+        else if(pageRef) pagesUsed.add(pageRef);
+      } else {
+        throw Error('Unexpected structure dictionary');
+      }
+    } else throw Error('Unsupported structure item');
+    visiting.delete(obj);
+    return pagesUsed;
+  };
+  const children = root.get(N('K'));
+  const roots = children instanceof PDF.PDFArray ? children.asArray() :
+    children===undefined ? [] : [children];
+  const retained = [];
+  try {
+    for (const item of roots) {
+      const used=footprint(item,null);
+      const keep=[...used].some(id=>keptRefs.has(id));
+      const drop=[...used].some(id=>removedRefs.has(id));
+      if(keep && drop) return {mode:'unsupported'}; // Shared subtree.
+      if(keep || !drop) retained.push(item);
+    }
+    // If retained pages are tagged, the flat parent tree must still map them.
+    if(pairs) {
+      for(let i=0;i<pairs.size();i+=2) {
+        const k=deref(pairs.get(i));
+        if(!(k instanceof PDF.PDFNumber)) return {mode:'unsupported'};
+        const num=k.asNumber();
+        if(!Number.isSafeInteger(num)||num<0) return {mode:'unsupported'};
+      }
+      for(const key of retainedKeys) {
+        let found=false;
+        for(let i=0;i<pairs.size();i+=2) {
+          if(deref(pairs.get(i)).asNumber()===key) found=true;
+        }
+        if(!found) return {mode:'unsupported'};
+      }
+    } else if(retainedKeys.size || discardedKeys.size) return {mode:'unsupported'};
+    // Reject orphan references in retained parent-tree entries conservatively:
+    // the K subtree must include each referenced structure element.
+    const reachable=new Set();
+    const collect=(item)=>{
+      const obj=deref(item);
+      if(!obj || typeof obj!=='object' || reachable.has(obj)) return;
+      reachable.add(obj);
+      if(obj instanceof PDF.PDFArray) obj.asArray().forEach(collect);
+      else if(obj instanceof PDF.PDFDict && obj.get(N('S')) && obj.get(N('K'))!==undefined)
+        collect(obj.get(N('K')));
+    };
+    retained.forEach(collect);
+    if(pairs) for(let i=0;i<pairs.size();i+=2) {
+      const key=deref(pairs.get(i)).asNumber();
+      if(discardedKeys.has(key)) continue;
+      if(!retainedKeys.has(key)) return {mode:'unsupported'};
+      const value=deref(pairs.get(i+1));
+      const refs=value instanceof PDF.PDFArray ? value.asArray() : [pairs.get(i+1)];
+      for(const ref of refs) {
+        const resolved=deref(ref);
+        if(resolved!==PDF.PDFNull && !reachable.has(resolved)) return {mode:'unsupported'};
+      }
+    }
+  } catch {return {mode:'unsupported'};}
+  return {mode:'preserve',root,roots,retained,parentTree,pairs,discardedKeys};
+}
+
+function applyTaggedRemoval(document, strategy, PDF) {
+  const N=PDF.PDFName.of, C=document.context;
+  if(strategy.mode==='none') return false;
+  if(strategy.mode==='untag') {
+    document.catalog.delete(N('StructTreeRoot'));
+    document.catalog.delete(N('MarkInfo'));
+    for(const page of document.getPages()) {
+      page.node.delete(N('StructParents'));
+      // Structure navigation order is no longer applicable to this PDF.
+      if(page.node.get(N('Tabs'))?.toString()==='/S') page.node.delete(N('Tabs'));
+      const annots=page.node.Annots();
+      if(!annots) continue;
+      for(let i=0;i<annots.size();i++) {
+        C.lookup(annots.get(i))?.delete?.(N('StructParent'));
+      }
+    }
+    return true;
+  }
+  // Retain the original tag tree and all kept-page references; only remove
+  // complete subtrees that reference exclusively removed pages.
+  if(strategy.mode!=='preserve') throw Error('Tagged structure is unsupported.');
+  if(strategy.retained.length !== strategy.roots.length) {
+    strategy.root.set(N('K'),C.obj(strategy.retained));
+  }
+  if(strategy.pairs && strategy.discardedKeys.size) {
+    const next=[];
+    for(let i=0;i<strategy.pairs.size();i+=2) {
+      const key=C.lookup(strategy.pairs.get(i));
+      if(!strategy.discardedKeys.has(key.asNumber())) {
+        next.push(strategy.pairs.get(i),strategy.pairs.get(i+1));
+      }
+    }
+    strategy.parentTree.set(N('Nums'),C.obj(next));
+  }
+  return false;
 }
 
 function containsSignature(document, PDF) {
@@ -292,6 +472,17 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
   const doc = await PDF.PDFDocument.load(sourceBytes, {updateMetadata: false});
   check();
   const kept = assertSupportedTransformation(doc, plan, PDF);
+  const removedSome=kept.length < doc.getPageCount();
+  let droppedAccessibilityTags=false;
+  if(removedSome && doc.catalog.get(PDF.PDFName.of('StructTreeRoot'))) {
+    const strategy=taggedRemovalStrategy(doc,kept,PDF);
+    const requestedFallback=options.allowUntagged===true;
+    if(strategy.mode==='unsupported' && !requestedFallback) {
+      throw Error('This PDF has accessibility tags that cannot be safely repaired after page removal. To continue, explicitly enable "Allow removing accessibility tags" and create the PDF again.');
+    }
+    droppedAccessibilityTags=applyTaggedRemoval(doc,
+      strategy.mode==='unsupported' ? {mode:'untag'} : strategy,PDF);
+  }
   progress(16, 'Preparing original PDF pages…');
   const sourcePages = doc.getPages().slice();
   const sourceRefs = sourcePages.map(page => page.ref.toString());
@@ -345,6 +536,14 @@ export async function buildOrganizedPdf(sourceBytes, plan, PDF, options = {}) {
     }
   }
   check();
+  if(droppedAccessibilityTags) {
+    if(output.catalog.get(PDF.PDFName.of('StructTreeRoot')) ||
+        output.catalog.get(PDF.PDFName.of('MarkInfo')) ||
+        output.getPages().some(page=>page.node.get(PDF.PDFName.of('StructParents')))) {
+      throw Error('Accessibility tag removal validation failed.');
+    }
+    options.onTagFallbackApplied?.();
+  }
   progress(100, 'Organized PDF verified.');
   return bytes;
 }

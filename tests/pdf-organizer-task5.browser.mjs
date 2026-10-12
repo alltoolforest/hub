@@ -27,6 +27,31 @@ async function fixture() {
   return {name: 'organizer-fixture.pdf', mimeType: 'application/pdf', buffer: Buffer.from(bytes)};
 }
 const file = await fixture();
+async function taggedFixture() {
+  const document=await PDF.PDFDocument.create({updateMetadata:false});
+  for(let i=0;i<3;i++) document.addPage([300+35*i,440]).drawText('TAGGED PAGE '+i);
+  document.setTitle('Tagged browser test');
+  await document.attach(Uint8Array.from([7,8,9]),'preserve.xml',{mimeType:'application/xml'});
+  const C=document.context,N=PDF.PDFName.of;
+  const root=C.obj({Type:'StructTreeRoot'}),rootRef=C.register(root),kids=[],nums=[];
+  for(let i=0;i<3;i++){
+    const elem=C.obj({Type:'StructElem',S:'P',Pg:document.getPage(i).ref,K:0});
+    const ref=C.register(elem);kids.push(ref);nums.push(i,C.obj([ref]));
+    document.getPage(i).node.set(N('StructParents'),PDF.PDFNumber.of(i));
+  }
+  // Mixed-page structure requires a deliberate untagged output, not a
+  // silent deletion of PDF accessibility relationships.
+  const wrapper=C.obj({Type:'StructElem',S:'Sect',P:rootRef,K:C.obj(kids)});
+  const wrapperRef=C.register(wrapper);
+  for(const kid of kids) C.lookup(kid).set(N('P'),wrapperRef);
+  root.set(N('K'),wrapperRef);
+  root.set(N('ParentTree'),C.register(C.obj({Nums:nums})));
+  document.catalog.set(N('StructTreeRoot'),rootRef);
+  document.catalog.set(N('MarkInfo'),C.obj({Marked:true}));
+  const bytes=await document.save();
+  return {name:'tagged-organizer-fixture.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)};
+}
+const taggedFile=await taggedFixture();
 
 async function run(engineName, engine, viewport) {
   const browser = await engine.launch({headless: true});
@@ -173,7 +198,45 @@ async function run(engineName, engine, viewport) {
     assert.match(await page.locator('#status').innerText(), /Arrangement updated/);
     trace.bfcacheLifecycle = 'PASS';
 
-    if (viewport.width <= 400) {
+    // Tagged document with shared structure tree: fail safely until the user
+    // opts in, then remove the selected page without broken structure tags.
+    await page.locator('input[type="file"]').setInputFiles(taggedFile);
+    await page.waitForFunction(() =>
+      document.querySelectorAll('.pdf-organizer-grid > li').length === 3 &&
+      (document.querySelector('.pdf-organizer-current')?.textContent||'').includes('tagged-organizer-fixture.pdf'),{timeout:30000});
+    const tagChoice=page.getByRole('checkbox',{
+      name:/Allow removing accessibility tags if they cannot be preserved/
+    });
+    assert.equal(await tagChoice.isVisible(),false);
+    await page.getByRole('button',{name:'Remove original page 2'}).click();
+    assert.equal(await tagChoice.isVisible(),true);
+    assert.equal(await tagChoice.isChecked(),false,'Fallback consent was preselected');
+    await page.getByRole('button',{name:'Save the current organized PDF'}).click();
+    await page.waitForFunction(() =>
+      (document.querySelector('#status')?.textContent||'').includes('accessibility tags'),{timeout:30000});
+    assert.equal(await page.locator('#downloads a[download]').count(),0);
+    trace.taggedDefaultProtection='PASS';
+    await tagChoice.check();
+    await page.getByRole('button',{name:'Save the current organized PDF'}).click();
+    const taggedLink=page.locator('#downloads a[download]');
+    await taggedLink.waitFor({timeout:30000});
+    const taggedDownloadPending=page.waitForEvent('download',{timeout:15000});
+    await taggedLink.click();
+    const taggedDownload=await taggedDownloadPending;
+    const stream=await taggedDownload.createReadStream();
+    const taggedChunks=[];
+    for await(const part of stream)taggedChunks.push(part);
+    const taggedResult=await PDF.PDFDocument.load(Buffer.concat(taggedChunks),{updateMetadata:false});
+    assert.equal(taggedResult.getPageCount(),2);
+    assert.deepEqual(taggedResult.getPages().map(p=>p.getWidth()),[300,370]);
+    assert.equal(taggedResult.getTitle(),'Tagged browser test');
+    assert.equal(taggedResult.catalog.get(PDF.PDFName.of('StructTreeRoot')),undefined);
+    assert.equal(taggedResult.catalog.get(PDF.PDFName.of('MarkInfo')),undefined);
+    assert.ok(taggedResult.catalog.get(PDF.PDFName.of('AF')));
+    assert.match(await page.locator('#status').innerText(),/Accessibility tagging was removed with your permission/);
+    trace.taggedOptInExport='PASS';
+
+        if (viewport.width <= 400) {
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth > innerWidth + 2);
       assert.equal(overflow, false, 'Unexpected narrow-phone horizontal overflow');
