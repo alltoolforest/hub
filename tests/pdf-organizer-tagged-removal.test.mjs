@@ -166,10 +166,10 @@ test('XFA form restrictions remain independent of tag fallback',async()=>{
   await assert.rejects(run(d,{allowUntagged:true}),/XFA forms/);
 });
 
-test('unsupported PDF navigation is not bypassed by accessibility fallback',async()=>{
+test('unsupported document OpenAction is not bypassed by accessibility fallback',async()=>{
   const d=await taggedPdf({complex:true});
-  d.catalog.set(N('Outlines'),d.context.obj({Count:0}));
-  await assert.rejects(run(d,{allowUntagged:true}),/Outlines/);
+  d.catalog.set(N('OpenAction'),d.context.obj([d.getPage(0).ref,N('Fit')]));
+  await assert.rejects(run(d,{allowUntagged:true}),/OpenAction/);
 });
 
 test('unrelated tagged annotation data is removed from kept pages in fallback',async()=>{

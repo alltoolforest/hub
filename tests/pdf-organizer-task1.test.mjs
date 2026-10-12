@@ -110,11 +110,11 @@ test('digital-signature permission structures fail closed', async () => {
   await assert.rejects(exported(doc, initialPlan(doc)), /digital signature/);
 });
 
-test('removing pages from outline-bearing PDFs fails closed', async () => {
+test('malformed direct outline catalog fails safely without user consent', async () => {
   const doc = await fixture(2);
   doc.catalog.set(PDF.PDFName.of('Outlines'), doc.context.obj({Count: 0}));
   await assert.rejects(exported(doc, changePlan(initialPlan(doc), 'toggle', 1)),
-    /Outlines/);
+    /Allow removing unsupported bookmarks/);
 });
 
 test('removing a page retains an unplaced document form field', async () => {

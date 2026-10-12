@@ -121,10 +121,10 @@ test('signed documents remain blocked because removing pages invalidates signatu
   await assert.rejects(remove(doc,[1]),/digital signature/);
 });
 
-test('outline navigation pointing to removed pages is not silently destroyed', async () => {
+test('malformed outline structures require explicit bookmark-cleanup consent', async () => {
   const doc=await source();
   doc.catalog.set(key('Outlines'),doc.context.obj({Count:1}));
-  await assert.rejects(remove(doc,[1]),/Outlines/);
+  await assert.rejects(remove(doc,[1]),/Allow removing unsupported bookmarks/);
 });
 
 test('named destinations still require safe link repair before deletion', async () => {
