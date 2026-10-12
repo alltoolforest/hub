@@ -97,7 +97,8 @@ export async function mount(root) {
     handle.classList.add('pdf-page-grip');
     handle.setAttribute('aria-describedby', 'pdf-organizer-help');
     handle.title = 'Drag page to reorder';
-    card.draggable = true;
+    card.draggable = false;
+    handle.draggable = true; // Only the explicit grip starts a desktop drag.
     card.addEventListener('dragstart', event => {
       if (session.snapshot().busy) { event.preventDefault(); return; }
       draggedKey = String(originalIndex);
@@ -169,8 +170,9 @@ export async function mount(root) {
     controls.append(earlier, later, rotate, toggle);
     const positionBox = el('details', {class: 'pdf-page-move'});
     const summary = el('summary', {text: 'Move to position'});
-    const positionLabel = el('label', {text: 'Destination position'});
-    const positionInput = el('input', {type: 'number', min: 1, step: 1,
+    const positionInputId = 'pdf-page-destination-' + originalIndex;
+    const positionLabel = el('label', {text: 'Destination position', for: positionInputId});
+    const positionInput = el('input', {id: positionInputId, type: 'number', min: 1, step: 1,
       'aria-label': 'New position for original page ' + (originalIndex + 1)});
     const jump = makeButton('Move', () => {
       const target = Number(positionInput.value);
@@ -239,7 +241,17 @@ export async function mount(root) {
       renderer.update(item.index, item.rotation);
       nodes.push(entry.card);
     }
-    grid.replaceChildren(...nodes); // Existing cards stay alive; focus and canvases survive moves.
+    // Moving nodes with replaceChildren may temporarily drop browser focus.
+    // Restore the focused control (or its page grip if it became disabled).
+    const focused = document.activeElement;
+    const focusedKey = originalKey(focused);
+    const restoreFocus = Boolean(focused && grid.contains(focused));
+    grid.replaceChildren(...nodes);
+    if (restoreFocus && focusedKey !== undefined) {
+      const next = focused.isConnected && !focused.disabled ?
+        focused : cards.get(Number(focusedKey))?.handle;
+      next?.focus?.({preventScroll: true});
+    }
     renderedRevision = view.revision;
     feedback.textContent = view.filename ?
       count + ' pages included · ' + (view.plan.length - count) + ' removed. ' +
