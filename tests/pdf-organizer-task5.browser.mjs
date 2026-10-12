@@ -52,6 +52,36 @@ async function taggedFixture() {
   return {name:'tagged-organizer-fixture.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)};
 }
 const taggedFile=await taggedFixture();
+async function bookmarkFixture(named=false){
+  const pdf=await PDF.PDFDocument.create({updateMetadata:false});
+  for(let i=0;i<3;i++)pdf.addPage([300+40*i,440]).drawText('BOOKMARK PAGE '+i);
+  pdf.setTitle(named?'Complex bookmarked fixture':'Bookmark browser fixture');
+  await pdf.attach(Uint8Array.from([3,1,4]),'kept.xml',{mimeType:'application/xml'});
+  const C=pdf.context,N=PDF.PDFName.of;
+  const outline=C.obj({Type:'Outlines'}),outlineRef=C.register(outline);
+  const refs=[];
+  for(let i=0;i<3;i++){
+    const destination=named&&i===0?N('complexNamedDestination'):
+      C.obj([pdf.getPage(i).ref,N('Fit')]);
+    refs.push(C.register(C.obj({Title:PDF.PDFString.of('Bookmark '+i),
+      Parent:outlineRef,Dest:destination})));
+  }
+  for(let i=0;i<3;i++){
+    const dict=C.lookup(refs[i]);
+    if(i)dict.set(N('Prev'),refs[i-1]);
+    if(i!==2)dict.set(N('Next'),refs[i+1]);
+  }
+  outline.set(N('First'),refs[0]);
+  outline.set(N('Last'),refs[2]);
+  outline.set(N('Count'),PDF.PDFNumber.of(3));
+  pdf.catalog.set(N('Outlines'),outlineRef);
+  pdf.catalog.set(N('PageMode'),N('UseOutlines'));
+  const bytes=await pdf.save();
+  return {name:named?'named-bookmarks.pdf':'bookmarked-fixture.pdf',
+    mimeType:'application/pdf',buffer:Buffer.from(bytes)};
+}
+const bookmarkFile=await bookmarkFixture();
+const namedBookmarkFile=await bookmarkFixture(true);
 
 async function run(engineName, engine, viewport) {
   const browser = await engine.launch({headless: true});
@@ -236,7 +266,61 @@ async function run(engineName, engine, viewport) {
     assert.match(await page.locator('#status').innerText(),/Accessibility tagging was removed with your permission/);
     trace.taggedOptInExport='PASS';
 
-        if (viewport.width <= 400) {
+    // Real browser bookmark regression: ordinary /Outlines must not block
+    // page deletion, and surviving bookmark destinations stay valid.
+    await page.locator('input[type="file"]').setInputFiles(bookmarkFile);
+    await page.waitForFunction(() =>
+      (document.querySelector('.pdf-organizer-current')?.textContent||'').includes('bookmarked-fixture.pdf'),{timeout:30000});
+    await page.getByRole('button',{name:'Remove original page 2'}).click();
+    const bookmarkConsent=page.getByRole('checkbox',{
+      name:/Allow removing unsupported bookmarks if they cannot be repaired/
+    });
+    assert.equal(await bookmarkConsent.isVisible(),true);
+    assert.equal(await bookmarkConsent.isChecked(),false);
+    await page.getByRole('button',{name:'Save the current organized PDF'}).click();
+    const bookmarksLink=page.locator('#downloads a[download]');
+    await bookmarksLink.waitFor({timeout:30000});
+    const downloadPromise=page.waitForEvent('download',{timeout:15000});
+    await bookmarksLink.click();
+    const bookmarkDownload=await downloadPromise;
+    const br=await bookmarkDownload.createReadStream(),bc=[];
+    for await(const part of br)bc.push(part);
+    const opened=await PDF.PDFDocument.load(Buffer.concat(bc),{updateMetadata:false});
+    assert.equal(opened.getPageCount(),2);
+    assert.ok(opened.catalog.get(PDF.PDFName.of('Outlines')),
+      'Kept-page bookmarks were unexpectedly discarded');
+    assert.ok(opened.catalog.get(PDF.PDFName.of('AF')),'Attachment unexpectedly removed');
+    const r=opened.context.lookup(opened.catalog.get(PDF.PDFName.of('Outlines')));
+    let cursor=r.get(PDF.PDFName.of('First')),titles=[];
+    const pages=new Set(opened.getPages().map(p=>String(p.ref)));
+    while(cursor){
+      const node=opened.context.lookup(cursor);
+      titles.push(node.get(PDF.PDFName.of('Title')).decodeText());
+      const dest=opened.context.lookup(node.get(PDF.PDFName.of('Dest')));
+      assert.ok(pages.has(String(dest.get(0))), 'Bookmark points to deleted page');
+      cursor=node.get(PDF.PDFName.of('Next'));
+    }
+    assert.deepEqual(titles,['Bookmark 0','Bookmark 2']);
+    assert.match(await page.locator('#status').innerText(),/bookmark\(s\) pointing to removed pages were removed/);
+    trace.bookmarkRepair='PASS';
+
+    // Unresolved named destinations do NOT silently discard bookmarks.
+    await page.locator('input[type="file"]').setInputFiles(namedBookmarkFile);
+    await page.waitForFunction(() =>
+      (document.querySelector('.pdf-organizer-current')?.textContent||'').includes('named-bookmarks.pdf'),{timeout:30000});
+    await page.getByRole('button',{name:'Remove original page 2'}).click();
+    assert.equal(await bookmarkConsent.isChecked(),false);
+    await page.getByRole('button',{name:'Save the current organized PDF'}).click();
+    await page.waitForFunction(() =>
+      (document.querySelector('#status')?.textContent||'').includes('Allow removing unsupported bookmarks'),{timeout:30000});
+    assert.equal(await page.locator('#downloads a[download]').count(),0);
+    await bookmarkConsent.check();
+    await page.getByRole('button',{name:'Save the current organized PDF'}).click();
+    await page.locator('#downloads a[download]').waitFor({timeout:30000});
+    assert.match(await page.locator('#status').innerText(),/Unsupported bookmarks were removed with your permission/);
+    trace.bookmarkOptIn='PASS';
+
+            if (viewport.width <= 400) {
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth > innerWidth + 2);
       assert.equal(overflow, false, 'Unexpected narrow-phone horizontal overflow');
