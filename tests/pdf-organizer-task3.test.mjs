@@ -120,7 +120,9 @@ class FakeCanvas {
   getContext() { return {}; }
 }
 class FakeHolder {
-  constructor() { this.children = []; this.textContent = ''; this.listeners = {}; }
+  constructor() { this.children = []; this._textContent = ''; this.listeners = {}; }
+  set textContent(value) { this._textContent = String(value); this.children = []; }
+  get textContent() { return this._textContent; }
   getBoundingClientRect() { return {width: 200}; }
   replaceChildren(...children) { this.children = children; this.textContent = ''; }
   querySelector(selector) { return selector === 'canvas' ? this.children.find(x => x.tagName === 'CANVAS') : null; }
@@ -186,7 +188,7 @@ test('lazy rendering waits for visibility and uses source page IDs', async () =>
   await settle();
   assert.equal(mock.stats().calls, 1);
   assert.ok(b.querySelector('canvas'));
-  assert.equal(a.querySelector('canvas'), null);
+  assert.ok(!a.querySelector('canvas'));
   thumbnails.dispose();
 }));
 
