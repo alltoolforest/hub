@@ -96,6 +96,20 @@ export async function readPdfFile(file, signal, onProgress = () => {}) {
   });
 }
 
+export function organizerErrorMessage(error) {
+  const message = String(error?.message || 'Unable to process this PDF.');
+  if (/encrypted|password|EncryptedPDFError/i.test(message)) {
+    return 'This PDF is password-protected or encrypted. Open an unlocked copy in a trusted PDF application, then try again.';
+  }
+  if (/failed to parse|invalid pdf|missing pdf|pdf header|xref|invalid object|invalid catalog|no pdf header|unexpected object/i.test(message)) {
+    return 'This PDF appears to be damaged or unsupported. Open and resave the original with a trusted PDF application, then try again.';
+  }
+  if (/out of memory|allocation failed|quotaexceeded|insufficient memory/i.test(message)) {
+    return 'This PDF needs more device memory than is available. Try a smaller document or a more capable device.';
+  }
+  return message;
+}
+
 const isCancelled = error => error?.name === 'AbortError';
 
 export class OrganizerSession {
@@ -163,7 +177,7 @@ export class OrganizerSession {
           if (id === this.requestId) this.emit('Operation cancelled. Your previous PDF is unchanged.');
         } else {
           this.phase = 'error';
-          this.emit(error?.message || 'Unable to process this PDF.', true, 0);
+          this.emit(organizerErrorMessage(error), true, 0);
         }
         return false;
       }
