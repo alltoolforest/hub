@@ -241,7 +241,9 @@ export async function mount(root) {
       entry.earlier.disabled = view.busy || i === 0;
       entry.later.disabled = view.busy || i === view.plan.length - 1;
       entry.rotate.disabled = view.busy;
-      entry.toggle.disabled = view.busy;
+      entry.toggle.disabled = view.busy || (item.keep && count === 1);
+      entry.toggle.title = item.keep && count === 1 ?
+        'At least one page must remain in the PDF.' : '';
       entry.handle.disabled = view.busy;
       entry.positionInput.disabled = view.busy;
       entry.jump.disabled = view.busy;
@@ -264,7 +266,8 @@ export async function mount(root) {
     renderedRevision = view.revision;
     feedback.textContent = view.filename ?
       count + ' pages included · ' + (view.plan.length - count) + ' removed. ' +
-      'Arranged pages are saved in the displayed output order.' : '';
+      'Arranged pages are saved in the displayed output order.' +
+      (count === 1 ? ' At least one page must remain; restore another page to remove this one.' : '') : '';
   }
 
   function onChange(view) {
@@ -279,13 +282,16 @@ export async function mount(root) {
     exportButton.disabled = view.busy || !view.filename;
     resetButton.disabled = view.busy || !view.filename;
     cancelButton.disabled = !view.busy || view.phase === 'cancelling';
+    const included = view.plan.filter(page => page.keep).length;
     for (const [i, page] of view.plan.entries()) {
       const entry = cards.get(page.index);
       if (!entry) continue;
       entry.earlier.disabled = view.busy || i === 0;
       entry.later.disabled = view.busy || i === view.plan.length - 1;
       entry.rotate.disabled = view.busy;
-      entry.toggle.disabled = view.busy;
+      entry.toggle.disabled = view.busy || (page.keep && included === 1);
+      entry.toggle.title = page.keep && included === 1 ?
+        'At least one page must remain in the PDF.' : '';
       entry.handle.disabled = view.busy;
       entry.positionInput.disabled = view.busy;
       entry.jump.disabled = view.busy;
@@ -314,9 +320,22 @@ export async function mount(root) {
     if (file) void session.openFile(file);
   });
   onChange(session.snapshot());
-  window.addEventListener('pagehide', () => {
+  // Back/forward-cache navigation keeps this JS heap alive. Disposing its
+  // session on pagehide would leave restored page controls pointing to a dead
+  // session. A normal unload still disposes all file and preview resources.
+  window.addEventListener('pagehide', event => {
+    if (event.persisted) return;
     renderer.dispose();
     session.dispose();
     clearOutputs();
-  }, {once: true});
+  });
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    // core.js revokes Blob URLs on pagehide, including BFCache navigation.
+    // Remove stale download buttons instead of presenting broken links.
+    clearOutputs();
+    if (session.snapshot().filename) {
+      session.emit('Page restored. Your PDF edits are intact. Create PDF again for a fresh download.', false, 0);
+    }
+  });
 }
