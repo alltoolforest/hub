@@ -454,6 +454,12 @@ function applyOutlineRemoval(document,strategy,PDF){
     }
     parent.set(N('Count'),PDF.PDFNumber.of(visible(items)));
   };
+  if(!strategy.top.length) {
+    document.catalog.delete(N('Outlines'));
+    if(document.catalog.get(N('PageMode'))?.toString()==='/UseOutlines')
+      document.catalog.set(N('PageMode'),N('UseNone'));
+    return strategy.removed;
+  }
   link(strategy.rootRef,strategy.root,strategy.top);
   return strategy.removed;
 }
