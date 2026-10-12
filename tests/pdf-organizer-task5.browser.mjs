@@ -44,7 +44,7 @@ async function run(engineName, engine, viewport) {
     await page.goto(new URL('documents/pdf-organizer/', root).href, {
       waitUntil: 'domcontentloaded', timeout: 30000
     });
-    await page.locator('.pdf-organizer-grid').waitFor({timeout: 15000});
+    await page.locator('.pdf-organizer-grid').waitFor({state: 'attached', timeout: 15000});
     await page.locator('input[type="file"]').setInputFiles(file);
     await page.waitForFunction(() =>
       document.querySelectorAll('.pdf-organizer-grid > li').length === 4, {timeout: 30000});
