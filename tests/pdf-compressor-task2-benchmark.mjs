@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -16,6 +16,29 @@ const qpdfPath=process.env.QPDF_BIN||'qpdf';
 const qpdfAvailable=spawnSync(qpdfPath,['--version'],{encoding:'utf8'}).status===0;
 const qpdfVersion=qpdfAvailable?
   (spawnSync(qpdfPath,['--version'],{encoding:'utf8'}).stdout||'').split('\n')[0]:null;
+function packageMetadata(pkg){
+  const result=spawnSync('npm',
+    ['view',pkg,'version','dist.unpackedSize','license','--json'],
+    {encoding:'utf8',timeout:15000,maxBuffer:1024*200});
+  if(result.status!==0){
+    return {package:pkg,status:'unavailable',reason:String(result.stderr||'npm metadata query failed').slice(0,150)};
+  }
+  try{
+    const fields=JSON.parse(result.stdout);
+    return {package:pkg,status:'metadata-only',version:fields.version,
+      unpackedBytes:fields['dist.unpackedSize']??fields.dist?.unpackedSize??null,
+      license:fields.license??null,
+      caveat:'Unpacked npm package estimate, not measured network transfer or runtime heap'};
+  }catch{return {package:pkg,status:'metadata parse unavailable'};}
+}
+const dependencySizes={
+  alreadyBundledPdfLibBytes:statSync(new URL('../assets/vendor/pdf-lib.js',import.meta.url)).size,
+  researchedWasmPackages:[
+    packageMetadata('@neslinesli93/qpdf-wasm'),
+    packageMetadata('qpdf-wasm-esm-embedded'),
+    packageMetadata('mupdf')
+  ]
+};
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const presence=(doc,key)=>Boolean(doc.catalog.get(N(key)));
 function profile(doc){
@@ -97,7 +120,7 @@ const qpdfStatus=qpdfAvailable?'reference benchmark available':'native reference
 const report={
   task:'PDF Compressor v1.0 — Task 2 feasibility only',
   source:'Task 1 reproducible synthetic fixture corpus',
-  qpdfStatus,qpdfVersion,methods,
+  qpdfStatus,qpdfVersion,methods,dependencySizes,
   environment:{node:process.version,platform:process.platform,arch:process.arch},
   measurementCautions:[
     'One measured run per candidate; timings and rss deltas are approximate, not production performance guarantees.',
