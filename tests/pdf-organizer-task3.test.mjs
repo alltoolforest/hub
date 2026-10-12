@@ -124,7 +124,7 @@ class FakeHolder {
   set textContent(value) { this._textContent = String(value); this.children = []; }
   get textContent() { return this._textContent; }
   getBoundingClientRect() { return {width: 200}; }
-  replaceChildren(...children) { this.children = children; this.textContent = ''; }
+  replaceChildren(...children) { this.children = children; this._textContent = ''; }
   querySelector(selector) { return selector === 'canvas' ? this.children.find(x => x.tagName === 'CANVAS') : null; }
 }
 const fakePdf = (options = {}) => {
