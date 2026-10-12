@@ -2,6 +2,7 @@
 // browsers. Package lives only in CI node_modules; NOT production/repository.
 // Candidate failure is reported, not hidden or transformed into a success.
 import {chromium,webkit} from 'playwright';
+import assert from 'node:assert/strict';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 const BASE=process.env.PDF_COMPRESSOR_BASE_URL||'http://127.0.0.1:8765/';
 const trials=[
@@ -14,7 +15,10 @@ for(const [browserName,browserType,viewport] of trials){
   const page=await browser.newPage({viewport});
   try{
     await page.goto(new URL('documents/pdf-compressor/',BASE).href);
-    for(const id of ['scanned','attachment']){
+    for(const id of ['digital','scanned','image-heavy','mixed','form',
+      'bookmarks','attachment','tagged','signed-marker']){
+      // Reclaim the prior WASM module and heap between independent trials.
+      await page.goto(new URL('documents/pdf-compressor/',BASE).href);
       const fixture=await buildFixture(id);
       let sample;
       try{
@@ -49,7 +53,17 @@ for(const [browserName,browserType,viewport] of trials){
         names:!!loaded.catalog.get(PDF.PDFName.of('Names'))===
           !!original.catalog.get(PDF.PDFName.of('Names')),
         attachments:!!loaded.catalog.get(PDF.PDFName.of('AF'))===
-          !!original.catalog.get(PDF.PDFName.of('AF'))
+          !!original.catalog.get(PDF.PDFName.of('AF')),
+        outlines:!!loaded.catalog.get(PDF.PDFName.of('Outlines'))===
+          !!original.catalog.get(PDF.PDFName.of('Outlines')),
+        tags:!!loaded.catalog.get(PDF.PDFName.of('StructTreeRoot'))===
+          !!original.catalog.get(PDF.PDFName.of('StructTreeRoot')),
+        markInfo:!!loaded.catalog.get(PDF.PDFName.of('MarkInfo'))===
+          !!original.catalog.get(PDF.PDFName.of('MarkInfo')),
+        signatureMarker:!!loaded.catalog.get(PDF.PDFName.of('Perms'))===
+          !!original.catalog.get(PDF.PDFName.of('Perms')),
+        formFields:JSON.stringify(loaded.getForm().getFields().map(f=>f.getName()))===
+          JSON.stringify(original.getForm().getFields().map(f=>f.getName()))
       };
       results.push({browser:browserName,fixture:id,status:'processed',
         originalBytes:fixture.bytes.length,outputBytes:sample.saved.length,
@@ -68,4 +82,9 @@ console.log('PDF_COMPRESSOR_TASK2_WASM_TRIAL_JSON_END');
 // with all basic structural invariants; this harness does not assert success
 // since an unsupported candidate should be disqualified rather than
 // forcing a risky workaround in Tasks 3+.
-if(!results.length)throw Error('No WASM trial executed');
+assert.equal(results.length,trials.length*9,'Candidate corpus is incomplete');
+for(const row of results){
+  assert.equal(row.status,'processed',row.browser+'/'+row.fixture+': '+row.reason);
+  assert.equal(row.allMeasuredInvariantsKept,true,
+    row.browser+'/'+row.fixture+' lost a measured document feature');
+}
