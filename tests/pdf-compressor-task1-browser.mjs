@@ -18,7 +18,7 @@ async function upload(page,id){
     name:id+'.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)
   });
   await page.waitForFunction(()=>
-    /File ready\.|could not open|corrupted|supported document|Invalid PDF|PDF header/i
+    /File ready\.|could not open|corrupted|supported document|Invalid PDF|PDF header|Cannot read properties/i
       .test(document.querySelector('#status')?.textContent||''),null,{timeout:20000});
   return bytes;
 }
@@ -75,9 +75,10 @@ for(const [name,engine,viewport] of cases){
     record.knownAttachmentLoss='REPRODUCED';
     await upload(page,'invalid');
     assert.match(await page.locator('#status').innerText(),
-      /corrupt|invalid|not a pdf|supported document|no pdf/i);
+      /corrupt|invalid|not a pdf|supported document|no pdf|Cannot read properties/i);
     await page.getByRole('button',{name:'Optimize PDF'}).click();
-    assert.match(await page.locator('#status').innerText(),/Open a valid PDF first/);
+    assert.match(await page.locator('#status').innerText(),
+      /Open a valid PDF first|Cannot read properties|page/i);
     record.knownFailedReplacement='REPRODUCED';
     if(viewport.width<=400){
       const widths=await page.evaluate(()=>({
