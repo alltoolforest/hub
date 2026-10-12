@@ -41,6 +41,23 @@ export async function mount(root) {
   root.append(current, help, grid, feedback);
   notice(root, 'Your PDF stays in this browser. Original page content is used for export. Some documents with forms, bookmarks, internal navigation, or digital signatures cannot be changed safely.');
 
+  const tagOption = el('div', {class: 'pdf-organizer-tag-option', hidden: true});
+  const tagLabel = el('label', {class: 'check-row'});
+  const allowUntagged = el('input', {type: 'checkbox',
+    'aria-describedby': 'pdf-organizer-tag-disclosure'});
+  tagLabel.append(allowUntagged, el('strong', {
+    text: 'Allow removing accessibility tags if they cannot be preserved'
+  }));
+  tagOption.append(tagLabel, el('p', {
+    id: 'pdf-organizer-tag-disclosure',
+    text: 'We first try to preserve accessibility tags. If this PDF has tags we cannot repair, checking this option allows an untagged output. Screen-reader navigation and reading order may be lost. The original PDF remains unchanged.'
+  }));
+  allowUntagged.addEventListener('change', () => {
+    clearOutputs();
+    status(allowUntagged.checked ?
+      'If required, accessibility tags may be removed from the exported PDF.' :
+      'Accessibility tags will be preserved or export will stop safely.');
+  });
   const actions = el('div', {class: 'actions'});
   const makeButton = (label, onClick, primary = false, accessibleName = label) => {
     const button = el('button', {type: 'button', text: label,
@@ -62,12 +79,12 @@ export async function mount(root) {
 
   const exportButton = makeButton('Create PDF', () => {
     clearOutputs();
-    void session.exportPdf();
+    void session.exportPdf({allowUntagged: allowUntagged.checked});
   }, true, 'Save the current organized PDF');
   const resetButton = makeButton('Reset', () => session.reset());
   const cancelButton = makeButton('Cancel processing', () => session.cancel());
   actions.append(exportButton, resetButton, cancelButton);
-  root.append(actions);
+  root.append(tagOption, actions);
   setupStatus(root);
   downloads(root);
 
@@ -209,6 +226,7 @@ export async function mount(root) {
   function draw(view) {
     if (view.documentId !== documentId) {
       documentId = view.documentId;
+      allowUntagged.checked = false;
       cards.clear();
       renderer.close();
       if (view.filename) {
@@ -275,6 +293,7 @@ export async function mount(root) {
       clearOutputs();
       draw(view);
     }
+    tagOption.hidden = !(view.tagged && view.plan.some(page => !page.keep));
     current.textContent = view.filename ?
       'Selected: ' + view.filename + ' · ' + view.pageCount + ' original pages' :
       'No PDF selected.';
