@@ -5,7 +5,7 @@ export const INPUT_LIMITS=Object.freeze({maxBytes:20*1024*1024,maxPages:500,
   maxObjects:50000,maxGraphEntries:250000,maxDepth:100,maxImages:1000,
   maxImagePixels:8000000,maxTotalImagePixels:32000000});
 export class InputInspectionError extends Error {
-  constructor(code,message){super(message);this.name='InputInspectionError';this.code=code;}
+  constructor(code,message,options){super(message,options);this.name='InputInspectionError';this.code=code;}
 }
 const fail=(code,message)=>{throw new InputInspectionError(code,message);};
 const cancel=signal=>{if(signal?.aborted)fail('cancelled','Inspection cancelled. Select or retry your PDF.');};
@@ -103,7 +103,8 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   let independent;
   try{independent=await readPages(bytes.slice(),{signal,maxPages:limits.maxPages});}
   catch(error){cancel(signal);if(error instanceof InputInspectionError)throw error;
-    fail('independent-inspection-failed','The independent reader could not verify this PDF. Export a fresh copy.');}
+    throw new InputInspectionError('independent-inspection-failed',
+      'The independent reader could not verify this PDF. Export a fresh copy.',{cause:error});}
   cancel(signal);
   if(!independent||independent.pages?.length!==pages.length)
     fail('reader-disagreement','PDF readers disagree about the page tree. Keep the original.');

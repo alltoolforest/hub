@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 import {inspectPDFInput,createInputSession,INPUT_LIMITS} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
-import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
+import {createIndependentInputReader,readPageTextContent} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
 // Test-only independent parser, separately installed and pinned for this gate.
 const pdfjs=await import(process.env.PDFJS_TEST_MODULE??'pdfjs-dist/legacy/build/pdf.mjs');
 const options={PDF,readPages:createIndependentInputReader(pdfjs)};
@@ -13,6 +13,16 @@ async function modify(id,change){
   change(doc);return new Uint8Array(await doc.save({useObjectStreams:true}));
 }
 const rejects=(bytes,code,extra={})=>assert.rejects(inspectPDFInput(bytes,{...options,...extra}),e=>e.code===code);
+test('text extraction uses reader protocol without requiring ReadableStream async iteration',async()=>{
+  let cancelled=0,released=0,index=0;
+  const page={streamTextContent:()=>({getReader:()=>({
+    read:async()=>index++===0?{done:false,value:{items:[{str:'verified text'}],styles:{},lang:'en'}}:{done:true},
+    cancel:async()=>{cancelled++;},releaseLock:()=>{released++;}
+  })})};
+  const result=await readPageTextContent(page);
+  assert.equal(result.items[0].str,'verified text');assert.equal(result.lang,'en');
+  assert.equal(cancelled,1);assert.equal(released,1);
+});
 
 test('accurate read-only page and document classification across baseline corpus',async()=>{
   for(const [id,classification] of [['digital','digital'],['scanned','image-only'],['image-heavy','image-only'],
