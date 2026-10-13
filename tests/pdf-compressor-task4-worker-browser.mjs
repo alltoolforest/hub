@@ -8,9 +8,15 @@ if(!engine)throw Error('Unsupported test browser');
 const browser=await engine.launch({headless:true,timeout:30000});
 try{
   const context=await browser.newContext(),page=await context.newPage(),unexpected=[];
+  let localBlobRequests=0;
   const policy="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' blob: data:; object-src 'none'; base-uri 'none'";
   await context.route('**/*',async route=>{
     const r=route.request(),url=new URL(r.url());
+    // WebKit routes local Blob image decoding through this hook. It remains
+    // in browser memory and cannot be fetched by the HTTP request context.
+    if(url.protocol==='blob:'&&url.origin==='http://127.0.0.1:8765'&&r.method()==='GET'){
+      localBlobRequests++;return route.continue();
+    }
     if(url.origin!=='http://127.0.0.1:8765'||r.method()!=='GET'){
       unexpected.push({url:r.url(),method:r.method()});return route.abort();
     }
@@ -52,5 +58,5 @@ try{
   assert.deepEqual(unexpected,[]);
   assert.ok(report.some(row=>row.savedBytes>0));
   console.log(JSON.stringify({browser:selected,sourceBuiltWasm:true,moduleWorker:true,
-    strictCSP:true,unexpectedRequests:unexpected,report},null,2));
+    strictCSP:true,localBlobRequests,unexpectedRequests:unexpected,report},null,2));
 }finally{await browser.close();}
