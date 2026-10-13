@@ -83,3 +83,7 @@ Next work is evidence-driven: register native real-photo/phone pairs, reserve he
 Deployment succeeded: https://atf-camera-fidelity-lab.vamshichandragiri05.chatgpt.site
 
 Owner-private; open while signed into the owning account. This is a separate experimental Site, not an AllToolForest production URL. Build `cf-20261012-t11-r1`; source/version identifiers are retained in `PRIVATE-PREVIEW.json`. Deployment success verifies publication only, not image-processing behavior in an actual phone browser.
+
+## 2026-10-13 R9 review checkpoint
+
+Selective chroma cleanup and coordinated natural/brighter tone tested offline on five supplied photographs. See SELECTIVE-R9-REVIEW.md. No new sharpening; source-native output. All supplied-photo cleanup gates withheld processing, so these are tone comparisons, not noise/detail recovery. Five targeted tests, 38 integrity checks and 20 exact PNG round trips pass. Isolated calibration avoids clean/blur regressions by abstaining and makes only small noise gains. Active R5/production unchanged; freeze remains NO-GO pending general quality and device gates.

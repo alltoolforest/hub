@@ -1,0 +1,1022 @@
+{
+  "status": "Offline review only; not accepted for freeze",
+  "users": [
+    {
+      "id": "portrait",
+      "width": 1102,
+      "height": 1470,
+      "source_sha256": "04838320fc099c9e454ed4b307085806534d64abe321258376af4e0cc3cc2971",
+      "input_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+      "faces": [
+        {
+          "x": 205,
+          "y": 230,
+          "width": 535,
+          "height": 575
+        }
+      ],
+      "noise": {
+        "sigma": 0,
+        "samples": 44120
+      },
+      "plan": {
+        "mean": 53.078606054357174,
+        "noise": 0.427718832891244
+      },
+      "cleanup": {
+        "changedPixels": 0,
+        "mean": 53.0737759525519,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        }
+      },
+      "cleanupFaceChangedPixels": 0,
+      "variants": [
+        {
+          "name": "original",
+          "sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+          "changedPixels": 0,
+          "mean": 53.0737759525519,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 1102,
+            "height": 1470,
+            "alphaPreserved": true,
+            "meanChange": 0,
+            "meanLumaShift": 0,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0
+          }
+        },
+        {
+          "name": "pr171",
+          "sha256": "680e1e305893d5059308a737817751ccf1d4668e7bae4f9a430d64ed4083955a",
+          "changedPixels": 1604379,
+          "mean": 81.41756499223376,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 1102,
+            "height": 1470,
+            "alphaPreserved": true,
+            "meanChange": 29.811277166644032,
+            "meanLumaShift": 28.343789039681866,
+            "newClippedLowChannels": 2207,
+            "newClippedHighChannels": 34,
+            "maxRowShiftJump": 0.3281680580761588
+          }
+        },
+        {
+          "name": "natural",
+          "sha256": "67556b29ef02734a167ad4962f2fe89b0517b18d51a036a1630382dc34a659a2",
+          "changedPixels": 1601435,
+          "mean": 84.77666926973913,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 1102,
+            "height": 1470,
+            "alphaPreserved": true,
+            "meanChange": 31.702893317036434,
+            "meanLumaShift": 31.702893317187225,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.3112522686025443
+          }
+        },
+        {
+          "name": "brighter",
+          "sha256": "02bf70a08b724a7081cf61528c86bd6a5981aa3e5acd25b7ea57173659a64917",
+          "changedPixels": 1601435,
+          "mean": 87.21977580459942,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 1102,
+            "height": 1470,
+            "alphaPreserved": true,
+            "meanChange": 34.14599985184636,
+            "meanLumaShift": 34.14599985204753,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.30852994555353774
+          }
+        }
+      ]
+    },
+    {
+      "id": "everyday",
+      "width": 864,
+      "height": 1536,
+      "source_sha256": "d49c9ee91a4b7daa270e4702b71d7ed14e37108e5bd8e1711853da6738166971",
+      "input_sha256": "35b82e17528ff503d85e69301f6879582fb9c800aa4b6b8a4ba1cd91da3e36ca",
+      "faces": [
+        {
+          "x": 140,
+          "y": 290,
+          "width": 195,
+          "height": 220
+        },
+        {
+          "x": 540,
+          "y": 335,
+          "width": 195,
+          "height": 215
+        }
+      ],
+      "noise": {
+        "sigma": 0,
+        "samples": 33885
+      },
+      "plan": {
+        "mean": 155.09080593413722,
+        "noise": 0.6631299734748011
+      },
+      "cleanup": {
+        "changedPixels": 0,
+        "mean": 155.03325820987595,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 864,
+          "height": 1536,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        }
+      },
+      "cleanupFaceChangedPixels": 0,
+      "variants": [
+        {
+          "name": "original",
+          "sha256": "35b82e17528ff503d85e69301f6879582fb9c800aa4b6b8a4ba1cd91da3e36ca",
+          "changedPixels": 0,
+          "mean": 155.03325820987595,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 864,
+            "height": 1536,
+            "alphaPreserved": true,
+            "meanChange": 0,
+            "meanLumaShift": 0,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0
+          }
+        },
+        {
+          "name": "pr171",
+          "sha256": "456fa04c72a30c81226baa0dc49a38bc94b3da716eb3e249f019a4668d7ba739",
+          "changedPixels": 1309129,
+          "mean": 151.28142427915031,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 864,
+            "height": 1536,
+            "alphaPreserved": true,
+            "meanChange": 3.745031537342464,
+            "meanLumaShift": -3.7518339307256454,
+            "newClippedLowChannels": 206,
+            "newClippedHighChannels": 312,
+            "maxRowShiftJump": 0.3721791666666574
+          }
+        },
+        {
+          "name": "natural",
+          "sha256": "2397d1ad5033da583ca5d7a162206a234353d7bc9faf0dee5eb78c5b0240fb22",
+          "changedPixels": 1313259,
+          "mean": 158.02468202599303,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 864,
+            "height": 1536,
+            "alphaPreserved": true,
+            "meanChange": 2.9914425194508745,
+            "meanLumaShift": 2.991423816117085,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.11574074074074092
+          }
+        },
+        {
+          "name": "brighter",
+          "sha256": "0ce4b9124db199274209d705c538d8fdb20e42178d1077b8cf6305ff540be952",
+          "changedPixels": 1324811,
+          "mean": 160.93004625369966,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 864,
+            "height": 1536,
+            "alphaPreserved": true,
+            "meanChange": 5.896788043740355,
+            "meanLumaShift": 5.896788043823714,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.21412037037037024
+          }
+        }
+      ]
+    },
+    {
+      "id": "prabsa",
+      "width": 717,
+      "height": 721,
+      "source_sha256": "2445cddfc781ddf62d4f377fe98197d4fc7a2816014b04d560453a6bf715e706",
+      "input_sha256": "33057721a15c84b7ea57769fe022c01d49052479ab021734bab4ea147593f6fe",
+      "faces": [
+        {
+          "x": 240,
+          "y": 100,
+          "width": 175,
+          "height": 210
+        }
+      ],
+      "noise": {
+        "sigma": 2.979214824989938e-14,
+        "samples": 11274
+      },
+      "plan": {
+        "mean": 135.1077112044887,
+        "noise": 2.723408488063658
+      },
+      "cleanup": {
+        "changedPixels": 0,
+        "mean": 134.97294099668923,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 717,
+          "height": 721,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        }
+      },
+      "cleanupFaceChangedPixels": 0,
+      "variants": [
+        {
+          "name": "original",
+          "sha256": "33057721a15c84b7ea57769fe022c01d49052479ab021734bab4ea147593f6fe",
+          "changedPixels": 0,
+          "mean": 134.97294099668923,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 717,
+            "height": 721,
+            "alphaPreserved": true,
+            "meanChange": 0,
+            "meanLumaShift": 0,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0
+          }
+        },
+        {
+          "name": "pr171",
+          "sha256": "6945684a0418c81cd851bb24f326c92ea0466dac3aab6749a31fd929b38eabd6",
+          "changedPixels": 516956,
+          "mean": 134.78506745785077,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 717,
+            "height": 721,
+            "alphaPreserved": true,
+            "meanChange": 3.6511824645634614,
+            "meanLumaShift": -0.18787353883845045,
+            "newClippedLowChannels": 100,
+            "newClippedHighChannels": 14,
+            "maxRowShiftJump": 0.26493361227335976
+          }
+        },
+        {
+          "name": "natural",
+          "sha256": "700a94ac8d749eaf7afb6578eae590ef3900c863526545e39377a6c6062efa3d",
+          "changedPixels": 513079,
+          "mean": 139.11866491571254,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 717,
+            "height": 721,
+            "alphaPreserved": true,
+            "meanChange": 4.145723919010672,
+            "meanLumaShift": 4.145723919023326,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.11715481171548081
+          }
+        },
+        {
+          "name": "brighter",
+          "sha256": "b50a54ec6da6ed766501c5581cc13645658107c7a360c72bdd3815d831405ceb",
+          "changedPixels": 516048,
+          "mean": 142.4433070039285,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 717,
+            "height": 721,
+            "alphaPreserved": true,
+            "meanChange": 7.470366007230775,
+            "meanLumaShift": 7.470366007239279,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.16736401673640167
+          }
+        }
+      ]
+    },
+    {
+      "id": "outdoor",
+      "width": 452,
+      "height": 678,
+      "source_sha256": "8ea76782d4a9eb2deb89fceb9d62a9e56da31bf0d3bcc07a902112ebfd2b53fb",
+      "input_sha256": "844633dd386b2cc2a8e54b69556f16210ad7684e58ba83974da09240f0390882",
+      "faces": [
+        {
+          "x": 200,
+          "y": 85,
+          "width": 120,
+          "height": 155
+        }
+      ],
+      "noise": {
+        "sigma": 0.44570230607966854,
+        "samples": 18953
+      },
+      "plan": {
+        "mean": 121.84607211010564,
+        "noise": 0.8297745358090095
+      },
+      "cleanup": {
+        "changedPixels": 0,
+        "mean": 121.87604315204432,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 452,
+          "height": 678,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        }
+      },
+      "cleanupFaceChangedPixels": 0,
+      "variants": [
+        {
+          "name": "original",
+          "sha256": "844633dd386b2cc2a8e54b69556f16210ad7684e58ba83974da09240f0390882",
+          "changedPixels": 0,
+          "mean": 121.87604315204432,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 452,
+            "height": 678,
+            "alphaPreserved": true,
+            "meanChange": 0,
+            "meanLumaShift": 0,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0
+          }
+        },
+        {
+          "name": "pr171",
+          "sha256": "dcc8e700bcf8edc420bccef5a103985712e32b35b961a36a3de9c0720efa25d3",
+          "changedPixels": 306455,
+          "mean": 120.29292863377951,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 452,
+            "height": 678,
+            "alphaPreserved": true,
+            "meanChange": 3.2778996005951915,
+            "meanLumaShift": -1.5831145182648023,
+            "newClippedLowChannels": 884,
+            "newClippedHighChannels": 1183,
+            "maxRowShiftJump": 2.015340707964608
+          }
+        },
+        {
+          "name": "natural",
+          "sha256": "27bf78683820ff999f529d6d6ad91497693f19eedfe9c4c05f1b822a2384acc8",
+          "changedPixels": 305091,
+          "mean": 125.94841336115921,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 452,
+            "height": 678,
+            "alphaPreserved": true,
+            "meanChange": 4.072371455173554,
+            "meanLumaShift": 4.072370209114899,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.5641592920353986
+          }
+        },
+        {
+          "name": "brighter",
+          "sha256": "d833023612e9c7fd61245410cc0abb144d783a5a174157480d829532e51c7903",
+          "changedPixels": 305185,
+          "mean": 129.50902798512763,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 452,
+            "height": 678,
+            "alphaPreserved": true,
+            "meanChange": 7.632984833059232,
+            "meanLumaShift": 7.632984833083325,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.6570796460176984
+          }
+        }
+      ]
+    },
+    {
+      "id": "event",
+      "width": 250,
+      "height": 375,
+      "source_sha256": "59ff39458af0a28d6d6ce9c5881a48791010886a0a8f33f9c94570eb9cd23e73",
+      "input_sha256": "3c9b7d1d2a2b473e0431302bdbf4a65e8f5559e379e874ed9102a20b81cd3e2f",
+      "faces": [
+        {
+          "x": 102,
+          "y": 68,
+          "width": 79,
+          "height": 128
+        }
+      ],
+      "noise": {
+        "sigma": 1.489607412494969e-14,
+        "samples": 8778
+      },
+      "plan": {
+        "mean": 99.40840398842751,
+        "noise": 1.8488063660477432
+      },
+      "cleanup": {
+        "changedPixels": 0,
+        "mean": 98.91393704959731,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 250,
+          "height": 375,
+          "alphaPreserved": true,
+          "meanChange": 0,
+          "meanLumaShift": 0,
+          "newClippedLowChannels": 0,
+          "newClippedHighChannels": 0,
+          "maxRowShiftJump": 0
+        }
+      },
+      "cleanupFaceChangedPixels": 0,
+      "variants": [
+        {
+          "name": "original",
+          "sha256": "3c9b7d1d2a2b473e0431302bdbf4a65e8f5559e379e874ed9102a20b81cd3e2f",
+          "changedPixels": 0,
+          "mean": 98.91393704959731,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 250,
+            "height": 375,
+            "alphaPreserved": true,
+            "meanChange": 0,
+            "meanLumaShift": 0,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0
+          }
+        },
+        {
+          "name": "pr171",
+          "sha256": "e727fb1c053e9a2bc19fea37347c1af3003d343d452254dfdc8506d36b18d372",
+          "changedPixels": 90892,
+          "mean": 99.15085277013694,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 250,
+            "height": 375,
+            "alphaPreserved": true,
+            "meanChange": 2.2363662222222223,
+            "meanLumaShift": 0.23691572053962945,
+            "newClippedLowChannels": 5836,
+            "newClippedHighChannels": 164,
+            "maxRowShiftJump": 0.8358064000000002
+          }
+        },
+        {
+          "name": "natural",
+          "sha256": "70f05de3e5321f7abd0b7a4a8267282783a75a77f7cd74a2715021cbfe2992d5",
+          "changedPixels": 92337,
+          "mean": 103.22654504959438,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 250,
+            "height": 375,
+            "alphaPreserved": true,
+            "meanChange": 4.312608,
+            "meanLumaShift": 4.31260799999708,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.37200000000000033
+          }
+        },
+        {
+          "name": "brighter",
+          "sha256": "fe36f252b75f93ac0af015ecf56dc7ebbe9f4e8c14db11dc822d2b1557fd742b",
+          "changedPixels": 93125,
+          "mean": 106.4249450495914,
+          "integrity": {
+            "passed": true,
+            "scope": "catastrophic faults only; visual review required",
+            "width": 250,
+            "height": 375,
+            "alphaPreserved": true,
+            "meanChange": 7.511008,
+            "meanLumaShift": 7.511007999994099,
+            "newClippedLowChannels": 0,
+            "newClippedHighChannels": 0,
+            "maxRowShiftJump": 0.5960000000000001
+          }
+        }
+      ]
+    }
+  ],
+  "calibration": [
+    {
+      "id": "astronaut-original",
+      "variant": "original",
+      "noise": {
+        "sigma": 1.5750524109014723,
+        "samples": 17530
+      },
+      "beforeMSE": 0,
+      "afterMSE": 0,
+      "changedPixels": 0,
+      "mean": 112.70084147643759,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "astronaut-noise",
+      "variant": "noise",
+      "noise": {
+        "sigma": 8.225995807127882,
+        "samples": 6148
+      },
+      "beforeMSE": 58.248714447021484,
+      "afterMSE": 58.18937555948893,
+      "changedPixels": 618,
+      "mean": 113.16377900467799,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0.0022786458333333335,
+        "meanLumaShift": -2.8332519320883875e-05,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.002517187499999851
+      }
+    },
+    {
+      "id": "astronaut-underexposure",
+      "variant": "underexposure",
+      "noise": {
+        "sigma": 1.0524109014674956,
+        "samples": 20266
+      },
+      "beforeMSE": 2417.191446940104,
+      "afterMSE": 2417.191446940104,
+      "changedPixels": 0,
+      "mean": 73.25736502076194,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "variant": "jpeg",
+      "noise": {
+        "sigma": 0,
+        "samples": 16921
+      },
+      "beforeMSE": 43.19472122192383,
+      "afterMSE": 43.19472122192383,
+      "changedPixels": 0,
+      "mean": 112.76519542391381,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "coffee-original",
+      "variant": "original",
+      "noise": {
+        "sigma": 1.4993710691823963,
+        "samples": 32992
+      },
+      "beforeMSE": 0,
+      "afterMSE": 0,
+      "changedPixels": 0,
+      "mean": 98.78887363247931,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "variant": "noise",
+      "noise": {
+        "sigma": 10.275681341719075,
+        "samples": 8732
+      },
+      "beforeMSE": 60.91631388888889,
+      "afterMSE": 60.89197083333333,
+      "changedPixels": 218,
+      "mean": 98.92395720333329,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.0008208333333333334,
+        "meanLumaShift": 6.46083337875704e-06,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.0010803333333333379
+      }
+    },
+    {
+      "id": "coffee-underexposure",
+      "variant": "underexposure",
+      "noise": {
+        "sigma": 0.9725366876310324,
+        "samples": 39797
+      },
+      "beforeMSE": 1863.3111666666666,
+      "afterMSE": 1863.3111666666666,
+      "changedPixels": 0,
+      "mean": 64.22088394166919,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "variant": "jpeg",
+      "noise": {
+        "sigma": 1.489607412494969e-14,
+        "samples": 32705
+      },
+      "beforeMSE": 61.50852638888889,
+      "afterMSE": 61.50852638888889,
+      "changedPixels": 0,
+      "mean": 98.8236744799885,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "variant": "original",
+      "noise": {
+        "sigma": 0.30398322851155185,
+        "samples": 16611
+      },
+      "beforeMSE": 0,
+      "afterMSE": 0,
+      "changedPixels": 0,
+      "mean": 117.3671953954004,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "variant": "noise",
+      "noise": {
+        "sigma": 10.981341719077575,
+        "samples": 3879
+      },
+      "beforeMSE": 63.97109632914511,
+      "afterMSE": 63.957723577235775,
+      "changedPixels": 70,
+      "mean": 117.38664232520462,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0.0004286770140428677,
+        "meanLumaShift": 1.568366599276783e-06,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.0009720620842572095
+      }
+    },
+    {
+      "id": "chelsea-underexposure",
+      "variant": "underexposure",
+      "noise": {
+        "sigma": 0.7496855345912056,
+        "samples": 22343
+      },
+      "beforeMSE": 1847.659709288002,
+      "afterMSE": 1847.659709288002,
+      "changedPixels": 0,
+      "mean": 76.28818736436692,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "variant": "jpeg",
+      "noise": {
+        "sigma": 0,
+        "samples": 17211
+      },
+      "beforeMSE": 28.557213599408723,
+      "afterMSE": 28.557213599408723,
+      "changedPixels": 0,
+      "mean": 117.3729645395396,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "astronaut-blur-0-8",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.8253668763102743,
+        "samples": 18719
+      },
+      "beforeMSE": 40.878335316975914,
+      "afterMSE": 40.878335316975914,
+      "changedPixels": 0,
+      "mean": 112.70326032866615,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "astronaut-blur-1-6",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.5268343815513489,
+        "samples": 19769
+      },
+      "beforeMSE": 156.65913772583008,
+      "afterMSE": 156.65913772583008,
+      "changedPixels": 0,
+      "mean": 112.70238233031168,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "coffee-blur-0-8",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.9725366876310286,
+        "samples": 41121
+      },
+      "beforeMSE": 55.786947222222224,
+      "afterMSE": 55.786947222222224,
+      "changedPixels": 0,
+      "mean": 98.77922553414547,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "coffee-blur-1-6",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.7496855345912056,
+        "samples": 49442
+      },
+      "beforeMSE": 150.75389583333333,
+      "afterMSE": 150.75389583333333,
+      "changedPixels": 0,
+      "mean": 98.77786688247339,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "chelsea-blur-0-8",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.7496855345912056,
+        "samples": 21658
+      },
+      "beforeMSE": 16.764949494949494,
+      "afterMSE": 16.764949494949494,
+      "changedPixels": 0,
+      "mean": 117.37340986695497,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "id": "chelsea-blur-1-6",
+      "variant": "blur",
+      "noise": {
+        "sigma": 0.7496855345911907,
+        "samples": 27454
+      },
+      "beforeMSE": 53.78228874106923,
+      "afterMSE": 53.78228874106923,
+      "changedPixels": 0,
+      "mean": 117.3844307982335,
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    }
+  ],
+  "limitations": [
+    "Manually annotated faces; no detector",
+    "Source chroma retained, intentional tone changes permitted",
+    "No additional sharpening or optical deconvolution",
+    "Calibration evaluates isolated cleanup, not full tone pipeline",
+    "No held-out preference, browser/mobile or 32MP qualification"
+  ]
+}
