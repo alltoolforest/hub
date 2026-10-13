@@ -2,7 +2,7 @@
 export class WorkerOperationError extends Error {
   constructor(code){super(code);this.name='WorkerOperationError';this.code=code;}
 }
-export function createWorkerBridge({workerFactory,timeoutMs=120000}={}){
+export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',onProgress=()=>{}}={}){
   if(typeof workerFactory!=='function')throw new TypeError('Isolated worker factory required');
   const run=(op,bytes,{mode,signal}={})=>new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new WorkerOperationError('cancelled'));
@@ -17,6 +17,10 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000}={}){
     try{
       worker=workerFactory();
       worker.onmessage=event=>{
+        if(settled)return;
+        if(event.data?.type==='progress'&&['inspect','embedded-images','lossless','lossless-optimization','final-output'].includes(event.data.stage)){
+          onProgress(event.data.stage);return;
+        }
         if(typeof event.data?.ok!=='boolean')return; // Ignore parser handshake.
         if(event.data.ok)finish(null,event.data[op==='inspect'?'report':'result']);
         else finish(new WorkerOperationError(event.data.code??'processing-failed'));
@@ -26,7 +30,7 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000}={}){
       signal?.addEventListener('abort',abort,{once:true});
       if(signal?.aborted){abort();return;}
       timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),timeoutMs);
-      const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode},[copy.buffer]);
+      const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,profile},[copy.buffer]);
     }catch(error){finish(error);}
   });
   return {inspect:(bytes,options)=>run('inspect',bytes,options),

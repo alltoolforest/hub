@@ -21,11 +21,13 @@ const messages=Object.freeze({
 export function describeProcessingError(error){
   const candidate=error?.name==='RangeError'?'memory-limit':error?.code;
   const code=typeof candidate==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(candidate)?candidate:'processing-failed';
-  return Object.freeze({code,message:Object.hasOwn(messages,code)?messages[code]:
+  const limit=Number.isSafeInteger(error?.maxBytes)&&error.maxBytes>0&&error.maxBytes<=INPUT_LIMITS.maxBytes?error.maxBytes:null;
+  return Object.freeze({code,message:code==='file-limit'&&limit?
+    'This PDF exceeds this device’s '+Math.round(limit/1048576)+' MiB limit. Select a smaller PDF.':Object.hasOwn(messages,code)?messages[code]:
     'This PDF could not be verified safely. Keep the original and try a fresh or smaller export.'});
 }
 const copy=value=>structuredClone(value);
-export function createCompressionSession({engine,onChange=()=>{},
+export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LIMITS,
   createURL=blob=>URL.createObjectURL(blob),revokeURL=url=>URL.revokeObjectURL(url)}={}){
   if(typeof engine?.inspect!=='function'||typeof engine?.compress!=='function')
     throw new TypeError('Verified worker engine required');
@@ -47,7 +49,7 @@ export function createCompressionSession({engine,onChange=()=>{},
       const token=generation,abort=new AbortController();controller=abort;notify();
       try{
         if(!file||!Number.isSafeInteger(file.size)||file.size<16)throw {code:'invalid-input'};
-        if(file.size>INPUT_LIMITS.maxBytes)throw {code:'file-limit'};
+        if(file.size>limits.maxBytes)throw {code:'file-limit',maxBytes:limits.maxBytes};
         const bytes=new Uint8Array(await file.arrayBuffer());
         if(token!==generation)return {status:'stale'};
         if(bytes.length!==file.size)throw {code:'invalid-input'};

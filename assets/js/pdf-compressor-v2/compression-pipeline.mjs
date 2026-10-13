@@ -1,6 +1,6 @@
 // Canonical Task 6: orchestration of independently verified engines only.
 // No UI, production wiring, network requests or full-page rasterization.
-import {inspectPDFInput} from './input-inspector.mjs';
+import {inspectPDFInput,INPUT_LIMITS} from './input-inspector.mjs';
 import {runVerifiedLossless} from './qpdf-lossless-adapter.mjs';
 import {runVerifiedImageCompression} from './image-compression.mjs';
 import {planCompression,describeResult,MODES} from './mode-policy.mjs';
@@ -10,10 +10,11 @@ export class CompressionPipelineError extends Error {
 }
 const checkCancel=signal=>{if(signal?.aborted)throw new CompressionPipelineError('cancelled');};
 export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
-  verifyJpeg,decodeJpeg,mode='balanced',signal}={}){
+  verifyJpeg,decodeJpeg,mode='balanced',signal,limits=INPUT_LIMITS,onProgress=()=>{}}={}){
   if(!MODES.includes(mode))throw new RangeError('Unsupported compression mode');
   checkCancel(signal);
-  const inspected=await inspectPDFInput(bytes,{PDF,readPages,signal});
+  onProgress('inspect');
+  const inspected=await inspectPDFInput(bytes,{PDF,readPages,signal,limits});
   const plan=planCompression({mode,images:inspected.images,pages:inspected.pageCount,
     classification:inspected.classification,allowJpeg:typeof decodeJpeg==='function'});
   if(!plan.allowed)throw new CompressionPipelineError(plan.reason);
@@ -22,14 +23,16 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
   // Every stage independently verifies its own source/output equivalence.
   // Lossless fingerprints then preserve the image stage's accepted content.
   if(mode!=='lossless'&&plan.imageCandidates>0){
+    onProgress('embedded-images');
     const image=await runVerifiedImageCompression(current,{PDF,readPages,encodeJpeg,
-      verifyJpeg,decodeJpeg,mode,signal});
+      verifyJpeg,decodeJpeg,mode,signal,limits});
     checkCancel(signal);
     stages.push({engine:'embedded-images',status:image.status,
       inputBytes:current.length,outputBytes:image.bytes.length});
     current=image.bytes;
   }
-  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal});
+  onProgress('lossless');
+  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits});
   checkCancel(signal);
   stages.push({engine:'lossless',status:lossless.status,
     inputBytes:current.length,outputBytes:lossless.bytes.length});
