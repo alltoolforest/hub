@@ -19,8 +19,9 @@ const messages=Object.freeze({
   'memory-limit':'Insufficient memory for this operation. Try a smaller PDF or close other tabs.'
 });
 export function describeProcessingError(error){
-  const code=error?.name==='RangeError'?'memory-limit':error?.code??'processing-failed';
-  return Object.freeze({code,message:messages[code]??
+  const candidate=error?.name==='RangeError'?'memory-limit':error?.code;
+  const code=typeof candidate==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(candidate)?candidate:'processing-failed';
+  return Object.freeze({code,message:Object.hasOwn(messages,code)?messages[code]:
     'This PDF could not be verified safely. Keep the original and try a fresh or smaller export.'});
 }
 const copy=value=>structuredClone(value);
@@ -82,7 +83,7 @@ export function createCompressionSession({engine,onChange=()=>{},
           await digestPDFBytes(bytes)!==receipt.outputDigest)throw {code:'invalid-output-receipt'};
         if(token!==generation)return {status:'stale'};
         const {bytes:ignored,...summary}=result;
-        const name=source.name.replace(/[\u0000-\u001f\u007f/\\]/g,'-').replace(/\.pdf$/i,'').slice(0,100)||'document';
+        const name=source.name.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069/\\]/g,'-').replace(/\.pdf$/i,'').slice(0,100)||'document';
         const url=createURL(new Blob([bytes],{type:'application/pdf'}));
         output={url,name:name+'-'+mode+'.pdf',summary:copy(summary)};
         controller=null;state='completed';notify();return {status:'completed'};
