@@ -4,8 +4,8 @@ import {WorkerMessageHandler} from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import {JpegImage} from 'pdfjs-dist/image_decoders/pdf.image_decoders.mjs';
 import createQpdf from '../assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs';
 import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
-import {createQpdfLosslessProvider,runVerifiedLossless} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
-import {runVerifiedImageCompression} from '../assets/js/pdf-compressor-v2/image-compression.mjs';
+import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
+import {compressPDF} from '../assets/js/pdf-compressor-v2/compression-pipeline.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
 import {encodeBrowserJpeg,verifyBrowserJpeg} from '../assets/js/pdf-compressor-v2/browser-image-codec.mjs';
 const decode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -20,10 +20,8 @@ self.onmessage=async event=>{
   const started=performance.now();
   try{
     const {bytes,mode}=event.data;
-    const result=mode==='lossless'?await runVerifiedLossless(bytes,{PDF,readPages:reader,
-      optimize}):
-      await runVerifiedImageCompression(bytes,{PDF,readPages:reader,decodeJpeg,
-        encodeJpeg:encodeBrowserJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),mode});
+    const result=await compressPDF(bytes,{PDF,readPages:reader,optimize,decodeJpeg,
+      encodeJpeg:encodeBrowserJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),mode});
     self.postMessage({ok:true,result,elapsedMs:Math.round(performance.now()-started)},[result.bytes.buffer]);
   }catch(error){self.postMessage({ok:false,error:error.code??error.message??String(error),diagnostic:self.QA_LAST_ERROR??error.cause?.stack??error.stack??null});}
 };
