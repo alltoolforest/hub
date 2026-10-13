@@ -7,6 +7,7 @@ import {chromium} from 'playwright';
 import {checkRenderedOutput} from './pdf-compressor-task5-render-check.mjs';
 const files=process.argv.slice(2),outputDir=process.env.PDF_COMPRESSOR_PRIVATE_OUTPUT;
 if(!files.length||!outputDir)throw Error('Private source paths and scratch output directory required');
+const pipeline=process.env.PDF_COMPRESSOR_PRIVATE_PIPELINE==='1';
 const modes=(process.env.PDF_COMPRESSOR_PRIVATE_MODES??'lossless,balanced,strong').split(',');
 if(modes.some(mode=>!['lossless','balanced','strong'].includes(mode)))throw Error('Unsupported private QA mode');
 const repository=resolve(new URL('../',import.meta.url).pathname);
@@ -33,9 +34,9 @@ try{
   await page.goto(origin+'/private-scan-gate');const report=[];
   for(let index=0;index<sources.length;index++)for(const mode of modes){
     const started=performance.now();
-    const result=await page.evaluate(async({index,mode})=>{
+    const result=await page.evaluate(async({index,mode,pipeline})=>{
       const bytes=new Uint8Array(await (await fetch('/private-input/'+index)).arrayBuffer());
-      const worker=new Worker('/tests/pdf-compressor-'+(mode==='lossless'?'task4':'task5')+'-worker.mjs',{type:'module'});
+      const worker=new Worker('/tests/pdf-compressor-'+(pipeline?'task6':mode==='lossless'?'task4':'task5')+'-worker.mjs',{type:'module'});
       try{
         const raw=await new Promise((resolve,reject)=>{
           const timer=setTimeout(()=>reject(Error('private-qa-worker-timeout')),120000);
@@ -46,7 +47,7 @@ try{
         if(!raw.ok)throw Error(raw.code+': '+raw.message);
         return {...raw.result,bytes:Array.from(raw.result.bytes)};
       }finally{worker.terminate();}
-    },{index,mode});
+    },{index,mode,pipeline});
     const output=new Uint8Array(result.bytes),original=sources[index].bytes;
     assert.ok(output.length<=original.length);
     if(result.status==='original-retained')assert.deepEqual(output,original);

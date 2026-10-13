@@ -62,7 +62,8 @@ try{
     assert.equal(raw.stages.at(-1).engine,'lossless');
     if(mode==='lossless'||['digital','form','bookmarks','attachment','tagged','masked-image'].includes(id))assert.equal(raw.stages.length,1);
     if(['jpeg-scan','scanned'].includes(id)&&mode!=='lossless')assert.equal(raw.stages[0].engine,'embedded-images');
-    assert.equal(raw.settings.imageQualityReduction,mode!=='lossless');
+    assert.equal(raw.settings.imageQualityReductionAllowed,mode!=='lossless');
+    if(mode==='lossless'||id==='digital')assert.equal(raw.settings.imageTransformationApplied,false);
     const renderedRMS=await checkRenderedOutput(bytes,output,mode,{requireOCR:id==='hidden-ocr'});
     report.push({fixture:id,mode,renderedRMS,status:raw.status,inputBytes:bytes.length,
       outputBytes:output.length,savedBytes:raw.savedBytes,elapsedMs:Math.round(performance.now()-started)});

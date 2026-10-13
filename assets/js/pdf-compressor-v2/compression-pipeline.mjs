@@ -41,7 +41,9 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
     inputBytes:bytes.length,outputBytes:current.length,savedBytes:summary.savedBytes,
     reductionPercent:summary.reductionPercent,mode,
     classification:inspected.classification,
-    settings:mode==='lossless'?{imageQualityReduction:false}:
-      {imageQualityReduction:true,...plan.settings},
+    settings:{imageQualityReductionAllowed:mode!=='lossless',
+      imageTransformationApplied:summary.success&&stages.some(stage=>
+        stage.engine==='embedded-images'&&stage.status==='compressed'),
+      ...(mode==='lossless'?{}:plan.settings)},
     stages,message:summary.message};
 }
