@@ -32,7 +32,7 @@ remain mandatory. A failed quality check cannot release an output.
 28 selected unit/adjacent regression tests passed with zero skips, including
 real software JPEG decoding, forged/oversized dimensions, truncated data,
 metadata retention, EXIF fallback and the prior safety/integrity checks.
-Three private scanner-produced PDFs (five total pages) passed Chromium Balanced
+Three private real-world scanned PDFs (five total pages) passed Chromium Balanced
 and Strong compression, full protected-structure verification, independent
 render comparisons, and visual review of every page. Both modes delivered
 meaningful savings on all three. Their originals contained no OCR/text layer;
@@ -43,13 +43,14 @@ filenames, hashes and detailed results remain outside GitHub.
 Expanded synthetic browser QA includes a high-quality JPEG scan and an already
 efficient JPEG. Each browser executes 28 cases across both modes, with full-page
 render/text comparisons, shared resources, masks, hidden OCR and downsampling.
-Its new cross-browser CI conclusion must be confirmed; the previous 72-case
-CI pass does not validate this new JPEG implementation.
+Final CI run 38352387958 succeeded on code checkpoint
+814df909ae0ca23cb78b3d61f563a397cf2a2850. Chromium, Firefox and WebKit each
+passed all 28 image cases (84 total), including the new JPEG paths. Input-integrity,
+lossless output preservation and pinned-runtime/source-artifact gates also passed.
 
 ## Remaining acceptance and dependencies
 
-Task 5 remains open for the new cross-browser CI result and physical mobile
-memory/performance evidence. Pixel limits and desktop tests are not a phone
+Task 5 remains open for physical mobile memory/performance evidence. Pixel limits and desktop tests are not a phone
 performance guarantee. PDF.js JPEG coefficient buffers add memory beyond raw
 pixel arrays and must be included in the device envelope. The software decoder
 currently comes from the pinned isolated QA dependency; future runtime bundling
