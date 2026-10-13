@@ -1,0 +1,122 @@
+{
+  "width": 864,
+  "height": 1536,
+  "source_sha256": "d49c9ee91a4b7daa270e4702b71d7ed14e37108e5bd8e1711853da6738166971",
+  "input_sha256": "35b82e17528ff503d85e69301f6879582fb9c800aa4b6b8a4ba1cd91da3e36ca",
+  "options": {
+    "content": "auto",
+    "strength": "balanced",
+    "sharpness": "auto",
+    "sourceMime": "image/jpeg",
+    "faces": []
+  },
+  "faces": [
+    {
+      "x": 135,
+      "y": 295,
+      "width": 205,
+      "height": 260
+    },
+    {
+      "x": 545,
+      "y": 335,
+      "width": 205,
+      "height": 230
+    }
+  ],
+  "sharpnessTesting": "Excluded; default PR171 auto amount only",
+  "plan": {
+    "noise": 0.6631299734748011,
+    "chromaNoise": 0,
+    "mean": 155.09080593413722,
+    "range": 173,
+    "sharp": 0.18
+  },
+  "variants": [
+    {
+      "variant": "original",
+      "sha256": "35b82e17528ff503d85e69301f6879582fb9c800aa4b6b8a4ba1cd91da3e36ca",
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 864,
+        "height": 1536,
+        "alphaPreserved": true,
+        "meanChange": 0,
+        "meanLumaShift": 0,
+        "newClippedLowChannels": 0,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0
+      }
+    },
+    {
+      "variant": "pr171",
+      "sha256": "456fa04c72a30c81226baa0dc49a38bc94b3da716eb3e249f019a4668d7ba739",
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 864,
+        "height": 1536,
+        "alphaPreserved": true,
+        "meanChange": 3.745031537342464,
+        "meanLumaShift": -3.7518339307256454,
+        "newClippedLowChannels": 206,
+        "newClippedHighChannels": 312,
+        "maxRowShiftJump": 0.3721791666666574
+      }
+    },
+    {
+      "variant": "brilliance",
+      "sha256": "a40d15cb87a7b144ea7b835d5ce4ffd1c1f56139b471f2dd16dc0f91f2407862",
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 864,
+        "height": 1536,
+        "alphaPreserved": true,
+        "meanChange": 2.534724482783565,
+        "meanLumaShift": -2.3526142764912947,
+        "newClippedLowChannels": 183,
+        "newClippedHighChannels": 217,
+        "maxRowShiftJump": 0.2051620370370384
+      }
+    },
+    {
+      "variant": "vibrance",
+      "sha256": "c32a9de974f5dbd52a6ab07a371a9625a89c0991d84bc944e01d88247ec731b6",
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 864,
+        "height": 1536,
+        "alphaPreserved": true,
+        "meanChange": 3.780240533773791,
+        "meanLumaShift": -3.75541213109226,
+        "newClippedLowChannels": 206,
+        "newClippedHighChannels": 355,
+        "maxRowShiftJump": 0.36910555555555113
+      }
+    },
+    {
+      "variant": "combined",
+      "sha256": "eb355e2ff58f9914f94327ae06a02493b921b0e2b2a8ac94bb9b9451b52d8d85",
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 864,
+        "height": 1536,
+        "alphaPreserved": true,
+        "meanChange": 2.53472197104874,
+        "meanLumaShift": -2.3522175265740466,
+        "newClippedLowChannels": 183,
+        "newClippedHighChannels": 217,
+        "maxRowShiftJump": 0.2051620370370384
+      }
+    }
+  ],
+  "limitations": [
+    "Single diagnostic; not held-out or a clean reference",
+    "Manual face regions apply only to new Vibrance/local clarity; baseline has no detected faces",
+    "No browser/device validation or quality preference score"
+  ]
+}
