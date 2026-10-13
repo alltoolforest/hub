@@ -182,3 +182,23 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task7-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task7-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task7-worker-browser.mjs
+  file-lifecycle:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated worker QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Cancellation, recovery, receipts and worker cleanup
+        run: |
+          node --test tests/pdf-compressor-task8-session.test.mjs
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-lifecycle-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task8-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task8-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task8-browser.mjs
