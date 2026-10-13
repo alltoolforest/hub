@@ -52,5 +52,8 @@ test('protected graph verifier rejects same-presence text changes and false JPEG
   const changed=await PDF.PDFDocument.load(request.output,{updateMetadata:false});
   changed.setTitle('Unauthorized changed metadata');
   await assert.rejects(verifier({...request,output:new Uint8Array(await changed.save({useObjectStreams:false}))}),/protected-document-structure-changed/);
+  const changedText=await PDF.PDFDocument.load(request.output,{updateMetadata:false});
+  changedText.getPage(0).drawText('Unexpected injected page text');
+  await assert.rejects(verifier({...request,output:new Uint8Array(await changedText.save({useObjectStreams:false}))}),/protected-document-structure-changed/);
   await assert.rejects(createImageOutputVerifier({PDF,readPages,verifyJpeg:async()=>false})(request),/jpeg-quality-verification-failed/);
 });

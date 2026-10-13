@@ -4,6 +4,7 @@ on:
     branches:
       - pdf-compressor-task3-integrity-foundation-20261012
       - pdf-compressor-task4-source-build-20261013
+      - pdf-compressor-task5-images-20261013
   pull_request:
     paths:
       - assets/js/pdf-compressor-v2/**

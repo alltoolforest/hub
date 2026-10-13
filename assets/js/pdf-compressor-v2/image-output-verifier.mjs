@@ -14,6 +14,13 @@ export function createImageOutputVerifier({PDF,readPages,verifyJpeg}={}) {
       if(declared.has(r.ref))throw Error('duplicate-image-manifest');declared.add(r.ref);
       const old=source.get(r.ref),entry=target.get(r.ref),next=entry?.obj,c=r.candidate;
       if(!isPlainOpaqueImage(old,PDF)||!isPlainOpaqueImage(next,PDF))throw Error('unsafe-image-replacement');
+      for(const key of ['Type','Subtype','BitsPerComponent'])
+        if(String(old.dict.get(N(key)))!==String(next.dict.get(N(key))))throw Error('image-dictionary-changed');
+      if(old.dict.get(N('Width'))?.asNumber?.()!==r.descriptor.width||
+        old.dict.get(N('Height'))?.asNumber?.()!==r.descriptor.height||
+        String(old.dict.get(N('ColorSpace')))!==r.descriptor.colorSpace||
+        !Number.isSafeInteger(c.width)||!Number.isSafeInteger(c.height)||c.width<1||c.height<1||
+        c.width>r.descriptor.width||c.height>r.descriptor.height)throw Error('invalid-image-manifest');
       if(String(old.dict.get(N('Filter')))!=='/FlateDecode'||String(next.dict.get(N('Filter')))!=='/DCTDecode'||
         String(next.dict.get(N('ColorSpace')))!=='/DeviceRGB'||
         next.dict.get(N('Width'))?.asNumber?.()!==c.width||next.dict.get(N('Height'))?.asNumber?.()!==c.height||

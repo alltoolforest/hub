@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {checkRenderedOutput} from './pdf-compressor-task5-render-check.mjs';
+import {buildImageFixture} from './pdf-compressor-task5-fixtures.mjs';
 import {chromium,firefox,webkit} from 'playwright';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 
@@ -30,9 +32,12 @@ try{
   });
   await page.goto('http://127.0.0.1:8766/compressor-worker-gate');
   const report=[];
-  for(const id of ['scanned','image-heavy','mixed','form','bookmarks','attachment','tagged']){
-    const {bytes}=await buildFixture(id),started=performance.now();
-    const raw=await page.evaluate(async data=>{
+  const inputs=[];
+  for(const id of ['scanned','image-heavy','mixed','form','bookmarks','attachment','tagged'])inputs.push({id,bytes:(await buildFixture(id)).bytes});
+  for(const [id,options] of [['gray-scan',{gray:true}],['shared-image',{shared:true}],['masked-image',{masked:true}],['hidden-ocr',{hiddenOCR:true}],['downsample-scan',{width:2500,height:1100}]])inputs.push({id,bytes:await buildImageFixture(options)});
+  for(const mode of ['balanced','strong'])for(const {id,bytes} of inputs){
+    const started=performance.now();
+    const raw=await page.evaluate(async ({data,mode})=>{
       const worker=new Worker('/tests/pdf-compressor-task5-worker.mjs',{type:'module'});
       try{
         const result=await new Promise((resolve,reject)=>{
@@ -43,20 +48,25 @@ try{
             if(typeof event.data?.ok!=='boolean')return;
             clearTimeout(timer);resolve(event.data);
           };
-          const input=new Uint8Array(data);worker.postMessage({bytes:input,mode:'balanced'},[input.buffer]);
+          const input=new Uint8Array(data);worker.postMessage({bytes:input,mode},[input.buffer]);
         });
         if(!result.ok)throw Error(result.code+': '+result.message+'; '+(result.diagnostic??''));
         return {...result.result,bytes:Array.from(result.result.bytes)};
       }finally{worker.terminate();}
-    },Array.from(bytes));
+    },{data:Array.from(bytes),mode});
     const output=new Uint8Array(raw.bytes);
     const reopened=await PDF.PDFDocument.load(output); assert.equal(reopened.getPageCount(),(await PDF.PDFDocument.load(bytes)).getPageCount());
     assert.ok(output.length<=bytes.length);
-    report.push({fixture:id,status:raw.status,inputBytes:bytes.length,
+    if(raw.status==='original-retained')assert.deepEqual(output,bytes);
+    if(id==='masked-image')assert.equal(raw.status,'original-retained');
+    const renderedRMS=await checkRenderedOutput(bytes,output,mode,{requireOCR:id==='hidden-ocr'});
+    report.push({fixture:id,mode,renderedRMS,status:raw.status,inputBytes:bytes.length,
       outputBytes:output.length,savedBytes:raw.savedBytes,elapsedMs:Math.round(performance.now()-started)});
   }
   assert.deepEqual(unexpected,[]);
   assert.ok(report.some(row=>row.savedBytes>0));
+  assert.ok(report.find(r=>r.fixture==='scanned'&&r.mode==='strong').outputBytes<
+    report.find(r=>r.fixture==='scanned'&&r.mode==='balanced').outputBytes);
   console.log(JSON.stringify({browser:selected,embeddedImageCompression:true,moduleWorker:true,
     strictCSP:true,localBlobRequests,unexpectedRequests:unexpected,report},null,2));
 }finally{await browser.close();}

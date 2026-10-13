@@ -28,10 +28,12 @@ network requests. Balanced outputs: scanned 339211 -> 72969 bytes;
 image-heavy 708693 -> 148806; mixed 113682 -> 26149. Four non-image PDFs retained
 exact original bytes. These savings do not predict savings on user documents.
 
-Firefox local executable is absent. WebKit host libraries are absent. An isolated
-three-browser CI job was added; its results must be confirmed before acceptance.
-Remaining Task 5 gates: Strong browser tests, varied image/OCR and high-resolution
-fixtures, representative page render comparisons, real physical-scan acceptance,
+Initial CI run 38348864420 passed all three browsers for the original seven-fixture
+Balanced gate. The expanded gate now tests both modes with scan-style grayscale,
+shared resources, masks, hidden OCR and downsampling, plus independent full-page
+render comparisons and exact extracted text/coordinates. Its latest CI conclusion
+must be confirmed separately; earlier passes do not cover newly added fixtures.
+Remaining Task 5 gates: expanded cross-browser CI, real physical-scan acceptance,
 mobile memory/performance checks and CI cross-browser verification. Tasks 6–13
 remain gated. Overall release NO-GO, not deployed or frozen.
 All changes stay within isolated compressor modules/tests/workflow/docs;
