@@ -1,0 +1,1213 @@
+{
+  "status": "Offline review; not freeze-qualified",
+  "portrait": {
+    "width": 1102,
+    "height": 1470,
+    "input_sha256": "e5717b698a2e1500576cfdb35a86a0fcea766a49afcbaa4127a9f8c9b4dab0fe",
+    "original_sha256": "48aef04062068249474b8bad09fc62881fb4fad43cd644bfa41bb3dedc6a786b",
+    "faces": [
+      {
+        "x": 205,
+        "y": 230,
+        "width": 535,
+        "height": 575
+      }
+    ],
+    "before": {
+      "meanLuma": 97.0804936079233,
+      "highFrequencyRMS": 1.2755614169415357,
+      "chromaSpread": 47.283842804295666,
+      "referenceMSE": null
+    },
+    "records": [
+      {
+        "strength": "low",
+        "settings": {
+          "luma": 0.25,
+          "chroma": 0.35,
+          "sigmaY": 6,
+          "sigmaC": 12
+        },
+        "sha256": "febdd7cf2a9da1120f0d9b518859dd7be157d006b5a3b3e929b88eac2fd4acfa",
+        "processingMs": 1782.083977,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 41.561268112810765,
+          "meanLumaShift": 44.008538294284165,
+          "newClippedLowChannels": 2030,
+          "newClippedHighChannels": 34,
+          "maxRowShiftJump": 0.69516914700543
+        },
+        "metrics": {
+          "meanLuma": 97.08231424683606,
+          "highFrequencyRMS": 1.2274353901721702,
+          "chromaSpread": 47.28315129712368,
+          "referenceMSE": null
+        },
+        "rois": [
+          {
+            "id": "face",
+            "box": [
+              300,
+              340,
+              430,
+              420
+            ],
+            "before": {
+              "meanLuma": 96.83054208084343,
+              "highFrequencyRMS": 1.019801572628625,
+              "chromaSpread": 29.168135917669854,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 96.8305722591381,
+              "highFrequencyRMS": 1.0191664983066935,
+              "chromaSpread": 29.167815303743154,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "hair",
+            "box": [
+              290,
+              60,
+              440,
+              220
+            ],
+            "before": {
+              "meanLuma": 17.918501822311242,
+              "highFrequencyRMS": 0.8184137677809439,
+              "chromaSpread": 12.429280694449893,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 17.921107458675156,
+              "highFrequencyRMS": 0.7825857098833754,
+              "chromaSpread": 12.42615496081318,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "background",
+            "box": [
+              30,
+              320,
+              165,
+              360
+            ],
+            "before": {
+              "meanLuma": 54.53087275083879,
+              "highFrequencyRMS": 0.9398434268949729,
+              "chromaSpread": 4.395735030295619,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 54.52897087541807,
+              "highFrequencyRMS": 0.8753374709596322,
+              "chromaSpread": 4.365421596263523,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "fabric",
+            "box": [
+              190,
+              1030,
+              200,
+              260
+            ],
+            "before": {
+              "meanLuma": 152.15482264228424,
+              "highFrequencyRMS": 0.8960336635575082,
+              "chromaSpread": 6.547681568634255,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 152.16232002305398,
+              "highFrequencyRMS": 0.8371294062954162,
+              "chromaSpread": 6.526275090075502,
+              "referenceMSE": null
+            }
+          }
+        ]
+      },
+      {
+        "strength": "medium",
+        "settings": {
+          "luma": 0.5,
+          "chroma": 0.6,
+          "sigmaY": 9,
+          "sigmaC": 16
+        },
+        "sha256": "371281526dd7b1829ca76838532739ca47053210dda888fc7ff17f8446d2b45e",
+        "processingMs": 1373.6387059999997,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 41.5631918466116,
+          "meanLumaShift": 44.01167633322399,
+          "newClippedLowChannels": 1489,
+          "newClippedHighChannels": 34,
+          "maxRowShiftJump": 0.6521112522686465
+        },
+        "metrics": {
+          "meanLuma": 97.08545228577589,
+          "highFrequencyRMS": 1.1198531831258147,
+          "chromaSpread": 47.27819841015149,
+          "referenceMSE": null
+        },
+        "rois": [
+          {
+            "id": "face",
+            "box": [
+              300,
+              340,
+              430,
+              420
+            ],
+            "before": {
+              "meanLuma": 96.83054208084343,
+              "highFrequencyRMS": 1.019801572628625,
+              "chromaSpread": 29.168135917669854,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 96.83136471982425,
+              "highFrequencyRMS": 0.9875894710497172,
+              "chromaSpread": 29.160480964052933,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "hair",
+            "box": [
+              290,
+              60,
+              440,
+              220
+            ],
+            "before": {
+              "meanLuma": 17.918501822311242,
+              "highFrequencyRMS": 0.8184137677809439,
+              "chromaSpread": 12.429280694449893,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 17.923662956609174,
+              "highFrequencyRMS": 0.6877515514411094,
+              "chromaSpread": 12.418805481727713,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "background",
+            "box": [
+              30,
+              320,
+              165,
+              360
+            ],
+            "before": {
+              "meanLuma": 54.53087275083879,
+              "highFrequencyRMS": 0.9398434268949729,
+              "chromaSpread": 4.395735030295619,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 54.51879360269016,
+              "highFrequencyRMS": 0.706758133652318,
+              "chromaSpread": 4.2876390507799345,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "fabric",
+            "box": [
+              190,
+              1030,
+              200,
+              260
+            ],
+            "before": {
+              "meanLuma": 152.15482264228424,
+              "highFrequencyRMS": 0.8960336635575082,
+              "chromaSpread": 6.547681568634255,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 152.18443346536273,
+              "highFrequencyRMS": 0.7085812882220303,
+              "chromaSpread": 6.47296638029314,
+              "referenceMSE": null
+            }
+          }
+        ]
+      },
+      {
+        "strength": "strong",
+        "settings": {
+          "luma": 0.75,
+          "chroma": 0.85,
+          "sigmaY": 12,
+          "sigmaC": 20
+        },
+        "sha256": "b315131a43ed92c4ac548e25916765f9c161a30f77e63bf0cc5b18912b563b30",
+        "processingMs": 1377.6058179999995,
+        "integrity": {
+          "passed": true,
+          "scope": "catastrophic faults only; visual review required",
+          "width": 1102,
+          "height": 1470,
+          "alphaPreserved": true,
+          "meanChange": 41.56372725738813,
+          "meanLumaShift": 44.013169287776854,
+          "newClippedLowChannels": 1144,
+          "newClippedHighChannels": 34,
+          "maxRowShiftJump": 0.6422439201451482
+        },
+        "metrics": {
+          "meanLuma": 97.08694524032875,
+          "highFrequencyRMS": 1.0520962916200023,
+          "chromaSpread": 47.27368971009093,
+          "referenceMSE": null
+        },
+        "rois": [
+          {
+            "id": "face",
+            "box": [
+              300,
+              340,
+              430,
+              420
+            ],
+            "before": {
+              "meanLuma": 96.83054208084343,
+              "highFrequencyRMS": 1.019801572628625,
+              "chromaSpread": 29.168135917669854,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 96.8319918017745,
+              "highFrequencyRMS": 0.939504449794116,
+              "chromaSpread": 29.150422964661498,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "hair",
+            "box": [
+              290,
+              60,
+              440,
+              220
+            ],
+            "before": {
+              "meanLuma": 17.918501822311242,
+              "highFrequencyRMS": 0.8184137677809439,
+              "chromaSpread": 12.429280694449893,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 17.93004377685769,
+              "highFrequencyRMS": 0.6218153981427976,
+              "chromaSpread": 12.412102758860877,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "background",
+            "box": [
+              30,
+              320,
+              165,
+              360
+            ],
+            "before": {
+              "meanLuma": 54.53087275083879,
+              "highFrequencyRMS": 0.9398434268949729,
+              "chromaSpread": 4.395735030295619,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 54.50629455891854,
+              "highFrequencyRMS": 0.6076029467828357,
+              "chromaSpread": 4.2355110647713285,
+              "referenceMSE": null
+            }
+          },
+          {
+            "id": "fabric",
+            "box": [
+              190,
+              1030,
+              200,
+              260
+            ],
+            "before": {
+              "meanLuma": 152.15482264228424,
+              "highFrequencyRMS": 0.8960336635575082,
+              "chromaSpread": 6.547681568634255,
+              "referenceMSE": null
+            },
+            "after": {
+              "meanLuma": 152.20084283074777,
+              "highFrequencyRMS": 0.636298310098909,
+              "chromaSpread": 6.438385287893595,
+              "referenceMSE": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "calibration": [
+    {
+      "id": "astronaut-noise",
+      "strength": "low",
+      "before": {
+        "meanLuma": 113.12992487870034,
+        "highFrequencyRMS": 8.653883480863307,
+        "chromaSpread": 45.42375314276702,
+        "referenceMSE": 33.22769546508789
+      },
+      "after": {
+        "meanLuma": 113.11344683915354,
+        "highFrequencyRMS": 8.55841332894515,
+        "chromaSpread": 45.34249102623645,
+        "referenceMSE": 30.69759750366211
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 3.3726526896158853,
+        "meanLumaShift": -0.05036049804377285,
+        "newClippedLowChannels": 410,
+        "newClippedHighChannels": 628,
+        "maxRowShiftJump": 0.4574281250000006
+      }
+    },
+    {
+      "id": "astronaut-noise",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 113.12992487870034,
+        "highFrequencyRMS": 8.653883480863307,
+        "chromaSpread": 45.42375314276702,
+        "referenceMSE": 33.22769546508789
+      },
+      "after": {
+        "meanLuma": 113.1185544029333,
+        "highFrequencyRMS": 8.3975383504743,
+        "chromaSpread": 45.272559973957485,
+        "referenceMSE": 28.2586186726888
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 3.673821767171224,
+        "meanLumaShift": -0.045252934264013334,
+        "newClippedLowChannels": 284,
+        "newClippedHighChannels": 557,
+        "maxRowShiftJump": 0.5153226562500007
+      }
+    },
+    {
+      "id": "astronaut-noise",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 113.12992487870034,
+        "highFrequencyRMS": 8.653883480863307,
+        "chromaSpread": 45.42375314276702,
+        "referenceMSE": 33.22769546508789
+      },
+      "after": {
+        "meanLuma": 113.11231365738585,
+        "highFrequencyRMS": 8.270243824638944,
+        "chromaSpread": 45.22192778890681,
+        "referenceMSE": 26.673563639322918
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 3.9648145039876304,
+        "meanLumaShift": -0.05149367981145758,
+        "newClippedLowChannels": 262,
+        "newClippedHighChannels": 506,
+        "maxRowShiftJump": 0.5583488281250003
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "strength": "low",
+      "before": {
+        "meanLuma": 112.72521716689712,
+        "highFrequencyRMS": 7.159417179235274,
+        "chromaSpread": 44.02623097742617,
+        "referenceMSE": 50.2151730855306
+      },
+      "after": {
+        "meanLuma": 112.72377619018198,
+        "highFrequencyRMS": 7.1533681524085,
+        "chromaSpread": 44.01853914447067,
+        "referenceMSE": 50.02087656656901
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 1.9365399678548176,
+        "meanLumaShift": -0.04141923373182976,
+        "newClippedLowChannels": 1692,
+        "newClippedHighChannels": 1912,
+        "maxRowShiftJump": 0.27522070312500013
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 112.72521716689712,
+        "highFrequencyRMS": 7.159417179235274,
+        "chromaSpread": 44.02623097742617,
+        "referenceMSE": 50.2151730855306
+      },
+      "after": {
+        "meanLuma": 112.72129222030142,
+        "highFrequencyRMS": 7.135181074960168,
+        "chromaSpread": 44.007707251080795,
+        "referenceMSE": 49.638598124186196
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 1.9517351786295574,
+        "meanLumaShift": -0.04390320361238764,
+        "newClippedLowChannels": 1370,
+        "newClippedHighChannels": 1679,
+        "maxRowShiftJump": 0.32359765625000014
+      }
+    },
+    {
+      "id": "astronaut-jpeg",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 112.72521716689712,
+        "highFrequencyRMS": 7.159417179235274,
+        "chromaSpread": 44.02623097742617,
+        "referenceMSE": 50.2151730855306
+      },
+      "after": {
+        "meanLuma": 112.71884613036578,
+        "highFrequencyRMS": 7.116728527873586,
+        "chromaSpread": 43.99546280251507,
+        "referenceMSE": 49.28861999511719
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 512,
+        "height": 512,
+        "alphaPreserved": true,
+        "meanChange": 1.9774335225423176,
+        "meanLumaShift": -0.04634929354803319,
+        "newClippedLowChannels": 1255,
+        "newClippedHighChannels": 1540,
+        "maxRowShiftJump": 0.35312734375000004
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "strength": "low",
+      "before": {
+        "meanLuma": 99.59895621416696,
+        "highFrequencyRMS": 10.276513038011986,
+        "chromaSpread": 37.25942985044829,
+        "referenceMSE": 30.844377777777776
+      },
+      "after": {
+        "meanLuma": 99.59858659916569,
+        "highFrequencyRMS": 10.18626669132463,
+        "chromaSpread": 37.15043995808225,
+        "referenceMSE": 28.154316666666666
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 3.218461111111111,
+        "meanLumaShift": 0.6746358566657795,
+        "newClippedLowChannels": 118,
+        "newClippedHighChannels": 73,
+        "maxRowShiftJump": 0.5020603333333337
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 99.59895621416696,
+        "highFrequencyRMS": 10.276513038011986,
+        "chromaSpread": 37.25942985044829,
+        "referenceMSE": 30.844377777777776
+      },
+      "after": {
+        "meanLuma": 99.59472362416498,
+        "highFrequencyRMS": 10.02523142082835,
+        "chromaSpread": 37.049147248785026,
+        "referenceMSE": 25.542268055555557
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 3.5627708333333334,
+        "meanLumaShift": 0.6707728816650808,
+        "newClippedLowChannels": 83,
+        "newClippedHighChannels": 73,
+        "maxRowShiftJump": 0.5602809999999985
+      }
+    },
+    {
+      "id": "coffee-noise",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 99.59895621416696,
+        "highFrequencyRMS": 10.276513038011986,
+        "chromaSpread": 37.25942985044829,
+        "referenceMSE": 30.844377777777776
+      },
+      "after": {
+        "meanLuma": 99.5960323199971,
+        "highFrequencyRMS": 9.878357495184964,
+        "chromaSpread": 36.97377124057895,
+        "referenceMSE": 23.8611625
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 3.9129375,
+        "meanLumaShift": 0.672081577497193,
+        "newClippedLowChannels": 80,
+        "newClippedHighChannels": 73,
+        "maxRowShiftJump": 0.6662969999999995
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "strength": "low",
+      "before": {
+        "meanLuma": 99.57630090750231,
+        "highFrequencyRMS": 8.545453063200167,
+        "chromaSpread": 35.628904189002014,
+        "referenceMSE": 63.823566666666665
+      },
+      "after": {
+        "meanLuma": 99.57552979666845,
+        "highFrequencyRMS": 8.534386556068474,
+        "chromaSpread": 35.61211181525667,
+        "referenceMSE": 63.481116666666665
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.8502402777777778,
+        "meanLumaShift": 0.7518553166799558,
+        "newClippedLowChannels": 103,
+        "newClippedHighChannels": 350,
+        "maxRowShiftJump": 0.16053633333333295
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 99.57630090750231,
+        "highFrequencyRMS": 8.545453063200167,
+        "chromaSpread": 35.628904189002014,
+        "referenceMSE": 63.823566666666665
+      },
+      "after": {
+        "meanLuma": 99.57384333166641,
+        "highFrequencyRMS": 8.49796620618927,
+        "chromaSpread": 35.58882053567976,
+        "referenceMSE": 62.79625277777778
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.9021652777777778,
+        "meanLumaShift": 0.7501688516779181,
+        "newClippedLowChannels": 91,
+        "newClippedHighChannels": 333,
+        "maxRowShiftJump": 0.19314066666666618
+      }
+    },
+    {
+      "id": "coffee-jpeg",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 99.57630090750231,
+        "highFrequencyRMS": 8.545453063200167,
+        "chromaSpread": 35.628904189002014,
+        "referenceMSE": 63.823566666666665
+      },
+      "after": {
+        "meanLuma": 99.57424127583303,
+        "highFrequencyRMS": 8.457320112761918,
+        "chromaSpread": 35.56558106788198,
+        "referenceMSE": 62.17907916666667
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 600,
+        "height": 400,
+        "alphaPreserved": true,
+        "meanChange": 0.9895638888888889,
+        "meanLumaShift": 0.7505667958445381,
+        "newClippedLowChannels": 92,
+        "newClippedHighChannels": 322,
+        "maxRowShiftJump": 0.21848566666666824
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "strength": "low",
+      "before": {
+        "meanLuma": 119.18145814338469,
+        "highFrequencyRMS": 6.575690164587358,
+        "chromaSpread": 19.32049458784101,
+        "referenceMSE": 54.6250110864745
+      },
+      "after": {
+        "meanLuma": 119.1820683547672,
+        "highFrequencyRMS": 6.451867268413713,
+        "chromaSpread": 19.13768768352735,
+        "referenceMSE": 52.119642769154964
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.0013082039911305,
+        "meanLumaShift": 1.7954275979291776,
+        "newClippedLowChannels": 1,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.5181605321507736
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 119.18145814338469,
+        "highFrequencyRMS": 6.575690164587358,
+        "chromaSpread": 19.32049458784101,
+        "referenceMSE": 54.6250110864745
+      },
+      "after": {
+        "meanLuma": 119.18252339393955,
+        "highFrequencyRMS": 6.175890925723041,
+        "chromaSpread": 18.949469555974073,
+        "referenceMSE": 49.15887903424489
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.189541759053954,
+        "meanLumaShift": 1.7958826371015264,
+        "newClippedLowChannels": 1,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.5723503325942334
+      }
+    },
+    {
+      "id": "chelsea-noise",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 119.18145814338469,
+        "highFrequencyRMS": 6.575690164587358,
+        "chromaSpread": 19.32049458784101,
+        "referenceMSE": 54.6250110864745
+      },
+      "after": {
+        "meanLuma": 119.1830040812994,
+        "highFrequencyRMS": 5.8942974497085,
+        "chromaSpread": 18.800257590252215,
+        "referenceMSE": 46.86852180339985
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.403791574279379,
+        "meanLumaShift": 1.7963633244613795,
+        "newClippedLowChannels": 1,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.7016186252771603
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "strength": "low",
+      "before": {
+        "meanLuma": 119.92954414932345,
+        "highFrequencyRMS": 4.505515219729286,
+        "chromaSpread": 17.58857018619662,
+        "referenceMSE": 65.4480610987928
+      },
+      "after": {
+        "meanLuma": 119.92870794385423,
+        "highFrequencyRMS": 4.489872173167608,
+        "chromaSpread": 17.582037894445026,
+        "referenceMSE": 65.23213353042621
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.145612219758561,
+        "meanLumaShift": 2.555743404314643,
+        "newClippedLowChannels": 29,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.37446385809312543
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "strength": "medium",
+      "before": {
+        "meanLuma": 119.92954414932345,
+        "highFrequencyRMS": 4.505515219729286,
+        "chromaSpread": 17.58857018619662,
+        "referenceMSE": 65.4480610987928
+      },
+      "after": {
+        "meanLuma": 119.9291255683919,
+        "highFrequencyRMS": 4.43585403057341,
+        "chromaSpread": 17.572613471655448,
+        "referenceMSE": 64.67287509238729
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.147467356491747,
+        "meanLumaShift": 2.556161028852305,
+        "newClippedLowChannels": 27,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.41554456762749403
+      }
+    },
+    {
+      "id": "chelsea-jpeg",
+      "strength": "strong",
+      "before": {
+        "meanLuma": 119.92954414932345,
+        "highFrequencyRMS": 4.505515219729286,
+        "chromaSpread": 17.58857018619662,
+        "referenceMSE": 65.4480610987928
+      },
+      "after": {
+        "meanLuma": 119.92885172951573,
+        "highFrequencyRMS": 4.376332084405886,
+        "chromaSpread": 17.56327194715316,
+        "referenceMSE": 64.1719093372752
+      },
+      "integrity": {
+        "passed": true,
+        "scope": "catastrophic faults only; visual review required",
+        "width": 451,
+        "height": 300,
+        "alphaPreserved": true,
+        "meanChange": 5.152379896526238,
+        "meanLumaShift": 2.5558871899761333,
+        "newClippedLowChannels": 26,
+        "newClippedHighChannels": 0,
+        "maxRowShiftJump": 0.42964789356984356
+      }
+    }
+  ],
+  "limitations": [
+    "High-frequency and chroma-spread reductions may remove genuine texture; not a noise-quality score",
+    "One portrait-specific R7 profile; not an automatic general-purpose treatment",
+    "Face noise cleanup is reduced but not pixel-exact; identity requires visual/landmark evidence",
+    "Node processing only; no mobile browser/codec qualification"
+  ],
+  "textureChecks": [
+    {
+      "id": "astronaut-original",
+      "strength": "low",
+      "before": {
+        "mse": 6.672726949055989,
+        "gradientMAE": 0.5836170415250281
+      },
+      "after": {
+        "mse": 6.73480224609375,
+        "gradientMAE": 0.595726969872318
+      }
+    },
+    {
+      "id": "astronaut-original",
+      "strength": "medium",
+      "before": {
+        "mse": 6.672726949055989,
+        "gradientMAE": 0.5836170415250281
+      },
+      "after": {
+        "mse": 6.932228088378906,
+        "gradientMAE": 0.6873510150469443
+      }
+    },
+    {
+      "id": "astronaut-original",
+      "strength": "strong",
+      "before": {
+        "mse": 6.672726949055989,
+        "gradientMAE": 0.5836170415250281
+      },
+      "after": {
+        "mse": 7.304463704427083,
+        "gradientMAE": 0.8157933816127871
+      }
+    },
+    {
+      "id": "coffee-original",
+      "strength": "low",
+      "before": {
+        "mse": 1.9824402777777779,
+        "gradientMAE": 0.6563767113950942
+      },
+      "after": {
+        "mse": 2.0183305555555555,
+        "gradientMAE": 0.6625189978288645
+      }
+    },
+    {
+      "id": "coffee-original",
+      "strength": "medium",
+      "before": {
+        "mse": 1.9824402777777779,
+        "gradientMAE": 0.6563767113950942
+      },
+      "after": {
+        "mse": 2.181901388888889,
+        "gradientMAE": 0.7602877531896712
+      }
+    },
+    {
+      "id": "coffee-original",
+      "strength": "strong",
+      "before": {
+        "mse": 1.9824402777777779,
+        "gradientMAE": 0.6563767113950942
+      },
+      "after": {
+        "mse": 2.537573611111111,
+        "gradientMAE": 0.9087065832363144
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "strength": "low",
+      "before": {
+        "mse": 34.789620596205964,
+        "gradientMAE": 0.9087361872912049
+      },
+      "after": {
+        "mse": 34.74741069228874,
+        "gradientMAE": 0.8927188948348669
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "strength": "medium",
+      "before": {
+        "mse": 34.789620596205964,
+        "gradientMAE": 0.9087361872912049
+      },
+      "after": {
+        "mse": 34.671355013550134,
+        "gradientMAE": 0.8871687603123387
+      }
+    },
+    {
+      "id": "chelsea-original",
+      "strength": "strong",
+      "before": {
+        "mse": 34.789620596205964,
+        "gradientMAE": 0.9087361872912049
+      },
+      "after": {
+        "mse": 34.68254249815225,
+        "gradientMAE": 0.9476650204387066
+      }
+    },
+    {
+      "id": "astronaut-blur-0-8",
+      "strength": "low",
+      "before": {
+        "mse": 42.66553624471029,
+        "gradientMAE": 3.0732566315998473
+      },
+      "after": {
+        "mse": 42.7724978129069,
+        "gradientMAE": 3.0813451901608064
+      }
+    },
+    {
+      "id": "astronaut-blur-0-8",
+      "strength": "medium",
+      "before": {
+        "mse": 42.66553624471029,
+        "gradientMAE": 3.0732566315998473
+      },
+      "after": {
+        "mse": 43.09516398111979,
+        "gradientMAE": 3.1539694900064053
+      }
+    },
+    {
+      "id": "astronaut-blur-0-8",
+      "strength": "strong",
+      "before": {
+        "mse": 42.66553624471029,
+        "gradientMAE": 3.0732566315998473
+      },
+      "after": {
+        "mse": 43.480943044026695,
+        "gradientMAE": 3.2224799621629936
+      }
+    },
+    {
+      "id": "astronaut-blur-1-6",
+      "strength": "low",
+      "before": {
+        "mse": 159.12066523234049,
+        "gradientMAE": 5.133633410181824
+      },
+      "after": {
+        "mse": 159.17104721069336,
+        "gradientMAE": 5.1335456118048155
+      }
+    },
+    {
+      "id": "astronaut-blur-1-6",
+      "strength": "medium",
+      "before": {
+        "mse": 159.12066523234049,
+        "gradientMAE": 5.133633410181824
+      },
+      "after": {
+        "mse": 159.41957473754883,
+        "gradientMAE": 5.1320582630278695
+      }
+    },
+    {
+      "id": "astronaut-blur-1-6",
+      "strength": "strong",
+      "before": {
+        "mse": 159.12066523234049,
+        "gradientMAE": 5.133633410181824
+      },
+      "after": {
+        "mse": 159.71429443359375,
+        "gradientMAE": 5.133701302844609
+      }
+    },
+    {
+      "id": "coffee-blur-0-8",
+      "strength": "low",
+      "before": {
+        "mse": 54.161904166666666,
+        "gradientMAE": 4.773644273871957
+      },
+      "after": {
+        "mse": 54.46135694444445,
+        "gradientMAE": 4.794161378403201
+      }
+    },
+    {
+      "id": "coffee-blur-0-8",
+      "strength": "medium",
+      "before": {
+        "mse": 54.161904166666666,
+        "gradientMAE": 4.773644273871957
+      },
+      "after": {
+        "mse": 55.179381944444444,
+        "gradientMAE": 4.893095437675668
+      }
+    },
+    {
+      "id": "coffee-blur-0-8",
+      "strength": "strong",
+      "before": {
+        "mse": 54.161904166666666,
+        "gradientMAE": 4.773644273871957
+      },
+      "after": {
+        "mse": 56.20193888888889,
+        "gradientMAE": 5.007617203275076
+      }
+    },
+    {
+      "id": "coffee-blur-1-6",
+      "strength": "low",
+      "before": {
+        "mse": 151.18694722222222,
+        "gradientMAE": 6.998446681813497
+      },
+      "after": {
+        "mse": 151.3222763888889,
+        "gradientMAE": 6.999243618228016
+      }
+    },
+    {
+      "id": "coffee-blur-1-6",
+      "strength": "medium",
+      "before": {
+        "mse": 151.18694722222222,
+        "gradientMAE": 6.998446681813497
+      },
+      "after": {
+        "mse": 151.89761666666666,
+        "gradientMAE": 7.005294051489857
+      }
+    },
+    {
+      "id": "coffee-blur-1-6",
+      "strength": "strong",
+      "before": {
+        "mse": 151.18694722222222,
+        "gradientMAE": 6.998446681813497
+      },
+      "after": {
+        "mse": 152.44050277777777,
+        "gradientMAE": 7.013807364404944
+      }
+    },
+    {
+      "id": "chelsea-blur-0-8",
+      "strength": "low",
+      "before": {
+        "mse": 47.510569105691054,
+        "gradientMAE": 2.6660307335566023
+      },
+      "after": {
+        "mse": 47.68409706824341,
+        "gradientMAE": 2.681610169454101
+      }
+    },
+    {
+      "id": "chelsea-blur-0-8",
+      "strength": "medium",
+      "before": {
+        "mse": 47.510569105691054,
+        "gradientMAE": 2.6660307335566023
+      },
+      "after": {
+        "mse": 48.24142892338014,
+        "gradientMAE": 2.7531677064292106
+      }
+    },
+    {
+      "id": "chelsea-blur-0-8",
+      "strength": "strong",
+      "before": {
+        "mse": 47.510569105691054,
+        "gradientMAE": 2.6660307335566023
+      },
+      "after": {
+        "mse": 48.99750431140675,
+        "gradientMAE": 2.848009319955843
+      }
+    },
+    {
+      "id": "chelsea-blur-1-6",
+      "strength": "low",
+      "before": {
+        "mse": 84.26229859571323,
+        "gradientMAE": 4.345815342995817
+      },
+      "after": {
+        "mse": 84.35335304262134,
+        "gradientMAE": 4.34684276551531
+      }
+    },
+    {
+      "id": "chelsea-blur-1-6",
+      "strength": "medium",
+      "before": {
+        "mse": 84.26229859571323,
+        "gradientMAE": 4.345815342995817
+      },
+      "after": {
+        "mse": 84.79422764227643,
+        "gradientMAE": 4.352032547752332
+      }
+    },
+    {
+      "id": "chelsea-blur-1-6",
+      "strength": "strong",
+      "before": {
+        "mse": 84.26229859571323,
+        "gradientMAE": 4.345815342995817
+      },
+      "after": {
+        "mse": 85.15239221483124,
+        "gradientMAE": 4.360598720178977
+      }
+    }
+  ],
+  "tests": {
+    "targetedPassed": 4,
+    "integrityOutputsPassed": 21
+  },
+  "decision": "Medium is a portrait review candidate; no automatic activation or production freeze"
+}
