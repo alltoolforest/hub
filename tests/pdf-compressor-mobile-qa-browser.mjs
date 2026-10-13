@@ -28,6 +28,13 @@ try{
   await page.evaluate(()=>window.staleResultCallback({data:{ok:true,result:{bytes:new Uint8Array([1,2,3])},elapsedMs:1}}));
   await page.waitForTimeout(500);assert.equal(await page.locator('#download').isVisible(),false);
   assert.match(await page.locator('#status').textContent(),/^Cancelled/);
+  await page.evaluate(()=>{window.workerStartedForOversize=false;window.NativeWorker=Worker;window.Worker=function(...args){window.workerStartedForOversize=true;return new window.NativeWorker(...args);};});
+  await page.locator('#file').setInputFiles({name:'oversize.pdf',mimeType:'application/pdf',buffer:Buffer.alloc(20*1024*1024+1)});
+  assert.equal(await page.locator('#run').isDisabled(),true);
+  assert.match(await page.locator('#status').textContent(),/^File too large:/);
+  await page.evaluate(()=>document.querySelector('#run').onclick());
+  assert.equal(await page.evaluate(()=>window.workerStartedForOversize),false);
+  assert.equal(await page.locator('#download').isVisible(),false);
   assert.deepEqual(remote,[]);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   console.log(JSON.stringify({scope:'Local Chromium file-mode diagnostic; not physical-phone evidence',reports,cancel:true,noRemoteRequests:true,narrowLayout:true},null,2));
 }finally{await browser.close();}
