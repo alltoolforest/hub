@@ -38,3 +38,7 @@ matrix. Browser-local processing remains the architecture; no server upload is
 authorized by this requirement.
 
 Do not advertise 100 MB support or close Task 10 until this evidence exists.
+
+## Superseding final evidence
+
+The recovered 100 MB engineering envelope, real-content verification and remaining physical-device gates are documented in `tasks10-13-release-report-20261013.md` and the final-large-file/memory/performance evidence. The earlier constraints above describe the historical checkpoint, not the current implementation.
