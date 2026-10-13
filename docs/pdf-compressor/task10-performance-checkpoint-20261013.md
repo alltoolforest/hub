@@ -55,6 +55,12 @@ Windows Chrome/Edge/Firefox, macOS Safari and appropriate device CPU/memory evid
 Automated cross-browser regression and the new diagnostic/performance CI job are
 required; their final commit/run result must be recorded separately.
 
+Automated checkpoint: bf9b0192e8e011c8bd5cbf2088f6229753122e40.
+CI run 38399304588 completed successfully across all eight jobs: input integrity,
+pinned source artifact, lossless output, embedded-image output, document-aware
+modes, final-output integrity, file lifecycle and performance diagnostic. This
+does not close the physical-device or full CPU/memory measurement gate.
+
 The earlier physical Android scan-quality/completion evidence remains accepted;
 it does not verify the newly integrated stages or complete this device matrix.
 The 21.61 MB complex stress PDF remains unsupported by the unchanged upper size
