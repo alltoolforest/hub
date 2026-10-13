@@ -1,4 +1,4 @@
-import '../assets/vendor/pdf-lib.js';
+import '../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js';
 import * as pdfjs from '../node_modules/pdfjs-dist/legacy/build/pdf.mjs';
 import createModule from '../assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs';
 import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';

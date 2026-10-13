@@ -1,4 +1,4 @@
-import PDF from '../assets/vendor/pdf-lib.js';
+import PDF from '../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {WorkerMessageHandler} from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import {JpegImage} from 'pdfjs-dist/image_decoders/pdf.image_decoders.mjs';

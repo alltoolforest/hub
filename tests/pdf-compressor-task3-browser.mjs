@@ -15,7 +15,7 @@ try{
     return route.continue();
   });
   await page.goto('http://127.0.0.1:8765/tests/',{waitUntil:'domcontentloaded'});
-  await page.addScriptTag({url:'/assets/vendor/pdf-lib.js'});
+  await page.addScriptTag({url:'/assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js'});
   const rows=[];
   for(const id of ['digital','scanned','mixed','form','bookmarks','attachment','tagged']){
     const {bytes}=await buildFixture(id);

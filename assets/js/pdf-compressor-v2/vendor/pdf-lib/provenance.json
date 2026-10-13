@@ -1,0 +1,8 @@
+{
+  "scope": "Isolated compressor parser fork; shared vendor remains untouched",
+  "source": "assets/vendor/pdf-lib.js",
+  "sourceSha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f",
+  "patchedSha256": "d408a0e4bec50611ffd43c87657a4d8cb6f07b54e7fff9f1c23fb62fa6f7ce88",
+  "patch": "Decode both uppercase and lowercase hexadecimal escapes in PDF names; one regex replacement",
+  "bytes": 525099
+}
