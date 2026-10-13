@@ -15,7 +15,10 @@ async function boundedInflate(bytes,maxBytes){
   // concurrently with writing so backpressure cannot deadlock large streams.
   const stream=new DecompressionStream('deflate');
   const reader=stream.readable.getReader(),writer=stream.writable.getWriter();
-  const written=(async()=>{try{await writer.write(bytes);await writer.close();}
+  const written=(async()=>{try{
+    for(let offset=0;offset<bytes.length;offset+=65536)
+      await writer.write(bytes.subarray(offset,offset+65536));
+    await writer.close();}
     catch(error){return error;}})();
   const chunks=[];let length=0;
   try{

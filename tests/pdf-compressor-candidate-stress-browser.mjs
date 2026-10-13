@@ -17,7 +17,7 @@ try{
  await page.locator('#compressor-mode').selectOption('strong');const compressionStart=Date.now();await page.locator('[data-run]').click();
  await page.waitForFunction(()=>['completed','failed'].includes(RC_UI.session.snapshot().state),{},{timeout:130000});
  const evidence=await page.evaluate(()=>{const s=RC_UI.session.snapshot(),r=s.result;return {state:s.state,error:s.error,inputBytes:r?.inputBytes,outputBytes:r?.outputBytes,engineMs:r?.engineMs,verified:r?.integrity?.independentTextVerified,phases:QA_PHASES,workers:RC_RESOURCES};});
- Object.assign(evidence,{inspectMs,compressMs:Date.now()-compressionStart,cpuThrottleRate:rate,noRemoteRequests:remote.length===0});
+ Object.assign(evidence,{inspectMs,compressMs:Date.now()-compressionStart,pageCpuThrottleRate:rate,noRemoteRequests:remote.length===0});
  console.log(JSON.stringify(evidence));if(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE)writeFileSync(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE,JSON.stringify(evidence,null,2));
  assert.equal(evidence.state,'completed');assert.equal(evidence.verified,true);assert.equal(evidence.workers.started,evidence.workers.terminated);assert.deepEqual(remote,[]);
 }finally{await browser.close();}

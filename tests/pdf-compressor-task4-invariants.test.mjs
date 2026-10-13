@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomFillSync} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 import {losslessFingerprint,inflateStreamBounded} from '../assets/js/pdf-compressor-v2/lossless-invariants.mjs';
@@ -66,7 +67,7 @@ test('decoded stream budgets fail closed',async()=>{
 });
 
 test('direct stream inflation drains backpressure, enforces exact limits and rejects damaged input',async()=>{
- const source=new Uint8Array(2*1024*1024);for(let i=0;i<source.length;i++)source[i]=(i*37)%251;
+ const source=randomFillSync(new Uint8Array(2*1024*1024));
  const encoded=new Uint8Array(deflateSync(source));
  assert.deepEqual(await inflateStreamBounded(encoded,source.length),source);
  await assert.rejects(inflateStreamBounded(encoded,source.length-1),e=>e.code==='decoded-stream-limit');

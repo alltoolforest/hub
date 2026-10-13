@@ -19,3 +19,9 @@ The OnePlus Nord4 manual report reopened the performance launch gate: the suppli
 - Self-contained candidate: all modes, downloaded bytes/hash, accessibility, cancellation/reset, narrow reflow, and zero remote requests passed.
 
 Private PDF bytes and digest-bearing receipts remain outside Git. Final CI and matched candidate comparison are recorded below when completed. Manual OnePlus retest remains required before freezing or launch.
+
+## Matched candidate comparison
+
+The previous downloadable candidate completed in 66,080 ms plus 7,665 ms initial inspection. The updated candidate completed in 30,546 ms plus 4,563 ms inspection with the same local Chromium harness and private source. These are single runs, not a statistical device guarantee. A page-target CDP throttling probe also passed, but does not establish worker CPU throttling or Nord4 performance.
+
+Direct inflation feeds at most 64 KiB of compressed input per write to retain backpressure for large streams. Regression input includes 2 MiB of incompressible data to exercise multiple writes, exact decoded limits, truncated data and bad checksums.
