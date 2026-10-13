@@ -4,6 +4,7 @@ on:
     branches:
       - pdf-compressor-task3-integrity-foundation-20261012
       - pdf-compressor-task4-source-build-20261013
+      - pdf-compressor-task5-images-20261013
   pull_request:
     paths:
       - assets/js/pdf-compressor-v2/**
@@ -120,3 +121,24 @@ jobs:
           name: pdf-compressor-independent-lossless-output-evidence
           path: /tmp/atf-qpdf-verified-outputs
           retention-days: 7
+  embedded-image-output:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Image candidate and protected structure tests
+        run: node --test tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-task5-transform.test.mjs tests/pdf-compressor-task5-jpeg-decoder.test.mjs tests/pdf-compressor-task3-policy.test.mjs
+      - name: Browser image compression and strict CSP gates
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-image-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task5-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task5-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task5-worker-browser.mjs

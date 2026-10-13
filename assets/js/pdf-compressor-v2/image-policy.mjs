@@ -10,7 +10,7 @@ export const QUALITY_MODES=Object.freeze({
   strong:Object.freeze({jpegQuality:0.68,maxDimension:1800})
 });
 function name(v){return typeof v==='string'?v.trim():'';}
-export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS){
+export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=false}={}){
   if(!QUALITY_MODES[mode])throw new RangeError('Unknown image quality mode');
   const skip=(reason)=>({eligible:false,action:'preserve',reason,mode});
   if(!item||typeof item!=='object')return skip('invalid-image-descriptor');
@@ -29,15 +29,16 @@ export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS){
     return skip('unverified-color-profile');
   if(!['/FlateDecode','/DCTDecode'].includes(name(filter)))
     return skip('unsupported-image-encoding');
-  if(name(filter)==='/DCTDecode')
+  if(name(filter)==='/DCTDecode'&&!allowJpeg)
     return skip('existing-jpeg-no-safe-decode-path');
-  // A Flate stream is ONLY a candidate. The independent transform must still
+  // Flate and explicitly enabled, independently decoded JPEG streams are ONLY
+  // candidates. The independent transform must still
   // validate decoded pixel bytes, original color, new stream, output PDF and
   // no visual/text or structural regression before export.
   const channels=colorSpace==='/DeviceGray'?1:3;
   if(pixels*channels>limits.maxDecodedBytes)return skip('decoded-byte-budget');
   return {
-    eligible:true,action:'candidate-only',reason:'bounded-opaque-flate-raster',
+    eligible:true,action:'candidate-only',reason:filter==='/DCTDecode'?'bounded-opaque-jpeg-raster':'bounded-opaque-flate-raster',
     mode,pixels,expectedRawBytes:pixels*channels,
     jpegQuality:QUALITY_MODES[mode].jpegQuality,
     maxDimension:QUALITY_MODES[mode].maxDimension,
