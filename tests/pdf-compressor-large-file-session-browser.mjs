@@ -1,10 +1,12 @@
 // Reproducible real-content stress fixtures through the File-owned session.
 import {chromium} from 'playwright';
+import {startManagedWorkerSampler} from './pdf-compressor-managed-worker-memory.mjs';
 import assert from 'node:assert/strict';
 import {writeFileSync,readFileSync} from 'node:fs';
 const browser=await chromium.launch();
 try{
  const page=await browser.newPage();await page.goto((process.env.PDF_COMPRESSOR_TEST_ORIGIN??'http://127.0.0.1:8766')+'/');
+ const stopSampler=await startManagedWorkerSampler(browser);
  const evidence=await page.evaluate(async({fixture,mode,privateData})=>{
   await import('/assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js');const PDF=globalThis.PDFLib,N=PDF.PDFName.of;
   let bytes;
@@ -51,6 +53,7 @@ try{
    return {fixture:privateData?'provided complex digital PDF':fixture,mode,inputBytes:file.size,inspectMs,compressMs:Math.round(performance.now()-compressStart),uiTicks:ticks,maxUiGapMs:Math.round(maxGap),workersStarted:started,workersTerminated:terminated,result};
   }finally{clearInterval(timer);session.dispose();}
  },{fixture:process.env.PDF_COMPRESSOR_LARGE_FIXTURE??'attachments',mode:process.env.PDF_COMPRESSOR_TEST_MODE??'balanced',privateData:process.env.PDF_COMPRESSOR_PRIVATE_SOURCE?readFileSync(process.env.PDF_COMPRESSOR_PRIVATE_SOURCE).toString('base64'):null});
+ evidence.managedWorkerMemory=await stopSampler();
  assert.ok(evidence.result.outputBytes<=evidence.inputBytes);assert.equal(evidence.result.integrity.independentTextVerified,true);assert.equal(evidence.workersStarted,evidence.workersTerminated);
  if(evidence.fixture==='entropy'){assert.equal(evidence.result.savedBytes,0);assert.equal(evidence.result.integrity.sourceDigest,evidence.result.integrity.outputDigest);}
  console.log(JSON.stringify(evidence));if(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE)writeFileSync(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE,JSON.stringify(evidence,null,2));

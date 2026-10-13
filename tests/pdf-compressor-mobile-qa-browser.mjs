@@ -31,7 +31,7 @@ try{
   assert.match(await page.locator('#status').textContent(),/^Cancelled/);
   await page.locator('#reset').click();
   await page.evaluate(()=>{window.workerStartedForOversize=false;window.NativeWorker=Worker;window.Worker=function(...args){window.workerStartedForOversize=true;return new window.NativeWorker(...args);};});
-  await page.locator('#file').setInputFiles({name:'oversize.pdf',mimeType:'application/pdf',buffer:Buffer.alloc(20*1024*1024+1)});
+  await page.evaluate(()=>QA_SESSION.select({name:'oversize.pdf',size:100000001,arrayBuffer:()=>{throw Error('oversize input must not be read');}}));
   assert.equal(await page.locator('#run').isDisabled(),true);
   assert.match(await page.locator('#status').textContent(),/^Test failed safely: file-limit/);
   await page.evaluate(()=>document.querySelector('#run').onclick());
