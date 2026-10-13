@@ -1,0 +1,77 @@
+name: PDF Compressor isolated integrity and pinned source build
+on:
+  push:
+    branches:
+      - pdf-compressor-task3-integrity-foundation-20261012
+      - pdf-compressor-task4-source-build-20261013
+  pull_request:
+    paths:
+      - assets/js/pdf-compressor-v2/**
+      - tests/pdf-compressor-*.mjs
+      - tests/pdf-compressor-*.py
+      - tests/build-pdf-compressor-qpdf-wasm.sh
+      - .github/workflows/pdf-compressor-integrity-source-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  input-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test-only dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+          npx playwright install --with-deps chromium
+      - name: Generate independent signed and encrypted fixtures
+        run: python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-pdfs
+      - name: Input integrity and adjacent compressor regression
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: node --test tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
+      - name: Isolated browser input gate
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-input-server.log 2>&1 &
+          node tests/pdf-compressor-task3-browser.mjs
+  qpdf-source-build:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned compiler and sources into disposable workspace
+        run: |
+          mkdir -p /tmp/atf-qpdf-build
+          git clone --depth 1 --branch 3.1.74 https://github.com/emscripten-core/emsdk.git /tmp/atf-qpdf-build/emsdk
+          git clone --depth 1 --branch v12.4.2 https://github.com/qpdf/qpdf.git /tmp/atf-qpdf-build/qpdf-source
+          git clone --depth 1 --branch v1.3.2 https://github.com/madler/zlib.git /tmp/atf-qpdf-build/zlib-source
+          git clone --depth 1 --branch 3.1.4.1 https://github.com/libjpeg-turbo/libjpeg-turbo.git /tmp/atf-qpdf-build/jpeg-source
+          test "$(git -C /tmp/atf-qpdf-build/emsdk rev-parse HEAD)" = 3d6d8ee910466516a53e665b86458faa81dae9ba
+          /tmp/atf-qpdf-build/emsdk/emsdk install 3.1.74
+          /tmp/atf-qpdf-build/emsdk/emsdk activate 3.1.74
+      - name: Build isolated module from reviewed source pins
+        run: |
+          source /tmp/atf-qpdf-build/emsdk/emsdk_env.sh
+          bash tests/build-pdf-compressor-qpdf-wasm.sh /tmp/atf-qpdf-build /tmp/atf-qpdf-artifact
+      - name: Report actual version without approving production integration
+        run: |
+          node --input-type=module - <<'JS'
+          import create from '/tmp/atf-qpdf-artifact/qpdf.mjs';
+          const module=await create({noInitialRun:true});
+          module.callMain(['--version']);
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-qpdf-experimental-source-build
+          path: /tmp/atf-qpdf-artifact
+          retention-days: 7
