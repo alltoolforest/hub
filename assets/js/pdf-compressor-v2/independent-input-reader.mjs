@@ -3,6 +3,25 @@
 // worker before production integration. Parser limits are provisional, not
 // a physical-device memory guarantee.
 import {InputInspectionError} from './input-inspector.mjs';
+export async function readPageTextContent(page,{signal,maxTextItems=200000}={}){
+  // PDF.js getTextContent uses async iteration over a ReadableStream, which
+  // fails in the tested WebKit worker. Use the universally supported reader
+  // protocol without patching globals or weakening inspection.
+  const reader=page.streamTextContent().getReader();
+  const items=[],styles=Object.create(null);let lang=null;
+  try{
+    for(;;){
+      if(signal?.aborted)throw new InputInspectionError('cancelled','Inspection cancelled.');
+      const {value,done}=await reader.read();if(done)break;
+      if(!Array.isArray(value?.items))throw new InputInspectionError('invalid-text-stream','The text layer could not be inspected safely.');
+      if(items.length+value.items.length>maxTextItems)
+        throw new InputInspectionError('text-limit','This PDF contains too much text for supported inspection.');
+      items.push(...value.items);Object.assign(styles,value.styles??{});
+      if(value.lang)lang=value.lang;
+    }
+    return {items,styles,lang};
+  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
 export function createIndependentInputReader(pdfjs){
   if(typeof pdfjs?.getDocument!=='function')throw new TypeError('PDF.js is required');
   return async (bytes,{signal,maxPages=500,maxOperators=200000}={})=>{
@@ -26,7 +45,7 @@ export function createIndependentInputReader(pdfjs){
         if(signal?.aborted)throw new InputInspectionError('cancelled','Inspection cancelled.');
         const page=await doc.getPage(i);
         try{
-          const text=await page.getTextContent();
+          const text=await readPageTextContent(page,{signal});
           const list=await page.getOperatorList();
           operations+=list.fnArray.length;
           if(operations>maxOperators)throw new InputInspectionError('operator-limit','This PDF has too many drawing operations for supported inspection.');

@@ -6,7 +6,7 @@ import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
-import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
+import {createIndependentInputReader,readPageTextContent} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
 import {createQpdfLosslessProvider,runVerifiedLossless} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createCanvas} from '@napi-rs/canvas';
@@ -28,7 +28,7 @@ async function independentlyRender(bytes){
       const canvas=createCanvas(Math.ceil(viewport.width),Math.ceil(viewport.height));
       const context=canvas.getContext('2d');
       await page.render({canvasContext:context,viewport}).promise;
-      const text=await page.getTextContent();
+      const text=await readPageTextContent(page);
       report.push({view:page.view,rotation:page.rotate,
         text:text.items.filter(x=>typeof x.str==='string').map(x=>({str:x.str,transform:x.transform,width:x.width,height:x.height,dir:x.dir})),
         pixels:digest(context.getImageData(0,0,canvas.width,canvas.height).data)});
