@@ -39,7 +39,7 @@ try{
           };
           const input=new Uint8Array(data);worker.postMessage({bytes:input},[input.buffer]);
         });
-        if(!result.ok)throw Error(result.code+': '+result.message);
+        if(!result.ok)throw Error(result.code+': '+result.message+'; '+(result.diagnostic??''));
         return {...result.result,bytes:Array.from(result.result.bytes)};
       }finally{worker.terminate();}
     },Array.from(bytes));

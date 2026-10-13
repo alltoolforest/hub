@@ -10,5 +10,6 @@ self.onmessage=async event=>{
     const result=await runVerifiedLossless(event.data.bytes,{PDF:self.PDFLib,
       readPages:createIndependentInputReader(pdfjs),optimize:createQpdfLosslessProvider(createModule)});
     self.postMessage({ok:true,result},[result.bytes.buffer]);
-  }catch(error){self.postMessage({ok:false,code:error.code??error.name,message:error.message});}
+  }catch(error){self.postMessage({ok:false,code:error.code??error.name,message:error.message,
+    diagnostic:error.cause?.message??null});}
 };
