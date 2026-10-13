@@ -142,3 +142,23 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task5-worker-browser.mjs
+  document-aware-modes:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install independent browser and render tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Mode routing and combined verified engine tests
+        run: |
+          node --test tests/pdf-compressor-task6-policy.test.mjs
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-mode-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task6-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task6-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task6-worker-browser.mjs
