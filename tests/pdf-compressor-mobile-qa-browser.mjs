@@ -23,7 +23,9 @@ try{
     assert.equal(report.mode,mode);assert.equal(report.inputBytes,bytes.length);
     assert.ok(report.outputBytes<=bytes.length);reports.push(report);
   }
-  await page.locator('#run').click();await page.locator('#cancel').click();
+  await page.locator('#run').click();await page.waitForFunction(()=>typeof running?.onmessage==='function');
+  await page.evaluate(()=>{window.staleResultCallback=running.onmessage;});await page.locator('#cancel').click();
+  await page.evaluate(()=>window.staleResultCallback({data:{ok:true,result:{bytes:new Uint8Array([1,2,3])},elapsedMs:1}}));
   await page.waitForTimeout(500);assert.equal(await page.locator('#download').isVisible(),false);
   assert.match(await page.locator('#status').textContent(),/^Cancelled/);
   assert.deepEqual(remote,[]);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
