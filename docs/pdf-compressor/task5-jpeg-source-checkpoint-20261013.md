@@ -17,7 +17,10 @@ profiles for the PDF's explicit color-space dictionary.
 Supported APP0/APP2/comment metadata is retained exactly during recompression.
 Unverified EXIF, Adobe and custom application semantics preserve the whole
 original image. Masks, PDF ICCBased/custom color spaces and decode dictionaries
-remain outside the supported transformation scope. Recompression must save at
+remain outside the supported transformation scope.
+Gray JPEGs with embedded profile/application metadata also remain intact because
+the browser codec emits RGB JPEGs; a gray profile cannot be copied into RGB data.
+Recompression must save at
 least 10% of an existing JPEG stream; final PDF no-expansion checks still apply.
 JPEG sources use tighter provisional decoded-pixel limits than Flate sources
 (RMS <=6 Balanced / <=10 Strong, average per-channel bias <=5).
@@ -26,7 +29,7 @@ remain mandatory. A failed quality check cannot release an output.
 
 ## Executed local verification
 
-27 selected unit/adjacent regression tests passed with zero skips, including
+28 selected unit/adjacent regression tests passed with zero skips, including
 real software JPEG decoding, forged/oversized dimensions, truncated data,
 metadata retention, EXIF fallback and the prior safety/integrity checks.
 Three private scanner-produced PDFs (five total pages) passed Chromium Balanced

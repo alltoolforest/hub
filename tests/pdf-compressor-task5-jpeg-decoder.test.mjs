@@ -31,3 +31,9 @@ test('JPEG application/comment metadata survives and unverified EXIF images rema
   const exif=source.slice();exif[3]=225;
   assert.equal((await decode({bytes:exif,descriptor})).status,'preserve');
 });
+test('gray JPEG application/profile metadata is preserved before RGB conversion',async()=>{
+  const bytes=new Uint8Array([255,216,255,226,0,4,1,1,255,192,0,11,8,0,24,0,32,1,1,17,0,255,218,0,8,1,1,0,0,63,0,255,217]);
+  let parsed=false;const guarded=createPDFJpegDecoder(class {parse(){parsed=true;}});
+  assert.equal((await guarded({bytes,descriptor:{...descriptor,colorSpace:'/DeviceGray'}})).status,'preserve');
+  assert.equal(parsed,false);
+});

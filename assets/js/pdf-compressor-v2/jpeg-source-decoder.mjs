@@ -39,6 +39,9 @@ export function createPDFJpegDecoder(JpegImage){
     if(!assessImage(descriptor,'balanced',undefined,{allowJpeg:true}).eligible)return {status:'preserve'};
     const header=inspectJpegHeader(bytes),channels=descriptor.colorSpace==='/DeviceGray'?1:3;
     if(header.unsupported||header.unsupportedMetadata||header.precision!==8||header.components!==channels)return {status:'preserve'};
+    // Gray profile metadata cannot be attached unchanged to a new RGB JPEG.
+    // Leave that image intact until a profile-preserving gray codec is verified.
+    if(channels===1&&header.metadata.some(m=>m.marker===226))return {status:'preserve'};
     if(header.width!==descriptor.width||header.height!==descriptor.height)throw Error('jpeg-source-dimension-mismatch');
     const image=new JpegImage();image.parse(bytes);
     if(image.width!==header.width||image.height!==header.height||image.numComponents!==channels)throw Error('jpeg-source-dimension-mismatch');
