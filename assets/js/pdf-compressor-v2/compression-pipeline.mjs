@@ -32,7 +32,7 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
     current=image.bytes;
   }
   onProgress('lossless');
-  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits});
+  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits,onProgress});
   checkCancel(signal);
   stages.push({engine:'lossless',status:lossless.status,
     inputBytes:current.length,outputBytes:lossless.bytes.length});

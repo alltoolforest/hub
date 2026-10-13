@@ -23,7 +23,7 @@ self.onmessage=async event=>{
     const result=await compressAndVerifyPDF(bytes,{PDF:self.PDFLib,
       readPages:createIndependentInputReader(pdfjs),readText:createIndependentTextReader(pdfjs),optimize:createQpdfLosslessProvider(createModule),
       encodeJpeg:encodeBrowserJpeg,decodeJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),
-      mode:event.data.mode});
+      mode:event.data.mode,onProgress:stage=>self.postMessage({type:'progress',stage})});
     self.postMessage({ok:true,result},[result.bytes.buffer]);
   }catch(error){self.postMessage({ok:false,code:error.code??error.name,message:error.message});}
 };

@@ -2,23 +2,29 @@
 export class WorkerOperationError extends Error {
   constructor(code){super(code);this.name='WorkerOperationError';this.code=code;}
 }
-export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',fileInput=false,onProgress=()=>{}}={}){
+export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',fileInput=false,onProgress=()=>{},now=()=>Date.now(),visibilityTarget=globalThis.document}={}){
   if(typeof workerFactory!=='function')throw new TypeError('Isolated worker factory required');
   const run=(op,bytes,{mode,signal}={})=>new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new WorkerOperationError('cancelled'));
     let worker,timer,settled=false;
+    const deadline=now()+timeoutMs;
     const finish=(error,value)=>{
       if(settled)return;settled=true;
       clearTimeout(timer);signal?.removeEventListener('abort',abort);
+      visibilityTarget?.removeEventListener('visibilitychange',checkDeadline);
       if(worker){worker.onmessage=null;worker.onerror=null;worker.onmessageerror=null;worker.terminate();}
       error?reject(error):resolve(value);
+    };
+    const checkDeadline=()=>{
+      if(now()<deadline)return false;
+      finish(new WorkerOperationError('processing-timeout'));return true;
     };
     const abort=()=>finish(new WorkerOperationError('cancelled'));
     try{
       worker=workerFactory();
       worker.onmessage=event=>{
-        if(settled)return;
-        if(event.data?.type==='progress'&&['inspect','embedded-images','lossless','lossless-optimization','final-output'].includes(event.data.stage)){
+        if(settled||checkDeadline())return;
+        if(event.data?.type==='progress'&&['inspect','embedded-images','lossless','lossless-inspection','lossless-optimization','lossless-verification','final-output'].includes(event.data.stage)){
           onProgress(event.data.stage);return;
         }
         if(typeof event.data?.ok!=='boolean')return; // Ignore parser handshake.
@@ -29,6 +35,7 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
       worker.onmessageerror=()=>finish(new WorkerOperationError('worker-message-failed'));
       signal?.addEventListener('abort',abort,{once:true});
       if(signal?.aborted){abort();return;}
+      visibilityTarget?.addEventListener('visibilitychange',checkDeadline);
       timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),timeoutMs);
       if(fileInput&&typeof Blob!=='undefined'&&bytes instanceof Blob)worker.postMessage({op,file:bytes,mode,profile});
       else {const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,profile},[copy.buffer]);}

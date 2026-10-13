@@ -74,3 +74,20 @@ test('File transport is explicit and completion releases its worker',async()=>{
  const pending=bridge.inspectFile(source);assert.equal(message.file,source);assert.equal(message.bytes,undefined);
  worker.onmessage({data:{ok:true,report:{valid:true}}});await pending;assert.equal(terminated,1);
 });
+
+// A suspended tab can receive worker messages before its delayed timer callback.
+test('expired worker messages and visibility restoration cannot release stale output',async()=>{
+ for(const event of ['progress','result','visibility']){
+  let clock=0,worker,terminated=0,progress=0;
+  const visibilityTarget=new EventTarget();
+  const bridge=createWorkerBridge({now:()=>clock,timeoutMs:1000,visibilityTarget,
+   onProgress:()=>progress++,workerFactory:()=>worker={postMessage:()=>{},terminate:()=>terminated++}});
+  const pending=bridge.compress(new Uint8Array(8));
+  clock=1001;
+  if(event==='visibility')visibilityTarget.dispatchEvent(new Event('visibilitychange'));
+  else worker.onmessage({data:event==='progress'?{type:'progress',stage:'lossless-verification'}:{ok:true,result:{bytes:new Uint8Array(8)}}});
+  await assert.rejects(pending,e=>e.code==='processing-timeout');
+  assert.equal(terminated,1);assert.equal(progress,0);
+  visibilityTarget.dispatchEvent(new Event('visibilitychange'));assert.equal(terminated,1);
+ }
+});

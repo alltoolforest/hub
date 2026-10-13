@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {deflateSync} from 'node:zlib';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
-import {losslessFingerprint} from '../assets/js/pdf-compressor-v2/lossless-invariants.mjs';
+import {losslessFingerprint,inflateStreamBounded} from '../assets/js/pdf-compressor-v2/lossless-invariants.mjs';
 const N=PDF.PDFName.of,fp=bytes=>losslessFingerprint(bytes,{PDF});
 async function change(bytes,mutate){
   const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false});mutate(doc);
@@ -63,4 +63,14 @@ test('decoded image, text content and attachment bytes are part of the invariant
 test('decoded stream budgets fail closed',async()=>{
   const {bytes}=await buildFixture('scanned');
   await assert.rejects(losslessFingerprint(bytes,{PDF,maxStreamBytes:100}),e=>e.code==='decoded-stream-limit');
+});
+
+test('direct stream inflation drains backpressure, enforces exact limits and rejects damaged input',async()=>{
+ const source=new Uint8Array(2*1024*1024);for(let i=0;i<source.length;i++)source[i]=(i*37)%251;
+ const encoded=new Uint8Array(deflateSync(source));
+ assert.deepEqual(await inflateStreamBounded(encoded,source.length),source);
+ await assert.rejects(inflateStreamBounded(encoded,source.length-1),e=>e.code==='decoded-stream-limit');
+ await assert.rejects(inflateStreamBounded(encoded.subarray(0,encoded.length-3),source.length));
+ const damaged=encoded.slice();damaged[damaged.length-1]^=1;
+ await assert.rejects(inflateStreamBounded(damaged,source.length));
 });

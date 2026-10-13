@@ -2,6 +2,7 @@
 // mandatory in the engines; this gate independently reopens their composed output.
 import {inspectPDFInput,INPUT_LIMITS} from './input-inspector.mjs';
 import {compressPDF} from './compression-pipeline.mjs';
+import {createOperationPageReader} from './operation-page-reader.mjs';
 import {MODES} from './mode-policy.mjs';
 export class OutputIntegrityError extends Error {
   constructor(code){super(code);this.name='OutputIntegrityError';this.code=code;}
@@ -38,6 +39,7 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
     savedBytes:saved,independentTextVerified:true});
 }
 export async function compressAndVerifyPDF(bytes,options){
+  options={...options,readPages:createOperationPageReader(options.readPages)};
   const result=await compressPDF(bytes,options);
   options?.onProgress?.('final-output');
   const integrity=await verifyFinalOutput(bytes,result,options);

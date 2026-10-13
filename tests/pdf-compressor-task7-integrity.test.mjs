@@ -53,3 +53,15 @@ test('an optimizer changing metadata cannot reach a verified final result',async
       return new Uint8Array(await doc.save({useObjectStreams:true}));
     }}),e=>e.code==='preservation-check-failed');
 });
+
+test('operation page reports are bound to bytes and limits, isolated, and never reused after cancellation',async()=>{
+ const {createOperationPageReader}=await import('../assets/js/pdf-compressor-v2/operation-page-reader.mjs');
+ let calls=0;const reader=createOperationPageReader(async()=>{calls++;return {pages:[{textItems:1}]};});
+ const bytes=new Uint8Array([1,2,3]);const a=await reader(bytes,{maxPages:5});a.pages[0].textItems=99;
+ assert.equal((await reader(bytes.slice(),{maxPages:5})).pages[0].textItems,1);assert.equal(calls,1);
+ bytes[0]=9;await reader(bytes,{maxPages:5});assert.equal(calls,2);
+ await reader(bytes,{maxPages:4});assert.equal(calls,3);
+ const controller=new AbortController();controller.abort();
+ await assert.rejects(reader(bytes,{maxPages:4,signal:controller.signal}));assert.equal(calls,3);
+ const second=createOperationPageReader(async()=>{calls++;return {pages:[]};});await second(bytes,{maxPages:4});assert.equal(calls,4);
+});

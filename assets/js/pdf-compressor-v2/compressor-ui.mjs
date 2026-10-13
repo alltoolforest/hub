@@ -62,5 +62,5 @@ export function mountCompressor(root,{engine,limits}={}){
   return {session,dispose:()=>{globalThis.removeEventListener('pagehide',dispose);dispose();},
     progress:stage=>{if(session.snapshot().state==='processing')el('[data-status]').textContent=
       ({inspect:'Checking PDF…','embedded-images':'Compressing eligible images…',lossless:'Optimizing PDF structure…',
-        'lossless-optimization':'Optimizing PDF structure…','final-output':'Verifying the output…'})[stage]??'Processing PDF…';}};
+        'lossless-inspection':'Checking preservation of PDF content…','lossless-optimization':'Optimizing PDF structure…','lossless-verification':'Verifying preserved PDF content…','final-output':'Verifying the output…'})[stage]??'Processing PDF…';}};
 }

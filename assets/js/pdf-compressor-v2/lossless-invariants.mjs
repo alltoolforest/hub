@@ -10,7 +10,13 @@ export class LosslessInvariantError extends Error {
   constructor(code){super(code);this.name='LosslessInvariantError';this.code=code;}
 }
 async function boundedInflate(bytes,maxBytes){
-  const reader=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+  // Feed resident bytes directly: Blob streams add asynchronous IO scheduling
+  // for every small PDF stream (thousands in some digital documents). Drain
+  // concurrently with writing so backpressure cannot deadlock large streams.
+  const stream=new DecompressionStream('deflate');
+  const reader=stream.readable.getReader(),writer=stream.writable.getWriter();
+  const written=(async()=>{try{await writer.write(bytes);await writer.close();}
+    catch(error){return error;}})();
   const chunks=[];let length=0;
   try{
     for(;;){
@@ -19,7 +25,12 @@ async function boundedInflate(bytes,maxBytes){
       if(length>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
       chunks.push(value);
     }
-  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+    const error=await written;if(error)throw error;
+  }finally{
+    await reader.cancel().catch(()=>{});
+    await writer.abort().catch(()=>{});await written;
+    reader.releaseLock();writer.releaseLock();
+  }
   const output=new Uint8Array(length);let offset=0;
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;

@@ -15,8 +15,10 @@ export function createQpdfLosslessProvider(createModule,{maximumBytes=INPUT_LIMI
     const input='/compressor-input.pdf',output='/compressor-output.pdf';
     try{
       module.FS.writeFile(input,bytes);
+      // Level 6 trades a small amount of lossless size reduction for lower CPU
+      // cost. Strong mode still controls image quality in the separate stage.
       const exitCode=module.callMain(['--object-streams=generate','--compress-streams=y',
-        '--decode-level=generalized','--recompress-flate','--compression-level=9',
+        '--decode-level=generalized','--recompress-flate','--compression-level=6',
         '--preserve-unreferenced','--remove-unreferenced-resources=no',input,output]);
       if(exitCode!==0)throw Error('qpdf-unclean-exit');
       // Expansion is an honest original-file fallback, not an optimizer error.
@@ -36,7 +38,7 @@ export function createQpdfLosslessProvider(createModule,{maximumBytes=INPUT_LIMI
     }
   };
 }
-export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,limits=INPUT_LIMITS}={}){
+export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,limits=INPUT_LIMITS,onProgress=()=>{}}={}){
   const inspect=async data=>{
     const report=await inspectPDFInput(data,{PDF,readPages,signal,limits});
     return {...report,signed:false,encrypted:false,
@@ -49,5 +51,5 @@ export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,l
     const prepared=await deduplicateOpaqueImages(input,{PDF,serializeClassic:true});
     return optimize(prepared.bytes);
   };
-  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes});
+  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes,onProgress});
 }

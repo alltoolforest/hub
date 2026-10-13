@@ -41,16 +41,17 @@ try{
   const {createCompressionSession}=await import('/assets/js/pdf-compressor-v2/compression-session.mjs');
   const {createWorkerBridge}=await import('/assets/js/pdf-compressor-v2/worker-bridge.mjs');
   const {INPUT_LIMITS}=await import('/assets/js/pdf-compressor-v2/input-inspector.mjs');
+  const phases=[],phaseStart=performance.now();
   let started=0,terminated=0,ticks=0,last=performance.now(),maxGap=0;
   const timer=setInterval(()=>{const now=performance.now();ticks++;maxGap=Math.max(maxGap,now-last);last=now;},100);
-  const engine=createWorkerBridge({fileInput:true,timeoutMs:180000,workerFactory:()=>{const worker=new Worker('/tests/pdf-compressor-task11-worker.mjs',{type:'module'}),end=worker.terminate.bind(worker);started++;worker.terminate=()=>{end();terminated++;};return worker;}});
+  const engine=createWorkerBridge({fileInput:true,timeoutMs:180000,onProgress:stage=>phases.push({stage,elapsedMs:Math.round(performance.now()-phaseStart)}),workerFactory:()=>{const worker=new Worker('/tests/pdf-compressor-task11-worker.mjs',{type:'module'}),end=worker.terminate.bind(worker);started++;worker.terminate=()=>{end();terminated++;};return worker;}});
   const session=createCompressionSession({engine,limits:INPUT_LIMITS});
   const file=new File([bytes],'synthetic.pdf',{type:'application/pdf'});bytes=null;const before=performance.now();
   try{
    await session.select(file);const inspected=session.snapshot();if(inspected.state!=='ready')throw Error(JSON.stringify(inspected));
    const inspectMs=Math.round(performance.now()-before),compressStart=performance.now();await session.compress(mode);const state=session.snapshot();
    if(state.state!=='completed')throw Error(JSON.stringify(state));const {url,name,...result}=state.result;
-   return {fixture:privateData?'provided complex digital PDF':fixture,mode,inputBytes:file.size,inspectMs,compressMs:Math.round(performance.now()-compressStart),uiTicks:ticks,maxUiGapMs:Math.round(maxGap),workersStarted:started,workersTerminated:terminated,result};
+   return {fixture:privateData?'provided complex digital PDF':fixture,mode,inputBytes:file.size,inspectMs,compressMs:Math.round(performance.now()-compressStart),phases,uiTicks:ticks,maxUiGapMs:Math.round(maxGap),workersStarted:started,workersTerminated:terminated,result};
   }finally{clearInterval(timer);session.dispose();}
  },{fixture:process.env.PDF_COMPRESSOR_LARGE_FIXTURE??'attachments',mode:process.env.PDF_COMPRESSOR_TEST_MODE??'balanced',privateData:process.env.PDF_COMPRESSOR_PRIVATE_SOURCE?readFileSync(process.env.PDF_COMPRESSOR_PRIVATE_SOURCE).toString('base64'):null});
  evidence.managedWorkerMemory=await stopSampler();
