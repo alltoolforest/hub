@@ -10,9 +10,9 @@ limits and progress while preserving existing default behavior and integrity.
 - Provisional standard/mobile/unknown-mobile/low-memory resource profiles. Limits
   are never raised above the existing 20 MiB/8 MP/32 MP aggregate defaults.
   Lower device budgets apply before File.arrayBuffer and before PDF/image parsing.
-- Direct JPEG frame dimensions are checked against the dictionary before the
+- Direct and generally wrapped JPEG frame dimensions are checked against the dictionary before the
   independent reader may decode them. A forged frame cannot bypass the pixel
-  guard by declaring a smaller PDF Width/Height. Unsupported headers reject safely.
+  guard by declaring a smaller PDF Width/Height. Aliases and ASCII/Flate wrappers cannot bypass the check; unsupported precision/component counts and filter chains reject safely.
 - PDF.js image/canvas budgets, serial existing image/page handling, disposable
   workers and retained-source recovery remain enforced. WASM binary is unchanged.
 - Real processing-phase messages supplement elapsed-time/heartbeat reporting.
@@ -25,8 +25,8 @@ limits and progress while preserving existing default behavior and integrity.
 
 ## Verified locally
 
-30 affected unit/adjacent tests passed, including forged JPEG dimensions rejected
-before independent decoding, device preflight, original retention, exact text,
+36 affected unit/adjacent tests passed, including forged JPEG dimensions rejected
+before independent decoding, valid and forged wrapped JPEGs, aliases/components, bounded ASCII equivalence, device preflight, original retention, exact text,
 invalid receipts, cleanup, cancellation and injection guards. Runtime hashes pass.
 The integrated file-mode diagnostic passed all modes, repeated source use, queued
 stale-result suppression, oversize rejection, reset/navigation lifecycle, narrow
