@@ -54,5 +54,6 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
   // A boolean true is required; absent/partial verification never approves output.
   if(await verifyOutput({original:bytes.slice(),output:output.slice(),replacements,mode})!==true)
     throw Error('image-output-integrity-failed');
+  if(signal?.aborted)throw Error('cancelled');
   return {status:'compressed',bytes:output,savedBytes:bytes.length-output.length,replacements:replacements.length};
 }

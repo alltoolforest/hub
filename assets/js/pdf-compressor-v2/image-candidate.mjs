@@ -42,7 +42,7 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
   let data;
   try{data=await encodeJpeg({rgb,width,height,
     quality:decision.jpegQuality,signal});}
-  catch{throw new ImageCandidateError('codec-failed');}
+  catch{throw new ImageCandidateError(signal?.aborted?'cancelled':'codec-failed');}
   if(signal?.aborted)throw new ImageCandidateError('cancelled');
   if(!(data instanceof Uint8Array)||data.length<4||
      data[0]!==0xff||data[1]!==0xd8||

@@ -19,12 +19,18 @@ and requires the full Task 4 graph fingerprint to match. A separate PDF.js
 reader checks page profiles. This is still isolated engine code, no production UI.
 The pixel thresholds are provisional safeguards, not proof of OCR readability.
 
-Verification executed: 17 selected unit/adjacent regression tests passed with
+Verification executed: 18 selected unit/adjacent regression tests passed with
 zero skips. Tests include real JPEG compression, unchanged content stream bytes,
 geometry, declared-image graph verification, metadata tampering rejection,
 codec rejection, cancellation, original immutability and downsampling.
-Chromium worker + strict CSP gate passed seven synthetic PDFs with no unexpected
-network requests. Balanced outputs: scanned 339211 -> 72969 bytes;
+Expanded Chromium worker + strict CSP gate passed 24 cases (12 PDFs x two
+modes), including hidden OCR, shared images, masks, grayscale and downsampling.
+12 compressed; 12 retained byte-identical originals. Independent full-page
+renders passed provisional RMS limits (largest observed 8.88 / 255), with exact
+extracted text and coordinates. No unexpected network requests. Execution timings
+are local Linux measurements, not phone benchmarks. Evidence: task5-chromium-evidence.json.
+The oversized decoded-payload and cancellation-during-verification regressions
+also passed. Balanced outputs: scanned 339211 -> 72969 bytes;
 image-heavy 708693 -> 148806; mixed 113682 -> 26149. Four non-image PDFs retained
 exact original bytes. These savings do not predict savings on user documents.
 

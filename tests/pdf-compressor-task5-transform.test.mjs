@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCanvas,ImageData,loadImage} from '@napi-rs/canvas';
 import {PDF,buildFixture} from './pdf-compressor-task1-fixtures.mjs';
-import {transformEmbeddedImages} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
+import {transformEmbeddedImages,inflateExact} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
+import {deflateSync} from 'node:zlib';
 import {createImageOutputVerifier} from '../assets/js/pdf-compressor-v2/image-output-verifier.mjs';
 const encodeJpeg=async({rgb,width,height,quality})=>{
   const canvas=createCanvas(width,height),rgba=new Uint8ClampedArray(width*height*4);
@@ -56,4 +57,10 @@ test('protected graph verifier rejects same-presence text changes and false JPEG
   changedText.getPage(0).drawText('Unexpected injected page text');
   await assert.rejects(verifier({...request,output:new Uint8Array(await changedText.save({useObjectStreams:false}))}),/protected-document-structure-changed/);
   await assert.rejects(createImageOutputVerifier({PDF,readPages,verifyJpeg:async()=>false})(request),/jpeg-quality-verification-failed/);
+});
+test('oversized decoded payload is rejected and cancellation during verification withholds output',async()=>{
+  await assert.rejects(inflateExact(new Uint8Array(deflateSync(new Uint8Array(1_000_000))),3),/image-decoded-size-mismatch/);
+  const {bytes}=await buildFixture('mixed'),controller=new AbortController();
+  await assert.rejects(transformEmbeddedImages(bytes,{PDF,encodeJpeg,inspectInput,signal:controller.signal,
+    verifyOutput:async()=>{controller.abort();return true;}}),/cancelled/);
 });
