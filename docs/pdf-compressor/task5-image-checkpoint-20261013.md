@@ -37,9 +37,11 @@ exact original bytes. These savings do not predict savings on user documents.
 Initial CI run 38348864420 passed all three browsers for the original seven-fixture
 Balanced gate. The expanded gate now tests both modes with scan-style grayscale,
 shared resources, masks, hidden OCR and downsampling, plus independent full-page
-render comparisons and exact extracted text/coordinates. Its latest CI conclusion
-must be confirmed separately; earlier passes do not cover newly added fixtures.
-Remaining Task 5 gates: expanded cross-browser CI, real physical-scan acceptance,
+render comparisons and exact extracted text/coordinates. Final expanded CI run 38349445605 succeeded on code commit
+c69d214c1c21babdc80050777b27a7dbeceb717d. Its image gate passed 24 cases in each
+of Chromium, Firefox and WebKit (72 document/mode/browser cases total).
+Input-integrity, pinned runtime and full lossless gates also succeeded.
+Remaining Task 5 gates: real physical-scan acceptance,
 mobile memory/performance checks and CI cross-browser verification. Tasks 6–13
 remain gated. Overall release NO-GO, not deployed or frozen.
 All changes stay within isolated compressor modules/tests/workflow/docs;
