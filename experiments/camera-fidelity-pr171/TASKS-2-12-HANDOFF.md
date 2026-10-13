@@ -1,5 +1,7 @@
 # Camera-Fidelity Engine — Experimental checkpoint and release decision
 
+2026-10-13 research addendum: `R6-LIGHT-COLOR-REVIEW.md` records isolated Brilliance/Vibrance and 1×/1.25×/1.5×/2× PR171 sharpening comparisons. 4 targeted tests and 120 integrity outputs pass; 13 recovered baseline hashes match prior evidence. Brilliance is useful only as a prospective optional treatment, Vibrance is subtle, and stronger sharpening regresses noise/JPEG references. R5 runtime and hosted/production pages are unchanged; no new technique activated.
+
 **Current development checkpoint:** `CONTROLS-R5-HANDOFF.md` supersedes earlier runtime-status statements below. PR171 defaults remain exact; adjustable R3 tone and guarded opt-in R4 detail are now integrated in the experimental worker/UI. JPEG detail remains withheld. Build `cf-20261012-controls-r5` is saved on the development branch but NOT deployed; the hosted page remains the previous build. 36 targeted tests and 27 retained-output comparisons pass. Photographic/device acceptance and production release remain NO-GO.
 
 Latest detail continuation, 2026-10-12: `DETAIL-R4-REVIEW.md` documents a new opt-in source-guided multiscale sharpening stage, with 4 targeted tests, 27 integrity outputs and 6 controlled-softness comparisons. It improves synthetic mild-softness error but regresses noise/JPEG references and makes only subtle changes to the supplied portrait. It remains offline; no automatic activation or production promotion.
