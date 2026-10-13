@@ -15,10 +15,8 @@ export function createQpdfLosslessProvider(createModule,{maximumBytes=INPUT_LIMI
     const input='/compressor-input.pdf',output='/compressor-output.pdf';
     try{
       module.FS.writeFile(input,bytes);
-      // Level 6 trades a small amount of lossless size reduction for lower CPU
-      // cost. Strong mode still controls image quality in the separate stage.
       const exitCode=module.callMain(['--object-streams=generate','--compress-streams=y',
-        '--decode-level=generalized','--recompress-flate','--compression-level=6',
+        '--decode-level=generalized','--recompress-flate','--compression-level=9',
         '--preserve-unreferenced','--remove-unreferenced-resources=no',input,output]);
       if(exitCode!==0)throw Error('qpdf-unclean-exit');
       // Expansion is an honest original-file fallback, not an optimizer error.
