@@ -32,7 +32,8 @@ emcmake cmake -S "$build_root/qpdf-source" -B "$build_root/qpdf-wasm-build" \
   -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_BUILD_TYPE=MinSizeRel \
   -DCMAKE_CXX_FLAGS='-Oz -flto -fexceptions' \
   -DBUILD_DOC=OFF -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON \
-  -DUSE_IMPLICIT_CRYPTO=OFF -DREQUIRE_CRYPTO_NATIVE=ON -DSTATIC_JPEG=ON
+  -DUSE_IMPLICIT_CRYPTO=OFF -DREQUIRE_CRYPTO_NATIVE=ON -DSTATIC_JPEG=ON \
+  -DLIBJPEG_STATIC_PATH="$prefix/lib/libjpeg.a"
 cmake --build "$build_root/qpdf-wasm-build" --target libqpdf -j 2
 emcc -Oz -flto -fexceptions -std=c++17 \
   "$build_root/qpdf-source/qpdf/qpdf.cc" \
