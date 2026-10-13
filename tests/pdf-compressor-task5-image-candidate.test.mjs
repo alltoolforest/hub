@@ -35,3 +35,15 @@ test('codec errors, malformed buffer, cancel fail closed',async()=>{
   await assert.rejects(encodeRasterCandidate({descriptor,rgba,signal:{aborted:true}}),
     e=>e.code==='cancelled');
 });
+test('downsampling is bounded, never upscales, and preserves uniform RGB values',async()=>{
+  const width=2500,height=4,pixels=new Uint8Array(width*height*4);
+  for(let p=0;p<width*height;p++)pixels.set([60,100,180,255],p*4);
+  for(const [mode,expected] of [['balanced',2400],['strong',1800]]){
+    const candidate=await encodeRasterCandidate({descriptor:{...descriptor,width,height,streamBytes:50000},rgba:pixels,mode,
+      encodeJpeg:async({rgb,width:w,height:h})=>{
+        assert.equal(w,expected);assert.ok(h<=height);
+        for(let p=0;p<rgb.length;p++)assert.equal(rgb[p],[60,100,180][p%3]);return fakeJpeg;
+      }});
+    assert.equal(candidate.width,expected);
+  }
+});

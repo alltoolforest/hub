@@ -21,12 +21,26 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
   const inputBytes=descriptor.streamBytes;
   if(!Number.isSafeInteger(inputBytes)||inputBytes<1)
     throw new ImageCandidateError('invalid-source-size');
-  const rgb=new Uint8Array(decision.pixels*3);
-  for(let p=0,s=0;p<rgba.length;p+=4){
-    rgb[s++]=rgba[p];rgb[s++]=rgba[p+1];rgb[s++]=rgba[p+2];
+  // Area averaging suppresses aliasing when reducing scans; never upscale.
+  const scale=Math.min(1,decision.maxDimension/Math.max(descriptor.width,descriptor.height));
+  const width=Math.max(1,Math.round(descriptor.width*scale)),height=Math.max(1,Math.round(descriptor.height*scale));
+  const rgb=new Uint8Array(width*height*3);
+  for(let y=0;y<height;y++){
+    if(signal?.aborted)throw new ImageCandidateError('cancelled');
+    const y0=y*descriptor.height/height,y1=(y+1)*descriptor.height/height;
+    for(let x=0;x<width;x++){
+      const x0=x*descriptor.width/width,x1=(x+1)*descriptor.width/width;
+      const sums=[0,0,0];let weight=0;
+      for(let sy=Math.floor(y0);sy<Math.ceil(y1);sy++)for(let sx=Math.floor(x0);sx<Math.ceil(x1);sx++){
+        const w=(Math.min(y1,sy+1)-Math.max(y0,sy))*(Math.min(x1,sx+1)-Math.max(x0,sx));
+        const p=(sy*descriptor.width+sx)*4;weight+=w;
+        for(let c=0;c<3;c++)sums[c]+=rgba[p+c]*w;
+      }
+      for(let c=0;c<3;c++)rgb[(y*width+x)*3+c]=Math.round(sums[c]/weight);
+    }
   }
   let data;
-  try{data=await encodeJpeg({rgb,width:descriptor.width,height:descriptor.height,
+  try{data=await encodeJpeg({rgb,width,height,
     quality:decision.jpegQuality,signal});}
   catch{throw new ImageCandidateError('codec-failed');}
   if(signal?.aborted)throw new ImageCandidateError('cancelled');
@@ -39,7 +53,7 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
   // Do not assume saved PDF size: extra dictionaries, xrefs and resource
   // metadata can cancel this gain. Final gate belongs to later tasks.
   return {status:'candidate-only',bytes:data,filter:'/DCTDecode',
-    colorSpace:'/DeviceRGB',width:descriptor.width,height:descriptor.height,
+    colorSpace:'/DeviceRGB',width,height,
     bitsPerComponent:8,estimatedImageBytesSaved:inputBytes-data.length,
     requiresIndependentPDFValidation:true};
 }
