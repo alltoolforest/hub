@@ -7,16 +7,20 @@ const engine={chromium,firefox,webkit}[selected];
 if(!engine)throw Error('Unsupported test browser');
 const browser=await engine.launch({headless:true,timeout:30000});
 try{
-  const page=await browser.newPage(),unexpected=[];
-  await page.route('**/*',route=>{
+  const context=await browser.newContext(),page=await context.newPage(),unexpected=[];
+  const policy="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' blob: data:; object-src 'none'; base-uri 'none'";
+  await context.route('**/*',async route=>{
     const r=route.request(),url=new URL(r.url());
     if(url.origin!=='http://127.0.0.1:8765'||r.method()!=='GET'){
       unexpected.push({url:r.url(),method:r.method()});return route.abort();
     }
     if(url.pathname==='/compressor-worker-gate')return route.fulfill({status:200,contentType:'text/html',
-      headers:{'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'"},
+      headers:{'Content-Security-Policy':policy},
       body:'<!doctype html><title>Isolated compressor worker test</title>'});
-    return route.continue();
+    // Dedicated workers use their own response CSP rather than inheriting the
+    // document policy. Apply the same restriction to every local response.
+    const response=await route.fetch();
+    return route.fulfill({response,headers:{...response.headers(),'content-security-policy':policy}});
   });
   await page.goto('http://127.0.0.1:8765/compressor-worker-gate');
   const report=[];
