@@ -40,7 +40,7 @@ export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,l
   const inspect=async data=>{
     const report=await inspectPDFInput(data,{PDF,readPages,signal,limits});
     return {...report,signed:false,encrypted:false,
-      fingerprint:await losslessFingerprint(data,{PDF})};
+      fingerprint:await losslessFingerprint(data,{PDF,maxEntries:limits.maxInvariantEntries,maxTotalDecodedBytes:limits.maxTotalDecodedBytes,maxStreamBytes:limits.maxDecodedStreamBytes})};
   };
   const optimizeWithSafeDedup=async input=>{
     // Classical staging removes obsolete xref/object-stream containers only.

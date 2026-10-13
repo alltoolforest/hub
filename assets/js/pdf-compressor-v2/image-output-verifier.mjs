@@ -2,11 +2,11 @@
 // in-memory verification copy, then require the complete lossless graph identity.
 import {losslessFingerprint} from './lossless-invariants.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
-export function createImageOutputVerifier({PDF,readPages,verifyJpeg}={}) {
+export function createImageOutputVerifier({PDF,readPages,verifyJpeg,limits}={}) {
   if(typeof readPages!=='function'||typeof verifyJpeg!=='function')throw Error('independent-image-reader-required');
   return async({original,output,replacements,mode})=>{
-    const a=await PDF.PDFDocument.load(original.slice(),{updateMetadata:false,throwOnInvalidObject:true});
-    const b=await PDF.PDFDocument.load(output.slice(),{updateMetadata:false,throwOnInvalidObject:true});
+    const a=await PDF.PDFDocument.load(original,{updateMetadata:false,throwOnInvalidObject:true});
+    const b=await PDF.PDFDocument.load(output,{updateMetadata:false,throwOnInvalidObject:true});
     const source=new Map(a.context.enumerateIndirectObjects().map(([ref,obj])=>[String(ref),obj]));
     const target=new Map(b.context.enumerateIndirectObjects().map(([ref,obj])=>[String(ref),{ref,obj}]));
     const declared=new Set(),N=PDF.PDFName.of;
@@ -29,12 +29,13 @@ export function createImageOutputVerifier({PDF,readPages,verifyJpeg}={}) {
       // in the protected-structure comparison. Never normalize arbitrary images.
       if(await verifyJpeg({bytes:next.contents.slice(),originalStream:old,descriptor:r.descriptor,
         width:c.width,height:c.height,mode})!==true)throw Error('jpeg-quality-verification-failed');
-      b.context.assign(entry.ref,PDF.PDFRawStream.of(old.dict.clone(b.context),old.contents.slice()));
+      b.context.assign(entry.ref,PDF.PDFRawStream.of(old.dict.clone(b.context),old.contents));
     }
-    const restored=new Uint8Array(await b.save({useObjectStreams:false}));
-    if(await losslessFingerprint(original,{PDF})!==await losslessFingerprint(restored,{PDF}))
+    const restored=await b.save({useObjectStreams:false});
+    const options={PDF,maxEntries:limits?.maxInvariantEntries,maxTotalDecodedBytes:limits?.maxTotalDecodedBytes,maxStreamBytes:limits?.maxDecodedStreamBytes};
+    if(await losslessFingerprint(original,options)!==await losslessFingerprint(restored,options))
       throw Error('protected-document-structure-changed');
-    const before=await readPages(original.slice()),after=await readPages(output.slice());
+    const before=await readPages(original,{maxPages:limits?.maxPages,maxOperators:limits?.maxOperators,maxImagePixels:limits?.maxImagePixels}),after=await readPages(output,{maxPages:limits?.maxPages,maxOperators:limits?.maxOperators,maxImagePixels:limits?.maxImagePixels});
     if(JSON.stringify(before)!==JSON.stringify(after))throw Error('independent-page-profile-changed');
     return true;
   };

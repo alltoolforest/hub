@@ -3,6 +3,30 @@ import {assessImage} from './image-policy.mjs';
 // not replace the explicit DeviceRGB/DeviceGray PDF color-space dictionary.
 // Inject the pinned PDF.js software JPEG decoder; never let a photo viewer
 // rotate or color-manage a PDF image behind the document's back.
+function scanRemainder(bytes,start){
+  let i=start,segments=0,metadataAfterScan=false;
+  const skip=()=>{
+    if(i+2>bytes.length)throw Error('truncated-source-jpeg');
+    const length=bytes[i]*256+bytes[i+1];
+    if(length<2||i+length>bytes.length)throw Error('truncated-source-jpeg');
+    i+=length;
+  };
+  skip();
+  while(i<bytes.length){
+    if(bytes[i++]!==255)continue;
+    while(bytes[i]===255)i++;
+    const marker=bytes[i++];
+    if(marker===0||marker>=208&&marker<=215)continue;
+    if(++segments>10000)throw Error('invalid-source-jpeg');
+    if(marker===217)return metadataAfterScan||i<bytes.length;
+    if(marker===220)throw Error('unsupported-jpeg-dnl');
+    if([192,193,194].includes(marker))throw Error('duplicate-jpeg-frame');
+    if(marker>=224&&marker<=239||marker===254){metadataAfterScan=true;skip();}
+    else if([218,196,219,221,204].includes(marker))skip();
+    else throw Error('unsupported-jpeg-scan-marker');
+  }
+  throw Error('jpeg-eoi-missing');
+}
 export function inspectJpegHeader(bytes){
   if(!(bytes instanceof Uint8Array)||bytes.length<4||bytes[0]!==255||bytes[1]!==216)throw Error('invalid-source-jpeg');
   let i=2,segments=0,frame=null;const metadata=[];let unsupportedMetadata=false;
@@ -10,7 +34,8 @@ export function inspectJpegHeader(bytes){
     if(++segments>10000||bytes[i++]!==255)throw Error('invalid-source-jpeg');
     while(bytes[i]===255)i++;
     const marker=bytes[i++];
-    if(marker===218){if(!frame)throw Error('jpeg-frame-missing');return {...frame,metadata,unsupportedMetadata};}
+    if(marker===218){if(!frame)throw Error('jpeg-frame-missing');return {...frame,metadata,unsupportedMetadata:unsupportedMetadata||scanRemainder(bytes,i)};}
+    if(marker===220)throw Error('unsupported-jpeg-dnl');
     if(marker===217)throw Error('jpeg-frame-missing');
     if(marker===216||marker===0||marker>=208&&marker<=215)throw Error('invalid-source-jpeg');
     if(i+2>bytes.length)throw Error('truncated-source-jpeg');
@@ -26,6 +51,15 @@ export function inspectJpegHeader(bytes){
       if(length<8)throw Error('invalid-jpeg-frame');
       if(frame)throw Error('duplicate-jpeg-frame');
       frame={precision:bytes[i+2],height:bytes[i+3]*256+bytes[i+4],width:bytes[i+5]*256+bytes[i+6],components:bytes[i+7]};
+      if(length!==8+3*frame.components)throw Error('invalid-jpeg-frame');
+      let maxH=0,maxV=0,samples=0;
+      for(let c=0;c<frame.components;c++){
+        const sampling=bytes[i+9+3*c],h=sampling>>4,v=sampling&15;
+        if(h<1||h>4||v<1||v>4)throw Error('invalid-jpeg-sampling');
+        maxH=Math.max(maxH,h);maxV=Math.max(maxV,v);samples+=h*v;
+      }
+      if(samples>10)throw Error('invalid-jpeg-sampling');
+      frame.coefficientBytes=Math.ceil(frame.width/(8*maxH))*Math.ceil(frame.height/(8*maxV))*samples*64*4;
     }
     if(marker>=192&&marker<=207&&![192,193,194,196,200,204].includes(marker))return {unsupported:true};
     i+=length;

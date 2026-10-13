@@ -2,7 +2,7 @@
 export class WorkerOperationError extends Error {
   constructor(code){super(code);this.name='WorkerOperationError';this.code=code;}
 }
-export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',onProgress=()=>{}}={}){
+export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',fileInput=false,onProgress=()=>{}}={}){
   if(typeof workerFactory!=='function')throw new TypeError('Isolated worker factory required');
   const run=(op,bytes,{mode,signal}={})=>new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new WorkerOperationError('cancelled'));
@@ -30,9 +30,11 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
       signal?.addEventListener('abort',abort,{once:true});
       if(signal?.aborted){abort();return;}
       timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),timeoutMs);
-      const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,profile},[copy.buffer]);
+      if(fileInput&&typeof Blob!=='undefined'&&bytes instanceof Blob)worker.postMessage({op,file:bytes,mode,profile});
+      else {const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,profile},[copy.buffer]);}
     }catch(error){finish(error);}
   });
-  return {inspect:(bytes,options)=>run('inspect',bytes,options),
-    compress:(bytes,options)=>run('compress',bytes,options)};
+  const bridge={inspect:(bytes,options)=>run('inspect',bytes,options),compress:(bytes,options)=>run('compress',bytes,options)};
+  if(fileInput){bridge.inspectFile=(file,options)=>run('inspect',file,options);bridge.compressFile=(file,options)=>run('compress',file,options);}
+  return bridge;
 }

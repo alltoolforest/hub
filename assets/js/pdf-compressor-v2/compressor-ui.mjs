@@ -20,7 +20,7 @@ export function mountCompressor(root,{engine,limits}={}){
       <button data-cancel hidden>Cancel</button><button data-clear>Clear PDF</button></div>
     <p data-status role="status" aria-live="polite" aria-atomic="true">Select a PDF to begin.</p>
     <section data-result hidden aria-label="Compression result"><h2>Your result</h2>
-      <dl><dt>Original size</dt><dd data-original></dd><dt>Output size</dt><dd data-output></dd>
+      <dl><dt>Mode used</dt><dd data-result-mode></dd><dt>Original size</dt><dd data-original></dd><dt>Output size</dt><dd data-output></dd>
       <dt>Saved</dt><dd data-saved></dd></dl><p data-outcome></p>
       <a data-download>Download PDF</a></section>
     <p>Keep your original PDF. Balanced and Strong may reduce image quality; existing text stays selectable. Lossless preserves image quality. Some PDFs cannot be made smaller.</p>
@@ -31,24 +31,24 @@ export function mountCompressor(root,{engine,limits}={}){
     lossless:'Lossless optimizes PDF structure without reducing image quality. Savings may be small or zero.'};
   const showMode=()=>{el('#compressor-quality').textContent=quality[mode.value];};
   showMode();mode.addEventListener('change',showMode);
-  el('[data-limit]').textContent=`Current tested input limit: ${formatBytes(limits.maxBytes)}. Image and document complexity limits also apply.`;
+  el('[data-limit]').textContent=`Input limit: ${formatBytes(limits.maxBytes)}. Image and document complexity limits also apply.`;
   const session=createCompressionSession({engine,limits,onChange:s=>{
     const busy=['loading','processing'].includes(s.state);
     file.disabled=busy;mode.disabled=busy;el('[data-run]').disabled=!s.canRetry;
     el('[data-cancel]').hidden=!busy;el('[data-result]').hidden=!s.canDownload;
     // Keep live status outside an aria-busy ancestor so progress can be announced.
     root.dataset.processing=String(busy);
-    el('[data-source]').textContent=s.source?`${s.source.name} · ${formatBytes(s.source.size)}`:'';
+    el('[data-source]').textContent=s.source?`Active PDF: ${s.source.name} · ${formatBytes(s.source.size)}`:'';
     const statuses={empty:'Select a PDF to begin.',loading:'Checking your PDF…',ready:'PDF ready. Choose a mode and compress.',
       processing:'Compressing and verifying your PDF…',cancelled:'Cancelled. You can retry with the same PDF.'};
     el('[data-status]').textContent=s.state==='failed'?s.error.message:
       s.state==='completed'?'Your verified PDF is ready to download.':statuses[s.state];
     const link=el('[data-download]');
     if(s.canDownload){
-      const r=s.result;el('[data-original]').textContent=formatBytes(r.inputBytes);
+      const r=s.result;el('[data-result-mode]').textContent=r.mode;el('[data-original]').textContent=formatBytes(r.inputBytes);
       el('[data-output]').textContent=formatBytes(r.outputBytes);
       el('[data-saved]').textContent=`${formatBytes(r.savedBytes)} (${r.reductionPercent.toFixed(2)}%)`;
-      el('[data-outcome]').textContent=r.savedBytes>0?'Compression verified. Review the downloaded PDF before using it.':
+      el('[data-outcome]').textContent=r.savedBytes>0?(r.mode!=='lossless'&&r.settings?.imageTransformationApplied===false?'PDF structure optimized; image quality unchanged. Review the downloaded PDF before using it.':'Compression verified. Review the downloaded PDF before using it.'):
         'No smaller verified output was found. The download contains your original PDF.';
       link.href=r.url;link.download=r.name;
     }else{link.removeAttribute('href');link.removeAttribute('download');}

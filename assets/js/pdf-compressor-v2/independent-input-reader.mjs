@@ -59,7 +59,7 @@ export function createIndependentInputReader(pdfjs){
       }
       // Inventory attachment dictionaries in the structural inspector. Do not
       // decompress attachment payloads just to establish their presence.
-      return {pages};
+      return {pages,operators:operations};
     }finally{
       signal?.removeEventListener('abort',abort);
       await task.destroy();

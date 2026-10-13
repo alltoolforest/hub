@@ -131,6 +131,10 @@ jobs:
             PDF_COMPRESSOR_TEST_MODE="$mode" PDF_COMPRESSOR_100MB_EVIDENCE="/tmp/pdf-large-$mode.json" node tests/pdf-compressor-100mb-experimental-browser.mjs
           done
           PDF_COMPRESSOR_TEST_ENTROPY=1 PDF_COMPRESSOR_100MB_EVIDENCE=/tmp/pdf-large-entropy.json node tests/pdf-compressor-100mb-experimental-browser.mjs
+          for mode in balanced strong lossless; do
+            PDF_COMPRESSOR_LARGE_FIXTURE=scan PDF_COMPRESSOR_TEST_MODE="$mode" PDF_COMPRESSOR_LARGE_EVIDENCE="/tmp/pdf-large-scan-$mode.json" node tests/pdf-compressor-large-file-session-browser.mjs
+          done
+          PDF_COMPRESSOR_LARGE_FIXTURE=scan-mixed PDF_COMPRESSOR_TEST_MODE=strong PDF_COMPRESSOR_LARGE_EVIDENCE=/tmp/pdf-large-scan-mixed.json node tests/pdf-compressor-large-file-session-browser.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: pdf-compressor-experimental-large-file-evidence
@@ -268,10 +272,10 @@ jobs:
           python-version: '3.12'
       - name: Install pinned diagnostic and measurement tools
         run: |
-          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
           npx playwright install --with-deps chromium
       - name: Device budgets and initial-decode regression gates
-        run: node --test tests/pdf-compressor-task10-policy.test.mjs tests/pdf-compressor-task9-security.test.mjs tests/pdf-compressor-name-escapes.test.mjs
+        run: node --test tests/pdf-compressor-task10-policy.test.mjs tests/pdf-compressor-task9-security.test.mjs tests/pdf-compressor-name-escapes.test.mjs tests/pdf-compressor-decoded-resource-budgets.test.mjs
       - name: Build and verify integrated offline diagnostic
         env:
           PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
@@ -279,6 +283,13 @@ jobs:
           python tests/build-pdf-compressor-mobile-qa.py
           node tests/pdf-compressor-mobile-qa-browser.mjs
           node tests/pdf-compressor-task9-browser.mjs
+      - name: Build and verify final offline candidate
+        env:
+          PDF_COMPRESSOR_CANDIDATE: '1'
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Release_Candidate.html
+        run: |
+          python tests/build-pdf-compressor-mobile-qa.py
+          node tests/pdf-compressor-candidate-browser.mjs
       - name: Synthetic size, repeated-run, managed-memory and cancellation measurements
         env:
           PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html

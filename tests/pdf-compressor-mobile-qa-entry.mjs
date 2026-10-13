@@ -20,11 +20,14 @@ const decodeJpeg=createPDFJpegDecoder(JpegImage);
 const progress=stage=>self.postMessage({type:'progress',stage});
 const optimize=createQpdfLosslessProvider(options=>{const url=URL.createObjectURL(new Blob([decode(self.QA_WASM)],{type:'application/wasm'}));return createQpdf({...options,locateFile:()=>url}).then(module=>{progress('lossless-optimization');return module;}).finally(()=>URL.revokeObjectURL(url));});
 self.onmessage=async event=>{
-  if(!event.data?.bytes)return;
+  if(!event.data?.bytes&&!event.data?.file)return;
   const started=performance.now();
   try{
-    const {bytes,mode}=event.data;
+    const {mode}=event.data;
     const profile=DEVICE_PROFILES[event.data.profile];if(!profile)throw Error('unsupported-device-profile');
+    const size=event.data.file?.size??event.data.bytes.length;
+    if(size>profile.limits.maxBytes)throw {code:'file-limit'};
+    const bytes=event.data.file?new Uint8Array(await event.data.file.arrayBuffer()):event.data.bytes;
     if(event.data.op==='inspect'){
       progress('inspect');const report=await inspectPDFInput(bytes,{PDF,readPages:reader,limits:profile.limits});
       self.postMessage({ok:true,report});return;

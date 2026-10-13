@@ -12,13 +12,15 @@ import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-d
 const decodeJpeg=createPDFJpegDecoder(JpegImage);
 pdfjs.GlobalWorkerOptions.workerSrc='/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs';
 self.onmessage=async event=>{
-  if(!event.data?.bytes)return;
+  if(!event.data?.bytes&&!event.data?.file)return;
   try{
+    if((event.data.file?.size??event.data.bytes.length)>100000000)throw {code:'file-limit'};
+    const bytes=event.data.file?new Uint8Array(await event.data.file.arrayBuffer()):event.data.bytes;
     if(event.data.op==='inspect'){
-      const report=await inspectPDFInput(event.data.bytes,{PDF:self.PDFLib,readPages:createIndependentInputReader(pdfjs)});
+      const report=await inspectPDFInput(bytes,{PDF:self.PDFLib,readPages:createIndependentInputReader(pdfjs)});
       self.postMessage({ok:true,report});return;
     }
-    const result=await compressAndVerifyPDF(event.data.bytes,{PDF:self.PDFLib,
+    const result=await compressAndVerifyPDF(bytes,{PDF:self.PDFLib,
       readPages:createIndependentInputReader(pdfjs),readText:createIndependentTextReader(pdfjs),optimize:createQpdfLosslessProvider(createModule),
       encodeJpeg:encodeBrowserJpeg,decodeJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),
       mode:event.data.mode});

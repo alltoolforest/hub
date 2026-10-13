@@ -1,0 +1,267 @@
+{
+  "environment": "Linux headless Chromium 141.0.7390.37",
+  "metricNote": "CDP Runtime counters sampled about every 100 ms. Managed heap/backing storage only; excludes complete process/GPU/native RAM. Samples may miss transient peaks. Null CPU means unavailable. Not physical-device certification.",
+  "rows": [
+    {
+      "fixture": "small-mixed",
+      "mode": "balanced",
+      "inputBytes": 113682,
+      "outputBytes": 25509,
+      "engineMs": 306,
+      "wallMs": 730,
+      "maxUiGapMs": 100,
+      "samples": 6,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 18041164,
+        "mainBackingBytes": 43205007,
+        "workerUsedBytes": 13187304,
+        "workerBackingBytes": 60175213,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 2,
+        "workersTerminated": 2,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "small-mixed",
+      "mode": "strong",
+      "inputBytes": 113682,
+      "outputBytes": 17813,
+      "engineMs": 297,
+      "wallMs": 658,
+      "maxUiGapMs": 101,
+      "samples": 5,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 18224248,
+        "mainBackingBytes": 43257826,
+        "workerUsedBytes": 13025008,
+        "workerBackingBytes": 61875847,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 3,
+        "workersTerminated": 3,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "small-mixed",
+      "mode": "lossless",
+      "inputBytes": 113682,
+      "outputBytes": 92301,
+      "engineMs": 433,
+      "wallMs": 807,
+      "maxUiGapMs": 100,
+      "samples": 7,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 18381040,
+        "mainBackingBytes": 43295207,
+        "workerUsedBytes": 11989384,
+        "workerBackingBytes": 51451655,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 4,
+        "workersTerminated": 4,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "small-mixed",
+      "mode": "balanced",
+      "inputBytes": 113682,
+      "outputBytes": 25509,
+      "engineMs": 407,
+      "wallMs": 777,
+      "maxUiGapMs": 100,
+      "samples": 7,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 2300140,
+        "mainBackingBytes": 34215841,
+        "workerUsedBytes": 12982148,
+        "workerBackingBytes": 62463020,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 5,
+        "workersTerminated": 5,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "small-mixed",
+      "mode": "balanced",
+      "inputBytes": 113682,
+      "outputBytes": 25509,
+      "engineMs": 275,
+      "wallMs": 654,
+      "maxUiGapMs": 100,
+      "samples": 6,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 2469212,
+        "mainBackingBytes": 24672875,
+        "workerUsedBytes": 12609240,
+        "workerBackingBytes": 60149010,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 6,
+        "workersTerminated": 6,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "medium-scan",
+      "mode": "balanced",
+      "inputBytes": 3800479,
+      "outputBytes": 421184,
+      "engineMs": 2146,
+      "wallMs": 2476,
+      "maxUiGapMs": 162,
+      "samples": 21,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 23790712,
+        "mainBackingBytes": 41036518,
+        "workerUsedBytes": 11660928,
+        "workerBackingBytes": 144335879,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 8,
+        "workersTerminated": 8,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "medium-scan",
+      "mode": "strong",
+      "inputBytes": 3800479,
+      "outputBytes": 128444,
+      "engineMs": 1576,
+      "wallMs": 1953,
+      "maxUiGapMs": 100,
+      "samples": 19,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 23948652,
+        "mainBackingBytes": 41880729,
+        "workerUsedBytes": 11201808,
+        "workerBackingBytes": 118057041,
+        "workerEmbedderBytes": 2698304
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 9,
+        "workersTerminated": 9,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "medium-scan",
+      "mode": "lossless",
+      "inputBytes": 3800479,
+      "outputBytes": 2995584,
+      "engineMs": 7555,
+      "wallMs": 7913,
+      "maxUiGapMs": 101,
+      "samples": 78,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 24219044,
+        "mainBackingBytes": 42139658,
+        "workerUsedBytes": 9929492,
+        "workerBackingBytes": 85528640,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 10,
+        "workersTerminated": 10,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "large-scan",
+      "mode": "balanced",
+      "inputBytes": 12152803,
+      "outputBytes": 780517,
+      "engineMs": 4648,
+      "wallMs": 5018,
+      "maxUiGapMs": 104,
+      "samples": 49,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 133374824,
+        "mainBackingBytes": 82297396,
+        "workerUsedBytes": 11041244,
+        "workerBackingBytes": 205614820,
+        "workerEmbedderBytes": 840688
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 12,
+        "workersTerminated": 12,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "large-scan",
+      "mode": "strong",
+      "inputBytes": 12152803,
+      "outputBytes": 250804,
+      "engineMs": 4112,
+      "wallMs": 4452,
+      "maxUiGapMs": 117,
+      "samples": 43,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 133584456,
+        "mainBackingBytes": 83860278,
+        "workerUsedBytes": 10939856,
+        "workerBackingBytes": 190212170,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 13,
+        "workersTerminated": 13,
+        "activeWorkers": 0
+      }
+    },
+    {
+      "fixture": "large-scan",
+      "mode": "lossless",
+      "inputBytes": 12152803,
+      "outputBytes": 9562596,
+      "engineMs": 24270,
+      "wallMs": 24767,
+      "maxUiGapMs": 130,
+      "samples": 246,
+      "sampledManagedMemoryPeaks": {
+        "mainUsedBytes": 24011496,
+        "mainBackingBytes": 60246386,
+        "workerUsedBytes": 9946656,
+        "workerBackingBytes": 200412964,
+        "workerEmbedderBytes": 773712
+      },
+      "processCPUSeconds": null,
+      "resources": {
+        "workersStarted": 14,
+        "workersTerminated": 14,
+        "activeWorkers": 0
+      }
+    }
+  ],
+  "resetMemory": {
+    "usedSize": 1922552,
+    "totalSize": 2437120,
+    "embedderHeapUsedSize": 782496,
+    "backingStorageSize": 24415612
+  },
+  "cancelDuringLossless": true,
+  "noRemoteRequests": true
+}

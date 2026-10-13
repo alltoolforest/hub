@@ -1,8 +1,11 @@
 // Canonical Blueprint v1.0 Task 3: read-only inspection, not compression.
 // Dependencies are injected. Never import a shared UI, write a PDF, execute
 // document actions, request passwords, or fetch/upload document data.
+import {scalarBudget} from './scalar-budget.mjs';
+import {inflateStreamBounded,decodeAsciiStreamBounded} from './lossless-invariants.mjs';
 import {inspectEncodedJpeg} from './image-header-preflight.mjs';
-export const INPUT_LIMITS=Object.freeze({maxBytes:20*1024*1024,maxPages:500,
+export const INPUT_LIMITS=Object.freeze({maxBytes:100000000,maxPages:500,maxOperators:2000000,
+  maxInvariantEntries:2000000,maxTotalDecodedBytes:512000000,maxDecodedStreamBytes:32000000,
   maxObjects:50000,maxGraphEntries:250000,maxDepth:100,maxImages:1000,
   maxImagePixels:8000000,maxTotalImagePixels:32000000});
 export class InputInspectionError extends Error {
@@ -29,7 +32,7 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   if(!PDF?.PDFDocument||typeof readPages!=='function')
     fail('inspection-unavailable','The independent PDF inspection engine is unavailable. Retry when it is ready.');
   let doc;
-  try{doc=await PDF.PDFDocument.load(bytes.slice(),{updateMetadata:false,
+  try{doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,
     // This only permits reading the encryption marker. The next gate rejects
     // encrypted documents before content inspection; no password or decryption.
     throwOnInvalidObject:true,ignoreEncryption:true});}
@@ -46,10 +49,11 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   if(doc.isEncrypted||context.trailerInfo.Encrypt)
     fail('encrypted-pdf','Encrypted PDFs are unsupported. Use an authorized unencrypted copy.');
   let entries=0,signed=has(doc.catalog,'Perms'),xfa=false,activeContent=false,
-    attachmentPresent=false,totalPixels=0;
+    attachmentPresent=false,totalPixels=0,totalCoefficients=0;
   const seen=new Set(),images=[];
+  const checkScalar=scalarBudget(PDF,code=>fail(code,'This PDF exceeds safe scalar resource limits. Try a simpler export.'));
   function walk(value,depth=0){
-    cancel(signal);
+    cancel(signal);checkScalar(value);
     if(++entries>limits.maxGraphEntries||depth>limits.maxDepth)
       fail('structure-limit','This PDF is too complex for the supported inspection limits.');
     if(value instanceof PDF.PDFRef){
@@ -66,7 +70,7 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       if(name(value,'Type')==='/EmbeddedFile'||has(value,'EmbeddedFiles')||has(value,'EF')||has(value,'AF'))attachmentPresent=true;
       if(['/JavaScript','/Launch','/GoToR','/SubmitForm','/ImportData'].includes(name(value,'S'))||
         has(value,'JS')||has(value,'AA')||has(value,'OpenAction'))activeContent=true;
-      for(const [,v] of value.entries())walk(v,depth+1);
+      for(const [key,v] of value.entries()){checkScalar(key);walk(v,depth+1);}
     }else if(value instanceof PDF.PDFArray){
       for(let i=0;i<value.size();i++)walk(value.get(i),depth+1);
     }
@@ -85,11 +89,14 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       // Dictionary dimensions alone cannot bound a forged encoded JPEG frame.
       // Wrapper streams and aliases cannot bypass this pre-decoding check.
       let frame;
-      try{frame=await inspectEncodedJpeg(object,{PDF,context,maxBytes:limits.maxBytes});}catch{
+      try{frame=await inspectEncodedJpeg(object,{PDF,context,maxBytes:Math.min(limits.maxBytes,limits.maxDecodedStreamBytes??32000000)});}catch{
         fail('image-header-unverifiable','A JPEG image header or filter chain could not be verified. Export a fresh PDF.');
       }
       if(frame&&(frame.width!==width||frame.height!==height))
         fail('encoded-image-dimensions','JPEG dimensions disagree with the PDF image dictionary. Export a fresh PDF.');
+      if(frame){totalCoefficients+=frame.coefficientBytes;
+        if(frame.coefficientBytes>limits.maxImagePixels*16+1048576||totalCoefficients>limits.maxTotalImagePixels*16+4194304)
+          fail('image-pixel-limit','JPEG decoding exceeds the safe coefficient budget. Try a lower-resolution PDF.');}
       images.push({ref:String(ref),width,height,bitsPerComponent:num('BitsPerComponent'),
         filter:name(d,'Filter'),colorSpace:name(d,'ColorSpace'),streamBytes:object.contents.length,
         mask:has(d,'Mask'),softMask:has(d,'SMask'),decode:has(d,'Decode'),decodeParms:has(d,'DecodeParms')});
@@ -99,6 +106,38 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   if(signed)fail('signed-pdf','This PDF contains a signature or certification marker. Compression can invalidate it; keep the original.');
   if(xfa)fail('unsupported-xfa','Dynamic XFA forms are unsupported. Keep this original PDF.');
   if(activeContent)fail('unsupported-actions','This PDF contains interactive document actions that cannot yet be verified safely. Keep the original.');
+  // Bound general stream expansion and predictor rows before the independent decoder.
+  let decodedTotal=0;
+  const streamLimit=limits.maxDecodedStreamBytes??32000000;
+  for(const [,object] of objects){
+    if(!(object instanceof PDF.PDFRawStream))continue;
+    const lookup=key=>context.lookup(object.dict.get(N(key)));
+    const params=lookup('DecodeParms')??lookup('DP');
+    const parameterList=params instanceof PDF.PDFArray?params.asArray().map(v=>context.lookup(v)):[params];
+    for(const param of parameterList){
+      if(!(param instanceof PDF.PDFDict))continue;
+      const number=(key,fallback)=>context.lookup(param.get(N(key)))?.asNumber?.()??fallback;
+      const columns=number('Columns',1),colors=number('Colors',1),bits=number('BitsPerComponent',8);
+      if(!Number.isSafeInteger(columns)||columns<1||!Number.isSafeInteger(colors)||colors<1||colors>32||
+        ![1,2,4,8,16].includes(bits)||Math.ceil(columns*colors*bits/8)>streamLimit)
+        fail('decoded-stream-limit','A decoded stream or predictor row exceeds the safe resource budget. Try a simpler export.');
+    }
+    const filter=lookup('Filter');
+    const values=filter instanceof PDF.PDFArray?filter.asArray().map(v=>context.lookup(v)):[filter];
+    const aliases={'/Fl':'/FlateDecode','/A85':'/ASCII85Decode','/AHx':'/ASCIIHexDecode'};
+    let data=object.contents;
+    for(const value of values){
+      const name=aliases[String(value)]??String(value);
+      if(name==='/FlateDecode')data=await inflateStreamBounded(data,streamLimit);
+      else if(['/ASCII85Decode','/ASCIIHexDecode'].includes(name))data=decodeAsciiStreamBounded(data,name,streamLimit);
+      else if(['/LZWDecode','/LZW','/RunLengthDecode','/RL'].includes(name)){
+        data=PDF.decodePDFRawStream(object).decode();break;
+      }else break;
+    }
+    decodedTotal+=data.length;
+    if(data.length>streamLimit||decodedTotal>(limits.maxTotalDecodedBytes??128000000))
+      fail('decoded-stream-limit','Decoded resources exceed the safe budget. Try a smaller or lower-resolution PDF.');
+  }
   let pages;
   try{pages=doc.getPages();}catch{fail('invalid-pages','The PDF page tree is damaged. Export a fresh copy.');}
   if(!pages.length||pages.length>limits.maxPages)fail('page-limit','The PDF must contain between 1 and '+limits.maxPages+' pages.');
@@ -110,7 +149,7 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
     return {mediaBox:media,cropBox:crop,rotation};
   });
   let independent;
-  try{independent=await readPages(bytes.slice(),{signal,maxPages:limits.maxPages,maxImagePixels:limits.maxImagePixels});}
+  try{independent=await readPages(bytes,{signal,maxPages:limits.maxPages,maxOperators:limits.maxOperators,maxImagePixels:limits.maxImagePixels});}
   catch(error){cancel(signal);if(error instanceof InputInspectionError)throw error;
     throw new InputInspectionError('independent-inspection-failed',
       'The independent reader could not verify this PDF. Export a fresh copy.',{cause:error});}

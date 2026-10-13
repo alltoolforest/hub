@@ -26,8 +26,8 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
   const after=await inspectPDFInput(output,{PDF,readPages,signal,limits});
   for(const key of ['pageCount','classification','hasTextLayer','possibleOCR','geometry','pages','structures'])
     if(JSON.stringify(before[key])!==JSON.stringify(after[key]))fail('final-document-profile-changed');
-  const sourceText=await readText(original.slice(),{signal});
-  const outputText=await readText(output.slice(),{signal});
+  const sourceText=await readText(original,{signal});
+  const outputText=await readText(output,{signal});
   if(!Array.isArray(sourceText)||sourceText.length!==before.pageCount||
     !Array.isArray(outputText)||JSON.stringify(sourceText)!==JSON.stringify(outputText))
     fail('final-text-or-geometry-changed');

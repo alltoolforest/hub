@@ -18,7 +18,7 @@ try{
     const {createWorkerBridge}=await import('/assets/js/pdf-compressor-v2/worker-bridge.mjs');
     const {INPUT_LIMITS}=await import('/assets/js/pdf-compressor-v2/input-inspector.mjs');
     globalThis.ui=mountCompressor(document.querySelector('#app'),{limits:INPUT_LIMITS,
-      engine:createWorkerBridge({workerFactory:()=>new Worker('/tests/pdf-compressor-task11-worker.mjs',{type:'module'}),
+      engine:createWorkerBridge({fileInput:true,workerFactory:()=>new Worker('/tests/pdf-compressor-task11-worker.mjs',{type:'module'}),
         onProgress:stage=>globalThis.ui?.progress(stage)})});
   });
   assert.equal(await page.locator('h1').textContent(),'PDF Compressor');

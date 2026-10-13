@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; worker-src blob:; connect-src blob:; img-src blob: data:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>PDF Compressor — Reduce PDF Size Privately | AllToolForest</title>
   <meta name="description" content="Compress eligible PDF images or optimize PDF structure on your device. Choose Balanced, Strong or Lossless and review measured file-size savings.">
@@ -25,8 +26,8 @@
     <p>The compressor preserves existing selectable text and OCR; it does not add OCR to scanned pages. Unsupported image structures are left unchanged. Signed, encrypted and unsafe documents may be rejected.</p>
     <h2>If your PDF cannot be compressed</h2>
     <p>An already optimized PDF may have no further savings. If no smaller verified output is available, the tool returns the original without claiming a reduction.</p>
-    <p>File size, decoded image size and document complexity can affect processing. Follow the displayed tested limit. Cancel and retry if needed; retain a copy of your original file.</p>
-    <p><strong>Release preparation:</strong> the 100 MB input target is still under validation. This content is not evidence of general 100 MB support.</p>
+    <p>File size, decoded image size and document complexity can affect processing. Follow the displayed device limit. Cancel and retry if needed; retain a copy of your original file.</p>
+    <p><strong>Release preparation:</strong> Standard and known-capability mobile profiles accept files up to 100 MB. Lower-memory or unknown-memory mobile profiles use smaller limits. Decoded images and document complexity have separate limits. Physical-device checks remain part of release verification.</p>
   </main>
 </body>
 </html>

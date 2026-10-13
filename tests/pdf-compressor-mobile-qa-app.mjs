@@ -5,7 +5,7 @@ import {detectDeviceProfile} from '../assets/js/pdf-compressor-v2/device-policy.
 const el=id=>document.getElementById(id),profile=detectDeviceProfile();
 let workerURL=null,timer=null,started=0,last=0,ticks=0,maxGap=0,inspectionMs=0;
 globalThis.QA_WORKERS=[];globalThis.QA_RESOURCE_COUNTS={workersStarted:0,workersTerminated:0};
-const engine=createWorkerBridge({profile:profile.id,onProgress:stage=>{globalThis.QA_PHASE=stage;},workerFactory:()=>{
+const engine=createWorkerBridge({fileInput:true,profile:profile.id,onProgress:stage=>{globalThis.QA_PHASE=stage;},workerFactory:()=>{
   if(!workerURL){
     const raw=atob(globalThis.QA_WORKER_SOURCE),bytes=new Uint8Array(raw.length);
     for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);

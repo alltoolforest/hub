@@ -3,10 +3,10 @@ import {INPUT_LIMITS} from './input-inspector.mjs';
 const budget=(id,overrides)=>Object.freeze({id,limits:Object.freeze({...INPUT_LIMITS,...overrides})});
 export const DEVICE_PROFILES=Object.freeze({
   standard:budget('standard',{}),
-  mobile:budget('mobile',{maxTotalImagePixels:16000000}),
-  'mobile-unknown':budget('mobile-unknown',{maxBytes:12*1024*1024,maxPages:200,
+  mobile:budget('mobile',{}),
+  'mobile-unknown':budget('mobile-unknown',{maxBytes:12*1024*1024,maxOperators:200000,maxInvariantEntries:250000,maxTotalDecodedBytes:128000000,maxPages:200,
     maxObjects:30000,maxGraphEntries:150000,maxImagePixels:6000000,maxTotalImagePixels:12000000}),
-  'low-memory':budget('low-memory',{maxBytes:8*1024*1024,maxPages:100,
+  'low-memory':budget('low-memory',{maxBytes:8*1024*1024,maxOperators:200000,maxInvariantEntries:250000,maxTotalDecodedBytes:128000000,maxPages:100,
     maxObjects:25000,maxGraphEntries:125000,maxImagePixels:4000000,maxTotalImagePixels:8000000})
 });
 export function selectDeviceProfile({deviceMemoryGB,mobile=false}={}){

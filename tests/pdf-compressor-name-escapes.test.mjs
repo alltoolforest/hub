@@ -23,5 +23,7 @@ test('isolated parser patch and unchanged shared parser match provenance',()=>{
   const patched=readFileSync(new URL('pdf-lib.js',base));
   const digest=b=>createHash('sha256').update(b).digest('hex');
   assert.equal(digest(source),manifest.sourceSha256);assert.equal(digest(patched),manifest.patchedSha256);
-  assert.deepEqual(patched,Buffer.from(source.toString().replace('/#([\\dABCDEF]{2})/g','/#([\\dA-Fa-f]{2})/g')));
+  let expected=source.toString();
+  for(const {from,to} of manifest.replacements){assert.equal(expected.split(from).length-1,1);expected=expected.replace(from,to);}
+  assert.deepEqual(patched,Buffer.from(expected));
 });

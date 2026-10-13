@@ -17,7 +17,7 @@ export function isPlainOpaqueImage(stream,PDF){
 }
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
 export async function deduplicateOpaqueImages(bytes,{PDF,serializeClassic=false}={}){
-  const doc=await PDF.PDFDocument.load(bytes.slice(),{updateMetadata:false,throwOnInvalidObject:true});
+  const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
   const {context}=doc,known=new Map(),replacements=new Map();
   for(const [ref,stream] of context.enumerateIndirectObjects()){
     if(!isPlainOpaqueImage(stream,PDF))continue;
@@ -51,5 +51,5 @@ export async function deduplicateOpaqueImages(bytes,{PDF,serializeClassic=false}
     const dict=object instanceof PDF.PDFRawStream?object.dict:object;
     if(dict instanceof PDF.PDFDict&&['/ObjStm','/XRef'].includes(String(dict.get(PDF.PDFName.of('Type')))))context.delete(ref);
   }
-  return {bytes:new Uint8Array(await doc.save({useObjectStreams:!serializeClassic})),deduplicated:replacements.size};
+  return {bytes:await doc.save({useObjectStreams:!serializeClassic}),deduplicated:replacements.size};
 }

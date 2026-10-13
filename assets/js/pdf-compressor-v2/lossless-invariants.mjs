@@ -2,6 +2,7 @@
 // Conservative verifier only. It does not transform PDFs or approve an engine.
 // Unlike presence-only profiles, form values, outline destinations, annotation
 // dictionaries, attachments, tags, fonts and stream content participate in hashes.
+import {scalarBudget} from './scalar-budget.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
@@ -64,9 +65,10 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
   maxTotalDecodedBytes=128000000,maxEntries=250000,maxDepth=100,onSnapshot}={}){
   if(!(bytes instanceof Uint8Array)||!PDF?.PDFDocument)
     throw new LosslessInvariantError('invalid-invariant-input');
-  const doc=await PDF.PDFDocument.load(bytes.slice(),{updateMetadata:false,throwOnInvalidObject:true});
+  const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
   const {context}=doc,N=PDF.PDFName.of,seen=new Map(),reachableRefs=new Set(),imageCache=new Map();
   let entries=0,totalDecoded=0;
+  const checkScalar=scalarBudget(PDF,code=>{throw new LosslessInvariantError(code);});
   async function canonical(value,depth=0){
     if(++entries>maxEntries||depth>maxDepth)throw new LosslessInvariantError('invariant-structure-limit');
     if(value instanceof PDF.PDFRef){
@@ -74,6 +76,7 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
       value=context.lookup(value);
       if(!value)throw new LosslessInvariantError('invariant-broken-reference');
     }
+    checkScalar(value);
     if(value instanceof PDF.PDFInvalidObject)throw new LosslessInvariantError('invariant-invalid-object');
     if(value instanceof PDF.PDFString||value instanceof PDF.PDFHexString)
       return ['string',hex(value.asBytes())];
@@ -107,6 +110,7 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         totalDecoded+=data.length;
         if(data.length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
           throw new LosslessInvariantError('invariant-byte-budget');
+        for(const key of dict.keys())checkScalar(key);
         const keys=dict.keys().filter(k=>!['/Length','/Filter'].includes(String(k)))
           .sort((a,b)=>String(a).localeCompare(String(b),'en'));
         const fields=[];for(const key of keys)fields.push([String(key),await canonical(dict.get(key),depth+1)]);
@@ -115,7 +119,7 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         if(plainImage)imageCache.set(value,snapshot);
         return snapshot;
       }
-      const fields=[];
+      const fields=[];for(const key of value.keys())checkScalar(key);
       for(const key of value.keys().sort((a,b)=>String(a).localeCompare(String(b),'en')))
         fields.push([String(key),await canonical(value.get(key),depth+1)]);
       return ['dict',id,fields];
