@@ -1,6 +1,7 @@
 // Canonical Blueprint v1.0 Task 3: read-only inspection, not compression.
 // Dependencies are injected. Never import a shared UI, write a PDF, execute
 // document actions, request passwords, or fetch/upload document data.
+import {inspectEncodedJpeg} from './image-header-preflight.mjs';
 export const INPUT_LIMITS=Object.freeze({maxBytes:20*1024*1024,maxPages:500,
   maxObjects:50000,maxGraphEntries:250000,maxDepth:100,maxImages:1000,
   maxImagePixels:8000000,maxTotalImagePixels:32000000});
@@ -81,6 +82,14 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       const pixels=width*height;totalPixels+=pixels;
       if(!Number.isSafeInteger(pixels)||pixels>limits.maxImagePixels||totalPixels>limits.maxTotalImagePixels)
         fail('image-pixel-limit','The embedded images exceed the current decoded-image inspection budget. Try a lower-resolution copy.');
+      // Dictionary dimensions alone cannot bound a forged encoded JPEG frame.
+      // Wrapper streams and aliases cannot bypass this pre-decoding check.
+      let frame;
+      try{frame=await inspectEncodedJpeg(object,{PDF,context,maxBytes:limits.maxBytes});}catch{
+        fail('image-header-unverifiable','A JPEG image header or filter chain could not be verified. Export a fresh PDF.');
+      }
+      if(frame&&(frame.width!==width||frame.height!==height))
+        fail('encoded-image-dimensions','JPEG dimensions disagree with the PDF image dictionary. Export a fresh PDF.');
       images.push({ref:String(ref),width,height,bitsPerComponent:num('BitsPerComponent'),
         filter:name(d,'Filter'),colorSpace:name(d,'ColorSpace'),streamBytes:object.contents.length,
         mask:has(d,'Mask'),softMask:has(d,'SMask'),decode:has(d,'Decode'),decodeParms:has(d,'DecodeParms')});
@@ -101,7 +110,7 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
     return {mediaBox:media,cropBox:crop,rotation};
   });
   let independent;
-  try{independent=await readPages(bytes.slice(),{signal,maxPages:limits.maxPages});}
+  try{independent=await readPages(bytes.slice(),{signal,maxPages:limits.maxPages,maxImagePixels:limits.maxImagePixels});}
   catch(error){cancel(signal);if(error instanceof InputInspectionError)throw error;
     throw new InputInspectionError('independent-inspection-failed',
       'The independent reader could not verify this PDF. Export a fresh copy.',{cause:error});}

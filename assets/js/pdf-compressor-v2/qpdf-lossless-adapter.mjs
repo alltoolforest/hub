@@ -28,9 +28,9 @@ export function createQpdfLosslessProvider(createModule){
     }
   };
 }
-export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal}={}){
+export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,limits=INPUT_LIMITS}={}){
   const inspect=async data=>{
-    const report=await inspectPDFInput(data,{PDF,readPages,signal});
+    const report=await inspectPDFInput(data,{PDF,readPages,signal,limits});
     return {...report,signed:false,encrypted:false,
       fingerprint:await losslessFingerprint(data,{PDF})};
   };
@@ -41,5 +41,5 @@ export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal}=
     const prepared=await deduplicateOpaqueImages(input,{PDF,serializeClassic:true});
     return optimize(prepared.bytes);
   };
-  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:INPUT_LIMITS.maxBytes});
+  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes});
 }

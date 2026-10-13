@@ -14,6 +14,7 @@ try{
   await page.goto(pathToFileURL(path).href);
   const {bytes}=await buildFixture('mixed');
   await page.locator('#file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)});
+  await page.waitForFunction(()=>/^Ready:/.test(document.querySelector('#status').textContent),{},{timeout:120000});
   const reports=[];
   for(const mode of ['balanced','strong','lossless']){
     await page.locator('#mode').selectOption(mode);await page.locator('#run').click();
@@ -21,20 +22,23 @@ try{
     assert.match(await page.locator('#status').textContent(),/^Completed:/);
     const report=JSON.parse(await page.locator('#report').textContent());
     assert.equal(report.mode,mode);assert.equal(report.inputBytes,bytes.length);
-    assert.ok(report.outputBytes<=bytes.length);reports.push(report);
+    assert.ok(report.outputBytes<=bytes.length);assert.equal(report.independentTextVerified,true);assert.equal(report.resources.activeWorkers,0);assert.equal(report.resources.workersStarted,report.resources.workersTerminated);reports.push(report);
   }
-  await page.locator('#run').click();await page.waitForFunction(()=>typeof running?.onmessage==='function');
-  await page.evaluate(()=>{window.staleResultCallback=running.onmessage;});await page.locator('#cancel').click();
+  await page.locator('#run').click();await page.waitForFunction(()=>QA_WORKERS.some(worker=>typeof worker.onmessage==='function'));
+  await page.evaluate(()=>{window.staleResultCallback=QA_WORKERS.at(-1).onmessage;});await page.locator('#cancel').click();
   await page.evaluate(()=>window.staleResultCallback({data:{ok:true,result:{bytes:new Uint8Array([1,2,3])},elapsedMs:1}}));
   await page.waitForTimeout(500);assert.equal(await page.locator('#download').isVisible(),false);
   assert.match(await page.locator('#status').textContent(),/^Cancelled/);
+  await page.locator('#reset').click();
   await page.evaluate(()=>{window.workerStartedForOversize=false;window.NativeWorker=Worker;window.Worker=function(...args){window.workerStartedForOversize=true;return new window.NativeWorker(...args);};});
   await page.locator('#file').setInputFiles({name:'oversize.pdf',mimeType:'application/pdf',buffer:Buffer.alloc(20*1024*1024+1)});
   assert.equal(await page.locator('#run').isDisabled(),true);
-  assert.match(await page.locator('#status').textContent(),/^File too large:/);
+  assert.match(await page.locator('#status').textContent(),/^Test failed safely: file-limit/);
   await page.evaluate(()=>document.querySelector('#run').onclick());
   assert.equal(await page.evaluate(()=>window.workerStartedForOversize),false);
   assert.equal(await page.locator('#download').isVisible(),false);
+  await page.evaluate(()=>{dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));});
+  assert.equal(await page.evaluate(()=>QA_SESSION.snapshot().state),'empty');assert.equal(await page.evaluate(()=>QA_WORKERS.length),0);
   assert.deepEqual(remote,[]);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   console.log(JSON.stringify({scope:'Local Chromium file-mode diagnostic; not physical-phone evidence',reports,cancel:true,noRemoteRequests:true,narrowLayout:true},null,2));
 }finally{await browser.close();}

@@ -202,3 +202,38 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task8-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task8-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task8-browser.mjs
+  performance-diagnostic:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned diagnostic and measurement tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2
+          npx playwright install --with-deps chromium
+      - name: Device budgets and initial-decode regression gates
+        run: node --test tests/pdf-compressor-task10-policy.test.mjs tests/pdf-compressor-task9-security.test.mjs
+      - name: Build and verify integrated offline diagnostic
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
+        run: |
+          python tests/build-pdf-compressor-mobile-qa.py
+          node tests/pdf-compressor-mobile-qa-browser.mjs
+          node tests/pdf-compressor-task9-browser.mjs
+      - name: Synthetic size, repeated-run, managed-memory and cancellation measurements
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
+          PDF_COMPRESSOR_PERFORMANCE_OUTPUT: /tmp/pdf-compressor-performance.json
+        run: node tests/pdf-compressor-task10-performance.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-synthetic-performance-evidence
+          path: /tmp/pdf-compressor-performance.json
+          retention-days: 7

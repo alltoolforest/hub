@@ -14,6 +14,7 @@ try{
   await page.goto(pathToFileURL(path).href);
   const payload='<img src=x onerror="globalThis.injected=true">.pdf';
   await page.locator('#file').setInputFiles({name:payload,mimeType:'application/pdf',buffer:Buffer.from((await buildFixture('digital')).bytes)});
+  await page.waitForFunction(()=>/^Ready:/.test(document.querySelector('#status').textContent),{},{timeout:120000});
   assert.ok((await page.locator('#status').textContent()).includes(payload));
   assert.equal(await page.locator('img').count(),0);
   assert.equal(await page.evaluate(()=>globalThis.injected===true),false);

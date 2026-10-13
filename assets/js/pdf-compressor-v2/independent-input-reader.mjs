@@ -24,10 +24,10 @@ export async function readPageTextContent(page,{signal,maxTextItems=200000}={}){
 }
 export function createIndependentInputReader(pdfjs){
   if(typeof pdfjs?.getDocument!=='function')throw new TypeError('PDF.js is required');
-  return async (bytes,{signal,maxPages=500,maxOperators=200000}={})=>{
+  return async (bytes,{signal,maxPages=500,maxOperators=200000,maxImagePixels=8000000}={})=>{
     const task=pdfjs.getDocument({data:bytes.slice(),stopAtErrors:true,
       isEvalSupported:false,enableXfa:false,useSystemFonts:false,
-      disableFontFace:true,verbosity:0});
+      disableFontFace:true,verbosity:0,maxImageSize:maxImagePixels,canvasMaxAreaInBytes:maxImagePixels*4});
     const abort=()=>{void task.destroy().catch(()=>{});};
     signal?.addEventListener('abort',abort,{once:true});
     try{

@@ -30,7 +30,10 @@ function decodeAscii(bytes,filter,maxBytes){
     if(!/^[0-9a-f]*$/i.test(encoded))throw new LosslessInvariantError('invalid-ascii-hex');
     if(encoded.length%2)encoded+='0';
     if(encoded.length/2>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
-    return Uint8Array.from(encoded.match(/../g)??[],pair=>parseInt(pair,16));
+    const output=new Uint8Array(encoded.length/2);
+    const nibble=code=>code<=57?code-48:code<=70?code-55:code-87;
+    for(let i=0;i<output.length;i++)output[i]=nibble(encoded.charCodeAt(i*2))*16+nibble(encoded.charCodeAt(i*2+1));
+    return output;
   }
   let encoded=text.startsWith('<~')?text.slice(2):text;
   if(!encoded.endsWith('~>'))throw new LosslessInvariantError('invalid-ascii85');
@@ -56,6 +59,7 @@ function decodeAscii(bytes,filter,maxBytes){
   if(group.length){const count=group.length-1;while(group.length<5)group.push(84);emit(count);}
   return output.slice(0,used);
 }
+export {boundedInflate as inflateStreamBounded,decodeAscii as decodeAsciiStreamBounded};
 export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
   maxTotalDecodedBytes=128000000,maxEntries=250000,maxDepth=100,onSnapshot}={}){
   if(!(bytes instanceof Uint8Array)||!PDF?.PDFDocument)
