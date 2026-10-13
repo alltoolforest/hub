@@ -36,7 +36,7 @@ jobs:
       - name: Input integrity and adjacent compressor regression
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
-        run: node --test tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
+        run: node --test tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
       - name: Isolated browser input gate
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
@@ -50,6 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch pinned compiler and sources into disposable workspace
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') == '' }}
         run: |
           mkdir -p /tmp/atf-qpdf-build
           git clone --depth 1 --branch 3.1.74 https://github.com/emscripten-core/emsdk.git /tmp/atf-qpdf-build/emsdk
@@ -60,9 +61,16 @@ jobs:
           /tmp/atf-qpdf-build/emsdk/emsdk install 3.1.74
           /tmp/atf-qpdf-build/emsdk/emsdk activate 3.1.74
       - name: Build isolated module from reviewed source pins
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') == '' }}
         run: |
           source /tmp/atf-qpdf-build/emsdk/emsdk_env.sh
           bash tests/build-pdf-compressor-qpdf-wasm.sh /tmp/atf-qpdf-build /tmp/atf-qpdf-artifact
+      - name: Reuse the hash-verified artifact from the confirmed pinned source build
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') != '' }}
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          mkdir -p /tmp/atf-qpdf-artifact
+          cp assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm /tmp/atf-qpdf-artifact/
       - name: Report actual version without approving production integration
         run: |
           node --input-type=module - <<'JS'
@@ -74,4 +82,41 @@ jobs:
         with:
           name: pdf-compressor-qpdf-experimental-source-build
           path: /tmp/atf-qpdf-artifact
+          retention-days: 7
+  lossless-output:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install independent QA tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify pinned runtime and generate independent inputs
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-pdfs
+      - name: Actual source-built engine outputs, graph identity, text and exact rendered pixels
+        env:
+          PDF_COMPRESSOR_QPDF_MODULE: assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: node tests/pdf-compressor-task4-source-gate.mjs
+      - name: Module-worker and strict-CSP compatibility in three browser engines
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-lossless-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task4-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task4-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task4-worker-browser.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-independent-lossless-output-evidence
+          path: /tmp/atf-qpdf-verified-outputs
           retention-days: 7

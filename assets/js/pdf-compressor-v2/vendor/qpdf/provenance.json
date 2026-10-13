@@ -1,0 +1,29 @@
+{
+  "scope": "Isolated PDF Compressor development; release gates remain pending",
+  "qpdf": "12.4.2",
+  "sources": {
+    "qpdf": "4eba95899886e851cc41d76886483b347612f2a8",
+    "zlib": "da607da739fa6047df13e66a2af6b8bec7c2a498",
+    "libjpeg-turbo": "9217719d3a58633923b096af4c1d50d304768a64",
+    "emsdk": "3d6d8ee910466516a53e665b86458faa81dae9ba"
+  },
+  "emscripten": "3.1.74",
+  "buildCommit": "b7cfbe99451a5452fdff5d05b1782a7898f18aba",
+  "ciRun": "https://github.com/alltoolforest/hub/actions/runs/38343404044",
+  "artifactId": 11787514715,
+  "archiveSha256": "f475ad0871f1dd76adc9c568859e04477f5ea199e7669b6574674b9dbc10c8b9",
+  "files": {
+    "qpdf.mjs": {
+      "bytes": 84990,
+      "sha256": "c5cc483241f550c59cb30e90f8f255bf912471677e82bcc9f5a809ee6eac6e7d"
+    },
+    "qpdf.wasm": {
+      "bytes": 2535144,
+      "sha256": "94848c766852383eee15dc84a51a5699e9b4fb9a04e7ccfafc4bdf2fd02bc34e"
+    }
+  },
+  "dynamicExecution": false,
+  "maximumWasmHeapBytes": 268435456,
+  "initialWasmHeapBytes": 33554432,
+  "physicalDeviceVerified": false
+}

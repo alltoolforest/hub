@@ -1,0 +1,139 @@
+{
+  "sourceBuilt": true,
+  "productionApproved": false,
+  "scope": "Task 4 actual source-built lossless synthetic corpus; not real-device acceptance",
+  "report": [
+    {
+      "fixture": "digital",
+      "status": "original-retained",
+      "inputBytes": 1370,
+      "outputBytes": 1370,
+      "savedBytes": 0,
+      "elapsedMs": 239,
+      "outputSHA256": "9134e629c32c992796c6335df6953c201aa672d999b3fd6dd3b204b01b892544",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "scanned",
+      "status": "compressed",
+      "inputBytes": 339211,
+      "outputBytes": 274423,
+      "savedBytes": 64788,
+      "elapsedMs": 486,
+      "outputSHA256": "9bb7b727e0ba037e174eb63dfcf7465666eaebef62fdfc6be0e4d7468eb1587d",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "image-heavy",
+      "status": "compressed",
+      "inputBytes": 708693,
+      "outputBytes": 571654,
+      "savedBytes": 137039,
+      "elapsedMs": 945,
+      "outputSHA256": "f556eb9abb16c6df0e96f077fc5c62095f9bd14d7298b317127dbeb7e4bc6a8e",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "mixed",
+      "status": "compressed",
+      "inputBytes": 113682,
+      "outputBytes": 92301,
+      "savedBytes": 21381,
+      "elapsedMs": 223,
+      "outputSHA256": "30775287a92f62b276bb6408c400409bd08162cd42cae1f9d2d6c553e536216c",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "form",
+      "status": "original-retained",
+      "inputBytes": 2124,
+      "outputBytes": 2124,
+      "savedBytes": 0,
+      "elapsedMs": 73,
+      "outputSHA256": "6e050ba960743d29a05bd6f15ee028636a676c570e5c92e93c6ff08c25cacfed",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "bookmarks",
+      "status": "original-retained",
+      "inputBytes": 1489,
+      "outputBytes": 1489,
+      "savedBytes": 0,
+      "elapsedMs": 66,
+      "outputSHA256": "ba986ea506dc42673d599d750d961e5e18c1ac3ae8043ce21356d6f5236b109c",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "attachment",
+      "status": "original-retained",
+      "inputBytes": 1441,
+      "outputBytes": 1441,
+      "savedBytes": 0,
+      "elapsedMs": 49,
+      "outputSHA256": "3c758bfc5f7c2cbcf8d744b29d5337aea1845f58b055c095382afc7bcbf8b6a0",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "tagged",
+      "status": "original-retained",
+      "inputBytes": 1287,
+      "outputBytes": 1287,
+      "savedBytes": 0,
+      "elapsedMs": 66,
+      "outputSHA256": "1d16d8ca3a4cd8251e65056dc9f3f31f8a5d74d82a94c0fcae467dbfacc3a824",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "independent-text",
+      "status": "compressed",
+      "inputBytes": 4108,
+      "outputBytes": 2261,
+      "savedBytes": 1847,
+      "elapsedMs": 73,
+      "outputSHA256": "b2a0fcf6d13bced2e8a4842c2a3141b8b81380d7afb1c7856fa177ec35aef194",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "independent-scan-color",
+      "status": "compressed",
+      "inputBytes": 303667,
+      "outputBytes": 233384,
+      "savedBytes": 70283,
+      "elapsedMs": 919,
+      "outputSHA256": "0bfa9331ef444f2802d746e42b95e554a20635a29ca922836480cd7076edd43b",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "independent-scan-gray",
+      "status": "compressed",
+      "inputBytes": 162729,
+      "outputBytes": 127506,
+      "savedBytes": 35223,
+      "elapsedMs": 1106,
+      "outputSHA256": "f8491413b593c6f564c528f27b09c73b014b1b8c92d28fd46fae7983e083f2fc",
+      "independentText": true,
+      "exactRenderedPixels": true
+    },
+    {
+      "fixture": "duplicate-image-resources",
+      "status": "compressed",
+      "inputBytes": 338978,
+      "outputBytes": 137681,
+      "savedBytes": 201297,
+      "elapsedMs": 307,
+      "outputSHA256": "848e1e536301194d9240ae3184e9abd19c36254fdf6b312d62b0c9d7afb37200",
+      "independentText": true,
+      "exactRenderedPixels": true
+    }
+  ]
+}

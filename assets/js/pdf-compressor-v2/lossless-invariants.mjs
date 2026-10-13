@@ -2,6 +2,7 @@
 // Conservative verifier only. It does not transform PDFs or approve an engine.
 // Unlike presence-only profiles, form values, outline destinations, annotation
 // dictionaries, attachments, tags, fonts and stream content participate in hashes.
+import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
 export class LosslessInvariantError extends Error {
@@ -22,16 +23,50 @@ async function boundedInflate(bytes,maxBytes){
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;
 }
+function decodeAscii(bytes,filter,maxBytes){
+  const text=new TextDecoder('ascii').decode(bytes).replace(/\s/g,'');
+  if(filter==='/ASCIIHexDecode'){
+    let encoded=text.endsWith('>')?text.slice(0,-1):text;
+    if(!/^[0-9a-f]*$/i.test(encoded))throw new LosslessInvariantError('invalid-ascii-hex');
+    if(encoded.length%2)encoded+='0';
+    if(encoded.length/2>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
+    return Uint8Array.from(encoded.match(/../g)??[],pair=>parseInt(pair,16));
+  }
+  let encoded=text.startsWith('<~')?text.slice(2):text;
+  if(!encoded.endsWith('~>'))throw new LosslessInvariantError('invalid-ascii85');
+  encoded=encoded.slice(0,-2);
+  const output=new Uint8Array(Math.min(maxBytes+1,encoded.length*4));let used=0,group=[];
+  const emit=(count)=>{
+    let number=0;for(const digit of group)number=number*85+digit;
+    if(number>0xffffffff)throw new LosslessInvariantError('invalid-ascii85');
+    if(used+count>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
+    for(let n=0;n<count;n++)output[used++]=(number>>>((3-n)*8))&255;
+    group=[];
+  };
+  for(const char of encoded){
+    if(char==='z'){
+      if(group.length)throw new LosslessInvariantError('invalid-ascii85');
+      group=[0,0,0,0,0];emit(4);continue;
+    }
+    const digit=char.charCodeAt(0)-33;
+    if(digit<0||digit>84)throw new LosslessInvariantError('invalid-ascii85');
+    group.push(digit);if(group.length===5)emit(4);
+  }
+  if(group.length===1)throw new LosslessInvariantError('invalid-ascii85');
+  if(group.length){const count=group.length-1;while(group.length<5)group.push(84);emit(count);}
+  return output.slice(0,used);
+}
 export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
-  maxTotalDecodedBytes=128000000,maxEntries=250000,maxDepth=100}={}){
+  maxTotalDecodedBytes=128000000,maxEntries=250000,maxDepth=100,onSnapshot}={}){
   if(!(bytes instanceof Uint8Array)||!PDF?.PDFDocument)
     throw new LosslessInvariantError('invalid-invariant-input');
   const doc=await PDF.PDFDocument.load(bytes.slice(),{updateMetadata:false,throwOnInvalidObject:true});
-  const {context}=doc,N=PDF.PDFName.of,seen=new Map();
+  const {context}=doc,N=PDF.PDFName.of,seen=new Map(),reachableRefs=new Set(),imageCache=new Map();
   let entries=0,totalDecoded=0;
   async function canonical(value,depth=0){
     if(++entries>maxEntries||depth>maxDepth)throw new LosslessInvariantError('invariant-structure-limit');
     if(value instanceof PDF.PDFRef){
+      reachableRefs.add(String(value));
       value=context.lookup(value);
       if(!value)throw new LosslessInvariantError('invariant-broken-reference');
     }
@@ -41,8 +76,10 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
     if(value instanceof PDF.PDFNumber)return ['number',value.asNumber()];
     if(value instanceof PDF.PDFName)return ['name',value.decodeText()];
     if(value instanceof PDF.PDFRawStream||value instanceof PDF.PDFDict||value instanceof PDF.PDFArray){
+      const plainImage=isPlainOpaqueImage(value,PDF);
+      if(plainImage&&imageCache.has(value))return imageCache.get(value);
       if(seen.has(value))return ['ref',seen.get(value)];
-      const id=seen.size;seen.set(value,id);
+      const id=plainImage?null:seen.size;if(!plainImage)seen.set(value,id);
       if(value instanceof PDF.PDFArray){
         const items=[];for(let i=0;i<value.size();i++)items.push(await canonical(value.get(i),depth+1));
         return ['array',id,items];
@@ -52,19 +89,27 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         const filters=filter instanceof PDF.PDFArray?
           Array.from({length:filter.size()},(_,i)=>String(context.lookup(filter.get(i)))):
           filter?[String(filter)]:[];
-        // Decode only plain Flate: predictors remain part of the dictionary.
+        // Decode supported general-purpose filters: predictor parameters remain
+        // part of the dictionary and cannot silently change.
         // Other filters are retained as encoded-byte invariants. This avoids
         // pretending that an unsupported decoder proves pixel equivalence.
-        const flate=filters.length===1&&filters[0]==='/FlateDecode';
-        const plain=filters.length===0;
-        const data=flate?await boundedInflate(value.contents,maxStreamBytes):value.contents;
+        let data=value.contents,consumed=0;
+        for(const filter of filters){
+          if(!['/FlateDecode','/ASCII85Decode','/ASCIIHexDecode'].includes(filter))break;
+          data=filter==='/FlateDecode'?await boundedInflate(data,maxStreamBytes):decodeAscii(data,filter,maxStreamBytes);
+          consumed++;
+        }
+        const remaining=filters.slice(consumed),decoded=remaining.length===0;
         totalDecoded+=data.length;
         if(data.length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
           throw new LosslessInvariantError('invariant-byte-budget');
-        const keys=dict.keys().filter(k=>String(k)!=='/Length'&&
-          (!(flate||plain)||String(k)!=='/Filter')).sort((a,b)=>String(a).localeCompare(String(b),'en'));
+        const keys=dict.keys().filter(k=>!['/Length','/Filter'].includes(String(k)))
+          .sort((a,b)=>String(a).localeCompare(String(b),'en'));
         const fields=[];for(const key of keys)fields.push([String(key),await canonical(dict.get(key),depth+1)]);
-        return ['stream',id,flate||plain?'decoded':'encoded',fields,await hash(data)];
+        if(remaining.length)fields.push(['/Filter',['filters',...remaining]]);
+        const snapshot=['stream',id,decoded?'decoded':'encoded',fields,await hash(data)];
+        if(plainImage)imageCache.set(value,snapshot);
+        return snapshot;
       }
       const fields=[];
       for(const key of value.keys().sort((a,b)=>String(a).localeCompare(String(b),'en')))
@@ -73,9 +118,27 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
     }
     return ['scalar',String(value)];
   }
-  const catalog=await canonical(doc.catalog);
+  const catalog=await canonical(context.trailerInfo.Root);
   const info=context.trailerInfo.Info?await canonical(context.trailerInfo.Info):null;
+  const initiallyReachable=new Set(reachableRefs),orphans=[];
+  for(const [ref,object] of context.enumerateIndirectObjects()){
+    if(initiallyReachable.has(String(ref)))continue;
+    // Superseded xref/object-stream containers are structural overhead. Other
+    // detached objects might contain private attachments/history: do not allow
+    // a rewriting engine to silently drop them under a content-preserving claim.
+    const dict=object instanceof PDF.PDFRawStream?object.dict:object;
+    const type=dict instanceof PDF.PDFDict?String(dict.get(N('Type'))):'';
+    if(!['/ObjStm','/XRef'].includes(type)){
+      // Normalize each orphan graph independently of original object numbers.
+      // Sorting these snapshots preserves even detached material/history.
+      seen.clear();imageCache.clear();
+      orphans.push(JSON.stringify(await canonical(ref)));
+    }
+  }
   // File IDs, xref location and object-stream packing are structural overhead;
   // they are excluded. Catalog, Info and all their reachable resources remain.
-  return hash(new TextEncoder().encode(JSON.stringify({catalog,info})));
+  const snapshot={catalog,info,orphans:orphans.sort()};
+  // Explicit local QA hook only; no logging/network behavior in this verifier.
+  if(typeof onSnapshot==='function')onSnapshot(snapshot);
+  return hash(new TextEncoder().encode(JSON.stringify(snapshot)));
 }
