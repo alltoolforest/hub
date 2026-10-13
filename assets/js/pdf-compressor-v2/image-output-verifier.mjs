@@ -21,7 +21,7 @@ export function createImageOutputVerifier({PDF,readPages,verifyJpeg}={}) {
         String(old.dict.get(N('ColorSpace')))!==r.descriptor.colorSpace||
         !Number.isSafeInteger(c.width)||!Number.isSafeInteger(c.height)||c.width<1||c.height<1||
         c.width>r.descriptor.width||c.height>r.descriptor.height)throw Error('invalid-image-manifest');
-      if(String(old.dict.get(N('Filter')))!=='/FlateDecode'||String(next.dict.get(N('Filter')))!=='/DCTDecode'||
+      if(!['/FlateDecode','/DCTDecode'].includes(String(old.dict.get(N('Filter'))))||String(next.dict.get(N('Filter')))!=='/DCTDecode'||
         String(next.dict.get(N('ColorSpace')))!=='/DeviceRGB'||
         next.dict.get(N('Width'))?.asNumber?.()!==c.width||next.dict.get(N('Height'))?.asNumber?.()!==c.height||
         next.contents.length!==c.bytes.length||next.contents.some((v,i)=>v!==c.bytes[i]))throw Error('image-manifest-mismatch');

@@ -2,12 +2,13 @@
 // This module NEVER edits a PDF. Candidate must pass an independent PDF
 // resource replacement/verification gate before use in a downloadable file.
 import {assessImage} from './image-policy.mjs';
+import {preserveJpegMetadata} from './jpeg-source-decoder.mjs';
 export class ImageCandidateError extends Error {
   constructor(code){super(code);this.name='ImageCandidateError';this.code=code;}
 }
-export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',encodeJpeg,signal}={}){
+export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',encodeJpeg,signal,allowJpeg=false,sourceJpeg}={}){
   if(signal?.aborted)throw new ImageCandidateError('cancelled');
-  const decision=assessImage(descriptor,mode);
+  const decision=assessImage(descriptor,mode,undefined,{allowJpeg});
   if(!decision.eligible) return {status:'preserve',reason:decision.reason};
   if(!(rgba instanceof Uint8Array||rgba instanceof Uint8ClampedArray)||
     rgba.byteLength!==decision.pixels*4)
@@ -48,7 +49,8 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
      data[0]!==0xff||data[1]!==0xd8||
      data[data.length-2]!==0xff||data[data.length-1]!==0xd9)
     throw new ImageCandidateError('invalid-jpeg');
-  if(data.length>=inputBytes)
+  if(descriptor.filter==='/DCTDecode')data=preserveJpegMetadata(sourceJpeg,data);
+  if(data.length>=inputBytes||(descriptor.filter==='/DCTDecode'&&data.length>inputBytes*.9))
     return {status:'preserve',reason:'no-image-stream-savings'};
   // Do not assume saved PDF size: extra dictionaries, xrefs and resource
   // metadata can cancel this gain. Final gate belongs to later tasks.

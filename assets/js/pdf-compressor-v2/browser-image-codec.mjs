@@ -18,17 +18,24 @@ export async function encodeBrowserJpeg({rgb,width,height,quality,signal}) {
   }finally{canvas.width=1;canvas.height=1;}
 }
 
-export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,height,mode}) {
+export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,height,mode},{decodeJpeg}={}) {
   if(typeof createImageBitmap!=='function'||typeof OffscreenCanvas!=='function')throw Error('image-verification-unavailable');
   const image=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}));
   const source=new OffscreenCanvas(descriptor.width,descriptor.height),target=new OffscreenCanvas(width,height);
   try {
     if(image.width!==width||image.height!==height)return false;
-    const gray=descriptor.colorSpace==='/DeviceGray',raw=await inflateExact(originalStream.contents,descriptor.width*descriptor.height*(gray?1:3));
     const ctx=source.getContext('2d'),pixels=ctx.createImageData(descriptor.width,descriptor.height);
-    for(let p=0;p<descriptor.width*descriptor.height;p++){
-      pixels.data[p*4]=raw[p*(gray?1:3)];pixels.data[p*4+1]=raw[p*(gray?1:3)+(gray?0:1)];
-      pixels.data[p*4+2]=raw[p*(gray?1:3)+(gray?0:2)];pixels.data[p*4+3]=255;
+    if(descriptor.filter==='/DCTDecode'){
+      if(typeof decodeJpeg!=='function')throw Error('source-jpeg-verification-unavailable');
+      const rgba=await decodeJpeg({bytes:originalStream.contents.slice(),descriptor});
+      if(!(rgba instanceof Uint8Array||rgba instanceof Uint8ClampedArray)||rgba.length!==pixels.data.length)return false;
+      pixels.data.set(rgba);
+    }else{
+      const gray=descriptor.colorSpace==='/DeviceGray',raw=await inflateExact(originalStream.contents,descriptor.width*descriptor.height*(gray?1:3));
+      for(let p=0;p<descriptor.width*descriptor.height;p++){
+        pixels.data[p*4]=raw[p*(gray?1:3)];pixels.data[p*4+1]=raw[p*(gray?1:3)+(gray?0:1)];
+        pixels.data[p*4+2]=raw[p*(gray?1:3)+(gray?0:2)];pixels.data[p*4+3]=255;
+      }
     }
     ctx.putImageData(pixels,0,0);
     const out=target.getContext('2d');out.imageSmoothingEnabled=true;out.imageSmoothingQuality='high';
@@ -39,6 +46,7 @@ export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,h
       const delta=actual[p*4+c]-reference[p*4+c];square+=delta*delta;bias[c]+=delta;
     }
     const rmse=Math.sqrt(square/(width*height*3));
-    return rmse<=(mode==='strong'?40:30)&&bias.every(sum=>Math.abs(sum/(width*height))<=5);
+    const limit=descriptor.filter==='/DCTDecode'?(mode==='strong'?10:6):(mode==='strong'?40:30);
+    return rmse<=limit&&bias.every(sum=>Math.abs(sum/(width*height))<=5);
   }finally{image.close();source.width=source.height=target.width=target.height=1;}
 }

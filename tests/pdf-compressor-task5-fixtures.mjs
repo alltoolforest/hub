@@ -1,7 +1,7 @@
 // Independently drawn QA scan-style pages, not physical scanner evidence.
 import {createCanvas} from '@napi-rs/canvas';
 import {PDF} from './pdf-compressor-task1-fixtures.mjs';
-export async function buildImageFixture({gray=false,width=800,height=1100,masked=false,shared=false,hiddenOCR=false}={}){
+export async function buildImageFixture({gray=false,width=800,height=1100,masked=false,shared=false,hiddenOCR=false,jpegQuality}={}){
   const canvas=createCanvas(width,height),ctx=canvas.getContext('2d');
   ctx.fillStyle='#f8f4ee';ctx.fillRect(0,0,width,height);
   ctx.fillStyle='#222';ctx.font=`${Math.round(width/30)}px sans-serif`;
@@ -18,7 +18,9 @@ export async function buildImageFixture({gray=false,width=800,height=1100,masked
   const dict={Type:'XObject',Subtype:'Image',Width:width,Height:height,
     BitsPerComponent:8,ColorSpace:gray?'DeviceGray':'DeviceRGB'};
   if(masked)dict.Mask=[0,0,0,0,0,0];
-  const image=doc.context.register(doc.context.flateStream(raw,dict));
+  if(jpegQuality!==undefined&&gray)throw Error('This browser QA JPEG encoder produces RGB only');
+  const image=doc.context.register(jpegQuality===undefined?doc.context.flateStream(raw,dict):
+    doc.context.stream(new Uint8Array(await canvas.encode('jpeg',jpegQuality)),{...dict,Filter:'DCTDecode'}));
   const font=await doc.embedFont(PDF.StandardFonts.Helvetica);
   for(let n=0;n<(shared?2:1);n++){
     const page=doc.addPage([600,800]);page.node.set(N('Resources'),doc.context.obj({XObject:{Image:image}}));

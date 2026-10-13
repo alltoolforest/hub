@@ -18,7 +18,7 @@ export async function inflateExact(bytes, expected) {
 }
 
 export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJpeg,
-  inspectInput,verifyOutput,signal}={}) {
+  inspectInput,verifyOutput,signal,decodeJpeg}={}) {
   if(typeof inspectInput!=='function'||typeof verifyOutput!=='function')
     throw Error('independent-verification-required');
   if(signal?.aborted)throw Error('cancelled');
@@ -32,14 +32,24 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
     const d=stream.dict,descriptor={width:d.get(N('Width'))?.asNumber?.(),
       height:d.get(N('Height'))?.asNumber?.(),bitsPerComponent:d.get(N('BitsPerComponent'))?.asNumber?.(),
       filter:String(d.get(N('Filter'))),colorSpace:String(d.get(N('ColorSpace'))),streamBytes:stream.contents.length};
-    const policy=assessImage(descriptor,mode);if(!policy.eligible)continue;
-    const raw=await inflateExact(stream.contents,policy.expectedRawBytes);
-    const rgba=new Uint8Array(policy.pixels*4),gray=descriptor.colorSpace==='/DeviceGray';
-    for(let p=0;p<policy.pixels;p++){
-      rgba[p*4]=raw[p*(gray?1:3)];rgba[p*4+1]=raw[p*(gray?1:3)+(gray?0:1)];
-      rgba[p*4+2]=raw[p*(gray?1:3)+(gray?0:2)];rgba[p*4+3]=255;
+    const allowJpeg=typeof decodeJpeg==='function';
+    const policy=assessImage(descriptor,mode,undefined,{allowJpeg});if(!policy.eligible)continue;
+    let rgba;
+    if(descriptor.filter==='/DCTDecode'){
+      const decoded=await decodeJpeg({bytes:stream.contents.slice(),descriptor,signal});
+      if(decoded?.status==='preserve')continue;
+      rgba=decoded;
+      if(!(rgba instanceof Uint8Array||rgba instanceof Uint8ClampedArray)||rgba.length!==policy.pixels*4)
+        throw Error('jpeg-decoded-size-mismatch');
+    }else{
+      const raw=await inflateExact(stream.contents,policy.expectedRawBytes);
+      rgba=new Uint8Array(policy.pixels*4);const gray=descriptor.colorSpace==='/DeviceGray';
+      for(let p=0;p<policy.pixels;p++){
+        rgba[p*4]=raw[p*(gray?1:3)];rgba[p*4+1]=raw[p*(gray?1:3)+(gray?0:1)];
+        rgba[p*4+2]=raw[p*(gray?1:3)+(gray?0:2)];rgba[p*4+3]=255;
+      }
     }
-    const candidate=await encodeRasterCandidate({descriptor,rgba,mode,encodeJpeg,signal});
+    const candidate=await encodeRasterCandidate({descriptor,rgba,mode,encodeJpeg,signal,allowJpeg,sourceJpeg:stream.contents});
     if(candidate.status!=='candidate-only')continue;
     const dict=d.clone(doc.context);dict.set(N('Filter'),N('DCTDecode'));
     dict.set(N('Width'),PDF.PDFNumber.of(candidate.width));dict.set(N('Height'),PDF.PDFNumber.of(candidate.height));

@@ -34,7 +34,7 @@ try{
   const report=[];
   const inputs=[];
   for(const id of ['scanned','image-heavy','mixed','form','bookmarks','attachment','tagged'])inputs.push({id,bytes:(await buildFixture(id)).bytes});
-  for(const [id,options] of [['gray-scan',{gray:true}],['shared-image',{shared:true}],['masked-image',{masked:true}],['hidden-ocr',{hiddenOCR:true}],['downsample-scan',{width:2500,height:1100}]])inputs.push({id,bytes:await buildImageFixture(options)});
+  for(const [id,options] of [['gray-scan',{gray:true}],['shared-image',{shared:true}],['masked-image',{masked:true}],['hidden-ocr',{hiddenOCR:true}],['downsample-scan',{width:2500,height:1100}],['jpeg-scan',{jpegQuality:98}],['efficient-jpeg',{jpegQuality:45}]])inputs.push({id,bytes:await buildImageFixture(options)});
   for(const mode of ['balanced','strong'])for(const {id,bytes} of inputs){
     const started=performance.now();
     const raw=await page.evaluate(async ({data,mode})=>{
@@ -58,7 +58,7 @@ try{
     const reopened=await PDF.PDFDocument.load(output); assert.equal(reopened.getPageCount(),(await PDF.PDFDocument.load(bytes)).getPageCount());
     assert.ok(output.length<=bytes.length);
     if(raw.status==='original-retained')assert.deepEqual(output,bytes);
-    if(id==='masked-image')assert.equal(raw.status,'original-retained');
+    if(['masked-image','efficient-jpeg'].includes(id))assert.equal(raw.status,'original-retained');
     const renderedRMS=await checkRenderedOutput(bytes,output,mode,{requireOCR:id==='hidden-ocr'});
     report.push({fixture:id,mode,renderedRMS,status:raw.status,inputBytes:bytes.length,
       outputBytes:output.length,savedBytes:raw.savedBytes,elapsedMs:Math.round(performance.now()-started)});
