@@ -23,7 +23,8 @@ async function importFile(name,mimeType,buffer){
 async function createImage(type){
  await page.locator('#format').selectOption(type);
  await page.getByRole('button',{name:'Create image',exact:true}).click();
- await ready('Ready:');
+ await page.waitForFunction(()=>document.querySelector('.app-output-status')?.dataset.outputState==='verified'&&
+  document.querySelector('.app-output-status')?.textContent?.startsWith('Ready: '),null,{timeout:20000});
  const download=page.waitForEvent('download');
  await page.locator('#downloads a[download]').click();
  const item=await download;
