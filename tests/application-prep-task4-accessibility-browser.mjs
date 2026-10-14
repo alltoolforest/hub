@@ -1,6 +1,8 @@
 // Task 4 — real-browser guided workflow, keyboard accessibility, status/error announcements,
 // size validation, output freshness, and narrow-viewport reflow.
 import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
 import {chromium,firefox,webkit} from 'playwright';
 const kind=process.env.BROWSER||'chromium';
 const browser=await ({chromium,firefox,webkit}[kind]).launch({headless:true});
@@ -12,6 +14,18 @@ const ready=(selector,text)=>page.waitForFunction(([s,v])=>
 try{
  await page.goto(base+'/documents/application-document-prep/',{waitUntil:'networkidle'});
  await page.locator('#app-workflow').waitFor();
+ await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+ const checkA11y=async state=>{
+  const audit=await page.evaluate(async()=>{
+   return window.axe.run('#workspace',{
+    runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa']}
+   });
+  });
+  const severe=audit.violations.filter(v=>v.impact==='critical'||v.impact==='serious');
+  assert.equal(severe.length,0,state+' accessibility violations: '+severe.map(v=>
+   v.id+': '+v.nodes.map(n=>n.target.join(' ')).join(', ')).join('; '));
+ };
+ await checkA11y('initial workspace');
  const steps=await page.locator('#workspace .app-step-title').allTextContents();
  assert.deepEqual(steps,[
   '1. Choose a preparation type','2. Select your photo, signature or image',
@@ -80,6 +94,7 @@ try{
  await ready('.app-review-help','facial features');
  assert.equal(await page.locator('#downloads').getAttribute('role'),'region');
  assert.equal(await page.locator('#downloads').getAttribute('aria-label'),'Generated file download');
+ await checkA11y('generated output workspace');
  await page.locator('#height').fill('78');
  assert.equal(await page.locator('.app-output-status').getAttribute('data-output-state'),'outdated');
  await ready('.app-output-status','Outdated result');
