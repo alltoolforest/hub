@@ -211,7 +211,8 @@ export async function mount(root){
     throw Error('HEIC/HEIF exceeds the safe conversion size for this device. Use a smaller JPG or PNG.');
    checkPixels(dimensions.width,dimensions.height,limits.heicPixels,'HEIC/HEIF source image');
   }
-  if(dimensions)checkPixels(dimensions.width,dimensions.height,limit,'Source image');
+  if(!dimensions)throw Error('Could not verify image dimensions before decoding. Re-save the file as a standard JPG or PNG and retry.');
+  checkPixels(dimensions.width,dimensions.height,limit,'Source image');
   let candidate=null;
   try{
    candidate=await deadline(decodeImage(candidateFile),limits.decodeDeadlineMs,
@@ -416,8 +417,10 @@ export async function mount(root){
     validatePdfPages(doc);
     return new Blob([await doc.save()],{type:'application/pdf'});
    };
+   const exportStarted=performance.now();
    const timedPdf=selectedQuality=>deadline(buildPdf(selectedQuality),
-     limits.exportDeadlineMs,'PDF image encoding');
+     Math.max(1,limits.exportDeadlineMs-(performance.now()-exportStarted)),
+     'PDF image encoding');
    let blob=await timedPdf(quality);
    if(jpeg&&target>0&&blob.size>target*1024){
     const floor=Math.min(quality,AUTOMATIC_QUALITY_FLOOR);
