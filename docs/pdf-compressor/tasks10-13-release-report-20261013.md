@@ -1,5 +1,9 @@
 # PDF Compressor — Tasks 10–13 release-candidate report
 
+## Manual performance follow-up
+
+The OnePlus Nord4 report of a three-minute wait reopened mobile performance acceptance. The scoped follow-up reduces stream-decoding and repeated inspection overhead, improves progress stages, and enforces expired worker deadlines. The final candidate completed the same private PDF in 32.0 seconds versus 66.1 seconds for the previous download in local Chromium, with the same output size and preserved content. Physical-phone acceptance remains open. See [the follow-up report](mobile-performance-followup-20261013.md) for current source, artifact hash, measurements, and verification. Historical evidence below remains valid for its recorded revisions.
+
 ## Decision and scope
 
 Engineering and automated verification for Tasks 10–13 are prepared for pre-deployment audit. Physical-device, assistive-technology and production-only checks remain explicit release gates, deferred to this final stage at the user's request. This is not production approval or a freeze decision.

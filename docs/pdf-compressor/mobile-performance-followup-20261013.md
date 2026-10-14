@@ -27,3 +27,13 @@ The previous downloadable candidate completed in 66,080 ms plus 7,665 ms initial
 The final candidate retains level 9: the level 6 experiment caused the small-fixture lossless savings gate to fail, although integrity passed. Restoring level 9 preserves that regression guarantee without giving up the verification-overhead fixes.
 
 Direct inflation feeds at most 64 KiB of compressed input per write to retain backpressure for large streams. Regression input includes 2 MiB of incompressible data to exercise multiple writes, exact decoded limits, truncated data and bad checksums.
+
+## Final candidate verification
+
+Final source: `c91c6b8c149b6ed6d5cea97cbdc131b5568bb5e9`. The final downloadable candidate retains compression level 9 and 64 KiB stream-feed chunks. On the supplied PDF it completed in **32,020 ms**, plus **4,751 ms** initial inspection, compared with the previous candidate's **66,080 ms** plus **7,665 ms** inspection. Output **20,644,640 bytes**, the same size as the previous candidate, with exact text/structure verification, worker cleanup, and zero remote requests. This is a single-pair Linux Chromium comparison, not a Nord4 speed guarantee.
+
+The final self-contained candidate passed all-mode actual download hash/size checks, accessibility in initial/completed/error states, cancellation/reset, narrow reflow, and zero network requests. Lossless savings on the small mixed fixture are preserved (113,682 → 92,301 bytes).
+
+Artifact: `PDF_Compressor_Release_Candidate_100MB.html`, 12,276,516 bytes, SHA-256 `421855716feed978d06bdd1f4073d1eb926d9da7f5683101c8872937af54b8c3`. The existing downloadable file was updated in place.
+
+Full regression run: https://github.com/alltoolforest/hub/actions/runs/38445377472 **all 12 jobs passed**, confirmed 2026-10-14. Phone manual performance acceptance remains open; no deployment or freezing.
