@@ -11,6 +11,14 @@ const browser=await browserType.launch({headless:true});
 const page=await browser.newPage({acceptDownloads:true,viewport:{width:390,height:844}});
 const errors=[];
 page.on('pageerror',error=>errors.push(error.message));
+page.on('console',message=>{if(message.type()==='error')console.log('HEIC_BROWSER_CONSOLE '+message.text().slice(0,500));});
+await page.addInitScript(()=>{
+ window.__appCspViolations=[];
+ document.addEventListener('securitypolicyviolation',event=>{
+  window.__appCspViolations.push({directive:event.violatedDirective,
+   blocked:event.blockedURI,source:event.sourceFile});
+ });
+});
 const base=process.env.SITE_URL||'http://127.0.0.1:8765';
 async function ready(text,selector='.app-output-status'){
  await page.waitForFunction(([selector,value])=>document.querySelector(selector)?.textContent?.includes(value),
@@ -21,6 +29,8 @@ async function importFile(name,mimeType,buffer){
  try{await ready('Selected: '+name,'.selected-files');}
  catch(error){
   const message=await page.locator('#status').textContent().catch(()=>'<no status>');
+  const violations=await page.evaluate(()=>window.__appCspViolations||[]).catch(()=>[]);
+  console.error('HEIC_CSP_DIAGNOSTICS '+JSON.stringify(violations));
   throw Error('Image import '+name+' failed. Tool status: '+message+'. Original error: '+error.message);
  }
 }
