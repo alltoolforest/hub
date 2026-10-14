@@ -148,7 +148,48 @@ try{
  },[...pdfBytes]);
  assert.ok(rendering.outer.slice(0,3).every(x=>x>245),'PDF page should be white');
  assert.ok(rendering.center.slice(0,3).every(x=>x<65),'PDF signature center should remain dark');
+ // A camera JPEG with EXIF orientation 6 must load once, with upright dimensions
+ // and correct spatial ordering after metadata is stripped by canvas export.
+ const jpegRaw=Buffer.from(await page.evaluate(()=>{
+  const c=document.createElement('canvas');c.width=80;c.height=40;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#ee1e1e';ctx.fillRect(0,0,40,40);
+  ctx.fillStyle='#1638e8';ctx.fillRect(40,0,40,40);
+  return c.toDataURL('image/jpeg',.98).split(',')[1];
+ }), 'base64');
+ const exif=Buffer.from([
+  255,225,0,34,69,120,105,102,0,0,73,73,42,0,8,0,0,0,
+  1,0,18,1,3,0,1,0,0,0,6,0,0,0,0,0,0,0
+ ]);
+ await importFile('camera-orientation-6.jpg','image/jpeg',
+  Buffer.concat([jpegRaw.subarray(0,2),exif,jpegRaw.subarray(2)]));
+ assert.equal(await page.locator('#width').inputValue(),'40','EXIF orientation width must be upright');
+ assert.equal(await page.locator('#height').inputValue(),'80','EXIF orientation height must be upright');
+ await page.locator('#rotation').selectOption('0');
+ const upright=await createImage('image/jpeg');
+ assert.deepEqual([upright.pixels.width,upright.pixels.height],[40,80]);
+ assert.ok(red(upright.pixels.top)&&blue(upright.pixels.bottom),
+  'EXIF orientation must not be applied twice or ignored');
+
+ // Positive HEIC/HEIF decode, using the pinned sample already used by the
+ // repository's existing image-enhancer compatibility tests.
+ const fixtureURL='https://raw.githubusercontent.com/alexcorvi/heic2any/169513b18329dbcb4dd5f86550aac6e975f0acf9/demo/1.heic';
+ const fixtureResponse=await fetch(fixtureURL);
+ assert.ok(fixtureResponse.ok,'Pinned HEIC compatibility fixture must be available');
+ const heicBytes=Buffer.from(await fixtureResponse.arrayBuffer());
+ assert.ok(heicBytes.length>1024);
+ await page.setViewportSize({width:1280,height:800});
+ await importFile('actual-photo.heic','image/heic',heicBytes);
+ const heicWidth=Number(await page.locator('#width').inputValue());
+ const heicHeight=Number(await page.locator('#height').inputValue());
+ assert.ok(heicWidth>0&&heicHeight>0,'Decoded HEIC dimensions must be valid');
+ // Keep the fidelity test focused on a practical small export.
+ await page.locator('#width').fill('320');
+ await page.locator('#format').selectOption('image/jpeg');
+ const converted=await createImage('image/jpeg');
+ assert.equal(converted.pixels.width,320);
+ assert.ok(converted.pixels.height>0);
  assert.deepEqual(errors,[]);
  console.log('TASK2_FIDELITY_BROWSER_PASS '+(process.env.BROWSER||'chromium')+
-  ': crop, rotation, flip, PNG alpha, JPG background, KB safeguard, rendered A4 PDF');
+  ': crop, rotation, flip, PNG alpha, JPG background, KB safeguard, rendered A4 PDF, EXIF, HEIC');
 }finally{await browser.close();}
