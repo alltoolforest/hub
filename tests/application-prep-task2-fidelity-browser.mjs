@@ -70,7 +70,8 @@ try{
  assert.ok(blue(result.pixels.center),'Right-half crop must remain blue');
  assert.ok(blue(result.pixels.left),'Right-half crop left pixel must remain blue');
 
- // Return to complete original; 90 clockwise rotation moves left-red region to top.
+ // Return to complete original; reveal advanced controls before using rotation/flip.
+ await page.locator('.app-advanced-settings summary').click();
  await page.getByRole('button',{name:'Use full image'}).click();
  await page.locator('#rotation').selectOption('90');
  await page.locator('#width').fill('40');
