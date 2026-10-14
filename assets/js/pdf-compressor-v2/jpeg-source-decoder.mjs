@@ -66,13 +66,28 @@ export function inspectJpegHeader(bytes){
   }
   throw Error('jpeg-frame-missing');
 }
+// Adobe APP14 YCCK/CMYK is valid only for 4-component DeviceCMYK PDF
+// images. The source marker must never be transplanted into a new RGB JPEG.
+export function verifiedAdobeCmyk(frame,descriptor){
+  if(descriptor?.colorSpace!=='/DeviceCMYK'||frame?.components!==4||
+     frame.precision!==8||frame.unsupported||frame.metadataAfterScan)return false;
+  const markers=frame.metadata||[];
+  const adobe=markers.filter(m=>m.marker===238);
+  if(adobe.length!==1||!markers.every(m=>[224,226,254,238].includes(m.marker)))return false;
+  const m=adobe[0].bytes;
+  return m.length===16&&m[0]===255&&m[1]===238&&m[2]===0&&m[3]===14&&
+    [65,100,111,98,101].every((v,i)=>m[4+i]===v)&&[0,2].includes(m[15]);
+}
 export function createPDFJpegDecoder(JpegImage){
   if(typeof JpegImage!=='function')throw Error('pdf-jpeg-decoder-unavailable');
   return async({bytes,descriptor,signal})=>{
     if(signal?.aborted)throw Error('cancelled');
     if(!assessImage(descriptor,'balanced',undefined,{allowJpeg:true}).eligible)return {status:'preserve'};
-    const header=inspectJpegHeader(bytes),channels=descriptor.colorSpace==='/DeviceGray'?1:3;
-    if(header.unsupported||header.unsupportedMetadata||header.precision!==8||header.components!==channels)return {status:'preserve'};
+    const header=inspectJpegHeader(bytes),channels=descriptor.colorSpace==='/DeviceGray'?1:
+      descriptor.colorSpace==='/DeviceCMYK'?4:3;
+    const adobeCmyk=verifiedAdobeCmyk(header,descriptor);
+    if(header.unsupported||header.precision!==8||header.components!==channels||
+       (channels===4?!adobeCmyk:header.unsupportedMetadata))return {status:'preserve'};
     // Gray profile metadata cannot be attached unchanged to a new RGB JPEG.
     // Leave that image intact until a profile-preserving gray codec is verified.
     if(channels===1&&header.metadata.some(m=>m.marker===226))return {status:'preserve'};
