@@ -13,7 +13,7 @@ export function planCompression({mode='balanced',images=[],pages=1,signed=false,
   const classified=classifyDocument(images,{pages,hasSignature:signed,encrypted,mode});
   if(!classified.safe)return {allowed:false,reason:classified.reason,mode};
   const candidates=classification==='digital'||classification==='vector-or-empty'?0:
-    images.filter(image=>assessImage(image,mode,undefined,{allowJpeg}).eligible).length;
+    images.filter(image=>assessImage(image,mode,undefined,{allowJpeg,allowAdaptive:true}).eligible).length;
   return {allowed:true,mode,lossless:true,imageCandidates:candidates,
     imagesPreserved:images.length-candidates,settings:QUALITY_MODES[mode],
     quality:mode==='balanced'?'moderate-lossy-image-candidates':'higher-lossy-image-candidates',
