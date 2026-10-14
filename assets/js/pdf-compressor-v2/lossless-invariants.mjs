@@ -50,7 +50,7 @@ async function boundedInflateStrict(bytes,maxBytes){
 async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
-    if(!/Junk found after end of compressed data/i.test(String(error)))throw error;
+    if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error)))throw error;
     // The zlib Adler checksum itself can end in PDF whitespace bytes.
     // Test one byte at a time and accept only a checksum-valid complete
     // stream; stripping all whitespace at once can truncate valid data.
