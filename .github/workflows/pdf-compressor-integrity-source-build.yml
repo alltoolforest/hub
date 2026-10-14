@@ -293,6 +293,12 @@ jobs:
         run: |
           python tests/build-pdf-compressor-mobile-qa.py
           node tests/pdf-compressor-candidate-browser.mjs
+      - name: Retain isolated offline PDF Compressor build for manual Android QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-adaptive-mobile-test-build
+          path: /tmp/PDF_Compressor_Release_Candidate.html
+          retention-days: 7
       - name: Synthetic size, repeated-run, managed-memory and cancellation measurements
         env:
           PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
