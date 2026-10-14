@@ -108,7 +108,9 @@ try{
     'work/invoice/','calculators/loan/']){
   const check=await httpProbe(new URL(path,base));
   assert.equal(check.status,200,'Frozen tool unavailable after Application Prep deployment: '+path);
-  assert.match(check.text,/<section class="workspace"/,'Frozen workspace missing: '+path);
+  const frozenSource=await fs.readFile(new URL('../'+path+'index.html',import.meta.url),'utf8');
+  assert.equal(check.text,frozenSource,
+   'Protected tool HTML unexpectedly differs from the unchanged source: '+path);
   frozenSmoke.push({path,status:check.status});
  }
  details.unrelatedFrozenTools=frozenSmoke;
