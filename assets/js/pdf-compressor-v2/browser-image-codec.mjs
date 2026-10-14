@@ -1,5 +1,6 @@
 // Worker-local browser codec. Unsupported OffscreenCanvas fails safely.
 import {inflateExact} from './embedded-image-transform.mjs';
+import {sampleOversizedSource} from './adaptive-image-candidate.mjs';
 export async function encodeBrowserJpeg({rgb,width,height,quality,signal}) {
   if(signal?.aborted)throw Error('cancelled');
   if(typeof OffscreenCanvas!=='function')throw Error('browser-codec-unavailable');
@@ -21,6 +22,24 @@ export async function encodeBrowserJpeg({rgb,width,height,quality,signal}) {
 export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,height,mode},{decodeJpeg}={}) {
   if(typeof createImageBitmap!=='function'||typeof OffscreenCanvas!=='function')throw Error('image-verification-unavailable');
   const image=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}));
+  if(descriptor.width*descriptor.height>8000000){
+    // Verify oversized sources at output resolution. Never allocate a canvas
+    // at the original scan dimensions. Source sampling is repeated from bytes.
+    try{
+      const reference=await sampleOversizedSource(originalStream.contents,{descriptor,width,height});
+      const target=new OffscreenCanvas(width,height),ctx=target.getContext('2d',{willReadFrequently:true});
+      if(!ctx||image.width!==width||image.height!==height)return false;
+      ctx.drawImage(image,0,0,width,height);
+      const actual=ctx.getImageData(0,0,width,height).data;
+      let square=0;const bias=[0,0,0],count=width*height;
+      for(let p=0;p<count;p++)for(let c=0;c<3;c++){
+        const delta=actual[p*4+c]-reference[p*3+c];square+=delta*delta;bias[c]+=delta;
+      }
+      const rmse=Math.sqrt(square/(count*3));
+      const limit=descriptor.filter==='/DCTDecode'?(mode==='strong'?10:6):(mode==='strong'?40:30);
+      return rmse<=limit&&bias.every(sum=>Math.abs(sum/count)<=5);
+    }finally{image.close();}
+  }
   const source=new OffscreenCanvas(descriptor.width,descriptor.height),target=new OffscreenCanvas(width,height);
   try {
     if(image.width!==width||image.height!==height)return false;
