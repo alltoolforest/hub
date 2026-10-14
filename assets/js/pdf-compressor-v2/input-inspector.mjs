@@ -182,7 +182,12 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   }
   const textPages=independent.pages.filter(p=>p.textItems>0).length;
   const imagePages=independent.pages.filter(p=>p.imagePaints>0).length;
-  const classification=textPages?(imagePages?'mixed':'digital'):(imagePages?'image-only':'vector-or-empty');
+  // PDF.js deliberately skips paints for images above its decoding budget.
+  // Their verified XObjects remain eligible for the adaptive image pipeline.
+  const hasLargeXObject=images.some(img=>img.width*img.height>limits.maxImagePixels);
+  const rasterPresent=imagePages>0||hasLargeXObject;
+  const classification=textPages?(rasterPresent?'mixed':'digital'):
+    (rasterPresent?'image-only':'vector-or-empty');
   return freeze({valid:true,sourceBytes:bytes.length,pageCount:pages.length,classification,
     // Image-only is not proof of scanner provenance; text over images may be OCR.
     hasTextLayer:textPages>0,possibleOCR:textPages>0&&imagePages>0,
