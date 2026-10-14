@@ -99,6 +99,43 @@ try{
  await ready('#status','exceeding the requested');
  assert.equal(await page.locator('#downloads a[download]').count(),1);
  details.outdatedAndErrorRecovery=true;
+ // Final freeze gate: exercise real HEIC conversion on the deployed site, not
+ // only against checkout/local CI. The HEIC decoder needs a CSP compatibility
+ // exception; an incompatible future CSP would otherwise silently break it.
+ await page.locator('#target').fill('0');
+ const fixtureURL='https://raw.githubusercontent.com/alexcorvi/heic2any/169513b18329dbcb4dd5f86550aac6e975f0acf9/demo/1.heic';
+ const fixture=await fetch(fixtureURL,{signal:AbortSignal.timeout(30000)});
+ assert.equal(fixture.status,200,'Pinned HEIC fixture is unavailable');
+ const heic=Buffer.from(await fixture.arrayBuffer());
+ assert.ok(heic.length>1024);
+ await page.locator('#file-input').setInputFiles({
+  name:'live-camera.heic',mimeType:'image/heic',buffer:heic
+ });
+ await ready('.selected-files','Selected: live-camera.heic');
+ await page.locator('#width').fill('320');
+ await page.locator('#format').selectOption('image/jpeg');
+ await page.getByRole('button',{name:'Create image',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.app-output-status')?.dataset.outputState==='verified'&&
+   document.querySelector('.app-output-status')?.textContent?.startsWith('Ready: 320 ×'),
+   null,{timeout:45000});
+ const heicDownload=page.waitForEvent('download',{timeout:20000});
+ await page.locator('#downloads a[download]').click();
+ const jpgFile=await heicDownload,jpgBytes=await fs.readFile(await jpgFile.path());
+ assert.equal(jpgBytes[0],255);assert.equal(jpgBytes[1],216);
+ details.heic={sourceBytes:heic.length,exportBytes:jpgBytes.length,format:'JPG'};
+ // Repeated local exports on a constrained viewport must not duplicate
+ // download links or leave the processing UI stuck.
+ for(let i=0;i<5;i++){
+  await page.getByRole('button',{name:'Create image',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.app-output-status')?.dataset.outputState==='verified'&&
+    ![...document.querySelectorAll('#workspace button')].some(n=>n.disabled),
+    null,{timeout:30000});
+  assert.equal(await page.locator('#downloads a[download]').count(),1);
+ }
+ details.repeatedExports=5;
+ assert.equal(await page.locator('#app-crop-x').getAttribute('aria-describedby'),'app-crop-help');
+ assert.equal(await page.locator('#downloads').getAttribute('aria-label'),'Generated file download');
+
  const priorFailureMessages=cspEvents.slice();
  // A handled invalid-size error is logged by the shared action controller.
  // It is expected; an uncaught browser exception would be reported separately.
