@@ -4,6 +4,7 @@
 import {scalarBudget} from './scalar-budget.mjs';
 import {inflateStreamBounded,decodeAsciiStreamBounded} from './lossless-invariants.mjs';
 import {inspectEncodedJpeg} from './image-header-preflight.mjs';
+import {streamFlateImage} from './streaming-flate-image.mjs';
 export const INPUT_LIMITS=Object.freeze({maxBytes:100000000,maxPages:500,maxOperators:2000000,
   maxInvariantEntries:2000000,maxTotalDecodedBytes:512000000,maxDecodedStreamBytes:32000000,
   maxObjects:50000,maxGraphEntries:250000,maxDepth:100,maxImages:1000,
@@ -49,7 +50,7 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   if(doc.isEncrypted||context.trailerInfo.Encrypt)
     fail('encrypted-pdf','Encrypted PDFs are unsupported. Use an authorized unencrypted copy.');
   let entries=0,signed=has(doc.catalog,'Perms'),xfa=false,activeContent=false,
-    attachmentPresent=false,totalPixels=0,totalCoefficients=0;
+    attachmentPresent=false,totalPixels=0;
   const seen=new Set(),images=[];
   const checkScalar=scalarBudget(PDF,code=>fail(code,'This PDF exceeds safe scalar resource limits. Try a simpler export.'));
   function walk(value,depth=0){
@@ -83,9 +84,10 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       const width=num('Width'),height=num('Height');
       if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1)
         fail('invalid-image','This PDF contains an image with invalid dimensions. Export a fresh copy.');
-      const pixels=width*height;totalPixels+=pixels;
-      if(!Number.isSafeInteger(pixels)||pixels>limits.maxImagePixels||totalPixels>limits.maxTotalImagePixels)
-        fail('image-pixel-limit','The embedded images exceed the current decoded-image inspection budget. Try a lower-resolution copy.');
+      const pixels=width*height;
+      if(!Number.isSafeInteger(pixels)||!Number.isSafeInteger(totalPixels+pixels))
+        fail('invalid-image','This PDF contains invalid image dimensions.');
+      totalPixels+=pixels; // Inventory only: never reject a document for cumulative image pixels.
       // Dictionary dimensions alone cannot bound a forged encoded JPEG frame.
       // Wrapper streams and aliases cannot bypass this pre-decoding check.
       let frame;
@@ -94,9 +96,8 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       }
       if(frame&&(frame.width!==width||frame.height!==height))
         fail('encoded-image-dimensions','JPEG dimensions disagree with the PDF image dictionary. Export a fresh PDF.');
-      if(frame){totalCoefficients+=frame.coefficientBytes;
-        if(frame.coefficientBytes>limits.maxImagePixels*16+1048576||totalCoefficients>limits.maxTotalImagePixels*16+4194304)
-          fail('image-pixel-limit','JPEG decoding exceeds the safe coefficient budget. Try a lower-resolution PDF.');}
+      // Verified JPEG headers are cheap to inspect without allocating their decoded pixels.
+      // Per-operation image transforms separately enforce memory budgets.
       images.push({ref:String(ref),width,height,bitsPerComponent:num('BitsPerComponent'),
         filter:name(d,'Filter'),colorSpace:name(d,'ColorSpace'),streamBytes:object.contents.length,
         mask:has(d,'Mask'),softMask:has(d,'SMask'),decode:has(d,'Decode'),decodeParms:has(d,'DecodeParms')});
@@ -112,6 +113,21 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   for(const [,object] of objects){
     if(!(object instanceof PDF.PDFRawStream))continue;
     const lookup=key=>context.lookup(object.dict.get(N(key)));
+    // A high-resolution plain Flate image can be checked incrementally without
+    // buffering all decoded pixels. This is not an unchecked decompression bypass.
+    const d=object.dict,filterName=String(lookup('Filter'));
+    if(name(d,'Subtype')==='/Image'&&filterName==='/FlateDecode'&&
+       !lookup('DecodeParms')&&!lookup('DP')&&
+       ['/DeviceGray','/DeviceRGB'].includes(name(d,'ColorSpace'))&&
+       lookup('BitsPerComponent')?.asNumber?.()===8){
+      const width=lookup('Width')?.asNumber?.(),height=lookup('Height')?.asNumber?.();
+      const channels=name(d,'ColorSpace')==='/DeviceGray'?1:3;
+      if(width*height*channels>streamLimit){
+        try{await streamFlateImage(object.contents,{width,height,channels,signal,maxRowBytes:streamLimit});}
+        catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
+        continue;
+      }
+    }
     const params=lookup('DecodeParms')??lookup('DP');
     const parameterList=params instanceof PDF.PDFArray?params.asArray().map(v=>context.lookup(v)):[params];
     for(const param of parameterList){
