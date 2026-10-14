@@ -11,7 +11,7 @@ const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',
 export class LosslessInvariantError extends Error {
   constructor(code){super(code);this.name='LosslessInvariantError';this.code=code;}
 }
-async function boundedInflate(bytes,maxBytes){
+async function boundedInflateStrict(bytes,maxBytes){
   // Feed resident bytes directly: Blob streams add asynchronous IO scheduling
   // for every small PDF stream (thousands in some digital documents). Drain
   // concurrently with writing so backpressure cannot deadlock large streams.
@@ -39,6 +39,23 @@ async function boundedInflate(bytes,maxBytes){
   const output=new Uint8Array(length);let offset=0;
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;
+}
+// Some PDF producers include PDF whitespace immediately after an otherwise
+// complete Flate/zlib stream. Browser DecompressionStream rejects that padding
+// even though tolerant PDF readers accept the decoded content. Retry only a
+// verified, bounded whitespace tail after the native decoder reports junk.
+// The retried decode must still validate the zlib checksum and output budget.
+// Never trim arbitrary data, preemptively truncate a valid stream, or suppress
+// a decompression/memory error.
+async function boundedInflate(bytes,maxBytes){
+  try{return await boundedInflateStrict(bytes,maxBytes);}
+  catch(error){
+    if(!/Junk found after end of compressed data/i.test(String(error)))throw error;
+    let padding=0;
+    for(let i=bytes.length-1;i>=0&&padding<16&&[0,9,10,12,13,32].includes(bytes[i]);i--)padding++;
+    if(padding===0)throw error;
+    return boundedInflateStrict(bytes.subarray(0,bytes.length-padding),maxBytes);
+  }
 }
 function decodeAscii(bytes,filter,maxBytes){
   const text=new TextDecoder('ascii').decode(bytes).replace(/\s/g,'');
