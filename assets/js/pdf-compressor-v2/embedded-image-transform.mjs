@@ -19,7 +19,7 @@ export async function inflateExact(bytes, expected) {
 }
 
 export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJpeg,
-  inspectInput,verifyOutput,signal,decodeJpeg}={}) {
+  inspectInput,verifyOutput,verifyJpeg,signal,decodeJpeg}={}) {
   if(typeof inspectInput!=='function'||typeof verifyOutput!=='function')
     throw Error('independent-verification-required');
   if(signal?.aborted)throw Error('cancelled');
@@ -56,6 +56,21 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
       candidate=await encodeRasterCandidate({descriptor,rgba,mode,encodeJpeg,signal,allowJpeg,sourceJpeg:stream.contents});
     }
     if(candidate.status!=='candidate-only')continue;
+    // Reject an individual JPEG candidate if its independently decoded
+    // appearance is not acceptable. A single degraded image must not block
+    // compression of all the other eligible images in the document.
+    // This is candidate eligibility, never authorization to export: the full
+    // output PDF must still pass the protected-graph and image verifiers.
+    if(typeof verifyJpeg==='function'){
+      let acceptable=false;
+      try{
+        acceptable=await verifyJpeg({bytes:candidate.bytes,originalStream:stream,
+          descriptor,width:candidate.width,height:candidate.height,mode})===true;
+      }catch(error){
+        if(signal?.aborted||error?.message==='cancelled'||error instanceof RangeError)throw error;
+      }
+      if(!acceptable)continue;
+    }
     const dict=d.clone(doc.context);dict.set(N('Filter'),N('DCTDecode'));
     dict.set(N('Width'),PDF.PDFNumber.of(candidate.width));dict.set(N('Height'),PDF.PDFNumber.of(candidate.height));
     dict.set(N('ColorSpace'),N('DeviceRGB'));dict.set(N('Length'),PDF.PDFNumber.of(candidate.bytes.length));
