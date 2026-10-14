@@ -1,0 +1,43 @@
+name: Application Prep isolated security research
+on:
+  pull_request:
+    paths:
+      - 'security/application-prep/**'
+      - 'tests/application-prep-hosting-security.test.mjs'
+      - 'tests/application-prep-live-header-gate*.mjs'
+      - 'tests/application-prep-heic-csp-experiment.mjs'
+      - '.github/workflows/application-prep-security-remediation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security-experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert scope and hosting-header contract
+        run: |
+          node --check tests/application-prep-heic-csp-experiment.mjs
+          node --test tests/application-prep-hosting-security.test.mjs tests/application-prep-live-header-gate.test.mjs
+          node --check tests/application-prep-live-header-gate.mjs
+          node --test tests/application-prep-task1.test.mjs tests/application-prep-task1-integrity.test.mjs tests/application-prep-task2.test.mjs tests/application-prep-task3-resources.test.mjs
+      - name: Install isolated, exact-version CSP-capable HEIC trial
+        run: |
+          npm install --no-save --ignore-scripts heic-to@1.6.6 playwright@1.56.1
+          node -e "const p=require('./node_modules/heic-to/package.json');if(p.version!=='1.6.6'||p.license!=='LGPL-3.0')process.exit(1);console.log('HEIC_TRIAL_LICENSE',p.license)"
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Confirm HEIC output with unsafe-eval denied
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/application-prep-security.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/security/application-prep/experiments/csp-test.html >/dev/null && break || sleep 1; done
+          node tests/application-prep-heic-csp-experiment.mjs
