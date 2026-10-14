@@ -43,7 +43,10 @@ export function createImageOutputVerifier({PDF,readPages,verifyJpeg,limits}={}) 
     // NEVER exempt text, geometry, annotations, links, or ordinary images.
     const oversized=replacements.some(r=>r.descriptor.width*r.descriptor.height>
       (limits?.maxImagePixels??8000000));
-    const stripPaints=report=>({...report,pages:report.pages.map(({imagePaints,...protectedFields})=>protectedFields)});
+    // The independent operator count can likewise change when PDF.js skips
+    // oversized XObjects. The protected page program is compared exactly in
+    // the lossless graph verification before this independent check.
+    const stripPaints=report=>({pages:report.pages.map(({imagePaints,...protectedFields})=>protectedFields)});
     if(JSON.stringify(before)!==JSON.stringify(after)&&
       (!oversized||JSON.stringify(stripPaints(before))!==JSON.stringify(stripPaints(after))))
       throw Error('independent-page-profile-changed');
