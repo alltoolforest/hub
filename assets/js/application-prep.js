@@ -6,6 +6,7 @@ import {A4_POINTS,sourcePixelLimit,outputPixelLimit,checkPixels,checkApplication
   validateEncodedBlob,sniffImageDimensions,validatePdfPages,checkApplicationSizeRange,
   validateApplicationFileSize,validateExportSignature,validateDecodedImageDimensions} from './application-prep-checks.js';
 import {cropFromPercent,cropToPercent,cropToPixels} from './application-prep-crop.js';
+import {applicationResourceProfile,sniffHeicDimensions,workingCanvasSize,deadline} from './application-prep-resources.js';
 
 function fittedDraw(ctx,image,w,h,fit,position){
  const scale=fit==='contain'?Math.min(w/image.width,h/image.height):Math.max(w/image.width,h/image.height);
@@ -79,6 +80,13 @@ async function verifyApplicationExport(blob,type,width,height){
 export async function mount(root){
  let image=null,file=null,crop=null,drag=null,manual=false,updating=false;
  let lastResult=null,cropInputsDirty=false;
+ const limits=applicationResourceProfile({
+  userAgent:navigator.userAgent,
+  coarsePointer:matchMedia('(pointer: coarse)').matches,
+  touchPoints:navigator.maxTouchPoints||0,
+  deviceMemory:navigator.deviceMemory,
+  viewportWidth:window.innerWidth
+ });
  const input=fileInput(root,'.jpg,.jpeg,.png,.webp,.heic,.heif',false,'Select a photo or signature');
  const preview=el('canvas',{'aria-label':'Image preview; use manual crop then drag to select an area',role:'img'});
  const frame=el('div',{class:'canvas-frame',hidden:true});frame.append(preview);root.append(frame);
@@ -191,14 +199,23 @@ export async function mount(root){
  }
  bindFile(input,async files=>{
   const candidateFile=files[0];
-  const ext=checkFile(candidateFile,['jpg','jpeg','png','webp','heic','heif'],mobile()?20:60);
-  const limit=sourcePixelLimit(mobile());
+  const ext=checkFile(candidateFile,['jpg','jpeg','png','webp','heic','heif'],limits.maxFileMB);
+  // Respect the same strict mobile profile in landscape/tablet and low-memory browsers.
+  const limit=Math.min(sourcePixelLimit(mobile()),sourcePixelLimit(limits.constrained));
   const header=new Uint8Array(await candidateFile.slice(0,262144).arrayBuffer());
-  const dimensions=sniffImageDimensions(header,ext);
+  const heic=ext==='heic'||ext==='heif';
+  const dimensions=heic?sniffHeicDimensions(header):sniffImageDimensions(header,ext);
+  if(heic){
+   if(!dimensions)throw Error('Could not safely read HEIC/HEIF dimensions before decoding. Convert this photo to JPG or PNG and retry.');
+   if(candidateFile.size>limits.heicFileMB*1024*1024)
+    throw Error('HEIC/HEIF exceeds the safe conversion size for this device. Use a smaller JPG or PNG.');
+   checkPixels(dimensions.width,dimensions.height,limits.heicPixels,'HEIC/HEIF source image');
+  }
   if(dimensions)checkPixels(dimensions.width,dimensions.height,limit,'Source image');
   let candidate=null;
   try{
-   candidate=await decodeImage(candidateFile);
+   candidate=await deadline(decodeImage(candidateFile),limits.decodeDeadlineMs,
+     'Image decoding',late=>late?.close?.());
    checkPixels(candidate.width,candidate.height,limit,'Source image');
    // Do not replace or close the last good image until its successor is validated.
    const old={image,file,crop,drag,manual};
@@ -315,7 +332,7 @@ export async function mount(root){
  function renderOutput(){
   if(!image)throw Error('Open an image first.');
   const w=num('width',{min:1,max:16384}),h=num('height',{min:1,max:16384});
-  checkPixels(w,h,outputPixelLimit(mobile()),'Output image');
+  checkPixels(w,h,Math.min(outputPixelLimit(mobile()),outputPixelLimit(limits.constrained)),'Output image');
   const fit=checkApplicationFit(read('fit')),type=read('format');
   if(!['image/jpeg','image/png','image/webp'].includes(type))throw Error('Unsupported output format.');
   const brightness=num('brightness',{min:0,max:300}),contrast=num('contrast',{min:0,max:300});
@@ -329,9 +346,9 @@ export async function mount(root){
    const bounds=crop?cropToPixels(crop,image.width,image.height):
      {x:0,y:0,w:image.width,h:image.height};
    const {x:sx,y:sy,w:sw,h:sh}=bounds;
-   const limit=outputPixelLimit(mobile());
-   const scale=Math.min(1,Math.sqrt(limit/(sw*sh)));
-   const rw=Math.max(1,Math.round(sw*scale)),rh=Math.max(1,Math.round(sh*scale));
+   const limit=Math.min(outputPixelLimit(mobile()),outputPixelLimit(limits.constrained));
+   const working=workingCanvasSize(sw,sh,w,h,rotation,fit,limit);
+   const rw=working.width,rh=working.height;
    temp=el('canvas',{width:rotation%180?rh:rw,height:rotation%180?rw:rh});
    const tc=temp.getContext('2d');if(!tc)throw Error('Canvas rotation unavailable.');
    tc.translate(temp.width/2,temp.height/2);
@@ -350,10 +367,13 @@ export async function mount(root){
   let c=null;
   try{
    const {minimumKB,maximumKB:target}=readRequestedSizes();
+   // Allow the Processing state to paint before heavy canvas work.
+   await new Promise(resolve=>setTimeout(resolve,0));
    c=renderOutput();
    const type=read('format');
    const quality=num('quality',{min:1,max:100})/100;
-   const blob=await encodeApplicationImage(c,type,quality,target);
+   const blob=await deadline(encodeApplicationImage(c,type,quality,target),
+     limits.exportDeadlineMs,'Image encoding');
    const info=validateEncodedBlob(blob,type,c.width,c.height,target);
    validateApplicationFileSize(blob,minimumKB,target);
    await verifyApplicationExport(blob,type,c.width,c.height);
@@ -375,6 +395,7 @@ export async function mount(root){
   let c=null;
   try{
    const {minimumKB,maximumKB:target}=readRequestedSizes();
+   await new Promise(resolve=>setTimeout(resolve,0));
    c=renderOutput();
    const quality=num('quality',{min:1,max:100})/100;
    const p=await load('pdf');
@@ -395,14 +416,16 @@ export async function mount(root){
     validatePdfPages(doc);
     return new Blob([await doc.save()],{type:'application/pdf'});
    };
-   let blob=await buildPdf(quality);
+   const timedPdf=selectedQuality=>deadline(buildPdf(selectedQuality),
+     limits.exportDeadlineMs,'PDF image encoding');
+   let blob=await timedPdf(quality);
    if(jpeg&&target>0&&blob.size>target*1024){
     const floor=Math.min(quality,AUTOMATIC_QUALITY_FLOOR);
-    let least=await buildPdf(floor);
+    let least=await timedPdf(floor);
     if(least.size>target*1024)throw compressionLimitError(least.size,target);
     let low=floor,high=quality;blob=least;
     for(let i=0;i<8;i++){
-     const trial=(low+high)/2,candidate=await buildPdf(trial);
+     const trial=(low+high)/2,candidate=await timedPdf(trial);
      if(candidate.size<=target*1024){blob=candidate;low=trial;}else high=trial;
     }
    }
