@@ -45,6 +45,8 @@ try{
   const data=await httpProbe(new URL(path,base));
   assert.equal(data.status,200,'Production asset missing '+path);
   assert.ok(data.text.length>600,'Asset suspiciously short '+path);
+  const checkedIn=await fs.readFile(new URL('../'+path,import.meta.url),'utf8');
+  assert.equal(data.text,checkedIn,'Published asset differs from deployed commit '+path);
  }
  const navigation=await page.goto(pageURL,{waitUntil:'networkidle',timeout:45000});
  assert.equal(navigation.status(),200);
@@ -97,6 +99,19 @@ try{
  await ready('#status','exceeding the requested');
  assert.equal(await page.locator('#downloads a[download]').count(),1);
  details.outdatedAndErrorRecovery=true;
+ const priorFailureMessages=cspEvents.slice();
+ // A handled invalid-size error is logged by the shared action controller.
+ // It is expected; an uncaught browser exception would be reported separately.
+ details.handledErrorConsoleLog=priorFailureMessages.length;
+ const frozenSmoke=[];
+ for(const path of ['documents/edit-pdf/','work/resume-studio/',
+    'work/invoice/','calculators/loan/']){
+  const check=await httpProbe(new URL(path,base));
+  assert.equal(check.status,200,'Frozen tool unavailable after Application Prep deployment: '+path);
+  assert.match(check.text,/<section class="workspace"/,'Frozen workspace missing: '+path);
+  frozenSmoke.push({path,status:check.status});
+ }
+ details.unrelatedFrozenTools=frozenSmoke;
  for(const width of [320,375,768,1280]){
   await page.setViewportSize({width,height:812});
   const overflow=await page.evaluate(()=>{
