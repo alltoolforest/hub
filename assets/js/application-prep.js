@@ -377,7 +377,8 @@ export async function mount(root){
    const {minimumKB,maximumKB:target}=readRequestedSizes();
    c=renderOutput();
    const quality=num('quality',{min:1,max:100})/100;
-   const p=await load('pdf'),jpeg=read('format')==='image/jpeg';
+   const p=await load('pdf');
+   const jpeg=read('format')==='image/jpeg';
    // Rebuild a separate one-page PDF for each JPEG candidate so the size limit
    // is checked on the actual final PDF, including its overhead.
    const buildPdf=async selectedQuality=>{
