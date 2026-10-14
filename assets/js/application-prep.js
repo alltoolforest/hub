@@ -88,7 +88,7 @@ export async function mount(root){
   viewportWidth:window.innerWidth
  });
  const input=fileInput(root,'.jpg,.jpeg,.png,.webp,.heic,.heif',false,'Select a photo or signature');
- const preview=el('canvas',{'aria-label':'Image preview; use manual crop then drag to select an area',role:'img'});
+ const preview=el('canvas',{'aria-label':'Source image preview. The crop percentages below are a keyboard alternative to dragging.',role:'img','aria-describedby':'app-crop-help'});
  const frame=el('div',{class:'canvas-frame',hidden:true});frame.append(preview);root.append(frame);
  const modeFields=el('div',{class:'fields app-workflow-fields'},[
    field('app-workflow','Preparing','select','photo',{options:[
@@ -97,14 +97,22 @@ export async function mount(root){
  ]);
  const guidance=el('p',{class:'app-guidance',role:'status','aria-live':'polite'});
  frame.before(modeFields,guidance);
+ // Keep the mode choice before the file upload in both keyboard and reading order.
+ const dropzone=input.closest('.dropzone');
+ root.insertBefore(dropzone,guidance.nextSibling);
+ modeFields.before(el('h2',{class:'app-step-title',text:'1. Choose a preparation type'}));
+ dropzone.before(el('h2',{class:'app-step-title',text:'2. Select your photo, signature or image'}));
+ modeFields.querySelector('#app-workflow').setAttribute('aria-describedby','app-mode-help');
+ guidance.id='app-mode-help';
  const modeHints={
-   photo:'Application photo: enter the exact portal dimensions and KB limit. Use Cover only when cropping is allowed. Do not alter identity features; acceptance is not guaranteed.',
-   signature:'Signature: use the portal dimensions and KB limit. PNG preserves a transparent background where supported; JPG uses white. Avoid distortion.',
-   document:'Supporting image: enter your required size, then choose image export or single-page A4 PDF. Check the portal accepts A4 and the final file size.'
+   photo:'Application photo: enter the portal’s exact pixels and KB range. Contain may add borders; Cover cuts off edges and must not crop the face. Identity and portal acceptance are not automatically checked.',
+   signature:'Signature: enter the portal’s pixels and KB range. Choose JPG for a white background or PNG only if transparency is accepted. Make sure every stroke remains readable.',
+   document:'Supporting image / PDF: use the portal’s image dimensions and KB range. PDF export creates one A4 page, not an editable or multi-page document. Confirm A4 is accepted.'
  };
  const updateGuidance=()=>{guidance.textContent=modeHints[read('app-workflow')]||modeHints.photo;};
  $('#app-workflow').addEventListener('change',updateGuidance);updateGuidance();
  const form=el('div',{class:'fields app-essential-fields'});root.append(form);
+ form.before(el('h2',{class:'app-step-title',text:'3. Enter your application requirements'}));
  const add=(id,label,type='number',v='',options={})=>form.append(field(id,label,type,v,options));
  add('width','Width (pixels)','number',1200,{min:1,max:16384,step:1});
  add('height','Height (pixels)','number',800,{min:1,max:16384,step:1});
@@ -118,6 +126,27 @@ export async function mount(root){
  add('brightness','Brightness (%)','number',100,{min:0,max:300});
  add('contrast','Contrast (%)','number',100,{min:0,max:300});
  add('watermark','Text watermark','text','',{full:true});
+ const fitHelp=el('small',{class:'app-field-help',id:'app-fit-help'});
+ $('#fit').setAttribute('aria-describedby','app-fit-help');
+ $('#fit').closest('.field').append(fitHelp);
+ const formatHelp=el('small',{class:'app-field-help',id:'app-format-help'});
+ $('#format').setAttribute('aria-describedby','app-format-help');
+ $('#format').closest('.field').append(formatHelp);
+ const updateFitHelp=()=>{
+  fitHelp.textContent=read('fit')==='cover'?
+    'Cover fills every pixel but may cut off faces, signatures or document edges. Use only when permitted.':
+    'Contain keeps the entire image proportional, but may add borders to match exact pixels.';
+ };
+ const updateFormatHelp=()=>{
+  formatHelp.textContent=read('format')==='image/jpeg'?
+   'JPG replaces transparency with white; inspect the resulting signature and fine text.':
+   read('format')==='image/png'?
+   'PNG keeps transparency; only use it if the portal accepts a transparent background.':
+   'WebP may not be accepted by application portals; verify the allowed formats.';
+ };
+ $('#fit').addEventListener('change',updateFitHelp);
+ $('#format').addEventListener('change',updateFormatHelp);
+ updateFitHelp();updateFormatHelp();
  form.append(el('label',{class:'check-row'},[el('input',{id:'lock-ratio',type:'checkbox',checked:true}),
     'Keep aspect ratio when changing dimensions']),
     el('label',{class:'check-row'},[el('input',{id:'flip-x',type:'checkbox'}),'Flip horizontally']),
@@ -133,6 +162,23 @@ export async function mount(root){
    const check=$('#'+id)?.closest('.check-row');if(check)advancedFields.append(check);
  }
  advanced.append(advancedFields);root.append(advanced);
+ const sizeError=el('p',{class:'app-size-error',id:'app-size-error',hidden:true,role:'alert'});
+ form.after(sizeError);
+ const minInput=$('#min-kb'),maxInput=$('#target');
+ for(const node of [minInput,maxInput])node.setAttribute('aria-describedby','app-size-error');
+ const validateSizeInputs=()=>{
+  const min=Number(minInput.value),max=Number(maxInput.value);
+  const impossible=minInput.value.trim()!==''&&maxInput.value.trim()!==''&&
+   Number.isFinite(min)&&Number.isFinite(max)&&min>0&&max>0&&min>max;
+  sizeError.hidden=!impossible;
+  sizeError.textContent=impossible?'Minimum KB must not exceed maximum KB. Correct the range before exporting.':'';
+  for(const node of [minInput,maxInput]){
+   if(impossible)node.setAttribute('aria-invalid','true');else node.removeAttribute('aria-invalid');
+  }
+ };
+ minInput.addEventListener('input',validateSizeInputs);
+ maxInput.addEventListener('input',validateSizeInputs);
+ validateSizeInputs();
  const ratio=$('#lock-ratio')?.closest('.check-row');
  if(ratio){form.append(ratio);}
  const requirements=el('p',{class:'app-requirements',role:'status','aria-live':'polite'});
@@ -230,11 +276,11 @@ export async function mount(root){
    if(old.image!==candidate)old.image?.close?.();
    $('#width').value=image.width;$('#height').value=image.height;
    resetCropFields();cropPanel.hidden=false;
-   refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';
+   refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';reviewHelp.hidden=true;
   }catch(error){if(candidate!==image)candidate?.close?.();throw error;}
  });
  const cropPanel=el('section',{class:'app-crop-panel',hidden:true,'aria-label':'Crop image without dragging'});
- cropPanel.append(el('h2',{text:'Crop the image'}));
+ cropPanel.append(el('h2',{text:'4. Crop the image (optional)'}));
  const cropHelp=el('p',{class:'app-crop-help',id:'app-crop-help',
    text:'Use the visual crop or enter left, top, width and height as percentages of the original image. Both methods produce the same crop.'});
  cropPanel.append(cropHelp);
@@ -245,6 +291,7 @@ export async function mount(root){
    field('app-crop-h','Height (%)','number',100,{min:0.01,max:100,step:'any'})
  ]);
  cropPanel.append(cropFields);
+ for(const node of cropFields.querySelectorAll('input'))node.setAttribute('aria-describedby','app-crop-help');
  function resetCropFields(){for(const [id,v] of [['app-crop-x',0],['app-crop-y',0],['app-crop-w',100],['app-crop-h',100]])$('#'+id).value=String(v);}
  function syncCropFields(){const p=cropToPercent(crop);
    for(const [id,v] of [['app-crop-x',p.x],['app-crop-y',p.y],['app-crop-w',p.w],['app-crop-h',p.h]])$('#'+id).value=String(v);
@@ -270,8 +317,9 @@ export async function mount(root){
      status('Full image selected.');
    })
  ]));
- frame.after(cropPanel);
- const resultDetails=el('p',{class:'app-output-status',role:'status','aria-live':'polite',hidden:true});
+ root.append(cropPanel);
+ const resultDetails=el('p',{class:'app-output-status',role:'status','aria-live':'polite',hidden:true,'aria-label':'Generated file verification'});
+ const reviewHelp=el('p',{class:'app-review-help',hidden:true});
  const outputFingerprint=()=>JSON.stringify({
   source:file?[file.name,file.size,file.lastModified]:null,
   crop,
@@ -286,11 +334,22 @@ export async function mount(root){
   resultDetails.dataset.outputState='outdated';
   resultDetails.hidden=false;
   resultDetails.textContent='Outdated result: The available download was generated using earlier settings. Create a new file before submitting. Previous: '+lastResult.description;
+  for(const link of root.querySelectorAll('#downloads a[download]')){
+   link.setAttribute('aria-label','Download previous result for old settings. Regenerate before submitting.');
+   link.closest('.download-row')?.setAttribute('data-output-state','outdated');
+  }
   status('Settings changed. The available download is an earlier result; create a new file.');
  }
  function recordVerifiedResult(){
   lastResult={fingerprint:outputFingerprint(),description:resultDetails.textContent,outdated:false};
   resultDetails.dataset.outputState='verified';
+  const mode=read('app-workflow');
+  reviewHelp.hidden=false;
+  reviewHelp.textContent=mode==='signature'?
+   'Before submitting: inspect every signature stroke, background color, final KB and accepted file type.':
+   mode==='photo'?
+   'Before submitting: inspect facial features, crop edges, background, final KB and accepted file type.':
+   'Before submitting: inspect fine print, all document edges, final KB and whether the portal accepts single-page A4 PDFs.';
  }
  const markChange=()=>markResultOutdated();
  form.addEventListener('input',markChange);form.addEventListener('change',markChange);
@@ -454,10 +513,26 @@ export async function mount(root){
   $('#rotation').value='0';$('#brightness').value=$('#contrast').value='100';
   $('#flip-x').checked=$('#flip-y').checked=false;$('#watermark').value='';
   if(image){$('#width').value=image.width;$('#height').value=image.height;}
-  resetCropFields();refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';
+  resetCropFields();refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';reviewHelp.hidden=true;
   showSource();
  }));
- root.append(actions,resultDetails);
+ root.append(el('h2',{class:'app-step-title',text:'5. Create and check the finished file'}),actions,resultDetails,reviewHelp);
  setupStatus(root);downloads(root);
+ const statusElement=$('#status');
+ statusElement.setAttribute('tabindex','-1');
+ statusElement.setAttribute('aria-label','Processing and error messages');
+ const focusErrors=new MutationObserver(()=>{
+  const isError=statusElement.classList.contains('error');
+  statusElement.setAttribute('role',isError?'alert':'status');
+  if(isError&&statusElement.textContent!==statusElement.dataset.lastFocusedError){
+   statusElement.dataset.lastFocusedError=statusElement.textContent;
+   statusElement.focus({preventScroll:false});
+  }
+  if(!isError)delete statusElement.dataset.lastFocusedError;
+ });
+ focusErrors.observe(statusElement,{attributes:true,attributeFilter:['class'],childList:true,subtree:true,characterData:true});
+ $('#downloads').setAttribute('role','region');
+ $('#downloads').setAttribute('aria-label','Generated file download');
+ window.addEventListener('pagehide',()=>focusErrors.disconnect(),{once:true});
  window.addEventListener('pagehide',()=>image?.close?.(),{once:true});
 }
