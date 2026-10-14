@@ -26,8 +26,22 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
   if(saved===0&&output.some((value,index)=>value!==original[index]))fail('false-original-fallback');
   const before=await inspectInput(original,{PDF,readPages,signal,limits});
   const after=await inspectInput(output,{PDF,readPages,signal,limits});
-  for(const key of ['pageCount','classification','hasTextLayer','possibleOCR','geometry','pages','structures'])
-    if(JSON.stringify(before[key])!==JSON.stringify(after[key]))fail('final-document-profile-changed');
+  // A source image above the independent decoder's maxImageSize may have its
+  // paint operation suppressed in the source profile, while the validated
+  // downsized candidate paints normally. The stage verifier already restored
+  // and compared the complete page-operator graph and approved image content.
+  const adaptivePaints=result.mode!=='lossless'&&
+    result.settings?.imageTransformationApplied===true&&
+    result.stages?.some(stage=>stage.engine==='embedded-images'&&stage.status==='compressed')&&
+    before.images.some(img=>img.width*img.height>limits.maxImagePixels);
+  for(const key of ['pageCount','classification','hasTextLayer','possibleOCR','geometry','pages','structures']){
+    if(JSON.stringify(before[key])===JSON.stringify(after[key]))continue;
+    if(key==='pages'&&adaptivePaints){
+      const strip=pages=>pages.map(({imagePaints,...protectedFields})=>protectedFields);
+      if(JSON.stringify(strip(before.pages))===JSON.stringify(strip(after.pages)))continue;
+    }
+    fail('final-document-profile-changed');
+  }
   const sourceText=await readText(original,{signal});
   const outputText=await readText(output,{signal});
   if(!Array.isArray(sourceText)||sourceText.length!==before.pageCount||
