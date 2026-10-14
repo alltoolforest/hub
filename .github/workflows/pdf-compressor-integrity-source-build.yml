@@ -200,6 +200,7 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task5-worker-browser.mjs
+          node tests/pdf-compressor-adaptive-browser.mjs
   document-aware-modes:
     needs: input-integrity
     runs-on: ubuntu-latest
