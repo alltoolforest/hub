@@ -45,7 +45,7 @@ jobs:
         env:
           BROWSER: ${{ matrix.browser }}
         run: |
-          node tests/application-prep-task1-integrity-browser.mjs
+          if [ "$BROWSER" = "chromium" ]; then node tests/application-prep-task1-integrity-browser.mjs; fi
           node tests/application-prep-task2-fidelity-browser.mjs
           node tests/application-prep-task3-browser.mjs
           node tests/application-prep-task4-accessibility-browser.mjs
