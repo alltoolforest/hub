@@ -7,5 +7,5 @@ const w=512,h=512,d=new Uint8ClampedArray(readFileSync(process.argv[2])),copy=d.
 const faces=[{x:0,y:0,width:w,height:h}],portrait=run(d,w,h,plan(d,w,h,{content:'portrait',faceProtection:'strict'}),96,faces);assert.equal(portrait.length,d.length);
 assert.deepEqual(run(d,w,h,plan(d,w,h,{modules})),d);assert.deepEqual(run(d,w,h,plan(d,w,h,{content:'text-logo'})),d);
 const alpha=d.slice();for(let i=0;i<alpha.length;i+=400){alpha[i+3]=0;}const a=run(alpha,w,h,plan(alpha,w,h));for(let i=0;i<a.length;i+=4)if(alpha[i+3]!==255)assert.deepEqual(a.slice(i,i+4),alpha.slice(i,i+4));
-for(const name of ['image-enhancer-photo.js','image-enhancer-wavelet.js','image-enhancer-photo-worker.js'])assert.deepEqual(readFileSync('dist/assets/'+name),readFileSync(process.argv[3]+'/'+name));
+for(const name of ['image-enhancer-photo.js','image-enhancer-wavelet.js','image-enhancer-photo-worker.js'])assert.deepEqual(readFileSync('dist/assets/original/'+name),readFileSync(process.argv[3]+'/'+name));
 core.releasePhotoWorkspace();console.log('PASS: opaque strip equality, native buffer length, unchanged input, real portrait dependency, modules-off/graphic identity, alpha/hidden RGB preservation, exact archive engine/worker files. Browser/UI flow not executed.');

@@ -83,6 +83,7 @@ export function collectPhotoStatistics(data, width, height, stats, step = 4, off
         for (let c = 0; c < 3; c++) band.rgb[c] += data[p + c];
       }
       if (!(l > 4 && l < 251)) continue;
+      if ([p-4,p+4,p-width*4,p+width*4].some(q => data[q+3] !== 255)) continue;
       const left = Y(data, p - 4), right = Y(data, p + 4), up = Y(data, p - width * 4), down = Y(data, p + width * 4);
       const neighborY = (left + right + up + down) / 4;
       const bucket = Math.min(255, Math.round(Math.abs(l - neighborY) * 4));
@@ -92,7 +93,7 @@ export function collectPhotoStatistics(data, width, height, stats, step = 4, off
       if (l < 80) { stats.shadowHist[bucket]++; stats.shadowCount++; }
       // Second-scale residual (neighbours at +-2 px): correlated noise (JPEG, demosaic, phone NR)
       // hides from the 1 px test but shows here. White noise reads the same at both scales.
-      if (x >= 2 && x < width - 2 && y >= 2 && y < height - 2) {
+      if (x >= 2 && x < width - 2 && y >= 2 && y < height - 2 && [p-8,p+8,p-width*8,p+width*8].every(q => data[q+3] === 255)) {
         const n2 = (Y(data, p - 8) + Y(data, p + 8) + Y(data, p - width * 8) + Y(data, p + width * 8)) / 4;
         stats.residualHist2[Math.min(255, Math.round(Math.abs(l - n2) * 4))]++; stats.residualCount2++;
       }
@@ -227,7 +228,7 @@ export function makePhotoPlan(stats, options = {}) {
   const maxDim = Math.max(stats.size.width, stats.size.height) || 1800;
   const shift = clamp(Math.round(Math.log2(maxDim / 1800)), 0, 2);
   const sharpG = ({ off: 0, low: .35, medium: .75, auto: .55 })[options.sharpness || 'auto'] ?? .55;
-  const virtualGain = [sharpG, sharpG * .7, .30, .22, .14];
+  const virtualGain = sharpG === 0 ? [0, 0, 0, 0, 0] : [sharpG, sharpG * .7, .30, .22, .14];
   const strictFace = options.faceProtection === 'strict';
   const faceGain = [.45, .45, .30, .20, .15].map(v => strictFace ? v * .35 : v);
   const dz = ({ fidelity: .8, balanced: 1, recovery: 1.15 })[options.strength] || 1;
@@ -259,7 +260,7 @@ let pool = null;
 function workspace(n) {
   if (!pool || pool.capacity < n) {
     const mk = () => new Float32Array(n);
-    pool = { capacity: n, Y: mk(), cb: mk(), cr: mk(), a: mk(), b: mk(), tmp: mk(), acc: mk(), edge: mk(), w1: mk(), w2: mk(), prot: mk() };
+    pool = { capacity: n, Y: mk(), cb: mk(), cr: mk(), a: mk(), b: mk(), tmp: mk(), acc: mk(), edge: mk(), w1: mk(), w2: mk(), prot: mk(), detail: mk() };
   }
   const v = {}; for (const k of Object.keys(pool)) if (k !== 'capacity') v[k] = pool[k].subarray(0, n);
   return v;
@@ -298,28 +299,38 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
   const n = width * height, W = workspace(n);
   const { Y: Yp, cb, cr, prot } = W;
   const [wr, wg, wbl] = plan.wb;
-  // Transparent / partially transparent pixels are replicate-filled (left neighbour, else the pixel
-  // above) so they do not create a fake edge that the detail stage would sharpen into a halo.
-  // Their own RGBA is passed through unchanged at output.
-  for (let y = 0; y < height; y++) {
-    let seen = false, lastY = 128, lastB = 0, lastR = 0, rowEmpty = false;
-    for (let x = 0; x < width; x++) {
-      const i = y * width + x, p = i * 4;
-      if (data[p + 3] !== 255) {
-        if (!seen && !rowEmpty) {            // leading transparent run: borrow the first opaque pixel on this row
-          let k = x + 1; while (k < width && data[(y * width + k) * 4 + 3] !== 255) k++;
-          if (k < width) { const q = (y * width + k) * 4, r = data[q] * wr, g = data[q + 1] * wg, b = data[q + 2] * wbl, l = .2126 * r + .7152 * g + .0722 * b; lastY = l; lastB = b - l; lastR = r - l; seen = true; }
-          else rowEmpty = true;
-        }
-        if (seen) { Yp[i] = lastY; cb[i] = lastB; cr[i] = lastR; }
-        else if (y > 0) { Yp[i] = Yp[i - width]; cb[i] = cb[i - width]; cr[i] = cr[i - width]; }
-        else { Yp[i] = 128; cb[i] = 0; cr[i] = 0; }
-        continue;
+  // Finite-support alpha guard: hidden RGB never enters filtering. Preserve source
+  // pixels within the complete wavelet/deblock support of nonopaque pixels.
+  // This conservative boundary policy is independent of strip partitioning.
+  let alphaGuard = null;
+  for (let i = 0; i < n; i++) if (data[i*4+3] !== 255) { alphaGuard = new Uint8Array(n); break; }
+  if (alphaGuard) {
+    const radius = PHOTO_HALO, horizontal = W.tmp;
+    for (let y = 0; y < height; y++) {
+      let count = 0;
+      for (let x = 0; x <= Math.min(radius,width-1); x++) count += data[(y*width+x)*4+3] !== 255;
+      for (let x = 0; x < width; x++) {
+        horizontal[y*width+x] = count > 0 ? 1 : 0;
+        if (x-radius >= 0) count -= data[(y*width+x-radius)*4+3] !== 255;
+        if (x+radius+1 < width) count += data[(y*width+x+radius+1)*4+3] !== 255;
       }
-      const r = data[p] * wr, g = data[p + 1] * wg, b = data[p + 2] * wbl;
-      const l = .2126 * r + .7152 * g + .0722 * b;
-      Yp[i] = lastY = l; cb[i] = lastB = b - l; cr[i] = lastR = r - l; seen = true;
     }
+    for (let x = 0; x < width; x++) {
+      let count = 0;
+      for (let y = 0; y <= Math.min(radius,height-1); y++) count += horizontal[y*width+x];
+      for (let y = 0; y < height; y++) {
+        alphaGuard[y*width+x] = count > 0 ? 1 : 0;
+        if (y-radius >= 0) count -= horizontal[(y-radius)*width+x];
+        if (y+radius+1 < height) count += horizontal[(y+radius+1)*width+x];
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const p = i*4;
+    if (data[p+3] !== 255) { Yp[i] = 128; cb[i] = 0; cr[i] = 0; continue; }
+    const r = data[p]*wr, g = data[p+1]*wg, b = data[p+2]*wbl;
+    const l = .2126*r + .7152*g + .0722*b;
+    Yp[i] = l; cb[i] = b-l; cr[i] = r-l;
   }
   // Protection plane: face rectangles (feathered) and, in Portrait mode, skin-coloured pixels.
   const useProt = faces.length > 0 || plan.portrait;
@@ -336,7 +347,7 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
   // ---- luma: shrink noise, shape detail, per scale
   let cur = W.a, nxt = W.b;
   const { tmp, acc, edge, w1, w2 } = W;
-  cur.set(Yp); acc.fill(0); edge.fill(0);
+  cur.set(Yp); acc.fill(0); edge.fill(0); W.detail.fill(0);
   const L = plan.levels, noiseRel = plan.noiseRel;
   const doLevel = (j, wv, c, i, ringT) => {
     const lv = L[j];
@@ -354,7 +365,8 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
       const ramp = smooth01((a - T) / (1.5 * T + .5));
       const k2 = lv.knee * lv.knee;
       const inc = wv * sh * g * ramp * k2 / (a * a + k2);
-      o += inc > lv.cap ? lv.cap : inc < -lv.cap ? -lv.cap : inc;
+      const added = clamp(inc, -lv.cap, lv.cap);
+      o += added; W.detail[i] += added;
     }
     return o;
   };
@@ -382,6 +394,24 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
     edge[i] += (a1 < 0 ? -a1 : a1) * .5 + (a2 < 0 ? -a2 : a2) * .75;
     acc[i] += doLevel(0, a1, c1, i, rt) + doLevel(1, a2, c1, i, rt);
     Yp[i] = c1 + acc[i];
+  }
+  // Limit only added detail to local source extrema, allowing the denoised
+  // value itself. This removes sharpening overshoot without undoing denoising.
+  if (L.some(lv => lv.gain > 0)) {
+    for (let i = 0; i < n; i++) {
+      const q = i*4; tmp[i] = .2126*data[q]*wr + .7152*data[q+1]*wg + .0722*data[q+2]*wbl;
+    }
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const i = y*width+x, base = Yp[i]-W.detail[i];
+      let lo = base, hi = base;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const q = (clamp(y+dy,0,height-1)*width+clamp(x+dx,0,width-1))*4;
+        if (data[q+3] !== 255) continue;
+        const l = tmp[q/4];
+        lo = Math.min(lo,l); hi = Math.max(hi,l);
+      }
+      Yp[i] = clamp(Yp[i],lo,hi);
+    }
   }
   // ---- chroma: coarse-scale shrinkage, relaxed where luma shows a real edge
   if (plan.chromaOn) {
@@ -412,7 +442,7 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
     if (loc) { gy = (yAbs + .5) / loc.cell - .5; iy = Math.floor(gy); fy = gy - iy; }
     for (let x = 0; x < width; x++) {
       const i = y * width + x, p = i * 4, q = ((y - startRow) * width + x) * 4;
-      if (data[p + 3] !== 255) { output[q] = data[p]; output[q + 1] = data[p + 1]; output[q + 2] = data[p + 2]; output[q + 3] = data[p + 3]; continue; }
+      if (data[p + 3] !== 255 || (alphaGuard && alphaGuard[i])) { output[q] = data[p]; output[q + 1] = data[p + 1]; output[q + 2] = data[p + 2]; output[q + 3] = data[p + 3]; continue; }
       const yd = clamp(Yp[i], 0, 254.99);
       const k = yd | 0;
       let yt = tone[k] + (tone[k + 1] - tone[k]) * (yd - k);

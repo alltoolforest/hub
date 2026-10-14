@@ -1,0 +1,30 @@
+[
+  {
+    "image": "event",
+    "engine": "original",
+    "newLowClippedPixels": 10672,
+    "newHighClippedPixels": 821,
+    "meanY": 100.34605193813331
+  },
+  {
+    "image": "event",
+    "engine": "revised",
+    "newLowClippedPixels": 8844,
+    "newHighClippedPixels": 594,
+    "meanY": 100.58841161173333
+  },
+  {
+    "image": "print",
+    "engine": "original",
+    "newLowClippedPixels": 71,
+    "newHighClippedPixels": 19,
+    "meanY": 83.32690756966308
+  },
+  {
+    "image": "print",
+    "engine": "revised",
+    "newLowClippedPixels": 20,
+    "newHighClippedPixels": 14,
+    "meanY": 83.35500844043607
+  }
+]
