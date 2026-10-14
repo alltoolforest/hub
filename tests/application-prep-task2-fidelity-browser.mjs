@@ -144,7 +144,7 @@ try{
   const read=(x,y)=>[...ctx.getImageData(x,y,1,1).data];
   const out={page:[c.width,c.height],outer:read(5,5),
     center:read(Math.floor(c.width/2),Math.floor(c.height/2))};
-  await loaded.destroy();return out;
+  return out; // Browser context cleanup releases the test-only renderer.
  },[...pdfBytes]);
  assert.ok(rendering.outer.slice(0,3).every(x=>x>245),'PDF page should be white');
  assert.ok(rendering.center.slice(0,3).every(x=>x<65),'PDF signature center should remain dark');
