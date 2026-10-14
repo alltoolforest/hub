@@ -10,11 +10,11 @@ export class CompressionPipelineError extends Error {
 }
 const checkCancel=signal=>{if(signal?.aborted)throw new CompressionPipelineError('cancelled');};
 export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
-  verifyJpeg,decodeJpeg,mode='balanced',signal,limits=INPUT_LIMITS,onProgress=()=>{}}={}){
+  verifyJpeg,decodeJpeg,mode='balanced',signal,limits=INPUT_LIMITS,onProgress=()=>{},inspectInput=inspectPDFInput}={}){
   if(!MODES.includes(mode))throw new RangeError('Unsupported compression mode');
   checkCancel(signal);
   onProgress('inspect');
-  const inspected=await inspectPDFInput(bytes,{PDF,readPages,signal,limits});
+  const inspected=await inspectInput(bytes,{PDF,readPages,signal,limits});
   const plan=planCompression({mode,images:inspected.images,pages:inspected.pageCount,
     classification:inspected.classification,allowJpeg:typeof decodeJpeg==='function'});
   if(!plan.allowed)throw new CompressionPipelineError(plan.reason);
@@ -32,7 +32,7 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
     current=image.bytes;
   }
   onProgress('lossless');
-  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits});
+  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits,onProgress,inspectInput});
   checkCancel(signal);
   stages.push({engine:'lossless',status:lossless.status,
     inputBytes:current.length,outputBytes:lossless.bytes.length});

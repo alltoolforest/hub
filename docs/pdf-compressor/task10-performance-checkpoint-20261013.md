@@ -49,6 +49,12 @@ physical peak-RAM or lower-memory device pass is inferred from navigator hints.
 
 ## Pending completion gate
 
+Later steering: the user requires 100 MB input support and has deferred manual
+checks until the end of the blueprint. See `task10-100mb-requirement.md` and
+`release-preparation-checkpoint-20261013.md` for the newer engineering evidence
+and remaining-task status. The historical 20 MiB measurements below remain
+valid baseline evidence, not a revised launch target or current completion claim.
+
 Task 10 remains open for the measured real-device envelope: updated integrated
 Android repeated-run/cancel/download checks, lower-memory phones, iPhone Safari,
 Windows Chrome/Edge/Firefox, macOS Safari and appropriate device CPU/memory evidence.

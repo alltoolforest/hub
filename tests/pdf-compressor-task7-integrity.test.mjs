@@ -53,3 +53,40 @@ test('an optimizer changing metadata cannot reach a verified final result',async
       return new Uint8Array(await doc.save({useObjectStreams:true}));
     }}),e=>e.code==='preservation-check-failed');
 });
+
+test('operation page reports are bound to bytes and limits, isolated, and never reused after cancellation',async()=>{
+ const {createOperationPageReader}=await import('../assets/js/pdf-compressor-v2/operation-page-reader.mjs');
+ let calls=0;const reader=createOperationPageReader(async()=>{calls++;return {pages:[{textItems:1}]};});
+ const bytes=new Uint8Array([1,2,3]);const a=await reader(bytes,{maxPages:5});a.pages[0].textItems=99;
+ assert.equal((await reader(bytes.slice(),{maxPages:5})).pages[0].textItems,1);assert.equal(calls,1);
+ bytes[0]=9;await reader(bytes,{maxPages:5});assert.equal(calls,2);
+ await reader(bytes,{maxPages:4});assert.equal(calls,3);
+ const controller=new AbortController();controller.abort();
+ await assert.rejects(reader(bytes,{maxPages:4,signal:controller.signal}));assert.equal(calls,3);
+ const second=createOperationPageReader(async()=>{calls++;return {pages:[]};});await second(bytes,{maxPages:4});assert.equal(calls,4);
+});
+
+test('combined independent readers reuse exact text only for the same bytes and standard limits',async()=>{
+ const {createIndependentReaders}=await import('../assets/js/pdf-compressor-v2/independent-readers.mjs');
+ const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');let loads=0;
+ const parser={...pdfjs,getDocument:options=>{loads++;return pdfjs.getDocument(options);}};
+ const readers=createIndependentReaders(parser),bytes=(await buildFixture('digital')).bytes;
+ const independent=createIndependentTextReader(pdfjs);
+ await readers.readPages(bytes);const text=await readers.readText(bytes);
+ assert.equal(loads,1);assert.deepEqual(text,await independent(bytes));
+ text[0]='changed';assert.notEqual((await readers.readText(bytes))[0],'changed');
+ await assert.rejects(readers.readText(bytes,{maxCharacters:1}),e=>e.code==='text-character-limit');assert.equal(loads,2);
+ const other=(await buildFixture('mixed')).bytes;await readers.readText(other);assert.equal(loads,3);
+ const abort=new AbortController();abort.abort();await assert.rejects(readers.readText(bytes,{signal:abort.signal}));
+});
+
+test('operation inspection reuse cannot bypass byte changes, stricter limits or cancellation',async()=>{
+ const {createOperationInspector}=await import('../assets/js/pdf-compressor-v2/operation-inspector.mjs');
+ const {INPUT_LIMITS}=await import('../assets/js/pdf-compressor-v2/input-inspector.mjs');
+ let calls=0;const inspect=createOperationInspector({PDF,readPages:async(...args)=>{calls++;return options.readPages(...args);}});
+ const bytes=(await buildFixture('digital')).bytes;
+ const a=await inspect(bytes);a.pageCount=999;assert.notEqual((await inspect(bytes.slice())).pageCount,999);assert.equal(calls,1);
+ await assert.rejects(inspect(bytes,{limits:{...INPUT_LIMITS,maxBytes:16}}),e=>e.code==='file-limit');
+ await inspect((await buildFixture('mixed')).bytes);assert.equal(calls,2);
+ const abort=new AbortController();abort.abort();await assert.rejects(inspect(bytes,{signal:abort.signal}));
+});

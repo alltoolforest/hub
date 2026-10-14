@@ -47,7 +47,7 @@ test('device file limits apply before reading and state the selected budget',asy
     engine:{inspect:async()=>{},compress:async()=>{}}});
   await session.select({name:'source.pdf',size:9*1024*1024,arrayBuffer:async()=>{read=true;}});
   assert.equal(read,false);assert.equal(session.snapshot().error.code,'file-limit');
-  assert.match(session.snapshot().error.message,/8 MiB/);
+  assert.match(session.snapshot().error.message,/8.39 MB/);
 });
 test('forged JPEG frame dimensions are rejected before independent decoding',async()=>{
   const doc=await PDF.PDFDocument.load(await buildImageFixture({jpegQuality:98}),{updateMetadata:false});
@@ -62,4 +62,22 @@ test('forged JPEG frame dimensions are rejected before independent decoding',asy
   assert.equal(changed,true);let read=false;
   await assert.rejects(inspectPDFInput(new Uint8Array(await doc.save()),{PDF,readPages:async()=>{read=true;}}),e=>e.code==='encoded-image-dimensions');
   assert.equal(read,false);
+});
+test('post-scan JPEG DNL and invalid sampling fail before independent decoding',async()=>{
+ const N=PDF.PDFName.of;
+ for(const variant of ['dnl','sampling']){
+  const doc=await PDF.PDFDocument.load(await buildImageFixture({jpegQuality:98}),{updateMetadata:false});
+  for(const [ref,image] of doc.context.enumerateIndirectObjects()){
+   if(!(image instanceof PDF.PDFRawStream)||String(image.dict.get(N('Filter')))!=='/DCTDecode')continue;
+   let data=image.contents.slice();
+   if(variant==='sampling'){
+    for(let i=0;i<data.length-12;i++)if(data[i]===255&&[192,193,194].includes(data[i+1])){data[i+11]=255;break;}
+   }else{
+    const insertion=new Uint8Array([255,220,0,4,255,255]),next=new Uint8Array(data.length+insertion.length);
+    next.set(data.subarray(0,data.length-2));next.set(insertion,data.length-2);next.set(data.subarray(data.length-2),data.length-2+insertion.length);data=next;
+   }
+   doc.context.assign(ref,PDF.PDFRawStream.of(image.dict.clone(doc.context),data));
+  }
+  let called=false;await assert.rejects(inspectPDFInput(await doc.save({useObjectStreams:false}),{PDF,readPages:async()=>{called=true;}}),e=>e.code==='image-header-unverifiable');assert.equal(called,false);
+ }
 });

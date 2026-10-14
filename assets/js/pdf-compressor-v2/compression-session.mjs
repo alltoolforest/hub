@@ -3,8 +3,10 @@ import {INPUT_LIMITS} from './input-inspector.mjs';
 import {MODES} from './mode-policy.mjs';
 import {digestPDFBytes} from './output-integrity.mjs';
 const messages=Object.freeze({
-  'file-limit':'This PDF exceeds the 20 MiB limit. Select a smaller PDF.',
+  'file-limit':'This PDF exceeds the current input limit. Select a smaller PDF.',
   'image-pixel-limit':'Images exceed the decoded-pixel budget. Export a lower-resolution PDF.',
+  'scalar-resource-limit':'PDF strings exceed safe resource limits. Try a simpler export.',
+  'decoded-stream-limit':'Decoded PDF resources exceed safe limits. Try a smaller or lower-resolution PDF.',
   'operator-limit':'This PDF is too complex for supported processing. Try a simpler export.',
   'text-character-limit':'This PDF exceeds the text-verification budget. Try a smaller document.',
   'encrypted-pdf':'Encrypted PDFs are unsupported. Select an authorized unencrypted copy.',
@@ -23,7 +25,7 @@ export function describeProcessingError(error){
   const code=typeof candidate==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(candidate)?candidate:'processing-failed';
   const limit=Number.isSafeInteger(error?.maxBytes)&&error.maxBytes>0&&error.maxBytes<=INPUT_LIMITS.maxBytes?error.maxBytes:null;
   return Object.freeze({code,message:code==='file-limit'&&limit?
-    'This PDF exceeds this device’s '+Math.round(limit/1048576)+' MiB limit. Select a smaller PDF.':Object.hasOwn(messages,code)?messages[code]:
+    'This PDF exceeds this device’s '+(limit/1000000).toFixed(2)+' MB limit. Select a smaller PDF.':Object.hasOwn(messages,code)?messages[code]:
     'This PDF could not be verified safely. Keep the original and try a fresh or smaller export.'});
 }
 const copy=value=>structuredClone(value);
@@ -33,7 +35,7 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
     throw new TypeError('Verified worker engine required');
   let state='empty',source=null,output=null,error=null,controller=null,generation=0;
   const snapshot=()=>Object.freeze({state,error,source:source?Object.freeze({name:source.name,
-    size:source.bytes.length,report:copy(source.report)}):null,
+    size:source.size,report:copy(source.report)}):null,
     result:output?Object.freeze({...copy(output.summary),url:output.url,name:output.name}):null,
     canRetry:Boolean(source)&&!['loading','processing'].includes(state),
     canDownload:state==='completed'&&Boolean(output)});
@@ -50,15 +52,19 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
       try{
         if(!file||!Number.isSafeInteger(file.size)||file.size<16)throw {code:'invalid-input'};
         if(file.size>limits.maxBytes)throw {code:'file-limit',maxBytes:limits.maxBytes};
-        const bytes=new Uint8Array(await file.arrayBuffer());
+        let bytes=new Uint8Array(await file.arrayBuffer());
         if(token!==generation)return {status:'stale'};
         if(bytes.length!==file.size)throw {code:'invalid-input'};
-        const report=await engine.inspect(bytes,{signal:abort.signal});
-        if(token!==generation)return {status:'stale'};
-        if(report?.valid!==true||report.sourceBytes!==bytes.length)throw {code:'invalid-input'};
+        const fileOwned=typeof Blob!=='undefined'&&file instanceof Blob&&
+          typeof engine.inspectFile==='function'&&typeof engine.compressFile==='function';
         const digest=await digestPDFBytes(bytes);
         if(token!==generation)return {status:'stale'};
-        source={bytes,name:String(file.name??'document.pdf'),report:copy(report),digest};
+        if(fileOwned)bytes=null;
+        const report=await (fileOwned?engine.inspectFile(file,{signal:abort.signal}):engine.inspect(bytes,{signal:abort.signal}));
+        if(token!==generation)return {status:'stale'};
+        if(report?.valid!==true||report.sourceBytes!==file.size)throw {code:'invalid-input'};
+        if(token!==generation)return {status:'stale'};
+        source={bytes,file:fileOwned?file:null,size:file.size,name:String(file.name??'document.pdf'),report:copy(report),digest};
         controller=null;state='ready';notify();return {status:'ready'};
       }catch(cause){
         if(token!==generation)return {status:'stale'};
@@ -71,13 +77,13 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
       invalidate();clearOutput();error=null;state='processing';
       const token=generation,abort=new AbortController();controller=abort;notify();
       try{
-        const result=await engine.compress(source.bytes,{mode,signal:abort.signal});
+        const result=await (source.file?engine.compressFile(source.file,{mode,signal:abort.signal}):engine.compress(source.bytes,{mode,signal:abort.signal}));
         if(token!==generation)return {status:'stale'};
         const bytes=result?.bytes?.slice(),receipt=result?.integrity;
         if(!(bytes instanceof Uint8Array)||receipt?.version!==1||receipt.mode!==mode||
           result.mode!==mode||receipt.sourceDigest!==source.digest||
-          receipt.inputBytes!==source.bytes.length||receipt.outputBytes!==bytes.length||
-          receipt.savedBytes!==source.bytes.length-bytes.length||receipt.savedBytes<0||
+          receipt.inputBytes!==source.size||receipt.outputBytes!==bytes.length||
+          receipt.savedBytes!==source.size-bytes.length||receipt.savedBytes<0||
           result.inputBytes!==receipt.inputBytes||result.outputBytes!==receipt.outputBytes||
           result.savedBytes!==receipt.savedBytes||receipt.independentTextVerified!==true||
           (receipt.savedBytes===0&&receipt.outputDigest!==source.digest)||

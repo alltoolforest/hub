@@ -5,6 +5,9 @@ certificates are disposable self-signed QA certificates, never production keys.
 No user documents, network requests or production assets are used.
 """
 import io
+import reportlab
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -53,6 +56,22 @@ for name, grayscale in [('independent-scan-color.pdf', False),
     c.drawImage(ImageReader(image), 0, 0, width=400, height=560)
     c.showPage()
     c.save()
+
+
+# Each independently authored page embeds the same real TrueType subset.
+# Merge separate documents so resources have distinct PDF object identities.
+pdfmetrics.registerFont(TTFont('RepeatedVera', str(Path(reportlab.__file__).parent / 'fonts' / 'Vera.ttf')))
+font_writer = PdfWriter()
+for page_number in range(8):
+    buffer = io.BytesIO()
+    font_canvas = canvas.Canvas(buffer, pagesize=(400, 560), invariant=1)
+    font_canvas.setFont('RepeatedVera', 18)
+    font_canvas.drawString(30, 480, 'Embedded font preservation ABC xyz 0123456789')
+    font_canvas.showPage()
+    font_canvas.save()
+    font_writer.append(PdfReader(io.BytesIO(buffer.getvalue())))
+with (out / 'independent-repeated-fonts.pdf').open('wb') as f:
+    font_writer.write(f)
 
 writer = PdfWriter()
 writer.append(PdfReader(plain))

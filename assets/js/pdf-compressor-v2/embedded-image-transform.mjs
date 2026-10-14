@@ -22,8 +22,8 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
   if(typeof inspectInput!=='function'||typeof verifyOutput!=='function')
     throw Error('independent-verification-required');
   if(signal?.aborted)throw Error('cancelled');
-  await inspectInput(bytes.slice()); // Must reject signed/encrypted/unsafe inputs.
-  const doc=await PDF.PDFDocument.load(bytes.slice(),{updateMetadata:false,throwOnInvalidObject:true});
+  await inspectInput(bytes); // Must reject signed/encrypted/unsafe inputs.
+  const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
   const N=PDF.PDFName.of,replacements=[];let inspected=0;
   for(const [ref,stream] of doc.context.enumerateIndirectObjects()) {
     if(!isPlainOpaqueImage(stream,PDF))continue;
@@ -58,7 +58,7 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
     replacements.push({ref:String(ref),descriptor,candidate});
   }
   if(!replacements.length)return {status:'original-retained',bytes:bytes.slice(),savedBytes:0,replacements:0};
-  const output=new Uint8Array(await doc.save({useObjectStreams:false}));
+  const output=await doc.save({useObjectStreams:false});
   if(signal?.aborted)throw Error('cancelled');
   if(output.length>=bytes.length)return {status:'original-retained',bytes:bytes.slice(),savedBytes:0,replacements:0};
   // A boolean true is required; absent/partial verification never approves output.

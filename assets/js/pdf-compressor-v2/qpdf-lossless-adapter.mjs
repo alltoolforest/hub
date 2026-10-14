@@ -4,10 +4,12 @@ import {inspectPDFInput,INPUT_LIMITS} from './input-inspector.mjs';
 import {losslessFingerprint} from './lossless-invariants.mjs';
 import {optimizeLosslessly} from './lossless-core.mjs';
 import {deduplicateOpaqueImages} from './lossless-image-dedup.mjs';
-export function createQpdfLosslessProvider(createModule){
+export function createQpdfLosslessProvider(createModule,{maximumBytes=INPUT_LIMITS.maxBytes}={}){
   if(typeof createModule!=='function')throw new TypeError('A reviewed local qpdf module factory is required');
+  if(!Number.isSafeInteger(maximumBytes)||maximumBytes<8)
+    throw new TypeError('A positive safe byte budget is required');
   return async bytes=>{
-    if(!(bytes instanceof Uint8Array)||bytes.length>INPUT_LIMITS.maxBytes)
+    if(!(bytes instanceof Uint8Array)||bytes.length>maximumBytes)
       throw Error('invalid-or-oversize-input');
     const module=await createModule({noInitialRun:true,print:()=>{},printErr:()=>{}});
     const input='/compressor-input.pdf',output='/compressor-output.pdf';
@@ -17,9 +19,15 @@ export function createQpdfLosslessProvider(createModule){
         '--decode-level=generalized','--recompress-flate','--compression-level=9',
         '--preserve-unreferenced','--remove-unreferenced-resources=no',input,output]);
       if(exitCode!==0)throw Error('qpdf-unclean-exit');
+      // Expansion is an honest original-file fallback, not an optimizer error.
+      // Avoid allocating the output buffer when the local filesystem can report
+      // its size before reading it. No unverified candidate is released.
+      const outputSize=module.FS.stat?.(output)?.size;
+      if(Number.isSafeInteger(outputSize)&&outputSize>=bytes.length)return bytes.slice();
       const result=module.FS.readFile(output);
-      if(!(result instanceof Uint8Array)||result.length>INPUT_LIMITS.maxBytes)
+      if(!(result instanceof Uint8Array))
         throw Error('invalid-or-oversize-output');
+      if(result.length>=bytes.length)return bytes.slice();
       return result.slice();
     }finally{
       for(const path of [input,output]){
@@ -28,11 +36,11 @@ export function createQpdfLosslessProvider(createModule){
     }
   };
 }
-export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,limits=INPUT_LIMITS}={}){
+export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,limits=INPUT_LIMITS,onProgress=()=>{},inspectInput=inspectPDFInput}={}){
   const inspect=async data=>{
-    const report=await inspectPDFInput(data,{PDF,readPages,signal,limits});
+    const report=await inspectInput(data,{PDF,readPages,signal,limits});
     return {...report,signed:false,encrypted:false,
-      fingerprint:await losslessFingerprint(data,{PDF})};
+      fingerprint:await losslessFingerprint(data,{PDF,maxEntries:limits.maxInvariantEntries,maxTotalDecodedBytes:limits.maxTotalDecodedBytes,maxStreamBytes:limits.maxDecodedStreamBytes})};
   };
   const optimizeWithSafeDedup=async input=>{
     // Classical staging removes obsolete xref/object-stream containers only.
@@ -41,5 +49,5 @@ export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,l
     const prepared=await deduplicateOpaqueImages(input,{PDF,serializeClassic:true});
     return optimize(prepared.bytes);
   };
-  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes});
+  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes,onProgress});
 }

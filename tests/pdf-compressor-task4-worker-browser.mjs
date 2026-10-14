@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {chromium,firefox,webkit} from 'playwright';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
@@ -30,8 +31,11 @@ try{
   });
   await page.goto('http://127.0.0.1:8765/compressor-worker-gate');
   const report=[];
-  for(const id of ['scanned','mixed','form','bookmarks','attachment','tagged']){
-    const {bytes}=await buildFixture(id),started=performance.now();
+  const inputs=[];
+  for(const id of ['scanned','mixed','form','bookmarks','attachment','tagged'])inputs.push({id,...await buildFixture(id)});
+  if(process.env.PDF_COMPRESSOR_INDEPENDENT_FIXTURES)inputs.push({id:'independent-repeated-fonts',bytes:new Uint8Array(readFileSync(process.env.PDF_COMPRESSOR_INDEPENDENT_FIXTURES+'/independent-repeated-fonts.pdf'))});
+  for(const {id,bytes} of inputs){
+    const started=performance.now();
     const raw=await page.evaluate(async data=>{
       const worker=new Worker('/tests/pdf-compressor-task4-worker.mjs',{type:'module'});
       try{
@@ -52,6 +56,7 @@ try{
     const output=new Uint8Array(raw.bytes);
     assert.equal(await losslessFingerprint(output,{PDF}),await losslessFingerprint(bytes,{PDF}));
     assert.ok(output.length<=bytes.length);
+    if(id==='independent-repeated-fonts')assert.ok(output.length<bytes.length/2);
     report.push({fixture:id,status:raw.status,inputBytes:bytes.length,
       outputBytes:output.length,savedBytes:raw.savedBytes,elapsedMs:Math.round(performance.now()-started)});
   }

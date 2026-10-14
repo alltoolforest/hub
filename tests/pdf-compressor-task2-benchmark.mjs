@@ -32,7 +32,7 @@ function packageMetadata(pkg){
   }catch{return {package:pkg,status:'metadata parse unavailable'};}
 }
 const dependencySizes={
-  alreadyBundledPdfLibBytes:statSync(new URL('../assets/vendor/pdf-lib.js',import.meta.url)).size,
+  alreadyBundledPdfLibBytes:statSync(new URL('../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js',import.meta.url)).size,
   researchedWasmPackages:[
     packageMetadata('@neslinesli93/qpdf-wasm'),
     packageMetadata('qpdf-wasm-esm-embedded'),

@@ -1,0 +1,31 @@
+{
+  "scope": "Isolated compressor parser fork; shared vendor remains untouched",
+  "source": "assets/vendor/pdf-lib.js",
+  "sourceSha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f",
+  "patchedSha256": "025c8321cfd03cb968a5ce7bf186ec52a4098c0e7fd600fe2a6e7acb3f2f26e9",
+  "patch": "PDF name escapes and bounded decoded buffers, context expansion and object counts",
+  "bytes": 525550,
+  "replacements": [
+    {
+      "from": "/#([\\dABCDEF]{2})/g",
+      "to": "/#([\\dA-Fa-f]{2})/g"
+    },
+    {
+      "from": "t.prototype.ensureBuffer=function(t){var e=this.buffer;",
+      "to": "t.prototype.ensureBuffer=function(t){if(t>32000000)throw new Error(\"compressor-decoded-stream-limit\");var e=this.buffer;"
+    },
+    {
+      "from": "for(var n=this.minBufferLength;n<t;)n*=2;var r=new Uint8Array(n);",
+      "to": "for(var n=this.minBufferLength;n<t;)n*=2;if(n>33554432)throw new Error(\"compressor-decoded-stream-limit\");var r=new Uint8Array(n);"
+    },
+    {
+      "from": "t.fromPDFRawStream=function(e){return t.of(Al(e).decode())}",
+      "to": "t.fromPDFRawStream=function(e){var n=Al(e).decode(),r=e.dict.context;r.compressorDecodedBytes=(r.compressorDecodedBytes||0)+n.length;if(r.compressorDecodedBytes>128000000)throw new Error(\"compressor-decoded-stream-limit\");return t.of(n)}"
+    },
+    {
+      "from": "r.objectCount=i.lookup(Fo.of(\"N\"),co).asNumber(),r}",
+      "to": "r.objectCount=i.lookup(Fo.of(\"N\"),co).asNumber(),r.objectCount>=0&&r.objectCount<=50000&&Number.isSafeInteger(r.objectCount)||(function(){throw new Error(\"compressor-object-stream-limit\")})(),r}"
+    }
+  ],
+  "patchedBytes": 525550
+}

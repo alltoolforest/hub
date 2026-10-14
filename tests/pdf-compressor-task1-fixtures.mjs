@@ -4,7 +4,7 @@
 import {createRequire} from 'node:module';
 import {deflateSync} from 'node:zlib';
 const require=createRequire(import.meta.url);
-export const PDF=require('../assets/vendor/pdf-lib.js');
+export const PDF=require('../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js');
 const N=PDF.PDFName.of;
 const FIXED_DATE=new Date('2020-01-02T03:04:05.000Z');
 

@@ -1,0 +1,19 @@
+{
+  "fixture": "scan",
+  "mode": "balanced",
+  "inputBytes": 96010241,
+  "inspectMs": 1521,
+  "compressMs": 10875,
+  "uiTicks": 119,
+  "maxUiGapMs": 494,
+  "workersStarted": 2,
+  "workersTerminated": 2,
+  "managedWorkerMemory": {
+    "samples": 107,
+    "peaks": {
+      "usedBytes": 6891336,
+      "backingBytes": 664024738
+    },
+    "note": "100ms CDP worker samples; managed counters only, not physical RAM. Main/fixture/native/GPU excluded; transient and unresponsive targets may be missed."
+  }
+}
