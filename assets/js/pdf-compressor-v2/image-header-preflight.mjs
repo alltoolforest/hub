@@ -17,6 +17,19 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     else throw Error('unverifiable-jpeg-filter-chain');
   }
   const frame=inspectJpegHeader(bytes);
-  if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components))throw Error('unsupported-jpeg-frame');
+  // A well-formed Adobe APP14 marker is normal in CMYK/YCCK PDFs produced
+  // by print-layout applications. Verify exact marker bytes and colorspace,
+  // without permitting arbitrary APP markers, DNL, or post-scan metadata.
+  const adobe=frame.metadata.filter(m=>m.marker===238);
+  const validAdobe=adobe.length===1&&frame.components===4&&
+    String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))))==='/DeviceCMYK'&&
+    adobe[0].bytes.length===16&&adobe[0].bytes[0]===255&&adobe[0].bytes[1]===238&&
+    adobe[0].bytes[2]===0&&adobe[0].bytes[3]===14&&
+    [65,100,111,98,101].every((v,i)=>adobe[0].bytes[4+i]===v)&&
+    [0,2].includes(adobe[0].bytes[15]);
+  const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
+    (m.marker===238&&validAdobe));
+  if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components)||
+    frame.metadataAfterScan||!allowedMetadata)throw Error('unsupported-jpeg-frame');
   return frame;
 }
