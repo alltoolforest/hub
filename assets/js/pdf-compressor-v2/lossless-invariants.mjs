@@ -51,10 +51,17 @@ async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
     if(!/Junk found after end of compressed data/i.test(String(error)))throw error;
-    let padding=0;
-    for(let i=bytes.length-1;i>=0&&padding<16&&[0,9,10,12,13,32].includes(bytes[i]);i--)padding++;
-    if(padding===0)throw error;
-    return boundedInflateStrict(bytes.subarray(0,bytes.length-padding),maxBytes);
+    // The zlib Adler checksum itself can end in PDF whitespace bytes.
+    // Test one byte at a time and accept only a checksum-valid complete
+    // stream; stripping all whitespace at once can truncate valid data.
+    for(let trim=1;trim<=16&&trim<bytes.length;trim++){
+      if(![0,9,10,12,13,32].includes(bytes[bytes.length-trim]))break;
+      try{return await boundedInflateStrict(bytes.subarray(0,bytes.length-trim),maxBytes);}
+      catch(retryError){
+        if(retryError?.code==='decoded-stream-limit')throw retryError;
+      }
+    }
+    throw error;
   }
 }
 function decodeAscii(bytes,filter,maxBytes){
