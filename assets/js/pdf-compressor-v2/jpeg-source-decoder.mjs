@@ -18,7 +18,15 @@ function scanRemainder(bytes,start){
     const marker=bytes[i++];
     if(marker===0||marker>=208&&marker<=215)continue;
     if(++segments>10000)throw Error('invalid-source-jpeg');
-    if(marker===217)return metadataAfterScan||i<bytes.length;
+    if(marker===217){
+      // Some valid PDF image streams include one or more PDF whitespace bytes
+      // after JPEG EOI. Ignore only this bounded terminator padding, never
+      // arbitrary trailing payloads or unexpected post-scan metadata markers.
+      const trailing=bytes.length-i;
+      if(trailing>16)return true;
+      for(;i<bytes.length;i++)if(![0,9,10,12,13,32].includes(bytes[i]))return true;
+      return metadataAfterScan;
+    }
     if(marker===220)throw Error('unsupported-jpeg-dnl');
     if([192,193,194].includes(marker))throw Error('duplicate-jpeg-frame');
     if(marker>=224&&marker<=239||marker===254){metadataAfterScan=true;skip();}
