@@ -63,3 +63,48 @@ export function validatePdfPages(pdf,pageCount=1){
    throw Error('Generated PDF page dimensions are not A4.');
  return {width,height,pages:pages.length};
 }
+
+// Application-document requirements are entered by the user; 0 means unspecified.
+// Keep the existing max-only validation contract for previously verified callers.
+export function checkApplicationSizeRange(minimumKB,maximumKB){
+ if(!Number.isFinite(minimumKB)||!Number.isFinite(maximumKB)||
+    minimumKB<0||maximumKB<0||minimumKB>50000||maximumKB>50000)
+   throw Error('Enter valid minimum and maximum file sizes between 0 and 50,000 KB.');
+ if(maximumKB>0&&minimumKB>maximumKB)
+   throw Error('Minimum file size cannot exceed the maximum file size.');
+ return {minimumKB,maximumKB};
+}
+export function validateApplicationFileSize(blob,minimumKB=0,maximumKB=0){
+ checkApplicationSizeRange(minimumKB,maximumKB);
+ if(!blob||!Number.isFinite(blob.size)||blob.size<=0)
+   throw Error('The generated file is empty or invalid.');
+ if(minimumKB>0&&blob.size<minimumKB*1024)
+   throw Error('Output is '+(blob.size/1024).toFixed(1)+' KB, below the requested minimum '+minimumKB+
+     ' KB. Try a higher quality or different permitted dimensions/format. The previous output is preserved.');
+ if(maximumKB>0&&blob.size>maximumKB*1024)
+   throw Error('Output is '+(blob.size/1024).toFixed(1)+' KB, exceeding the requested maximum '+maximumKB+
+     ' KB. Reduce dimensions or quality. The previous output is preserved.');
+ return {kb:blob.size/1024,minimumKB,maximumKB};
+}
+// Detect actual bytes instead of trusting a Blob MIME label.
+export function sniffExportType(bytes){
+ if(!(bytes instanceof Uint8Array))bytes=new Uint8Array(bytes);
+ if(bytes.length>=8&&bytes[0]===137&&ascii(bytes,1,3)==='PNG'&&
+    bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10)return 'image/png';
+ if(bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255)return 'image/jpeg';
+ if(bytes.length>=12&&ascii(bytes,0,4)==='RIFF'&&ascii(bytes,8,4)==='WEBP')return 'image/webp';
+ if(bytes.length>=5&&ascii(bytes,0,5)==='%PDF-')return 'application/pdf';
+ return null;
+}
+export function validateExportSignature(bytes,expectedType){
+ const detected=sniffExportType(bytes);
+ if(detected!==expectedType)
+   throw Error('Generated file data does not match the requested format ('+expectedType+'). Export was not saved.');
+ return detected;
+}
+export function validateDecodedImageDimensions(actualWidth,actualHeight,expectedWidth,expectedHeight){
+ if(!Number.isSafeInteger(actualWidth)||!Number.isSafeInteger(actualHeight)||
+    actualWidth!==expectedWidth||actualHeight!==expectedHeight)
+   throw Error('Generated image dimensions do not match the requested dimensions. Export was not saved.');
+ return {width:actualWidth,height:actualHeight};
+}

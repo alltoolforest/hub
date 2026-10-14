@@ -41,3 +41,53 @@ body[data-tool="application-document-prep"] .app-advanced-settings summary:focus
 @media(max-width:340px){
  body[data-tool="application-document-prep"] .app-crop-fields{grid-template-columns:1fr}
 }
+
+/* Task 4 — scoped, accessible guided workflow; no global layout overrides. */
+body[data-tool="application-document-prep"] .app-step-title{
+ font-size:17px;line-height:1.45;font-weight:700;margin:23px 0 10px;
+ color:#183e2c;overflow-wrap:anywhere;
+}
+body[data-tool="application-document-prep"] .app-workflow-fields{margin:0 0 6px}
+body[data-tool="application-document-prep"] .app-guidance{margin:4px 0 16px}
+body[data-tool="application-document-prep"] .app-field-help{
+ display:block;font-size:13px;line-height:1.5;color:#4d6257;margin:3px 0 0;
+}
+body[data-tool="application-document-prep"] .app-size-error{
+ margin:12px 0;padding:12px;border:2px solid #a33131;
+ border-radius:8px;color:#812121;background:#fff5f4;line-height:1.5;
+}
+body[data-tool="application-document-prep"] .field [aria-invalid="true"]{
+ border:2px solid #a33131;
+}
+body[data-tool="application-document-prep"] .app-output-status[data-output-state="outdated"]{
+ background:#fff8ec;border-left:4px solid #a15a1a;color:#683e12;
+}
+body[data-tool="application-document-prep"] .app-output-status[data-output-state="verified"]{
+ border-left-width:4px;
+}
+body[data-tool="application-document-prep"] .app-review-help{
+ margin:10px 0 4px;padding:10px 12px;line-height:1.6;
+ border:1px solid #dce6e0;border-radius:8px;background:#fafcfb;
+}
+body[data-tool="application-document-prep"] #downloads .download-row[data-output-state="outdated"]{
+ border:2px solid #a15a1a;
+}
+body[data-tool="application-document-prep"] .workspace :is(button,a.button,input,select,textarea,summary):focus-visible{
+ outline:3px solid #2362bd;outline-offset:3px;
+}
+body[data-tool="application-document-prep"] .workspace .actions button{
+ min-height:44px;white-space:normal;text-align:center;
+}
+body[data-tool="application-document-prep"] .workspace #downloads .download-row{min-width:0;}
+body[data-tool="application-document-prep"] .workspace #downloads .download-row a{
+ min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+}
+body[data-tool="application-document-prep"] .app-crop-panel input{min-width:0}
+body[data-tool="application-document-prep"] #status:focus{outline:2px solid #2362bd;outline-offset:3px}
+@media(max-width:700px){
+ body[data-tool="application-document-prep"] .app-step-title{font-size:16px;margin-top:20px}
+ body[data-tool="application-document-prep"] .workspace .actions{min-width:0}
+ body[data-tool="application-document-prep"] .workspace .actions button{width:100%}
+ body[data-tool="application-document-prep"] .workspace #downloads .download-row{flex-direction:column;align-items:stretch}
+ body[data-tool="application-document-prep"] .workspace #downloads .download-row a{width:100%}
+}
