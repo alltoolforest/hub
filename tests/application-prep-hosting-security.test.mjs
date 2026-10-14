@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const policy=readFileSync(new URL('../security/application-prep/hosting/cloudflare-pages/_headers',import.meta.url),'utf8');
-const groups=policy.split(/\r?\n(?=\/(?:hub\/)?documents\/application-document-prep\/\*)/).map(g=>g.trim()).filter(Boolean);
+const groups=policy.split(/\r?\n(?=\/(?:hub\/)?documents\/application-document-prep\/\*)/).map(g=>g.trim()).filter(g=>g.startsWith('/'));
 test('headers apply only to Application Document Prep; never global frozen tools',()=>{
  const patterns=policy.split('\n').filter(s=>s.startsWith('/'));
  assert.deepEqual(patterns,[
