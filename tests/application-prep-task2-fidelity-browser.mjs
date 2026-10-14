@@ -18,7 +18,11 @@ async function ready(text,selector='.app-output-status'){
 }
 async function importFile(name,mimeType,buffer){
  await page.locator('#file-input').setInputFiles({name,mimeType,buffer});
- await ready('Selected: '+name,'.selected-files');
+ try{await ready('Selected: '+name,'.selected-files');}
+ catch(error){
+  const message=await page.locator('#status').textContent().catch(()=>'<no status>');
+  throw Error('Image import '+name+' failed. Tool status: '+message+'. Original error: '+error.message);
+ }
 }
 async function createImage(type){
  await page.locator('#format').selectOption(type);
