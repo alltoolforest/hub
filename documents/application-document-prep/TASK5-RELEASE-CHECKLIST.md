@@ -15,12 +15,13 @@ Launch-Ready Remediation Master Blueprint v1.0. This file is a **tool-local veri
 
 1. Site owner approves the real public host, canonical HTTPS domain and public contact.
 2. Site-wide approved deployment workstream updates `site-config.json`, `robots.txt`, `sitemap.xml` and this page's static canonical/robots metadata **together**, avoiding placeholders, staging canonical or unapproved indexing.
-3. Hosting actually delivers `Content-Security-Policy` with `frame-ancestors 'none'` (or verified `X-Frame-Options: DENY`), `X-Content-Type-Options: nosniff`, `Referrer-Policy` and `Permissions-Policy`. The page CSP meta is an interim browser mitigation, not a substitute.
-4. On the exact published HTTPS URL, run `PUBLIC_LAUNCH=1 node tests/application-prep-task5-release-check.mjs`; it must pass with the **real** live headers.
-5. Confirm the browser makes no document/file upload requests and only fetches audited same-origin libraries. Confirm privacy text matches actual delivery/CDN behavior.
-6. Recheck no personal files are retained in application storage, telemetry, network logs or exception messages beyond normal hosting access logs.
-7. Confirm search indexability, one canonical, non-placeholder sitemap URL, heading/title/description, mobile viewport, no indexing errors.
-8. Obtain explicit release authorization; do not deploy or freeze as part of this Task 5 PR.
+3. Document security sign-off for the **Application Prep page-only** `script-src 'unsafe-eval'` compatibility exception required by the bundled HEIC decoder. Preserve same-origin-only scripting and network restrictions. For public approval set `HEIC_LEGACY_EVAL_APPROVED=1` only after explicit risk acceptance; a CSP-compatible replacement decoder needs a separately authorized future release.
+4. Hosting actually delivers `Content-Security-Policy` with `frame-ancestors 'none'` (or verified `X-Frame-Options: DENY`), `X-Content-Type-Options: nosniff`, `Referrer-Policy` and `Permissions-Policy`. The page CSP meta is an interim browser mitigation, not a substitute.
+5. On the exact published HTTPS URL, run `PUBLIC_LAUNCH=1 node tests/application-prep-task5-release-check.mjs`; it must pass with the **real** live headers.
+6. Confirm the browser makes no document/file upload requests and only fetches audited same-origin libraries. Confirm privacy text matches actual delivery/CDN behavior.
+7. Recheck no personal files are retained in application storage, telemetry, network logs or exception messages beyond normal hosting access logs.
+8. Confirm search indexability, one canonical, non-placeholder sitemap URL, heading/title/description, mobile viewport, no indexing errors.
+9. Obtain explicit release authorization; do not deploy or freeze as part of this Task 5 PR.
 
 ## Required release sequence (do not skip)
 
