@@ -4,6 +4,7 @@ on:
     paths:
       - 'security/application-prep/**'
       - 'tests/application-prep-hosting-security.test.mjs'
+      - 'tests/application-prep-live-header-gate*.mjs'
       - 'tests/application-prep-heic-csp-experiment.mjs'
       - '.github/workflows/application-prep-security-remediation.yml'
   workflow_dispatch:
@@ -25,7 +26,8 @@ jobs:
       - name: Assert scope and hosting-header contract
         run: |
           node --check tests/application-prep-heic-csp-experiment.mjs
-          node --test tests/application-prep-hosting-security.test.mjs
+          node --test tests/application-prep-hosting-security.test.mjs tests/application-prep-live-header-gate.test.mjs
+          node --check tests/application-prep-live-header-gate.mjs
           node --test tests/application-prep-task1.test.mjs tests/application-prep-task1-integrity.test.mjs tests/application-prep-task2.test.mjs tests/application-prep-task3-resources.test.mjs
       - name: Install isolated, exact-version CSP-capable HEIC trial
         run: |
