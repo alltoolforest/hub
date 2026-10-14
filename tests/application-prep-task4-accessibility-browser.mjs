@@ -14,7 +14,7 @@ const ready=(selector,text)=>page.waitForFunction(([s,v])=>
 try{
  await page.goto(base+'/documents/application-document-prep/',{waitUntil:'networkidle'});
  await page.locator('#app-workflow').waitFor();
- await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+ await page.addScriptTag({url:base+'/node_modules/axe-core/axe.min.js'}); // Same-origin script required by Task 5 CSP.
  const checkA11y=async state=>{
   const audit=await page.evaluate(async()=>{
    return window.axe.run('#workspace',{
