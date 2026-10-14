@@ -17,7 +17,7 @@ export function createIndependentTextReader(pdfjs){
         if(signal?.aborted)throw new OutputIntegrityError('cancelled');
         const page=await doc.getPage(n);
         try{
-          const text=await readPageTextContent(page,{signal,maxTextItems:maxItems});
+          const text=await readPageTextContent(page,{signal,maxTextItems:collector.remainingItems});
           await collector.add(page,text);
         }finally{page.cleanup();}
       }
@@ -31,7 +31,7 @@ export function createIndependentTextReader(pdfjs){
 
 export function createTextFingerprintCollector({maxItems=200000,maxCharacters=2000000}={}){
  const pages=[];let totalItems=0,totalCharacters=0;
- return {pages,async add(page,text){
+ return {pages,get remainingItems(){return maxItems-totalItems;},async add(page,text){
   totalItems+=text.items.length;
   if(totalItems>maxItems)throw new OutputIntegrityError('text-limit');
   const items=[];

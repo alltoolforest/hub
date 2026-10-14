@@ -8,7 +8,7 @@ export function createIndependentReaders(pdfjs){
  return {
   async readPages(bytes,options={}){
    const collector=createTextFingerprintCollector();
-   const reader=createIndependentInputReader(pdfjs,{onPageText:collector.add});
+   const reader=createIndependentInputReader(pdfjs,{onPageText:collector.add,getMaxTextItems:()=>collector.remainingItems});
    const report=await reader(bytes,options);
    const digest=await digestPDFBytes(bytes);
    options.signal?.throwIfAborted();

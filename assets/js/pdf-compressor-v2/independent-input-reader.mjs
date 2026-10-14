@@ -22,7 +22,7 @@ export async function readPageTextContent(page,{signal,maxTextItems=200000}={}){
     return {items,styles,lang};
   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-export function createIndependentInputReader(pdfjs,{onPageText}={}){
+export function createIndependentInputReader(pdfjs,{onPageText,getMaxTextItems}={}){
   if(typeof pdfjs?.getDocument!=='function')throw new TypeError('PDF.js is required');
   return async (bytes,{signal,maxPages=500,maxOperators=200000,maxImagePixels=8000000}={})=>{
     const task=pdfjs.getDocument({data:bytes.slice(),stopAtErrors:true,
@@ -45,7 +45,7 @@ export function createIndependentInputReader(pdfjs,{onPageText}={}){
         if(signal?.aborted)throw new InputInspectionError('cancelled','Inspection cancelled.');
         const page=await doc.getPage(i);
         try{
-          const text=await readPageTextContent(page,{signal});
+          const text=await readPageTextContent(page,{signal,maxTextItems:getMaxTextItems?.()??200000});
           if(onPageText)await onPageText(page,text);
           const list=await page.getOperatorList();
           operations+=list.fnArray.length;
