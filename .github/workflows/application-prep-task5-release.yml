@@ -32,7 +32,7 @@ jobs:
         run: node tests/application-prep-task5-release-check.mjs
       - name: Install Playwright
         run: |
-          npm install --no-save --ignore-scripts playwright@1.56.1
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
           npx playwright install --with-deps ${{ matrix.browser }}
       - name: Browser checks for file confidentiality and CSP
         env:
@@ -41,3 +41,11 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/application-prep-task5-http.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/documents/application-document-prep/ >/dev/null && break || sleep 1; done
           node tests/application-prep-task5-security-browser.mjs
+      - name: Full prior browser regression under the Task 5 CSP
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          node tests/application-prep-task1-integrity-browser.mjs
+          node tests/application-prep-task2-fidelity-browser.mjs
+          node tests/application-prep-task3-browser.mjs
+          node tests/application-prep-task4-accessibility-browser.mjs
