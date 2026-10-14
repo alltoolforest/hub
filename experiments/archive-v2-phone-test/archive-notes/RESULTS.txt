@@ -1,0 +1,23 @@
+## 1. Detail added by default settings (band-energy gain; 1.00 = no change), mean over all test images
+scale      1px   2px   4px   8px  16px
+v1     1.10  1.06  1.04  1.03  1.03 
+v2     1.09  1.16  1.20  1.21  1.19
+
+## 2. Denoise/deblock fidelity vs. clean ground truth (PSNR dB / SSIM, mean of 5 photos; denoise stage only for v2)
+white noise l8/c6              input 28.89/0.657   v2 31.73/0.859   (+2.84 dB)
+camera-like l5/c3 + JPEG q80   input 32.83/0.849   v2 33.43/0.896   (+0.60 dB)
+correlated l7/c4 + JPEG q55    input 30.28/0.786   v2 31.13/0.847   (+0.85 dB)
+JPEG q35 only                  input 30.94/0.873   v2 30.91/0.873   (-0.03 dB)
+
+## 3. Sharpening on softened photos: fine-band energy relative to the sharp original (1.00 = fully restored; >1 = overshoot)
+blur s0.9 + JPEG88  input      1px 0.39  2px 0.75   PSNR 30.08 SSIM 0.885
+blur s0.9 + JPEG88  v2 auto    1px 0.47  2px 0.90   PSNR 29.70 SSIM 0.878
+blur s0.9 + JPEG88  v2 medium  1px 0.51  2px 0.94   PSNR 29.67 SSIM 0.880
+blur s1.4           input      1px 0.22  2px 0.58   PSNR 28.11 SSIM 0.843
+blur s1.4           v2 auto    1px 0.28  2px 0.70   PSNR 28.27 SSIM 0.839
+blur s1.4           v2 medium  1px 0.29  2px 0.73   PSNR 28.36 SSIM 0.843
+
+## 4. Noise estimate vs injected luma sigma (white noise)
+sigma 3: astronaut=4.2 chelsea=4.2 coffee=4.2 hopper=4.7 rocket=3.5
+sigma 6: astronaut=7.0 chelsea=7.0 coffee=7.7 hopper=7.0 rocket=7.0
+sigma 10: astronaut=10.5 chelsea=10.5 coffee=11.2 hopper=10.5 rocket=10.5
