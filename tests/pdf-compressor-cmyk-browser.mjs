@@ -1,6 +1,7 @@
 // Synthetic Adobe YCCK fixture; no user-owned PDF content is committed.
 // Checks independently verified image recompression, color and text stability.
 import assert from 'node:assert/strict';
+import {deflateSync} from 'node:zlib';
 import {chromium} from 'playwright';
 import PDF from '../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js';
 import {checkRenderedOutput} from './pdf-compressor-task5-render-check.mjs';
@@ -10,6 +11,10 @@ assert.equal(ycck[3],0xee);
 const paddedYcck=Buffer.concat([ycck,Buffer.from([10])]);
 const doc=await PDF.PDFDocument.create(),page=doc.addPage([200,200]);
 const N=PDF.PDFName.of;
+// This document also contains a legitimate Flate stream followed by an LF.
+// Chromium's native DecompressionStream rejects the untrimmed bytes.
+const paddedFlate=new Uint8Array([...deflateSync(Buffer.from('legacy Flate content test')),10]);
+doc.context.register(doc.context.stream(paddedFlate,{Filter:'FlateDecode'}));
 const image=doc.context.register(doc.context.stream(new Uint8Array(paddedYcck),{
   Type:'XObject',Subtype:'Image',Width:64,Height:64,BitsPerComponent:8,
   ColorSpace:'DeviceCMYK',Filter:'DCTDecode'}));
