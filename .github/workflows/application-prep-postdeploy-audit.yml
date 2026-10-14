@@ -54,7 +54,29 @@ jobs:
           node --check tests/application-prep-final-live-reliability.mjs
           node --check tests/application-prep-final-live-accessibility.mjs
           node --check tests/application-prep-final-live-security.mjs
-          git diff --name-only c5d82369191b0a9f7be5b6b0b804db659bed8672 HEAD | grep -Ev '^(tests/application-prep-(postdeploy-audit|final-live-[a-z]+)\\.mjs|\\.github/workflows/application-prep-postdeploy-audit\\.yml)$' && { echo 'NON-QA CODE CHANGED!'; exit 1; } || true
+          unexpected="$(git diff --name-only c5d82369191b0a9f7be5b6b0b804db659bed8672 HEAD | grep -Ev '^(tests/application-prep-(postdeploy-audit|final-live-[a-z]+)\\.mjs|\\.github/workflows/application-prep-postdeploy-audit\\.yml)
+      - name: Install QA-only browser dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Validate pixel fidelity, EXIF, PNG/JPEG, output-size constraints and PDF rendering LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-fidelity.mjs
+      - name: Validate mobile preflight, repeated outputs and import-failure recovery LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-reliability.mjs
+      - name: Validate WCAG guided flow, keyboard control, stale states and mobile reflow LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-accessibility.mjs
+      - name: Validate malicious-file handling, CSP and privacy LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-security.mjs
+ || true)"
+          if [ -n "$unexpected" ]; then echo "NON-QA CODE CHANGED: $unexpected"; exit 1; fi
       - name: Install QA-only browser dependencies
         run: |
           npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
