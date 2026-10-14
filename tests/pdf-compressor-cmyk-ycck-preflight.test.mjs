@@ -61,4 +61,31 @@ test('conflicting repeated Adobe transforms and malformed EXIF segments still fa
     e=>e.code==='image-header-unverifiable');
  }
 });
+test('JPEG images with up to 16 PDF whitespace bytes after EOI remain inspectable',async()=>{
+ for(const suffix of [Buffer.from([10]),Buffer.from([13,10]),Buffer.from([32,9,0,12])]){
+  const doc=await PDF.PDFDocument.create(),page=doc.addPage([600,800]),N=PDF.PDFName.of;
+  const jpg=Buffer.concat([source,suffix]);
+  const image=doc.context.register(doc.context.stream(new Uint8Array(jpg),{
+   Type:'XObject',Subtype:'Image',Width:16,Height:16,BitsPerComponent:8,
+   ColorSpace:'DeviceCMYK',Filter:'DCTDecode'}));
+  page.node.set(N('Resources'),doc.context.obj({XObject:{Image:image}}));
+  page.pushOperators(PDF.pushGraphicsState(),PDF.scale(600,800),PDF.drawObject('Image'),PDF.popGraphicsState());
+  const bytes=new Uint8Array(await doc.save({useObjectStreams:false}));
+  const report=await inspectPDFInput(bytes,{PDF,readPages:pages});
+  assert.equal(report.images.length,1);
+ }
+});
+test('non-whitespace JPEG data after EOI and excessive padding remain rejected',async()=>{
+ for(const suffix of [Buffer.from([0,1]),Buffer.from([10,32,255]),Buffer.alloc(17,10)]){
+  const doc=await PDF.PDFDocument.create(),page=doc.addPage([600,800]),N=PDF.PDFName.of;
+  const image=doc.context.register(doc.context.stream(
+   new Uint8Array(Buffer.concat([source,suffix])),{
+   Type:'XObject',Subtype:'Image',Width:16,Height:16,
+   BitsPerComponent:8,ColorSpace:'DeviceCMYK',Filter:'DCTDecode'}));
+  page.node.set(N('Resources'),doc.context.obj({XObject:{Image:image}}));
+  page.pushOperators(PDF.pushGraphicsState(),PDF.scale(600,800),PDF.drawObject('Image'),PDF.popGraphicsState());
+  await assert.rejects(inspectPDFInput(new Uint8Array(await doc.save({useObjectStreams:false})),{PDF,readPages:pages}),
+    e=>e.code==='image-header-unverifiable');
+ }
+});
 test.todo('CMYK/YCCK JPEG re-encoding and independently verified file-size reduction on a real-world scan');
