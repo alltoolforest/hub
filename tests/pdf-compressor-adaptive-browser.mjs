@@ -40,13 +40,26 @@ try{
         PDF:window.PDFLib,readPages,mode:'strong',encodeJpeg:encodeBrowserJpeg,
         decodeJpeg:async()=>({status:'preserve'}),
         verifyJpeg:input=>verifyBrowserJpeg(input,{decodeJpeg:async()=>({status:'preserve'})})});
+      const {createIndependentReaders}=await import('/assets/js/pdf-compressor-v2/independent-readers.mjs');
+      const {createQpdfLosslessProvider}=await import('/assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs');
+      const {compressAndVerifyPDF}=await import('/assets/js/pdf-compressor-v2/output-integrity.mjs');
+      const qpdf=await import('/assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs');
+      const readers=createIndependentReaders(pdfjs);
+      const final=await compressAndVerifyPDF(data,{PDF:window.PDFLib,
+        ...readers,optimize:createQpdfLosslessProvider(qpdf.default),
+        mode:'strong',encodeJpeg:encodeBrowserJpeg,decodeJpeg:async()=>({status:'preserve'}),
+        verifyJpeg:input=>verifyBrowserJpeg(input,{decodeJpeg:async()=>({status:'preserve'})})});
       return {status:result.status,inputBytes:data.length,outputBytes:result.bytes.length,
-        replacements:result.replacements};
+        replacements:result.replacements,finalStatus:final.status,finalBytes:final.outputBytes,
+        integrityVerified:final.integrity?.independentTextVerified};
     }catch(e){return {error:String(e),stack:String(e?.stack).slice(0,1200)};}
   });
   assert.equal(result.error,undefined,JSON.stringify(result));
   assert.equal(result.status,'compressed',JSON.stringify(result));
   assert.ok(result.outputBytes<result.inputBytes,JSON.stringify(result));
   assert.equal(result.replacements,1);
+  assert.equal(result.finalStatus,'compressed',JSON.stringify(result));
+  assert.ok(result.finalBytes<result.inputBytes,JSON.stringify(result));
+  assert.equal(result.integrityVerified,true);
   console.log(JSON.stringify(result));
 }finally{await browser.close();await unlink(fixture).catch(()=>{}); }
