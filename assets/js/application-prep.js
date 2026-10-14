@@ -334,7 +334,7 @@ export async function mount(root){
   resultDetails.dataset.outputState='outdated';
   resultDetails.hidden=false;
   resultDetails.textContent='Outdated result: The available download was generated using earlier settings. Create a new file before submitting. Previous: '+lastResult.description;
-  for(const link of $$('#downloads a[download]')){
+  for(const link of root.querySelectorAll('#downloads a[download]')){
    link.setAttribute('aria-label','Download previous result for old settings. Regenerate before submitting.');
    link.closest('.download-row')?.setAttribute('data-output-state','outdated');
   }
@@ -516,8 +516,7 @@ export async function mount(root){
   resetCropFields();refreshRequirements();resultDetails.hidden=true;resultDetails.textContent='';reviewHelp.hidden=true;
   showSource();
  }));
- actions.before(el('h2',{class:'app-step-title',text:'5. Create and check the finished file'}));
- root.append(actions,resultDetails,reviewHelp);
+ root.append(el('h2',{class:'app-step-title',text:'5. Create and check the finished file'}),actions,resultDetails,reviewHelp);
  setupStatus(root);downloads(root);
  const statusElement=$('#status');
  statusElement.setAttribute('tabindex','-1');
