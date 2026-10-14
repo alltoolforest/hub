@@ -34,7 +34,7 @@ export function inspectJpegHeader(bytes){
     if(++segments>10000||bytes[i++]!==255)throw Error('invalid-source-jpeg');
     while(bytes[i]===255)i++;
     const marker=bytes[i++];
-    if(marker===218){if(!frame)throw Error('jpeg-frame-missing');return {...frame,metadata,unsupportedMetadata:unsupportedMetadata||scanRemainder(bytes,i)};}
+    if(marker===218){if(!frame)throw Error('jpeg-frame-missing');const metadataAfterScan=scanRemainder(bytes,i);return {...frame,metadata,metadataAfterScan,unsupportedMetadata:unsupportedMetadata||metadataAfterScan};}
     if(marker===220)throw Error('unsupported-jpeg-dnl');
     if(marker===217)throw Error('jpeg-frame-missing');
     if(marker===216||marker===0||marker>=208&&marker<=215)throw Error('invalid-source-jpeg');
