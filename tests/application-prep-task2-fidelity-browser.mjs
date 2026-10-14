@@ -124,6 +124,16 @@ try{
  const {width,height}=doc.getPage(0).getSize();
  assert.ok(Math.abs(width-595.28)<.3&&Math.abs(height-841.89)<.3);
  const rendering=await page.evaluate(async data=>{
+  // Compatibility shims only for the test's PDF.js visual inspection.
+  // This does not modify the production viewer or exported PDF.
+  if(!Map.prototype.getOrInsertComputed)Object.defineProperty(Map.prototype,'getOrInsertComputed',{
+   value:function(key,callback){if(!this.has(key))this.set(key,callback(key));return this.get(key);},
+   configurable:true
+  });
+  if(!Map.prototype.getOrInsert)Object.defineProperty(Map.prototype,'getOrInsert',{
+   value:function(key,value){if(!this.has(key))this.set(key,value);return this.get(key);},
+   configurable:true
+  });
   const pdfjs=await import('/assets/vendor/pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc='/assets/vendor/pdf.worker.mjs';
   const loaded=await pdfjs.getDocument({data:new Uint8Array(data),isEvalSupported:false}).promise;
