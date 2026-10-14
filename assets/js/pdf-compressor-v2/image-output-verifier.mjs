@@ -36,7 +36,17 @@ export function createImageOutputVerifier({PDF,readPages,verifyJpeg,limits}={}) 
     if(await losslessFingerprint(original,options)!==await losslessFingerprint(restored,options))
       throw Error('protected-document-structure-changed');
     const before=await readPages(original,{maxPages:limits?.maxPages,maxOperators:limits?.maxOperators,maxImagePixels:limits?.maxImagePixels}),after=await readPages(output,{maxPages:limits?.maxPages,maxOperators:limits?.maxOperators,maxImagePixels:limits?.maxImagePixels});
-    if(JSON.stringify(before)!==JSON.stringify(after))throw Error('independent-page-profile-changed');
+    // PDF.js may omit an image-paint operation when the source XObject exceeds
+    // its safe maxImageSize. The approved candidate is smaller and paints again.
+    // This one count can therefore change even though the complete original
+    // PDF graph was restored and verified above (including page operators).
+    // NEVER exempt text, geometry, annotations, links, or ordinary images.
+    const oversized=replacements.some(r=>r.descriptor.width*r.descriptor.height>
+      (limits?.maxImagePixels??8000000));
+    const stripPaints=pages=>pages.map(({imagePaints,...protectedFields})=>protectedFields);
+    if(JSON.stringify(before)!==JSON.stringify(after)&&
+      (!oversized||JSON.stringify(stripPaints(before))!==JSON.stringify(stripPaints(after))))
+      throw Error('independent-page-profile-changed');
     return true;
   };
 }
