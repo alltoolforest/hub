@@ -37,7 +37,7 @@ jobs:
       - name: Input integrity and adjacent compressor regression
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
-        run: node --test tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
+        run: node --test tests/pdf-compressor-font-dedup.test.mjs tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
       - name: Isolated browser input gate
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
@@ -167,6 +167,8 @@ jobs:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
         run: node tests/pdf-compressor-task4-source-gate.mjs
       - name: Module-worker and strict-CSP compatibility in three browser engines
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
         run: |
           python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-lossless-server.log 2>&1 &
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task4-worker-browser.mjs

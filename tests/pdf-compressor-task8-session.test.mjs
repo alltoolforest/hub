@@ -91,3 +91,13 @@ test('expired worker messages and visibility restoration cannot release stale ou
   visibilityTarget.dispatchEvent(new Event('visibilitychange'));assert.equal(terminated,1);
  }
 });
+
+test('fast selection only checks boundaries; invalid, oversize and cancelled files fail before processing',async()=>{
+ const {preflightPDFFile}=await import('../assets/js/pdf-compressor-v2/file-preflight.mjs');
+ const limits={maxBytes:1000};const file=new File(['%PDF-1.7\nnot a parsed document\n%%EOF\n'],'preflight.pdf');
+ assert.deepEqual(await preflightPDFFile(file,{limits}),{valid:true,sourceBytes:file.size,preflightOnly:true});
+ await assert.rejects(preflightPDFFile(new File(['not PDF'.repeat(10)],'bad.pdf'),{limits}),e=>e.code==='unsupported-header');
+ await assert.rejects(preflightPDFFile(new File(['%PDF-1.7\nincomplete file'],'bad.pdf'),{limits}),e=>e.code==='incomplete-pdf');
+ await assert.rejects(preflightPDFFile({size:1001,slice:()=>{throw Error('must not read');}},{limits}),e=>e.code==='file-limit');
+ const controller=new AbortController();controller.abort();await assert.rejects(preflightPDFFile(file,{limits,signal:controller.signal}));
+});

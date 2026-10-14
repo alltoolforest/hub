@@ -1,7 +1,7 @@
 // Private input stays local. Exercise the actual downloadable candidate, not a substitute worker.
 import {chromium} from 'playwright';
 import {pathToFileURL} from 'node:url';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch();
 try{
@@ -19,5 +19,10 @@ try{
  const evidence=await page.evaluate(()=>{const s=RC_UI.session.snapshot(),r=s.result;return {state:s.state,error:s.error,inputBytes:r?.inputBytes,outputBytes:r?.outputBytes,engineMs:r?.engineMs,verified:r?.integrity?.independentTextVerified,phases:QA_PHASES,workers:RC_RESOURCES};});
  Object.assign(evidence,{inspectMs,compressMs:Date.now()-compressionStart,pageCpuThrottleRate:rate,noRemoteRequests:remote.length===0});
  console.log(JSON.stringify(evidence));if(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE)writeFileSync(process.env.PDF_COMPRESSOR_LARGE_EVIDENCE,JSON.stringify(evidence,null,2));
+ if(evidence.state==='completed'&&process.env.PDF_COMPRESSOR_PRIVATE_OUTPUT){
+  const pending=page.waitForEvent('download');await page.locator('[data-download]').click();
+  const download=await pending;const data=readFileSync(await download.path());
+  assert.equal(data.length,evidence.outputBytes);writeFileSync(process.env.PDF_COMPRESSOR_PRIVATE_OUTPUT,data);
+ }
  assert.equal(evidence.state,'completed');assert.equal(evidence.verified,true);assert.equal(evidence.workers.started,evidence.workers.terminated);assert.deepEqual(remote,[]);
 }finally{await browser.close();}

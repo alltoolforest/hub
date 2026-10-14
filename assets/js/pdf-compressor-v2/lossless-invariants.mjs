@@ -2,6 +2,7 @@
 // Conservative verifier only. It does not transform PDFs or approve an engine.
 // Unlike presence-only profiles, form values, outline destinations, annotation
 // dictionaries, attachments, tags, fonts and stream content participate in hashes.
+import {collectFontPrograms} from './font-program-policy.mjs';
 import {scalarBudget} from './scalar-budget.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
@@ -80,7 +81,8 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
   if(!(bytes instanceof Uint8Array)||!PDF?.PDFDocument)
     throw new LosslessInvariantError('invalid-invariant-input');
   const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
-  const {context}=doc,N=PDF.PDFName.of,seen=new Map(),reachableRefs=new Set(),imageCache=new Map();
+  const {context}=doc,N=PDF.PDFName.of,seen=new Map(),reachableRefs=new Set(),resourceCache=new Map();
+  const fontPrograms=collectFontPrograms(doc,PDF),streamCache=new WeakMap(),encodedCache=new Map();
   let entries=0,totalDecoded=0;
   const checkScalar=scalarBudget(PDF,code=>{throw new LosslessInvariantError(code);});
   async function canonical(value,depth=0){
@@ -97,10 +99,10 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
     if(value instanceof PDF.PDFNumber)return ['number',value.asNumber()];
     if(value instanceof PDF.PDFName)return ['name',value.decodeText()];
     if(value instanceof PDF.PDFRawStream||value instanceof PDF.PDFDict||value instanceof PDF.PDFArray){
-      const plainImage=isPlainOpaqueImage(value,PDF);
-      if(plainImage&&imageCache.has(value))return imageCache.get(value);
+      const plainResource=isPlainOpaqueImage(value,PDF)||fontPrograms.has(value);
+      if(plainResource&&resourceCache.has(value))return resourceCache.get(value);
       if(seen.has(value))return ['ref',seen.get(value)];
-      const id=plainImage?null:seen.size;if(!plainImage)seen.set(value,id);
+      const id=plainResource?null:seen.size;if(!plainResource)seen.set(value,id);
       if(value instanceof PDF.PDFArray){
         const items=[];for(let i=0;i<value.size();i++)items.push(await canonical(value.get(i),depth+1));
         return ['array',id,items];
@@ -114,23 +116,37 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         // part of the dictionary and cannot silently change.
         // Other filters are retained as encoded-byte invariants. This avoids
         // pretending that an unsupported decoder proves pixel equivalence.
-        let data=value.contents,consumed=0;
-        for(const filter of filters){
-          if(!['/FlateDecode','/ASCII85Decode','/ASCIIHexDecode'].includes(filter))break;
-          data=filter==='/FlateDecode'?await boundedInflate(data,maxStreamBytes):decodeAscii(data,filter,maxStreamBytes);
-          consumed++;
+        let cached=streamCache.get(value);
+        if(!cached){
+          // Repeated programs share decoding work, never dictionary identity.
+          // Bind the exact encoded bytes AND the ordered decoder chain.
+          const encodedDigest=await hash(value.contents);
+          const cacheKey=JSON.stringify(filters)+'|'+encodedDigest;
+          cached=encodedCache.get(cacheKey);
+          if(!cached){
+            let data=value.contents,consumed=0;
+            for(const filter of filters){
+              if(!['/FlateDecode','/ASCII85Decode','/ASCIIHexDecode'].includes(filter))break;
+              data=filter==='/FlateDecode'?await boundedInflate(data,maxStreamBytes):decodeAscii(data,filter,maxStreamBytes);
+              consumed++;
+            }
+            const remaining=filters.slice(consumed);
+            cached={remaining,length:data.length,digest:consumed?await hash(data):encodedDigest};
+            encodedCache.set(cacheKey,cached);
+          }
+          streamCache.set(value,cached);
         }
-        const remaining=filters.slice(consumed),decoded=remaining.length===0;
-        totalDecoded+=data.length;
-        if(data.length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
+        const {remaining,length,digest}=cached,decoded=remaining.length===0;
+        totalDecoded+=length;
+        if(length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
           throw new LosslessInvariantError('invariant-byte-budget');
         for(const key of dict.keys())checkScalar(key);
         const keys=dict.keys().filter(k=>!['/Length','/Filter'].includes(String(k)))
           .sort((a,b)=>String(a).localeCompare(String(b),'en'));
         const fields=[];for(const key of keys)fields.push([String(key),await canonical(dict.get(key),depth+1)]);
         if(remaining.length)fields.push(['/Filter',['filters',...remaining]]);
-        const snapshot=['stream',id,decoded?'decoded':'encoded',fields,await hash(data)];
-        if(plainImage)imageCache.set(value,snapshot);
+        const snapshot=['stream',id,decoded?'decoded':'encoded',fields,digest];
+        if(plainResource)resourceCache.set(value,snapshot);
         return snapshot;
       }
       const fields=[];for(const key of value.keys())checkScalar(key);
@@ -153,7 +169,7 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
     if(!['/ObjStm','/XRef'].includes(type)){
       // Normalize each orphan graph independently of original object numbers.
       // Sorting these snapshots preserves even detached material/history.
-      seen.clear();imageCache.clear();
+      seen.clear();resourceCache.clear();
       orphans.push(JSON.stringify(await canonical(ref)));
     }
   }

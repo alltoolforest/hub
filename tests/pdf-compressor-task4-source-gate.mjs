@@ -43,7 +43,7 @@ for(const id of ['digital','scanned','image-heavy','mixed','form','bookmarks','a
   inputs.push({id,bytes:(await buildFixture(id)).bytes});
 const independentDirectory=process.env.PDF_COMPRESSOR_INDEPENDENT_FIXTURES;
 if(!independentDirectory)throw Error('Generate the independent QA inputs before this gate.');
-for(const name of ['independent-text.pdf','independent-scan-color.pdf','independent-scan-gray.pdf'])
+for(const name of ['independent-text.pdf','independent-scan-color.pdf','independent-scan-gray.pdf','independent-repeated-fonts.pdf'])
   inputs.push({id:name.replace('.pdf',''),bytes:new Uint8Array(await readFile(resolve(independentDirectory,name)))});
 {
   const source=(await buildFixture('scanned')).bytes;

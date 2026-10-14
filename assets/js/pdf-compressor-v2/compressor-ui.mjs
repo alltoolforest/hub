@@ -39,7 +39,7 @@ export function mountCompressor(root,{engine,limits}={}){
     // Keep live status outside an aria-busy ancestor so progress can be announced.
     root.dataset.processing=String(busy);
     el('[data-source]').textContent=s.source?`Active PDF: ${s.source.name} · ${formatBytes(s.source.size)}`:'';
-    const statuses={empty:'Select a PDF to begin.',loading:'Checking your PDF…',ready:'PDF ready. Choose a mode and compress.',
+    const statuses={empty:'Select a PDF to begin.',loading:'Checking your PDF…',ready:'PDF selected. Full checks run when you compress.',
       processing:'Compressing and verifying your PDF…',cancelled:'Cancelled. You can retry with the same PDF.'};
     el('[data-status]').textContent=s.state==='failed'?s.error.message:
       s.state==='completed'?'Your verified PDF is ready to download.':statuses[s.state];

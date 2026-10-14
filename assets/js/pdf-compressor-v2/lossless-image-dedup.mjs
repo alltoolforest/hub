@@ -1,4 +1,5 @@
-// Task 4 exact-byte deduplication only. No codec, pixel conversion or metadata
+import {collectFontPrograms,reachableObjects} from './font-program-policy.mjs';
+// Exact-byte deduplication of opaque images and compatible font programs. No codec, pixel conversion or metadata
 // removal. Masked, tagged/structured, profiled and custom image dictionaries are
 // deliberately excluded. The final independent lossless verifier is mandatory.
 const allowedKeys=new Set(['/Type','/Subtype','/Width','/Height','/ColorSpace',
@@ -18,12 +19,15 @@ export function isPlainOpaqueImage(stream,PDF){
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
 export async function deduplicateOpaqueImages(bytes,{PDF,serializeClassic=false}={}){
   const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
+  const fonts=collectFontPrograms(doc,PDF),reachable=reachableObjects(doc,PDF);
   const {context}=doc,known=new Map(),replacements=new Map();
   for(const [ref,stream] of context.enumerateIndirectObjects()){
-    if(!isPlainOpaqueImage(stream,PDF))continue;
+    // Detached material/history stays intact, even when its bytes duplicate a font.
+    const font=fonts.has(stream)&&reachable.has(stream);
+    if(!isPlainOpaqueImage(stream,PDF)&&!font)continue;
     const fields=stream.dict.keys().filter(key=>String(key)!=='/Length')
       .sort((a,b)=>String(a).localeCompare(String(b),'en')).map(key=>[String(key),String(stream.dict.get(key))]);
-    const signature=JSON.stringify(fields)+'|'+await hash(stream.contents);
+    const signature=(font?'font:':'image:')+JSON.stringify(fields)+'|'+await hash(stream.contents);
     if(known.has(signature))replacements.set(String(ref),{from:ref,to:known.get(signature)});
     else known.set(signature,ref);
   }

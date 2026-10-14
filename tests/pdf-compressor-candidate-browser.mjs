@@ -30,6 +30,13 @@ try{
  await page.locator('[data-run]').click();await page.locator('[data-cancel]').click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>RC_UI.session.snapshot().state),'cancelled');assert.equal(await page.locator('[data-download]').isVisible(),false);
  await page.locator('[data-clear]').click();
+ const signed=(await buildFixture('signed-marker')).bytes;
+ await page.locator('#compressor-file').setInputFiles({name:'signed.pdf',mimeType:'application/pdf',buffer:Buffer.from(signed)});
+ await page.waitForFunction(()=>RC_UI.session.snapshot().state==='ready');await page.locator('[data-run]').click();
+ await page.waitForFunction(()=>RC_UI.session.snapshot().state==='failed');
+ assert.equal(await page.evaluate(()=>RC_UI.session.snapshot().error.code),'signed-pdf');
+ assert.equal(await page.locator('[data-download]').isVisible(),false);
+ await page.locator('[data-clear]').click();
  await page.evaluate(()=>RC_UI.session.select({name:'oversize.pdf',size:100000001,arrayBuffer:()=>{throw Error('must not read');}}));
  assert.match(await page.locator('[data-status]').textContent(),/100.00 MB/);await axeCheck();
  await page.locator('summary').click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);

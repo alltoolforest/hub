@@ -5,7 +5,7 @@ import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/indep
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
 import {compressAndVerifyPDF} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
-import {createIndependentTextReader} from '../assets/js/pdf-compressor-v2/independent-text-reader.mjs';
+import {createIndependentReaders} from '../assets/js/pdf-compressor-v2/independent-readers.mjs';
 import {encodeBrowserJpeg,verifyBrowserJpeg} from '../assets/js/pdf-compressor-v2/browser-image-codec.mjs';
 import {JpegImage} from '../node_modules/pdfjs-dist/image_decoders/pdf.image_decoders.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
@@ -20,8 +20,9 @@ self.onmessage=async event=>{
       const report=await inspectPDFInput(bytes,{PDF:self.PDFLib,readPages:createIndependentInputReader(pdfjs)});
       self.postMessage({ok:true,report});return;
     }
+    const {readPages,readText}=createIndependentReaders(pdfjs);
     const result=await compressAndVerifyPDF(bytes,{PDF:self.PDFLib,
-      readPages:createIndependentInputReader(pdfjs),readText:createIndependentTextReader(pdfjs),optimize:createQpdfLosslessProvider(createModule),
+      readPages,readText,optimize:createQpdfLosslessProvider(createModule),
       encodeJpeg:encodeBrowserJpeg,decodeJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),
       mode:event.data.mode,onProgress:stage=>self.postMessage({type:'progress',stage})});
     self.postMessage({ok:true,result},[result.bytes.buffer]);

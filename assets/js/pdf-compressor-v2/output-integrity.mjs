@@ -3,6 +3,7 @@
 import {inspectPDFInput,INPUT_LIMITS} from './input-inspector.mjs';
 import {compressPDF} from './compression-pipeline.mjs';
 import {createOperationPageReader} from './operation-page-reader.mjs';
+import {createOperationInspector} from './operation-inspector.mjs';
 import {MODES} from './mode-policy.mjs';
 export class OutputIntegrityError extends Error {
   constructor(code){super(code);this.name='OutputIntegrityError';this.code=code;}
@@ -14,7 +15,7 @@ export const digestPDFBytes=async bytes=>Array.from(new Uint8Array(
 
 // This is a final postcondition, not standalone authorization for arbitrary
 // lossy output. Only compressAndVerifyPDF supplies the verified stage composition.
-export async function verifyFinalOutput(original,result,{PDF,readPages,readText,signal,limits=INPUT_LIMITS}={}){
+export async function verifyFinalOutput(original,result,{PDF,readPages,readText,signal,limits=INPUT_LIMITS,inspectInput=inspectPDFInput}={}){
   cancel(signal);
   if(!(original instanceof Uint8Array)||!(result?.bytes instanceof Uint8Array)||
     !MODES.includes(result.mode)||typeof readText!=='function')fail('unverifiable-output');
@@ -23,8 +24,8 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
     result.outputBytes!==output.length||result.savedBytes!==saved||
     result.status!==(saved>0?'compressed':'original-retained'))fail('invalid-output-report');
   if(saved===0&&output.some((value,index)=>value!==original[index]))fail('false-original-fallback');
-  const before=await inspectPDFInput(original,{PDF,readPages,signal,limits});
-  const after=await inspectPDFInput(output,{PDF,readPages,signal,limits});
+  const before=await inspectInput(original,{PDF,readPages,signal,limits});
+  const after=await inspectInput(output,{PDF,readPages,signal,limits});
   for(const key of ['pageCount','classification','hasTextLayer','possibleOCR','geometry','pages','structures'])
     if(JSON.stringify(before[key])!==JSON.stringify(after[key]))fail('final-document-profile-changed');
   const sourceText=await readText(original,{signal});
@@ -40,6 +41,7 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
 }
 export async function compressAndVerifyPDF(bytes,options){
   options={...options,readPages:createOperationPageReader(options.readPages)};
+  options.inspectInput=createOperationInspector(options);
   const result=await compressPDF(bytes,options);
   options?.onProgress?.('final-output');
   const integrity=await verifyFinalOutput(bytes,result,options);
