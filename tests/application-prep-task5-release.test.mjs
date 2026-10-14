@@ -28,7 +28,8 @@ test('public launch fails until site-wide review-host blockers are resolved',()=
  for(const expected of ['Public domain configured','Public contact configured',
   'Robots indexing enabled','Sitemap matches public tool URL',
   'Canonical points to public URL','Delivered CSP anti-framing header',
-  'Delivered security headers','Review version not inadvertently advertised as public'])
+  'Delivered security headers','Legacy HEIC evaluator exception approved',
+  'Review version not inadvertently advertised as public'])
   assert.ok(failed.includes(expected),expected+' must block an unverified launch');
 });
 test('live deployment rejects missing delivered anti-framing and transport headers',()=>{
@@ -37,14 +38,14 @@ test('live deployment rejects missing delivered anti-framing and transport heade
   .replace('</head>','<link rel="canonical" href="https://example.com/documents/application-document-prep/"></head>');
  const good={domain,publicContactEmail:'contact@example.com'};
  const sitemapReady='<urlset><url><loc>https://example.com/documents/application-document-prep/</loc></url></urlset>';
- const x=audit({html:h,config:good,robots:'User-agent: *\nAllow: /',
+ const x=audit({html:h,config:good,legacyHeicEvalAccepted:true,robots:'User-agent: *\nAllow: /',
   sitemap:sitemapReady,publicLaunch:true,deliveredHeaders:{
    'content-security-policy':"default-src 'self'; frame-ancestors 'none'",
    'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
    'permissions-policy':'camera=(), microphone=()'
   }});
  assert.equal(x.ready,true,x.results.filter(x=>!x.pass).map(x=>x.name).join(', '));
- const bad=audit({html:h,config:good,robots:'Allow: /',sitemap:sitemapReady,publicLaunch:true,
+ const bad=audit({html:h,config:good,legacyHeicEvalAccepted:true,robots:'Allow: /',sitemap:sitemapReady,publicLaunch:true,
   deliveredHeaders:{'content-security-policy':"default-src 'self'"}});
  assert.equal(bad.ready,false);
 });
