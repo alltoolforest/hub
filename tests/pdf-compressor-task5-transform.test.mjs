@@ -31,6 +31,28 @@ test('real JPEG replacements reopen and preserve page content streams and geomet
     }});
   assert.equal(result.status,'compressed');assert.ok(result.savedBytes>0);assert.equal(verified,1);
 });
+test('one visually rejected image is preserved while other verified images still compress',async()=>{
+  const {bytes}=await buildFixture('image-heavy');
+  const original=await PDF.PDFDocument.load(bytes);
+  const N=PDF.PDFName.of;
+  const imageRefs=original.context.enumerateIndirectObjects().filter(([,value])=>
+    value instanceof PDF.PDFRawStream&&String(value.dict.get(N('Subtype')))==='/Image');
+  assert.ok(imageRefs.length>=3,'fixture requires multiple independently embedded images');
+  let evaluated=0,approved=null;
+  const result=await transformEmbeddedImages(bytes,{PDF,encodeJpeg,inspectInput,
+    verifyJpeg:async()=>++evaluated!==1,
+    verifyOutput:async value=>{approved=value;return true;}});
+  assert.equal(result.status,'compressed');
+  assert.equal(evaluated,imageRefs.length);
+  assert.equal(result.replacements,imageRefs.length-1);
+  assert.ok(result.savedBytes>0);
+  assert.ok(approved?.replacements?.length===result.replacements);
+  const output=await PDF.PDFDocument.load(result.bytes);
+  const originalImage=original.context.lookup(imageRefs[0][0]);
+  const retainedImage=output.context.lookup(imageRefs[0][0]);
+  assert.deepEqual(retainedImage.contents,originalImage.contents,
+    'the visually rejected source image must remain byte-for-byte unchanged');
+});
 test('missing or failed verifier cannot release an image output',async()=>{
   const {bytes}=await buildFixture('mixed');
   await assert.rejects(transformEmbeddedImages(bytes,{PDF}),/independent-verification-required/);
