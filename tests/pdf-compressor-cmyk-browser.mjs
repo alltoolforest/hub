@@ -27,6 +27,14 @@ try{
  const page=await browser.newPage();
  await page.goto('http://127.0.0.1:8766/tests/');
  await page.addScriptTag({url:'/assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js'});
+ const invalidFlate=new Uint8Array([...deflateSync(Buffer.from('strict-tail-test')),10,1]);
+ const rejectsJunk=await page.evaluate(async encoded=>{
+   const {inflateStreamBounded}=await import('/assets/js/pdf-compressor-v2/lossless-invariants.mjs');
+   try{await inflateStreamBounded(new Uint8Array(encoded),128);return false;}
+   catch{return true;}
+ },[...invalidFlate]);
+ assert.equal(rejectsJunk,true,'Strict browser decoder must reject non-whitespace Flate payloads');
+
  const r=await page.evaluate(async bytes=>{
    const pdfjs=await import('/node_modules/pdfjs-dist/legacy/build/pdf.mjs');
    const {JpegImage}=await import('/node_modules/pdfjs-dist/image_decoders/pdf.image_decoders.mjs');
