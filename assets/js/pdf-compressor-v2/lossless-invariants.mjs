@@ -122,7 +122,8 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         const channels=String(dict.get(N('ColorSpace')))==='/DeviceGray'?1:3;
         const streamedImage=plainResource&&String(dict.get(N('Subtype')))==='/Image'&&
           filters.length===1&&filters[0]==='/FlateDecode'&&
-          Number.isSafeInteger(width*height*channels)&&width*height*channels>maxStreamBytes;
+          Number.isSafeInteger(width*height*channels)&&width>0&&height>0&&
+          width*channels<=maxStreamBytes&&width*height*channels>maxStreamBytes;
         let cached=streamCache.get(value);
         if(!cached){
           // Repeated programs share decoding work, never dictionary identity.
