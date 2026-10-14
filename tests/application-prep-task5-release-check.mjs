@@ -11,7 +11,7 @@ const tag=(html,key)=>html.match(new RegExp('<meta\\s+[^>]*'+key+'[^>]*>','i'))?
 const has=(s,re)=>re.test(s);
 
 export function inspectApplicationPrepRelease({
- html,config,robots,sitemap,deliveredHeaders=null,publicLaunch=false
+ html,config,robots,sitemap,deliveredHeaders=null,publicLaunch=false,legacyHeicEvalAccepted=false
 }){
  const results=[];
  const check=(name,pass,reason)=>results.push({name,pass:Boolean(pass),reason});
@@ -40,6 +40,9 @@ export function inspectApplicationPrepRelease({
   has(robotsMeta,/noindex/i):!has(robotsMeta,/noindex|nofollow/i),
   publicLaunch?'Public page must remove staging noindex.':'Review build must stay noindex.');
  if(publicLaunch){
+  check('Legacy HEIC evaluator exception approved',
+    !/script-src[^;"<>]*'unsafe-eval'/i.test(csp)||legacyHeicEvalAccepted,
+    'Bundled HEIC conversion needs a page-scoped unsafe-eval exception; security reviewer must explicitly accept it or approve decoder migration.');
   check('Public domain configured',domainOK,'site-config.json domain must be set to a real hostname.');
   check('Public contact configured',/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(config?.publicContactEmail||''),
     'Public contact is necessary before launch; do not invent an address.');
@@ -79,7 +82,8 @@ async function main(){
    console.error('Could not verify live hosting response headers:',error.message);
   }
  }
- const result=inspectApplicationPrepRelease({html,config,robots,sitemap,publicLaunch,deliveredHeaders});
+ const result=inspectApplicationPrepRelease({html,config,robots,sitemap,publicLaunch,deliveredHeaders,
+  legacyHeicEvalAccepted:process.env.HEIC_LEGACY_EVAL_APPROVED==='1'});
  for(const item of result.results)console.log((item.pass?'PASS':'FAIL')+' '+item.name+' — '+item.reason);
  console.log('APPLICATION_PREP_RELEASE_CHECK '+JSON.stringify({
   mode:result.mode,ready:result.ready,
