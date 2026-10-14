@@ -148,6 +148,44 @@ try{
  },[...pdfBytes]);
  assert.ok(rendering.outer.slice(0,3).every(x=>x>245),'PDF page should be white');
  assert.ok(rendering.center.slice(0,3).every(x=>x<65),'PDF signature center should remain dark');
+ // A JPEG-backed PDF with a feasible cap must be compressed against the
+ // actual final PDF size, not only the intermediate JPEG byte count.
+ const detailSource=await page.evaluate(()=>{
+  const c=document.createElement('canvas');c.width=420;c.height=300;
+  const ctx=c.getContext('2d');
+  const image=ctx.createImageData(c.width,c.height);let seed=11935;
+  for(let i=0;i<image.data.length;i+=4){
+   seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+   const value=(seed>>>24);
+   image.data[i]=value;image.data[i+1]=(value*7)%256;
+   image.data[i+2]=(value*13)%256;image.data[i+3]=255;
+  }
+  ctx.putImageData(image,0,0);return c.toDataURL('image/png').split(',')[1];
+ });
+ await importFile('detailed-document.png','image/png',Buffer.from(detailSource,'base64'));
+ await page.locator('#format').selectOption('image/jpeg');
+ const jpegSizes=await page.locator('.canvas-frame canvas').evaluate(async c=>{
+  const toSize=quality=>new Promise(resolve=>c.toBlob(b=>resolve(b.size),'image/jpeg',quality));
+  return [await toSize(.35),await toSize(.90)];
+ });
+ assert.ok(jpegSizes[1]>jpegSizes[0]+12000,'JPEG quality range should be meaningful for this photo');
+ const targetKB=Math.ceil((jpegSizes[0]+jpegSizes[1])/2048);
+ assert.ok(targetKB*1024>jpegSizes[0]+4000);
+ await page.locator('#target').fill(String(targetKB));
+ await page.getByRole('button',{name:'Create supporting-image PDF'}).click();
+ await page.waitForFunction(()=>document.querySelector('.app-output-status')?.dataset.outputState==='verified'&&
+  document.querySelector('.app-output-status')?.textContent?.startsWith('Ready: single-page A4 PDF'),
+  null,{timeout:20000});
+ const constrainedDownload=page.waitForEvent('download');
+ await page.locator('#downloads a[download]').click();
+ const constrained=await constrainedDownload;
+ const constrainedBytes=await fs.readFile(await constrained.path());
+ assert.ok(constrainedBytes.length<=targetKB*1024,
+  'Final JPEG-backed PDF must satisfy the actual KB limit including container overhead');
+ const constrainedDoc=await PDFLib.PDFDocument.load(constrainedBytes);
+ assert.equal(constrainedDoc.getPageCount(),1);
+ await page.locator('#target').fill('0');
+
  // A camera JPEG with EXIF orientation 6 must load once, with upright dimensions
  // and correct spatial ordering after metadata is stripped by canvas export.
  const jpegRaw=Buffer.from(await page.evaluate(()=>{
