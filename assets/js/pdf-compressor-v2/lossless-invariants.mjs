@@ -5,6 +5,7 @@
 import {collectFontPrograms} from './font-program-policy.mjs';
 import {scalarBudget} from './scalar-budget.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
+import {streamFlateImage} from './streaming-flate-image.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
 export class LosslessInvariantError extends Error {
@@ -116,6 +117,12 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         // part of the dictionary and cannot silently change.
         // Other filters are retained as encoded-byte invariants. This avoids
         // pretending that an unsupported decoder proves pixel equivalence.
+        const width=context.lookup(dict.get(N('Width')))?.asNumber?.();
+        const height=context.lookup(dict.get(N('Height')))?.asNumber?.();
+        const channels=String(dict.get(N('ColorSpace')))==='/DeviceGray'?1:3;
+        const streamedImage=plainResource&&String(dict.get(N('Subtype')))==='/Image'&&
+          filters.length===1&&filters[0]==='/FlateDecode'&&
+          Number.isSafeInteger(width*height*channels)&&width*height*channels>maxStreamBytes;
         let cached=streamCache.get(value);
         if(!cached){
           // Repeated programs share decoding work, never dictionary identity.
@@ -123,6 +130,13 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
           const encodedDigest=await hash(value.contents);
           const cacheKey=JSON.stringify(filters)+'|'+encodedDigest;
           cached=encodedCache.get(cacheKey);
+          if(!cached&&streamedImage){
+            // Large unchanged image streams are validated incrementally and
+            // compared by exact encoded identity, never fully inflated in RAM.
+            await streamFlateImage(value.contents,{width,height,channels,maxRowBytes:maxStreamBytes});
+            cached={remaining:filters,length:value.contents.length,digest:encodedDigest,streamedImage:true};
+            encodedCache.set(cacheKey,cached);
+          }
           if(!cached){
             let data=value.contents,consumed=0;
             for(const filter of filters){
@@ -137,9 +151,11 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
           streamCache.set(value,cached);
         }
         const {remaining,length,digest}=cached,decoded=remaining.length===0;
-        totalDecoded+=length;
-        if(length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
-          throw new LosslessInvariantError('invariant-byte-budget');
+        if(!cached.streamedImage){
+          totalDecoded+=length;
+          if(length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
+            throw new LosslessInvariantError('invariant-byte-budget');
+        }
         for(const key of dict.keys())checkScalar(key);
         const keys=dict.keys().filter(k=>!['/Length','/Filter'].includes(String(k)))
           .sort((a,b)=>String(a).localeCompare(String(b),'en'));
