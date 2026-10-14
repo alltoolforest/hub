@@ -2,6 +2,7 @@
 // structure and independent reader. Not a production deployment test.
 import assert from 'node:assert/strict';
 import {deflateSync} from 'node:zlib';
+import {writeFile,unlink} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import PDF from '../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js';
 const width=3400,height=3400,raw=new Uint8Array(width*height*3);
@@ -19,18 +20,21 @@ pageDoc.node.set(N('Resources'),doc.context.obj({XObject:{Scan:ref}}));
 pageDoc.pushOperators(PDF.pushGraphicsState(),PDF.scale(600,800),PDF.drawObject('Scan'),PDF.popGraphicsState());
 const input=new Uint8Array(await doc.save({useObjectStreams:false}));
 assert.ok(input.length<100000000);
+const fixture=new URL('./.pdf-compressor-adaptive-fixture.pdf',import.meta.url);
+await writeFile(fixture,input);
 const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage();
   await page.goto('http://127.0.0.1:8766/tests/',{waitUntil:'domcontentloaded'});
   await page.addScriptTag({url:'/assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js'});
-  const result=await page.evaluate(async bytes=>{
+  const result=await page.evaluate(async()=>{
     const pdfjs=await import('/node_modules/pdfjs-dist/legacy/build/pdf.mjs');
     const {createIndependentInputReader}=await import('/assets/js/pdf-compressor-v2/independent-input-reader.mjs');
     const {runVerifiedImageCompression}=await import('/assets/js/pdf-compressor-v2/image-compression.mjs');
     const {encodeBrowserJpeg,verifyBrowserJpeg}=await import('/assets/js/pdf-compressor-v2/browser-image-codec.mjs');
     pdfjs.GlobalWorkerOptions.workerSrc='/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs';
-    const readPages=createIndependentInputReader(pdfjs),data=new Uint8Array(bytes);
+    const readPages=createIndependentInputReader(pdfjs),
+      data=new Uint8Array(await (await fetch('/tests/.pdf-compressor-adaptive-fixture.pdf')).arrayBuffer());
     try{
       const result=await runVerifiedImageCompression(data,{
         PDF:window.PDFLib,readPages,mode:'strong',encodeJpeg:encodeBrowserJpeg,
@@ -39,10 +43,10 @@ try{
       return {status:result.status,inputBytes:data.length,outputBytes:result.bytes.length,
         replacements:result.replacements};
     }catch(e){return {error:String(e),stack:String(e?.stack).slice(0,1200)};}
-  },input);
+  });
   assert.equal(result.error,undefined,JSON.stringify(result));
   assert.equal(result.status,'compressed',JSON.stringify(result));
   assert.ok(result.outputBytes<result.inputBytes,JSON.stringify(result));
   assert.equal(result.replacements,1);
   console.log(JSON.stringify(result));
-}finally{await browser.close();}
+}finally{await browser.close();await unlink(fixture).catch(()=>{}); }
