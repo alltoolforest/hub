@@ -1,0 +1,34 @@
+name: Application Prep Live GitHub Pages Audit
+on:
+  pull_request:
+    paths:
+      - 'tests/application-prep-postdeploy-audit.mjs'
+      - '.github/workflows/application-prep-postdeploy-audit.yml'
+  workflow_dispatch:
+jobs:
+  live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify audit script
+        run: node --check tests/application-prep-postdeploy-audit.mjs
+      - name: Install Playwright
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Inspect actual published response and browser outputs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          LIVE_SITE_URL: https://alltoolforest.github.io/hub/
+          EXPECTED_DEPLOY_SHA: c5d82369191b0a9f7be5b6b0b804db659bed8672
+        run: node tests/application-prep-postdeploy-audit.mjs
