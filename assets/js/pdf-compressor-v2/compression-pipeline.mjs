@@ -25,7 +25,7 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
   if(mode!=='lossless'&&plan.imageCandidates>0){
     onProgress('embedded-images');
     const image=await runVerifiedImageCompression(current,{PDF,readPages,encodeJpeg,
-      verifyJpeg,decodeJpeg,mode,signal,limits});
+      verifyJpeg,decodeJpeg,mode,signal,limits,inspectInput});
     checkCancel(signal);
     stages.push({engine:'embedded-images',status:image.status,
       inputBytes:current.length,outputBytes:image.bytes.length});
