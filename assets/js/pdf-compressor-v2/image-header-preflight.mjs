@@ -37,7 +37,28 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
   // or four-component frames mislabeled as RGB remain rejected.
   const preservedLegacyCmyk=adobeCmyk&&
     (adobe.length>1||frame.metadata.some(m=>[225,237].includes(m.marker)));
+  // Preserve common publishing/photography JPEG metadata exactly as-is.
+  // We can validate image framing and dictionary dimensions without assuming
+  // EXIF orientation/Photoshop resource blocks survive RGB re-encoding.
+  // createPDFJpegDecoder already refuses transformation when either marker
+  // is present (unsupportedMetadata): this broadens INPUT compatibility only.
+  const compatibleLegacyMetadata=m=>{
+    if(m.marker===225) // APP1: standard EXIF signature, not arbitrary payload
+      return m.bytes.length>=10&&[69,120,105,102,0,0].every((n,i)=>m.bytes[i+4]===n);
+    if(m.marker===237) // APP13: Photoshop 3.0 or legacy 8BIM header
+      return m.bytes.length>=8&&(
+        [56,66,73,77].every((n,i)=>m.bytes[i+4]===n)||
+        (m.bytes.length>=18&&[80,104,111,116,111,115,104,111,112,32,51,46,48,0]
+          .every((n,i)=>m.bytes[i+4]===n)));
+    return false;
+  };
+  const preserveLegacy=frame.components!==4&&[1,3].includes(frame.components)&&
+    ['/DeviceGray','/DeviceRGB'].includes(
+      String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace')))))&&
+    frame.metadata.some(m=>compatibleLegacyMetadata(m))&&
+    frame.metadata.every(m=>[224,226,254].includes(m.marker)||compatibleLegacyMetadata(m));
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
+    (preserveLegacy&&compatibleLegacyMetadata(m))||
     (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
     (preservedLegacyCmyk&&[225,237].includes(m.marker)));
   if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components)||
