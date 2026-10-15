@@ -1,6 +1,6 @@
 # PDF Compressor — Task 5: Valid-PDF Compatibility
 
-Status: **Task 5 started — compatibility audit and test plan only**. Based on the accepted Task 4 branch (`713bf8b054cdc86b932a0bc0bf68a431ff3996cc`). This document authorizes **no production/deployment, no merge, no freeze and no Task 6 changes**.
+Status: **Task 5 implementation and compatibility regressions underway; not manually accepted**. Based on the accepted Task 4 branch (`713bf8b054cdc86b932a0bc0bf68a431ff3996cc`). This document authorizes **no production/deployment, no merge, no freeze and no Task 6 changes**.
 
 ## Approved intent
 Improve attempts on complex **valid** PDFs, without arbitrarily rejecting unusual encoding, large page or object counts, or embedded image complexity. Preserve PDF semantics, user content, selectable text, page count/geometry, colors, masks/transparency, shared resources, integrity receipts and safe downloads. Where technically and legally authorized, evaluate user-provided password support. **Signed/certified PDFs must never be silently recompressed, since signature validity can be destroyed.** Preserve fail-closed handling for corruption, resource exhaustion, unsafe active content, security restrictions and unverified outputs.
@@ -28,4 +28,25 @@ Improve attempts on complex **valid** PDFs, without arbitrarily rejecting unusua
 - Which higher page/object/image limits can be supported reliably on lower-memory mobile hardware.
 - Which rare image formats can remain safely unchanged inside verified output rather than trigger entire-document rejection.
 
-Only the plan/audit is committed at this checkpoint; no compatibility implementation has yet been asserted as complete.
+## Task 5 implemented/verified checkpoint — 15 October 2026
+
+- RGB/gray JPEG APP1 EXIF and APP13 Photoshop metadata use a **preserve-only** inspection route. Malformed, unknown or inconsistent markers still reject.
+- CMYK/YCCK Adobe APP14 legacy metadata now uses the same **signature validation** for APP1/APP13 when preserved; an EXIF marker with correct length but false identifier is rejected.
+- A **36-page mixed scan-like** fixture with shared XObjects and an SMask, and a **120-page** text/object corpus, pass the independent inspection tests. A referenced soft/explicit image mask is no longer accidentally treated as a standalone lossy RGB/gray image candidate. Input bytes remain unchanged.
+- Six **synthetic signature/certification marker** cases (DocMDP and UR3 catalog permissions, visible/invisible widget fields, isolated ByteRange and orphan /Sig) are rejected before independent page reads. These are marker-level negative fixtures, **not cryptographic signatures**; the independently generated, validated pyHanko-signed PDF remains the cryptographic negative control.
+- An actual **source-built qpdf** full-pipeline test passed in lossless, balanced, strong and maximum modes on one synthetic two-page PDF with a shared RGB JPEG carrying EXIF+Photoshop markers. Each output was independently verified and the image's complete original encoded bytes were unchanged. Source size **3923 bytes**, measured output **3807 bytes** in each mode; small synthetic proof, not a general compression promise. Evidence: Actions run `38755934810`, lossless-output job.
+- New synthetic valid/negative compatibility PDFs have been added to a CI artifact collection to facilitate the required OnePlus Nord4 manual check. Artifact availability and full-job results need confirmation on the final head before claiming this step passed.
+
+## Authorized password-handling feasibility review — no implementation authorized
+
+The current `input-inspector.mjs` loads with `ignoreEncryption:true` solely to identify `/Encrypt` and deliberately returns `encrypted-pdf`; it never authenticates or decrypts. The independent PDF.js reader has no credential-handling integration in the compressor. The reviewed `qpdf-lossless-adapter.mjs` receives only raw input bytes and runs *optimization arguments*, not a user-provided-password workflow. The presence of cryptographic capabilities inside underlying libraries is **not** proof of an approved browser decryption pipeline.
+
+No independently verified local-only sequence currently covers password entry, wrong-password handling, permission checks, decrypted-source equivalence, bounded worker operation, zero retention of passwords, cancellation, source/output integrity, and device/browser regression. **Decision for Task 5: retain explicit encrypted-input rejection.** A separate, approved engineering design and security gate would be required before enabling authorized password support. Do not silently remove `/Encrypt` or use parser ignore-encryption as decryption.
+
+## Remaining Task 5 acceptance gaps
+
+1. Confirm final **12/12 CI green on the newest PR head** after fixture-artifact additions; review artifact outputs and regression logs.
+2. Continue unusual valid-image/filter and large-object edge cases only with real fixtures and independent reader evidence. **Do not expand current resource caps without phone memory data.**
+3. Run isolated HTML build and synthetic complex fixtures on the available OnePlus Nord4, then rerun the original **15.91 MB / approximately 68-page** reference in Balanced, Strong, Maximum and Lossless modes. Confirm content, text, pages, masks, download and honest result labels. Historical sub-60-second benchmark is not new measurement.
+4. Obtain explicit user manual acceptance before Task 5 closure. Do not start later tasks or deploy/freeze.
+
