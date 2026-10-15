@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
 import {transformEmbeddedImages} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
+import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
 const require=createRequire(import.meta.url);
 const PDF=require('../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js');
 // Test-only deterministic Pillow encoder; no user photos or network calls.
@@ -56,6 +57,17 @@ test('valid RGB EXIF and Photoshop JPEGs are inspectable without source-image mu
     String(obj.dict.get(N('Subtype')))==='/Image');
   assert.deepEqual(embedded.contents,image);
  }
+});
+test('a real independent PDF.js parser accepts recognized EXIF JPEG framing and page paints',async()=>{
+ const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
+ const source=await makePDF(prependMetadata(exif));
+ const report=await inspectPDFInput(source,{PDF,
+  readPages:createIndependentInputReader(pdfjs)});
+ assert.equal(report.valid,true);
+ assert.equal(report.pageCount,1);
+ assert.equal(report.pages[0].imagePaints,1);
+ assert.equal(report.images[0].width,16);
+ assert.equal(report.images[0].height,16);
 });
 test('legacy RGB EXIF metadata always takes preserve-only route, never color-reencodes',async()=>{
  const source=prependMetadata(exif);
