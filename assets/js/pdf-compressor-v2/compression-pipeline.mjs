@@ -14,26 +14,33 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
   if(!MODES.includes(mode))throw new RangeError('Unsupported compression mode');
   checkCancel(signal);
   onProgress('inspect');
+  const startedAt=performance.now();
   const inspected=await inspectInput(bytes,{PDF,readPages,signal,limits});
   const plan=planCompression({mode,images:inspected.images,pages:inspected.pageCount,
     classification:inspected.classification,allowJpeg:typeof decodeJpeg==='function'});
   if(!plan.allowed)throw new CompressionPipelineError(plan.reason);
   const stages=[];
   let current=bytes;
+  const now=()=>performance.now();
+  const stageTimings={inspectionMs:now()-startedAt,imageMs:0,losslessMs:0};
   // Every stage independently verifies its own source/output equivalence.
   // Lossless fingerprints then preserve the image stage's accepted content.
   if(mode!=='lossless'&&plan.imageCandidates>0){
     onProgress('embedded-images');
+    const imageStarted=now();
     const image=await runVerifiedImageCompression(current,{PDF,readPages,encodeJpeg,
-      verifyJpeg,decodeJpeg,mode,signal,limits});
+      verifyJpeg,decodeJpeg,mode,signal,limits,inspectInput});
     checkCancel(signal);
+    stageTimings.imageMs=now()-imageStarted;
     stages.push({engine:'embedded-images',status:image.status,
       inputBytes:current.length,outputBytes:image.bytes.length});
     current=image.bytes;
   }
   onProgress('lossless');
+  const losslessStarted=now();
   const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits,onProgress,inspectInput});
   checkCancel(signal);
+  stageTimings.losslessMs=now()-losslessStarted;
   stages.push({engine:'lossless',status:lossless.status,
     inputBytes:current.length,outputBytes:lossless.bytes.length});
   current=lossless.bytes;
@@ -48,5 +55,5 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
       imageTransformationApplied:summary.success&&stages.some(stage=>
         stage.engine==='embedded-images'&&stage.status==='compressed'),
       ...(mode==='lossless'?{}:plan.settings)},
-    stages,message:summary.message};
+    stages,stageTimings,message:summary.message};
 }

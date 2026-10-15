@@ -8,8 +8,12 @@ export async function encodeBrowserJpeg({rgb,width,height,quality,signal}) {
   if(!context)throw Error('browser-codec-unavailable');
   try {
     const pixels=context.createImageData(width,height);
-    for(let p=0;p<width*height;p++){
-      pixels.data.set(rgb.subarray(p*3,p*3+3),p*4);pixels.data[p*4+3]=255;
+    // Write the exact same RGBA pixels without creating a fresh 3-byte
+    // Uint8Array view for every pixel (very costly on mobile scans).
+    const rgba=pixels.data;
+    for(let si=0,di=0;si<rgb.length;si+=3,di+=4){
+      rgba[di]=rgb[si];rgba[di+1]=rgb[si+1];
+      rgba[di+2]=rgb[si+2];rgba[di+3]=255;
     }
     context.putImageData(pixels,0,0);
     const blob=await canvas.convertToBlob({type:'image/jpeg',quality});

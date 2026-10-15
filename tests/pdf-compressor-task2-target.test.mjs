@@ -70,6 +70,14 @@ test('aggressive Maximum failure still compares Strong and returns the smallest 
  assert.equal(r.target.effectiveMode,'strong');
  assert.equal(r.bytes.length,370);
 });
+test('stage diagnostics include time spent in every verified target-size attempt',async()=>{
+ const perPass={inspectionMs:120,imageMs:4000,losslessMs:2500,finalVerificationMs:1300};
+ const result=await compressToTarget(source,{mode:'maximum',targetBytes:100,
+  runVerified:async(_, {mode})=>({...verified(mode==='maximum'?400:350,mode),stageTimings:perPass})});
+ assert.deepEqual(result.stageTimings,{inspectionMs:240,imageMs:8000,losslessMs:5000,finalVerificationMs:2600});
+ assert.equal(result.target.attempts.length,2);
+ assert.equal(result.target.reached,false);
+});
 test('unchanged original may be returned if no profile makes a smaller verified result',async()=>{
  const calls=[];
  const r=await compressToTarget(source,{mode:'balanced',targetBytes:100,runVerified:async (_, {mode})=>{
