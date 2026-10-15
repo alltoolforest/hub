@@ -92,8 +92,14 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
       // Dictionary dimensions alone cannot bound a forged encoded JPEG frame.
       // Wrapper streams and aliases cannot bypass this pre-decoding check.
       let frame;
-      try{frame=await inspectEncodedJpeg(object,{PDF,context,maxBytes:Math.min(limits.maxBytes,limits.maxDecodedStreamBytes??32000000)});}catch{
-        fail('image-header-unverifiable','A JPEG image header or filter chain could not be verified. Export a fresh PDF.');
+      try{frame=await inspectEncodedJpeg(object,{PDF,context,maxBytes:Math.min(limits.maxBytes,limits.maxDecodedStreamBytes??32000000)});}catch(error){
+        // Fail closed; expose only fixed-code JPEG failure details to the local
+        // manual QA worker. Do not include image bytes or private filenames.
+        const reason=typeof error?.message==='string'&&
+          /^[a-z][a-z0-9-]{0,63}$/.test(error.message)?error.message:'jpeg-inspection-failed';
+        throw new InputInspectionError('image-header-unverifiable',
+          'A JPEG image header or filter chain could not be verified. Export a fresh PDF.',
+          {cause:new Error(reason)});
       }
       if(frame&&(frame.width!==width||frame.height!==height))
         fail('encoded-image-dimensions','JPEG dimensions disagree with the PDF image dictionary. Export a fresh PDF.');
