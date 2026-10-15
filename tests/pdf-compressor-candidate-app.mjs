@@ -1,4 +1,3 @@
-import {preflightPDFFile} from '../assets/js/pdf-compressor-v2/file-preflight.mjs';
 import {mountCompressor} from '../assets/js/pdf-compressor-v2/compressor-ui.mjs';
 import {createWorkerBridge} from '../assets/js/pdf-compressor-v2/worker-bridge.mjs';
 import {detectDeviceProfile} from '../assets/js/pdf-compressor-v2/device-policy.mjs';
@@ -39,8 +38,8 @@ const engine=createWorkerBridge({fileInput:true,profile:profile.id,onProgress:st
    name:'WorkerError',code:'worker-failed',message:'Worker stopped unexpectedly'}));
  worker.terminate=()=>{terminate();RC_RESOURCES.terminated++;};return worker;
 }});
-// Avoid running the complete parser twice before the first result.
-engine.inspectFile=(file,{signal}={})=>preflightPDFFile(file,{signal,limits:profile.limits});
+// File preflight and source SHA-256 now execute in the disposable worker.
+// Full structural, text and image integrity inspection still runs at compression.
 globalThis.RC_UI=mountCompressor(document.getElementById('compressor'),{engine,limits:profile.limits});
 document.getElementById('compressor').appendChild(qaDiagnostics);
 document.querySelector('[data-run]')?.addEventListener('click',()=>{
