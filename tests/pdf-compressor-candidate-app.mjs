@@ -23,6 +23,7 @@ const showQAError=(details={})=>{
   'Error: '+String(details.name??'WorkerError')+'\\n'+
   'Code: '+String(details.code??'processing-failed')+'\\n'+
   'Details: '+String(details.message??'No details available')+'\\n'+
+  (details.jpegReason?'JPEG preflight reason: '+String(details.jpegReason)+'\\n':'')+
   'Browser features: '+JSON.stringify(capabilities);
  qaDiagnostics.hidden=false;
 };
