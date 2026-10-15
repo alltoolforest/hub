@@ -36,7 +36,11 @@ export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes
       /(?:out of memory|memory access out of bounds|cannot enlarge memory)/i.test(String(error?.message??''))||
       /^(?:invalid-|unsafe-|unsupported-|encrypted-|signed-|resource-|decoded-|invariant-|memory-|file-limit|processing-timeout)/.test(String(error?.code??'')))
       throw error;
-    throw new LosslessCompressionError('optimizer-failed');
+    // Only an explicitly classified optimizer failure is recoverable.
+    // Do not reclassify unknown JS/WASM exceptions as normal qpdf failures.
+    if(error?.code==='qpdf-unclean-exit'||error?.code==='optimizer-failed')
+      throw new LosslessCompressionError('optimizer-failed');
+    throw error;
   }
   if(signal?.aborted)throw new LosslessCompressionError('cancelled');
   if(!candidate||candidate.length<8||candidate.length>maximumBytes)
