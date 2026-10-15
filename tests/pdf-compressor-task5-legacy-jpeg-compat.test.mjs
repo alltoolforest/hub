@@ -89,7 +89,7 @@ test('malformed EXIF and unsafe trailing JPEG payload remain rejected',async()=>
  }
 });
 test('structurally valid unfamiliar APP15 or standard XMP APP1 is opaque and preserved',async()=>{
- const xmpId=Buffer.from('http://ns.adobe.com/xap/1.0/\\0','utf8');
+ const xmpId=Buffer.concat([Buffer.from('http://ns.adobe.com/xap/1.0/'),Buffer.from([0])]);
  const xmpSegment=Buffer.concat([Buffer.from([255,225,0,xmpId.length+2]),xmpId]);
  for(const app of [unknown,xmpSegment]){
   const src=prependMetadata(app),input=await makePDF(src);
