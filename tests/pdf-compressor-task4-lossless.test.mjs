@@ -29,9 +29,12 @@ test('rejects unsafe documents and missing approved engine',async()=>{
     }),e=>e.code==='restricted-pdf');
   }
 });
-test('does not mutate input and fail-closed on optimizer exceptions',async()=>{
-  const copy=source.slice();
-  await assert.rejects(optimizeLosslessly(source,{inspect:safe,optimize:async()=>{throw Error('broken');}}),
-    e=>e instanceof LosslessCompressionError&&e.code==='optimizer-failed');
+test('does not mutate input; unknown optimizer exceptions fail closed, typed provider faults remain classifiable',async()=>{
+  const copy=source.slice(),unknown=Error('broken');
+  await assert.rejects(optimizeLosslessly(source,{inspect:safe,optimize:async()=>{throw unknown;}}),
+    e=>e===unknown,'unknown faults must not be rewritten into a recoverable category');
+  await assert.rejects(optimizeLosslessly(source,{inspect:safe,optimize:async()=>{
+    throw Object.assign(Error('qpdf-unclean-exit'),{code:'qpdf-unclean-exit'});
+  }}),e=>e instanceof LosslessCompressionError&&e.code==='optimizer-failed');
   assert.deepEqual(source,copy);
 });
