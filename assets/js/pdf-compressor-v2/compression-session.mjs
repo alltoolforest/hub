@@ -56,17 +56,29 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
       try{
         if(!file||!Number.isSafeInteger(file.size)||file.size<16)throw {code:'invalid-input'};
         if(file.size>limits.maxBytes)throw {code:'file-limit',maxBytes:limits.maxBytes};
-        let bytes=new Uint8Array(await file.arrayBuffer());
-        if(token!==generation)return {status:'stale'};
-        if(bytes.length!==file.size)throw {code:'invalid-input'};
+        // File-owned operations must never eagerly materialize the entire
+        // source on the main thread. The trusted inspection worker hashes the
+        // exact bytes it inspected; the final independently verified receipt
+        // must bind to that same source digest before a Blob can be downloaded.
         const fileOwned=typeof Blob!=='undefined'&&file instanceof Blob&&
           typeof engine.inspectFile==='function'&&typeof engine.compressFile==='function';
-        const digest=await digestPDFBytes(bytes);
-        if(token!==generation)return {status:'stale'};
-        if(fileOwned)bytes=null;
+        let bytes=null,digest;
+        if(!fileOwned){
+          bytes=new Uint8Array(await file.arrayBuffer());
+          if(token!==generation)return {status:'stale'};
+          if(bytes.length!==file.size)throw {code:'invalid-input'};
+          digest=await digestPDFBytes(bytes);
+          if(token!==generation)return {status:'stale'};
+        }
         const report=await (fileOwned?engine.inspectFile(file,{signal:abort.signal}):engine.inspect(bytes,{signal:abort.signal}));
         if(token!==generation)return {status:'stale'};
         if(report?.valid!==true||report.sourceBytes!==file.size)throw {code:'invalid-input'};
+        if(fileOwned){
+          // No hash = no trusted File ownership. Never silently downgrade to
+          // an unverified or byte-unbound compression result.
+          if(!/^[a-f0-9]{64}$/.test(report.sourceDigest??''))throw {code:'invalid-input'};
+          digest=report.sourceDigest;
+        }
         if(token!==generation)return {status:'stale'};
         source={bytes,file:fileOwned?file:null,size:file.size,name:String(file.name??'document.pdf'),report:copy(report),digest};
         controller=null;state='ready';notify();return {status:'ready'};
