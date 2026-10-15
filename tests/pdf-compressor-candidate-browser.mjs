@@ -37,14 +37,15 @@ try{
  }
  // Target goal tests actual worker profile retries, receipt and download.
  await page.locator('#compressor-mode').selectOption('maximum');
- await page.locator('#compressor-target').fill('0.01');
+ await page.locator('#compressor-target').fill('0.000001');
  await page.locator('[data-run]').click();
  await page.waitForFunction(()=>['completed','failed'].includes(RC_UI.session.snapshot().state),{},{timeout:120000});
  const targetState=await page.evaluate(()=>RC_UI.session.snapshot());
  assert.equal(targetState.state,'completed',JSON.stringify(targetState).slice(0,1600));
- assert.equal(targetState.result.target.requestedBytes,10000);
+ assert.equal(targetState.result.target.requestedBytes,1);
  assert.ok(['strong','maximum'].includes(targetState.result.target.effectiveMode));
- assert.equal(targetState.result.target.reached,targetState.result.outputBytes<=10000);
+ assert.equal(targetState.result.target.reached,false);
+ assert.deepEqual(targetState.result.target.attempts.map(a=>a.profile),['strong','maximum']);
  assert.equal(targetState.result.integrity.independentTextVerified,true);
  assert.match(await page.locator('[data-result-mode]').textContent(),/limit: maximum/);
  assert.match(await page.locator('[data-outcome]').textContent(),/target/i);
