@@ -46,22 +46,37 @@ class BoundedOutput {
 }
 export function decodeRunLengthBounded(bytes,maxBytes,{signal}={}){
   check(bytes,maxBytes,signal);
-  const out=new BoundedOutput(maxBytes);let i=0,sawEnd=false,steps=0;
+  // First pass checks the full encoded structure and expanded length before
+  // allocating. Second pass fills one exact-size buffer. No doubled output
+  // allocations, temporary arrays or unbounded library decompression.
+  let i=0,expanded=0,seenEnd=false,steps=0;
   while(i<bytes.length){
     if((++steps&4095)===0&&signal?.aborted)fail('cancelled');
-    const length=bytes[i++];
-    if(length===128){sawEnd=true;break;}
-    if(length<=127){
-      const size=length+1;
-      if(size>bytes.length-i)fail('invalid-runlength-stream');
-      out.slice(bytes,i,size);i+=size;
+    const control=bytes[i++];
+    if(control===128){seenEnd=true;break;}
+    const count=control<=127?control+1:257-control;
+    const consumed=control<=127?count:1;
+    if(consumed>bytes.length-i)fail('invalid-runlength-stream');
+    if(count>maxBytes-expanded)fail('decoded-stream-limit');
+    expanded+=count;i+=consumed;
+  }
+  if(!seenEnd)fail('invalid-runlength-stream');
+  if(signal?.aborted)fail('cancelled');
+  const result=new Uint8Array(expanded);i=0;let offset=0;
+  while(i<bytes.length){
+    const control=bytes[i++];
+    if(control===128)break;
+    if(control<=127){
+      const count=control+1;
+      result.set(bytes.subarray(i,i+count),offset);
+      offset+=count;i+=count;
     }else{
-      if(i>=bytes.length)fail('invalid-runlength-stream');
-      out.repeated(bytes[i++],257-length);
+      const count=257-control;
+      result.fill(bytes[i++],offset,offset+count);
+      offset+=count;
     }
   }
-  if(!sawEnd)fail('invalid-runlength-stream');
-  return out.finish();
+  return result;
 }
 export function decodeLZWBounded(bytes,maxBytes,{signal,earlyChange=1}={}){
   check(bytes,maxBytes,signal);
