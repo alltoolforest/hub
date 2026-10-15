@@ -111,3 +111,68 @@ export function decodeLZWBounded(bytes,maxBytes,{signal,earlyChange=1}={}){
   if(!sawEnd)fail('invalid-lzw-stream');
   return out.finish();
 }
+
+// Decode ASCII filters incrementally. Avoid the former full-encoded-string
+// TextDecoder + whitespace-regex copies for large PDFs. Enforce the same
+// per-stream output budget at every emitted byte.
+const whitespace=byte=>byte===0||byte===9||byte===10||byte===12||byte===13||byte===32;
+export function decodeASCIIStreamBounded(bytes,filter,maxBytes,{signal}={}){
+  check(bytes,maxBytes,signal);
+  const out=new BoundedOutput(maxBytes);let i=0,steps=0;
+  const advance=()=>{while(i<bytes.length&&whitespace(bytes[i]))i++;};
+  const tick=()=>{if((++steps&4095)===0&&signal?.aborted)fail('cancelled');};
+  if(filter==='/ASCIIHexDecode'){
+    let high=-1,ended=false;
+    for(;i<bytes.length;i++){
+      tick();const byte=bytes[i];
+      if(whitespace(byte))continue;
+      if(byte===62){ended=true;i++;break;} // '>' optional end marker
+      const digit=byte>=48&&byte<=57?byte-48:
+        byte>=65&&byte<=70?byte-55:byte>=97&&byte<=102?byte-87:-1;
+      if(digit<0)fail('invalid-ascii-hex');
+      if(high<0)high=digit;
+      else{out.push((high<<4)|digit);high=-1;}
+    }
+    if(ended){advance();if(i!==bytes.length)fail('invalid-ascii-hex');}
+    if(high>=0)out.push(high<<4);
+    return out.finish();
+  }
+  if(filter!=='/ASCII85Decode')fail('invalid-ascii-filter');
+  advance();
+  if(bytes[i]===60&&bytes[i+1]===126)i+=2; // optional '<~'
+  const digits=[];let ended=false;
+  const emit=(count)=>{
+    let number=0;
+    for(const digit of digits)number=number*85+digit;
+    if(number>0xffffffff)fail('invalid-ascii85');
+    if(count>maxBytes-out.length)fail('decoded-stream-limit');
+    for(let n=0;n<count;n++)out.push((number>>>((3-n)*8))&255);
+    digits.length=0;
+  };
+  for(;i<bytes.length;i++){
+    tick();const byte=bytes[i];
+    if(whitespace(byte))continue;
+    if(byte===126){
+      if(bytes[i+1]!==62)fail('invalid-ascii85');
+      i+=2;ended=true;break;
+    }
+    if(byte===122){
+      if(digits.length)fail('invalid-ascii85');
+      out.repeated(0,4);continue;
+    }
+    const digit=byte-33;
+    if(digit<0||digit>84)fail('invalid-ascii85');
+    digits.push(digit);
+    if(digits.length===5)emit(4);
+  }
+  if(!ended)fail('invalid-ascii85');
+  advance();if(i!==bytes.length)fail('invalid-ascii85');
+  if(digits.length===1)fail('invalid-ascii85');
+  if(digits.length){
+    const count=digits.length-1;
+    while(digits.length<5)digits.push(84);
+    emit(count);
+  }
+  if(signal?.aborted)fail('cancelled');
+  return out.finish();
+}
