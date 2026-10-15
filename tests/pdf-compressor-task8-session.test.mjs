@@ -101,3 +101,18 @@ test('fast selection only checks boundaries; invalid, oversize and cancelled fil
  await assert.rejects(preflightPDFFile({size:1001,slice:()=>{throw Error('must not read');}},{limits}),e=>e.code==='file-limit');
  const controller=new AbortController();controller.abort();await assert.rejects(preflightPDFFile(file,{limits,signal:controller.signal}));
 });
+
+test('target-size retries receive a bounded second deadline, normal worker deadlines unchanged',async()=>{
+  let clock=0;
+  const workers=[];
+  const bridge=createWorkerBridge({now:()=>clock,timeoutMs:1000,
+    visibilityTarget:new EventTarget(),
+    workerFactory:()=>{const worker={postMessage:()=>{},terminate:()=>{}};workers.push(worker);return worker;}});
+  const pending=bridge.compress(bytes,{mode:'maximum',targetBytes:100});
+  clock=1500;
+  workers.at(-1).onmessage({data:{ok:true,result:{bytes:bytes.slice()}}});
+  assert.ok((await pending).bytes instanceof Uint8Array);
+  const ordinary=bridge.compress(bytes,{mode:'strong'});
+  workers.at(-1).onmessage({data:{ok:true,result:{bytes:bytes.slice()}}});
+  await assert.rejects(ordinary,e=>e.code==='processing-timeout');
+});
