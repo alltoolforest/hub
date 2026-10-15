@@ -31,13 +31,18 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
     const y0=y*descriptor.height/height,y1=(y+1)*descriptor.height/height;
     for(let x=0;x<width;x++){
       const x0=x*descriptor.width/width,x1=(x+1)*descriptor.width/width;
-      const sums=[0,0,0];let weight=0;
+      // Numerically identical area-average math; use scalars instead of
+      // allocating arrays in the inner loop for every output pixel.
+      let red=0,green=0,blue=0,weight=0;
       for(let sy=Math.floor(y0);sy<Math.ceil(y1);sy++)for(let sx=Math.floor(x0);sx<Math.ceil(x1);sx++){
         const w=(Math.min(y1,sy+1)-Math.max(y0,sy))*(Math.min(x1,sx+1)-Math.max(x0,sx));
         const p=(sy*descriptor.width+sx)*4;weight+=w;
-        for(let c=0;c<3;c++)sums[c]+=rgba[p+c]*w;
+        red+=rgba[p]*w;green+=rgba[p+1]*w;blue+=rgba[p+2]*w;
       }
-      for(let c=0;c<3;c++)rgb[(y*width+x)*3+c]=Math.round(sums[c]/weight);
+      const dest=(y*width+x)*3;
+      rgb[dest]=Math.round(red/weight);
+      rgb[dest+1]=Math.round(green/weight);
+      rgb[dest+2]=Math.round(blue/weight);
     }
   }
   let data;
