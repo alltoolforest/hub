@@ -45,13 +45,19 @@ test('text budgets apply across pages and reject excessive content',async()=>{
   await assert.rejects(reader(raw,{maxCharacters:1}),e=>e.code==='text-character-limit');
   await assert.rejects(reader(raw,{maxPages:1}),e=>e.code==='text-page-limit');
 });
-test('an optimizer changing metadata cannot reach a verified final result',async()=>{
-  await assert.rejects(compressAndVerifyPDF(source,{...options,mode:'lossless',
+test('an optimizer changing metadata is discarded and only the unchanged original passes final verification',async()=>{
+  const result=await compressAndVerifyPDF(source,{...options,mode:'lossless',
     optimize:async input=>{
       const doc=await PDF.PDFDocument.load(input,{updateMetadata:false});
       doc.setTitle('ALTERED');
       return new Uint8Array(await doc.save({useObjectStreams:true}));
-    }}),e=>e.code==='preservation-check-failed');
+    }});
+  assert.deepEqual(result.bytes,source,'a tampered optimizer candidate must never be downloadable');
+  assert.equal(result.status,'original-retained');
+  assert.equal(result.stages.at(-1).status,'preserved-after-failure');
+  assert.equal(result.stages.at(-1).reason,'preservation-check-failed');
+  assert.equal(result.integrity.independentTextVerified,true);
+  assert.equal(result.integrity.outputDigest,result.integrity.sourceDigest);
 });
 
 test('operation page reports are bound to bytes and limits, isolated, and never reused after cancellation',async()=>{
