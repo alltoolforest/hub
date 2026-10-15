@@ -35,7 +35,7 @@ try{
   const inputs=[];
   for(const id of ['digital','scanned','image-heavy','mixed','form','bookmarks','attachment','tagged'])inputs.push({id,bytes:(await buildFixture(id)).bytes});
   for(const [id,options] of [['gray-scan',{gray:true}],['shared-image',{shared:true}],['masked-image',{masked:true}],['hidden-ocr',{hiddenOCR:true}],['downsample-scan',{width:2500,height:1100}],['jpeg-scan',{jpegQuality:98}],['efficient-jpeg',{jpegQuality:45}]])inputs.push({id,bytes:await buildImageFixture(options)});
-  for(const mode of ['lossless','balanced','strong'])for(const {id,bytes} of inputs){
+  for(const mode of ['lossless','balanced','strong','maximum'])for(const {id,bytes} of inputs){
     const started=performance.now();
     const raw=await page.evaluate(async ({data,mode})=>{
       const worker=new Worker('/tests/pdf-compressor-task6-worker.mjs',{type:'module'});
