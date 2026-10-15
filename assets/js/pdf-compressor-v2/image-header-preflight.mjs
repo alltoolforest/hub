@@ -57,11 +57,32 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     frame.components===3&&space==='/DeviceRGB')&&
     frame.metadata.some(m=>compatibleLegacyMetadata(m))&&
     frame.metadata.every(m=>[224,226,254].includes(m.marker)||compatibleLegacyMetadata(m));
+  // An APP marker can carry ordinary camera/editor metadata that the
+  // compressor has no reason to interpret. Accept *well-framed* APP3–APP12
+  // and APP15 only for opaque preservation, never for JPEG re-encoding.
+  // The verified decoder sees unsupportedMetadata=true and returns 'preserve';
+  // qpdf's lossless stage and the final PDF graph/encoded-stream SHA-256 gates
+  // still require the exact original image bytes. Do not admit malformed
+  // frame/segment lengths, post-scan metadata, unsupported color spaces,
+  // unrecognized APP1/APP13 layouts or an invalid Adobe APP14 transform.
+  const directColorSpace=(frame.components===1&&space==='/DeviceGray'||
+    frame.components===3&&space==='/DeviceRGB'||
+    frame.components===4&&space==='/DeviceCMYK'&&adobeCmyk);
+  const spoofedAdobe=m=>m.bytes.length>=9&&
+    [65,100,111,98,101].every((v,i)=>m.bytes[4+i]===v);
+  const opaqueApp=m=>directColorSpace&&
+    ((m.marker>=227&&m.marker<=236)||m.marker===239)&&
+    m.bytes.length>=4&&!spoofedAdobe(m);
+  const xmpSignature=new TextEncoder().encode('http://ns.adobe.com/xap/1.0/\\0');
+  const validXmp=m=>m.marker===225&&m.bytes.length>=4+xmpSignature.length&&
+    xmpSignature.every((v,i)=>m.bytes[i+4]===v);
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
     (preserveLegacy&&compatibleLegacyMetadata(m))||
     (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
-    (preservedLegacyCmyk&&compatibleLegacyMetadata(m)));
+    (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
+    (directColorSpace&&validXmp(m))||opaqueApp(m));
   if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components)||
-    frame.metadataAfterScan||!allowedMetadata)throw Error('unsupported-jpeg-frame');
+    frame.width<1||frame.height<1||frame.metadataAfterScan||!allowedMetadata)
+    throw Error('unsupported-jpeg-frame');
   return frame;
 }
