@@ -5,6 +5,7 @@ import {PDF,buildFixture} from './pdf-compressor-task1-fixtures.mjs';
 import {transformEmbeddedImages,inflateExact} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
 import {deflateSync} from 'node:zlib';
 import {createImageOutputVerifier} from '../assets/js/pdf-compressor-v2/image-output-verifier.mjs';
+import {runVerifiedImageCompression} from '../assets/js/pdf-compressor-v2/image-compression.mjs';
 const encodeJpeg=async({rgb,width,height,quality})=>{
   const canvas=createCanvas(width,height),rgba=new Uint8ClampedArray(width*height*4);
   for(let p=0;p<width*height;p++){rgba.set(rgb.subarray(p*3,p*3+3),p*4);rgba[p*4+3]=255;}
@@ -52,6 +53,29 @@ test('one visually rejected image is preserved while other verified images still
   const retainedImage=output.context.lookup(imageRefs[0][0]);
   assert.deepEqual(retainedImage.contents,originalImage.contents,
     'the visually rejected source image must remain byte-for-byte unchanged');
+});
+test('single-pass image engine reuses a verified input report and decodes each approved JPEG once',async()=>{
+ const {bytes}=await buildFixture('image-heavy');
+ let sourceInspections=0,approved=0,pageReads=0;
+ const inspected=async()=>{sourceInspections++;return {valid:true};};
+ const readPages=async data=>{
+  pageReads++;
+  const doc=await PDF.PDFDocument.load(data,{updateMetadata:false});
+  return {pages:doc.getPages().map(page=>({
+    view:[0,0,page.getWidth(),page.getHeight()],rotation:0,textItems:0,
+    imagePaints:1,annotations:0,links:0}))};
+ };
+ const jpeg=async()=>{approved++;return true;};
+ const result=await runVerifiedImageCompression(bytes,{
+   PDF,mode:'strong',encodeJpeg,readPages,
+   verifyJpeg:jpeg,inspectInput:inspected
+ });
+ assert.equal(result.status,'compressed');
+ assert.ok(result.replacements>0);
+ assert.equal(sourceInspections,1,'canonical source inspection must not rerun inside image stage');
+ assert.equal(approved,result.replacements,
+   'identical manifest JPEG bytes must use prior byte-bound quality evidence');
+ assert.equal(pageReads,2,'the independent verifier must inspect both source and output pages');
 });
 test('missing or failed verifier cannot release an image output',async()=>{
   const {bytes}=await buildFixture('mixed');
