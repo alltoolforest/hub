@@ -52,9 +52,9 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
           .every((n,i)=>m.bytes[i+4]===n)));
     return false;
   };
-  const preserveLegacy=frame.components!==4&&[1,3].includes(frame.components)&&
-    ['/DeviceGray','/DeviceRGB'].includes(
-      String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace')))))&&
+  const space=String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))));
+  const preserveLegacy=(frame.components===1&&space==='/DeviceGray'||
+    frame.components===3&&space==='/DeviceRGB')&&
     frame.metadata.some(m=>compatibleLegacyMetadata(m))&&
     frame.metadata.every(m=>[224,226,254].includes(m.marker)||compatibleLegacyMetadata(m));
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
