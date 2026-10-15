@@ -37,6 +37,7 @@ jobs:
       - name: Input integrity and adjacent compressor regression
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+          PDF_COMPRESSOR_TASK5_FIXTURES: /tmp/atf-task5-phone-fixtures
         run: node --test tests/pdf-compressor-task5-signature-certification.test.mjs tests/pdf-compressor-task5-complex-corpus.test.mjs tests/pdf-compressor-task5-legacy-jpeg-compat.test.mjs tests/pdf-compressor-task4-stream-flate-memory.test.mjs tests/pdf-compressor-task4-bounded-filters.test.mjs tests/pdf-compressor-task3-recovery.test.mjs tests/pdf-compressor-task2-pixel-math.test.mjs tests/pdf-compressor-verified-jpeg-evidence.test.mjs tests/pdf-compressor-task2-target.test.mjs tests/pdf-compressor-task2-maximum.test.mjs tests/pdf-compressor-cmyk-ycck-preflight.test.mjs tests/pdf-compressor-adaptive-large-images.test.mjs tests/pdf-compressor-font-dedup.test.mjs tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
       - name: Isolated browser input gate
         env:
@@ -44,6 +45,27 @@ jobs:
         run: |
           python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-input-server.log 2>&1 &
           node tests/pdf-compressor-task3-browser.mjs
+      - name: Collect synthetic valid/negative Task 5 samples for manual phone QA
+        run: |
+          test -f /tmp/atf-task5-phone-fixtures/task5-120-page-text.pdf
+          test -f /tmp/atf-task5-phone-fixtures/task5-36-page-shared-softmask.pdf
+          cp /tmp/atf-independent-pdfs/independent-scan-color.pdf /tmp/atf-task5-phone-fixtures/
+          cp /tmp/atf-independent-pdfs/signed.pdf /tmp/atf-task5-phone-fixtures/
+          cp /tmp/atf-independent-pdfs/encrypted.pdf /tmp/atf-task5-phone-fixtures/
+          cat > /tmp/atf-task5-phone-fixtures/README.txt <<'EOF'
+          AllToolForest PDF Compressor Task 5 - SYNTHETIC test PDFs only.
+          Test valid: task5-120-page-text.pdf, task5-36-page-shared-softmask.pdf,
+          independent-scan-color.pdf.
+          Test must reject: signed.pdf, encrypted.pdf.
+          The QA-only encrypted.pdf password is QA-only-password.
+          None of these are user documents or physical scanner captures.
+          No production release or quality acceptance is implied.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-task5-phone-compatibility-fixtures
+          path: /tmp/atf-task5-phone-fixtures/
+          retention-days: 7
   qpdf-source-build:
     needs: input-integrity
     runs-on: ubuntu-latest
