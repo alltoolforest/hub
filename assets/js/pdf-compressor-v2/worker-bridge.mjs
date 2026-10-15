@@ -7,7 +7,11 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
   const run=(op,bytes,{mode,targetBytes,signal}={})=>new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new WorkerOperationError('cancelled'));
     let worker,timer,settled=false;
-    const deadline=now()+timeoutMs;
+    // Target-size jobs may run two fully verified profiles. Grant a
+    // bounded second window only when the user explicitly requests a target.
+    // Ordinary compression retains the original deadline unchanged.
+    const effectiveTimeoutMs=targetBytes===undefined?timeoutMs:timeoutMs*2;
+    const deadline=now()+effectiveTimeoutMs;
     const finish=(error,value)=>{
       if(settled)return;settled=true;
       clearTimeout(timer);signal?.removeEventListener('abort',abort);
@@ -36,7 +40,7 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
       signal?.addEventListener('abort',abort,{once:true});
       if(signal?.aborted){abort();return;}
       visibilityTarget?.addEventListener('visibilitychange',checkDeadline);
-      timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),timeoutMs);
+      timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),effectiveTimeoutMs);
       if(fileInput&&typeof Blob!=='undefined'&&bytes instanceof Blob)worker.postMessage({op,file:bytes,mode,targetBytes,profile});
       else {const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,targetBytes,profile},[copy.buffer]);}
     }catch(error){finish(error);}
