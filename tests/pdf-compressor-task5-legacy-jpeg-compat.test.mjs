@@ -79,12 +79,45 @@ test('legacy RGB EXIF metadata always takes preserve-only route, never color-ree
   streamBytes:source.length}});
  assert.deepEqual(result,{status:'preserve'});
 });
-test('malformed EXIF, unknown APP marker and unsafe trailing payload are still rejected',async()=>{
+test('malformed EXIF and unsafe trailing JPEG payload remain rejected',async()=>{
  const badExif=Buffer.from(exif);badExif[5]=88;
  const malformed=Buffer.from(exif);malformed[3]=255;
  for(const image of [prependMetadata(badExif),prependMetadata(malformed),
-  prependMetadata(unknown),new Uint8Array(Buffer.concat([Buffer.from(base),Buffer.from([1,2])]))]){
+  new Uint8Array(Buffer.concat([Buffer.from(base),Buffer.from([1,2])]))]){
   await assert.rejects(inspectPDFInput(await makePDF(image),{PDF,readPages:pages}),
+    e=>e.code==='image-header-unverifiable');
+ }
+});
+test('structurally valid unfamiliar APP15 or standard XMP APP1 is opaque and preserved',async()=>{
+ const xmpId=Buffer.from('http://ns.adobe.com/xap/1.0/\\0','utf8');
+ const xmpSegment=Buffer.concat([Buffer.from([255,225,0,xmpId.length+2]),xmpId]);
+ for(const app of [unknown,xmpSegment]){
+  const src=prependMetadata(app),input=await makePDF(src);
+  assert.equal((await inspectPDFInput(input,{PDF,readPages:pages})).valid,true);
+  const parsed=await PDF.PDFDocument.load(input,{updateMetadata:false});
+  const raw=parsed.context.enumerateIndirectObjects().map(([,v])=>v)
+    .find(v=>v instanceof PDF.PDFRawStream&&String(v.dict.get(N('Subtype')))==='/Image');
+  assert.deepEqual(raw.contents,src,'input JPEG must remain byte-for-byte intact');
+  const decode=createPDFJpegDecoder(class AbortIfDecoded{
+    constructor(){throw Error('unfamiliar metadata must not be decoded for lossy recompression');}
+  });
+  assert.deepEqual(await decode({bytes:src,descriptor:{width:1600,height:1600,
+    bitsPerComponent:8,colorSpace:'/DeviceRGB',filter:'/DCTDecode',streamBytes:src.length}}),
+    {status:'preserve'});
+  const output=await transformEmbeddedImages(input,{PDF,mode:'maximum',
+    inspectInput:async bytes=>inspectPDFInput(bytes,{PDF,readPages:pages}),
+    decodeJpeg:decode,
+    encodeJpeg:async()=>{throw Error('no opaque JPEG recompression');},
+    verifyOutput:async()=>{throw Error('no opaque JPEG replacement');}});
+  assert.equal(output.status,'original-retained');
+  assert.deepEqual(output.bytes,input);
+ }
+});
+test('invalid opaque APP segment lengths and spoofed Adobe headers remain rejected',async()=>{
+ const truncated=Buffer.from([255,239,255,255,65,66]);
+ const mistaggedAdobe=Buffer.from([255,239,0,10,65,100,111,98,101,0,0,0]);
+ for(const app of [truncated,mistaggedAdobe]){
+  await assert.rejects(inspectPDFInput(await makePDF(prependMetadata(app)),{PDF,readPages:pages}),
     e=>e.code==='image-header-unverifiable');
  }
 });
