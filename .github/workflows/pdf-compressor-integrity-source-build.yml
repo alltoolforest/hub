@@ -321,6 +321,90 @@ jobs:
           path: /tmp/atf-task6-regression-results.log
           if-no-files-found: ignore
           retention-days: 7
+  continuation-task7-device-profiles:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: android-chromium
+            browser: chromium
+          - profile: ios-webkit
+            browser: webkit
+          - profile: windows-chromium
+            browser: chromium
+          - profile: windows-firefox
+            browser: firefox
+          - profile: macos-webkit
+            browser: webkit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned candidate builder and browser QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Verify source-built runtime and build isolated self-contained HTML
+        env:
+          PDF_COMPRESSOR_CANDIDATE: '1'
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/build-pdf-compressor-mobile-qa.py
+      - name: Task 7 source/output/download acceptance on emulated device/browser
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+          PDF_COMPRESSOR_TASK7_PROFILE: ${{ matrix.profile }}
+          PDF_COMPRESSOR_TASK7_EVIDENCE: /tmp/task7-device-profile.json
+        run: node tests/pdf-compressor-continuation-task7-acceptance-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-task7-${{ matrix.profile }}-acceptance
+          path: /tmp/task7-device-profile.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: matrix.profile == 'android-chromium'
+        with:
+          name: pdf-compressor-task7-isolated-release-candidate
+          path: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+          retention-days: 7
+
+  continuation-task7-size-ladder:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned size/protection test dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11
+          npx playwright install --with-deps chromium
+      - name: Real-content 10, 20 and 50 MB worker and independent receipt probes
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/task7-size-server.log 2>&1 &
+          for mb in 10 20 50; do
+            PDF_COMPRESSOR_TASK7_MB="$mb" PDF_COMPRESSOR_TASK7_EVIDENCE="/tmp/task7-$mb-mb.json" node tests/pdf-compressor-continuation-task7-size-ladder.mjs
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-task7-size-ladder-evidence
+          path: /tmp/task7-*-mb.json
+          if-no-files-found: ignore
+          retention-days: 7
+
   performance-diagnostic:
     needs: input-integrity
     runs-on: ubuntu-latest
