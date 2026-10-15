@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {deflateSync} from 'node:zlib';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
 import {transformEmbeddedImages} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
 import {createRequire} from 'node:module';
 import {inspectPDFInput,INPUT_LIMITS} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
@@ -9,6 +11,13 @@ const require=createRequire(import.meta.url);
 const PDF=require('../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js');
 const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
 const N=PDF.PDFName.of;
+// Only CI opt-in exports disposable, synthetic source fixtures for phone QA.
+async function saveManualFixture(filename,bytes){
+ const directory=process.env.PDF_COMPRESSOR_TASK5_FIXTURES;
+ if(!directory)return;
+ await mkdir(directory,{recursive:true});
+ await writeFile(resolve(directory,filename),bytes);
+}
 let fixture;
 async function complexDocument(){
  if(fixture)return fixture;
@@ -30,6 +39,7 @@ async function complexDocument(){
 test('120-page PDF with hundreds of objects remains independently inspectable',async()=>{
  const {bytes,count}=await complexDocument();
  const before=bytes.slice();
+ await saveManualFixture('task5-120-page-text.pdf',bytes);
  const report=await inspectPDFInput(bytes,{PDF,
   readPages:createIndependentInputReader(pdfjs)});
  assert.equal(report.valid,true);
@@ -90,6 +100,7 @@ async function reusedMaskedImages({unique=true}={}){
 test('36-page mixed scan-like document preserves shared XObject identities and transparency',async()=>{
  const {bytes,uniqueCount}=await reusedMaskedImages();
  const snapshot=bytes.slice(),doc=await PDF.PDFDocument.load(bytes);
+ await saveManualFixture('task5-36-page-shared-softmask.pdf',bytes);
  const report=await inspectPDFInput(bytes,{PDF,readPages:createIndependentInputReader(pdfjs)});
  assert.equal(report.valid,true);
  assert.equal(report.pageCount,36);
