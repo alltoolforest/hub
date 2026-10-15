@@ -9,6 +9,16 @@ test('streaming RGB image probes the exact byte count without a Blob source copy
  const result=await streamFlateImage(compressed(bytes),{width,height,channels:3,maxRowBytes:1200});
  assert.deepEqual(result,{decodedBytes:bytes.length,rows:height});
 });
+test('streaming Flate image does not materialize a complete duplicate Blob',async()=>{
+ const previous=globalThis.Blob;
+ globalThis.Blob=class ForbiddenBlob {constructor(){throw Error('unexpected-full-source-copy');}};
+ try{
+  const width=256,height=32,raw=new Uint8Array(width*height);
+  for(let i=0;i<raw.length;i++)raw[i]=i%251;
+  const report=await streamFlateImage(compressed(raw),{width,height,channels:1,maxRowBytes:width});
+  assert.equal(report.decodedBytes,raw.length);
+ }finally{globalThis.Blob=previous;}
+});
 test('streaming downsample outputs exactly the reference row-binning pixels',async()=>{
  const width=48,height=22,channels=3,raw=new Uint8Array(width*height*3);
  for(let i=0;i<raw.length;i++)raw[i]=(i*29+13)%256;
