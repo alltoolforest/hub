@@ -1,0 +1,18 @@
+[
+  {
+    "image": "event",
+    "meanLumaBefore": 100.53188788053333,
+    "meanLumaAfter": 100.53134355626666,
+    "meanAbsoluteLumaDifference": 0.015241659733333336,
+    "maxLumaDifference": 0.9277999999999995,
+    "changedPixels": 6956
+  },
+  {
+    "image": "print",
+    "meanLumaBefore": 83.36073318629084,
+    "meanLumaAfter": 83.36087734125957,
+    "meanAbsoluteLumaDifference": 0.13759934688939093,
+    "maxLumaDifference": 0.9370000000000118,
+    "changedPixels": 845746
+  }
+]

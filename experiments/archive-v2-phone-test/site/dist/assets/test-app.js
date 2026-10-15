@@ -18,14 +18,14 @@ $('run').addEventListener('click',async()=>{
   const portrait=$('content').value==='portrait';
   const options={strength:$('strength').value,sharpness:$('sharpness').value,content:$('content').value,sourceMime:file.type,faceProtection:portrait?'strict':'standard',faces:portrait?[{x:0,y:0,width,height}]:[],...($('local').value==='off'?{localExposure:'off'}:{})};
   const engine=$('engine').value;
-  worker=new Worker(new URL(engine==='original'?'./original/image-enhancer-photo-worker.js':'./image-enhancer-photo-worker.js',import.meta.url),{type:'module'});
+  worker=new Worker(new URL(engine==='original'?'./original/image-enhancer-photo-worker.js':engine==='safety'?'./safety/image-enhancer-photo-worker.js':'./image-enhancer-photo-worker.js',import.meta.url),{type:'module'});
   worker.onerror=e=>{if(ticket!==job)return;job++;stop();status(`Processing failed: ${e.message||'worker error'}. No output exported.`);};
   worker.onmessage=async({data})=>{
    if(ticket!==job)return;if(data.error){job++;stop();status(`Processing failed: ${data.error}. No output exported.`);return;}
    if(data.progress){status(data.progress);return;}if(!data.blob)return;
    stop();busy=true;controls();status('Checking native-size output…');let check;
    try{if(!(data.blob instanceof Blob)||!data.blob.size||data.width!==width||data.height!==height)throw new Error('Invalid output metadata');check=await createImageBitmap(data.blob);if(check.width!==width||check.height!==height)throw new Error('Output dimensions changed');check.close();check=null;if(ticket!==job)return;
-    resultURL=URL.createObjectURL(data.blob);$('result').src=resultURL;$('download').href=resultURL;$('download').download=`AllToolForest-V2-${engine}.png`;$('download').hidden=false;$('diagnostics').textContent=JSON.stringify({build:'archive-v2-20261014-test2',engine,width,height,options,...data.diagnostics},null,2);busy=false;controls();status('Complete. Compare and download the native-size PNG.');
+    resultURL=URL.createObjectURL(data.blob);$('result').src=resultURL;$('download').href=resultURL;$('download').download=`AllToolForest-V2-${engine}.png`;$('download').hidden=false;$('diagnostics').textContent=JSON.stringify({build:'archive-v2-20261014-test3',engine,width,height,options,...data.diagnostics},null,2);busy=false;controls();status('Complete. Compare and download the native-size PNG.');
    }catch(e){if(check)check.close();if(ticket!==job)return;busy=false;controls();status(`Output check failed: ${e.message}. No output exported.`);}
   };
   timer=setTimeout(()=>{if(ticket!==job)return;job++;stop();status('Processing exceeded the two-minute test limit. Try a smaller image or gentler settings.');},120000);

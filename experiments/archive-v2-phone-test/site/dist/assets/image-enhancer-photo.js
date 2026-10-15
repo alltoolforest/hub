@@ -251,6 +251,7 @@ export function makePhotoPlan(stats, options = {}) {
     noise, chromaNoise, shadowNoise, shadowLift, wb, tone, strength, graphic, portrait: options.content === 'portrait',
     blocks, blockStrength, mean, range, noiseRel, noise1, noise2, levels, chromaLevels, chromaOn: chromaStrength > 0, vibrance,
     ditherAmp, shift, ring,
+    shadowGuard: active && options.shadowGuard !== false,
     local: localAmount > 0 ? { cell: G.cell, gw: G.gw, gh: G.gh, mean: cellMean, expo: cellExpo, rangeWeight } : null
   };
 }
@@ -466,11 +467,14 @@ export function enhancePhotoStrip(data, width, height, startRow, rowCount, plan,
       }
       yt = clamp(yt, 0, 255);
       const gain = yd > .5 ? clamp(yt / yd, .5, 3) : 1;
-      const chromaGain = gain > 1 ? 1 + (gain - 1) * (plan.portrait ? .25 : .5) : gain;
+      // Restrain amplification of shadow color fluctuations while preserving luma.
+      // Smoothly restore the archive color treatment by luma 64.
+      const shadowColor = plan.shadowGuard ? smooth01((yd-8)/56) : 1;
+      const chromaGain = gain > 1 ? 1 + (gain - 1) * (plan.portrait ? .25 : .5) * shadowColor : gain;
       let cbv = cb[i] * chromaGain, crv = cr[i] * chromaGain;
       if (vib > 0) {
         const c = Math.hypot(cbv, crv);
-        const v = vib * smooth01(c / 10) * (1 - clamp(c / 100, 0, 1)) ** 2 * (1 - (useProt ? .5 * prot[i] : 0));
+        const v = vib * shadowColor * smooth01(c / 10) * (1 - clamp(c / 100, 0, 1)) ** 2 * (1 - (useProt ? .5 * prot[i] : 0));
         cbv *= 1 + v; crv *= 1 + v;
       }
       let cg = -(.2126 * crv + .0722 * cbv) / .7152, s = 1;

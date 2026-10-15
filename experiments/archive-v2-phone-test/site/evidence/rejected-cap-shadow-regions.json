@@ -1,0 +1,56 @@
+[
+  {
+    "variant": "safety",
+    "region": "hair",
+    "mean": 11.742548579777909,
+    "highPassRMS": 0.4569963696380458
+  },
+  {
+    "variant": "safety",
+    "region": "background",
+    "mean": 57.58226527110843,
+    "highPassRMS": 0.5327922987663262
+  },
+  {
+    "variant": "safety",
+    "region": "face",
+    "mean": 98.27491605263158,
+    "highPassRMS": 0.5644026301222679
+  },
+  {
+    "variant": "guard",
+    "region": "hair",
+    "mean": 5.645665189947398,
+    "highPassRMS": 0.4043544627452452
+  },
+  {
+    "variant": "guard",
+    "region": "background",
+    "mean": 56.906095653261296,
+    "highPassRMS": 0.7097976542395478
+  },
+  {
+    "variant": "guard",
+    "region": "face",
+    "mean": 96.99708156842104,
+    "highPassRMS": 0.6132586431273223
+  },
+  {
+    "variant": "denoise",
+    "region": "hair",
+    "mean": 5.645070292226767,
+    "highPassRMS": 0.3885475478970007
+  },
+  {
+    "variant": "denoise",
+    "region": "background",
+    "mean": 56.9270600190076,
+    "highPassRMS": 0.6436785064275248
+  },
+  {
+    "variant": "denoise",
+    "region": "face",
+    "mean": 96.99714321403509,
+    "highPassRMS": 0.6049526915738219
+  }
+]

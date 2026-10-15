@@ -1,0 +1,105 @@
+{
+  "method": "Worker-equivalent statistics and strips, balanced/auto/general/JPEG; desktop Node runtime only.",
+  "photos": [
+    {
+      "image": "event",
+      "variant": "safety",
+      "runtimeMs": 101,
+      "noise": 2.6319483436271756,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "event",
+      "variant": "guard",
+      "runtimeMs": 141,
+      "noise": 2.6319483436271756,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "event",
+      "variant": "denoise",
+      "runtimeMs": 73,
+      "noise": 2.6319483436271756,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "variant": "safety",
+      "runtimeMs": 1131,
+      "noise": 0.7018528916339135,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "variant": "guard",
+      "runtimeMs": 1060,
+      "noise": 0.7018528916339135,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "variant": "denoise",
+      "runtimeMs": 948,
+      "noise": 0.7018528916339135,
+      "shadowNoise": 0.7018528916339135
+    }
+  ],
+  "synthetic": [
+    {
+      "sourceMean": 12,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 2.4022516845182524,
+      "cleanTextureAdjacentDifference": 3.3189814814814813
+    },
+    {
+      "sourceMean": 12,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 2.6554628694160756,
+      "cleanTextureAdjacentDifference": 3.3189814814814813
+    },
+    {
+      "sourceMean": 12,
+      "variant": "denoise",
+      "processedNoisyVsCleanRMSE": 2.780732958578536,
+      "cleanTextureAdjacentDifference": 3.312632275132275
+    },
+    {
+      "sourceMean": 24,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 1.9800712112482735,
+      "cleanTextureAdjacentDifference": 2.7889550264550262
+    },
+    {
+      "sourceMean": 24,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 2.0321170233155246,
+      "cleanTextureAdjacentDifference": 2.7889550264550262
+    },
+    {
+      "sourceMean": 24,
+      "variant": "denoise",
+      "processedNoisyVsCleanRMSE": 2.194513574920072,
+      "cleanTextureAdjacentDifference": 2.7842592592592594
+    },
+    {
+      "sourceMean": 100,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 1.5098847028765572,
+      "cleanTextureAdjacentDifference": 2.0185185185185186
+    },
+    {
+      "sourceMean": 100,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 1.5098847028765572,
+      "cleanTextureAdjacentDifference": 2.0185185185185186
+    },
+    {
+      "sourceMean": 100,
+      "variant": "denoise",
+      "processedNoisyVsCleanRMSE": 1.5098847028765572,
+      "cleanTextureAdjacentDifference": 2.0185185185185186
+    }
+  ],
+  "guardOffMatchesSafety": true,
+  "realPhotosFullStripEquality": true
+}

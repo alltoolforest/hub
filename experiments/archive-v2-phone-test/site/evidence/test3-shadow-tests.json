@@ -1,0 +1,73 @@
+{
+  "method": "Worker-equivalent statistics and strips, balanced/auto/general/JPEG; desktop Node runtime only.",
+  "photos": [
+    {
+      "image": "event",
+      "variant": "safety",
+      "runtimeMs": 141,
+      "noise": 2.6319483436271756,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "event",
+      "variant": "guard",
+      "runtimeMs": 176,
+      "noise": 2.6319483436271756,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "variant": "safety",
+      "runtimeMs": 1418,
+      "noise": 0.7018528916339135,
+      "shadowNoise": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "variant": "guard",
+      "runtimeMs": 1475,
+      "noise": 0.7018528916339135,
+      "shadowNoise": 0.7018528916339135
+    }
+  ],
+  "synthetic": [
+    {
+      "sourceMean": 12,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 2.4022516845182524,
+      "cleanTextureAdjacentDifference": 3.3189814814814813
+    },
+    {
+      "sourceMean": 12,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 2.353054271957972,
+      "cleanTextureAdjacentDifference": 3.3189814814814813
+    },
+    {
+      "sourceMean": 24,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 1.9800712112482735,
+      "cleanTextureAdjacentDifference": 2.7889550264550262
+    },
+    {
+      "sourceMean": 24,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 1.9399089076073563,
+      "cleanTextureAdjacentDifference": 2.7889550264550262
+    },
+    {
+      "sourceMean": 100,
+      "variant": "safety",
+      "processedNoisyVsCleanRMSE": 1.5098847028765572,
+      "cleanTextureAdjacentDifference": 2.0185185185185186
+    },
+    {
+      "sourceMean": 100,
+      "variant": "guard",
+      "processedNoisyVsCleanRMSE": 1.5098847028765572,
+      "cleanTextureAdjacentDifference": 2.0185185185185186
+    }
+  ],
+  "guardOffMatchesSafety": true,
+  "realPhotosFullStripEquality": true
+}

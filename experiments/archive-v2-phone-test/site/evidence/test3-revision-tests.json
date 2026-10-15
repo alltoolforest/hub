@@ -1,0 +1,80 @@
+{
+  "tests": [
+    {
+      "test": "vertical neutral edge overshoot",
+      "original": [
+        72,
+        168
+      ],
+      "revised": [
+        80,
+        160
+      ],
+      "pass": true
+    },
+    {
+      "test": "horizontal neutral edge overshoot",
+      "original": [
+        72,
+        168
+      ],
+      "revised": [
+        80,
+        160
+      ],
+      "pass": true
+    },
+    {
+      "test": "transparent gap strip equality (17/32/96/192), hidden RGB independence, alpha preservation",
+      "pass": true
+    },
+    {
+      "test": "sharpness off disables every detail scale",
+      "pass": true
+    },
+    {
+      "test": "event native dimensions, input immutability and full/96-row equality",
+      "pass": true,
+      "changedPixels": 30440
+    },
+    {
+      "test": "print native dimensions, input immutability and full/96-row equality",
+      "pass": true,
+      "changedPixels": 889309
+    }
+  ],
+  "photos": [
+    {
+      "image": "event",
+      "engine": "original",
+      "width": 250,
+      "height": 375,
+      "runtimeMs": 116,
+      "noiseEstimate": 2.6319483436271756
+    },
+    {
+      "image": "event",
+      "engine": "revised",
+      "width": 250,
+      "height": 375,
+      "runtimeMs": 192,
+      "noiseEstimate": 2.6319483436271756
+    },
+    {
+      "image": "print",
+      "engine": "original",
+      "width": 1102,
+      "height": 1470,
+      "runtimeMs": 1233,
+      "noiseEstimate": 0.7018528916339135
+    },
+    {
+      "image": "print",
+      "engine": "revised",
+      "width": 1102,
+      "height": 1470,
+      "runtimeMs": 2035,
+      "noiseEstimate": 0.7018528916339135
+    }
+  ]
+}

@@ -44,6 +44,7 @@ self.onmessage = async ({ data: { bitmap, options } }) => {
       blob, width, height,
       diagnostics: {
         noise: plan.noise, chromaNoise: plan.chromaNoise, shadowNoise: plan.shadowNoise, blockStrength: plan.blockStrength,
+        shadowGuard: plan.shadowGuard,
         mean: plan.mean, range: plan.range, wb: plan.wb, localExposure: !!plan.local, levelShift: plan.shift,
         msAnalysis: Math.round(t1 - t0), msPixels: Math.round(t2 - t1)
       }
