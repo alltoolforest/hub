@@ -18,7 +18,7 @@ export function createQpdfLosslessProvider(createModule,{maximumBytes=INPUT_LIMI
       const exitCode=module.callMain(['--object-streams=generate','--compress-streams=y',
         '--decode-level=generalized','--recompress-flate','--compression-level=9',
         '--preserve-unreferenced','--remove-unreferenced-resources=no',input,output]);
-      if(exitCode!==0)throw Error('qpdf-unclean-exit');
+      if(exitCode!==0)throw Object.assign(Error('qpdf-unclean-exit'),{code:'qpdf-unclean-exit'});
       // Expansion is an honest original-file fallback, not an optimizer error.
       // Avoid allocating the output buffer when the local filesystem can report
       // its size before reading it. No unverified candidate is released.
@@ -49,5 +49,5 @@ export async function runVerifiedLossless(bytes,{PDF,readPages,optimize,signal,l
     const prepared=await deduplicateOpaqueImages(input,{PDF,serializeClassic:true});
     return optimize(prepared.bytes);
   };
-  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes,onProgress});
+  return optimizeLosslessly(bytes,{optimize:optimizeWithSafeDedup,inspect,maximumBytes:limits.maxBytes,onProgress,signal});
 }

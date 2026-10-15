@@ -5,7 +5,8 @@ export class LosslessCompressionError extends Error {
   constructor(code){super(code);this.name='LosslessCompressionError';this.code=code;}
 }
 const asBytes = v => v instanceof Uint8Array ? v : null;
-export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes=80*1024*1024,onProgress=()=>{}}={}){
+export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes=80*1024*1024,onProgress=()=>{},signal}={}){
+  if(signal?.aborted)throw new LosslessCompressionError('cancelled');
   const input=asBytes(original);
   if(!input||input.length<8||input.length>maximumBytes)
     throw new LosslessCompressionError('invalid-or-oversize-input');
@@ -13,6 +14,7 @@ export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes
     throw new LosslessCompressionError('unapproved-or-unavailable-engine');
   onProgress('lossless-inspection');
   const before=await inspect(input);
+  if(signal?.aborted)throw new LosslessCompressionError('cancelled');
   if(!before||before.valid!==true)
     throw new LosslessCompressionError('invalid-pdf');
   if(before.signed||before.encrypted||before.unknownSecurity)
@@ -24,7 +26,23 @@ export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes
   onProgress('lossless-optimization');
   let candidate;
   try { candidate=asBytes(await optimize(input.slice())); }
-  catch { throw new LosslessCompressionError('optimizer-failed'); }
+  catch(error){
+    // Resource exhaustion, unsafe-input failures and cancellation are not
+    // optional optimization errors. They must never be mislabeled as a safe
+    // recoverable optimizer failure.
+    if(signal?.aborted||error?.code==='cancelled'||error?.name==='AbortError')
+      throw new LosslessCompressionError('cancelled');
+    if(error instanceof RangeError||['RuntimeError','QuotaExceededError','OutOfMemoryError'].includes(error?.name)||
+      /(?:out of memory|memory access out of bounds|cannot enlarge memory)/i.test(String(error?.message??''))||
+      /^(?:invalid-|unsafe-|unsupported-|encrypted-|signed-|resource-|decoded-|invariant-|memory-|file-limit|processing-timeout)/.test(String(error?.code??'')))
+      throw error;
+    // Only an explicitly classified optimizer failure is recoverable.
+    // Do not reclassify unknown JS/WASM exceptions as normal qpdf failures.
+    if(error?.code==='qpdf-unclean-exit'||error?.code==='optimizer-failed')
+      throw new LosslessCompressionError('optimizer-failed');
+    throw error;
+  }
+  if(signal?.aborted)throw new LosslessCompressionError('cancelled');
   if(!candidate||candidate.length<8||candidate.length>maximumBytes)
     throw new LosslessCompressionError('invalid-output');
   if(candidate.length>=input.length)
@@ -32,6 +50,7 @@ export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes
       outputBytes:input.length,savedBytes:0};
   onProgress('lossless-verification');
   const after=await inspect(candidate);
+  if(signal?.aborted)throw new LosslessCompressionError('cancelled');
   if(!after||after.valid!==true||after.signed||after.encrypted||after.unknownSecurity||
      after.fingerprint!==before.fingerprint)
     throw new LosslessCompressionError('preservation-check-failed');
