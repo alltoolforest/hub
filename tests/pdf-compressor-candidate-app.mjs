@@ -9,7 +9,7 @@ qaDiagnostics.setAttribute('role','status');
 qaDiagnostics.setAttribute('aria-live','polite');
 qaDiagnostics.hidden=true;
 qaDiagnostics.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;background:#fff3ec;border:1px solid #a34c29;border-radius:8px;padding:12px;margin-top:12px';
-document.getElementById('compressor').appendChild(qaDiagnostics);
+// Append only after mountCompressor() overwrites its root HTML.
 const showQAError=(details={})=>{
  const capabilities={
   secureContext:isSecureContext,
@@ -42,6 +42,7 @@ const engine=createWorkerBridge({fileInput:true,profile:profile.id,onProgress:st
 // Avoid running the complete parser twice before the first result.
 engine.inspectFile=(file,{signal}={})=>preflightPDFFile(file,{signal,limits:profile.limits});
 globalThis.RC_UI=mountCompressor(document.getElementById('compressor'),{engine,limits:profile.limits});
+document.getElementById('compressor').appendChild(qaDiagnostics);
 document.querySelector('[data-run]')?.addEventListener('click',()=>{
  qaDiagnostics.hidden=true;qaDiagnostics.textContent='';
 },{capture:true});
