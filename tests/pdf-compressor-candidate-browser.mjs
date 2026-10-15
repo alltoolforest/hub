@@ -35,6 +35,8 @@ try{
  await page.waitForFunction(()=>RC_UI.session.snapshot().state==='ready');await page.locator('[data-run]').click();
  await page.waitForFunction(()=>RC_UI.session.snapshot().state==='failed');
  assert.equal(await page.evaluate(()=>RC_UI.session.snapshot().error.code),'signed-pdf');
+ assert.equal(await page.locator('#pdf-compressor-qa-error').isVisible(),true);
+ assert.match(await page.locator('#pdf-compressor-qa-error').textContent(),/Code: signed-pdf/);
  assert.equal(await page.locator('[data-download]').isVisible(),false);
  await page.locator('[data-clear]').click();
  await page.evaluate(()=>RC_UI.session.select({name:'oversize.pdf',size:100000001,arrayBuffer:()=>{throw Error('must not read');}}));
