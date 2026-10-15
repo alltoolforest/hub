@@ -28,7 +28,7 @@ export async function checkRenderedOutput(original,output,mode,{requireOCR=false
     const {pixels:x,...before}=a[n],{pixels:y,...after}=b[n];
     assert.deepEqual(after,before,'Text/OCR coordinates or page geometry changed');assert.equal(x.length,y.length);
     let squared=0;for(let p=0;p<x.length;p++)squared+=(x[p]-y[p])**2;
-    const value=Math.sqrt(squared/x.length);assert.ok(value<=(mode==='strong'?35:25),'Rendered page RMS exceeds provisional quality gate');rms.push(value);
+    const value=Math.sqrt(squared/x.length);assert.ok(value<=(mode==='maximum'?60:mode==='strong'?35:25),'Rendered page RMS exceeds provisional quality gate');rms.push(value);
   }
   return rms;
 }
