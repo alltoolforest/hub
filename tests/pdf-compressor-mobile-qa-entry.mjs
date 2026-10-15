@@ -37,7 +37,7 @@ self.onmessage=async event=>{
       // Fast structural preflight and source SHA-256 stay inside this disposable
       // worker. The final compression still runs full independent inspection.
       progress('inspect');
-      const checked=await preflightPDFFile(new Blob([bytes]),{limits:profile.limits});
+      const checked=await preflightPDFFile(event.data.file??new Blob([bytes]),{limits:profile.limits});
       const sourceDigest=await digestPDFBytes(bytes);
       self.postMessage({ok:true,report:{...checked,sourceDigest}});return;
     }
