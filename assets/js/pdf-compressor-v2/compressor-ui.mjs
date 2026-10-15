@@ -28,6 +28,7 @@ export function mountCompressor(root,{engine,limits}={}){
       <dl><dt>Mode used</dt><dd data-result-mode></dd><dt>Original size</dt><dd data-original></dd><dt>Output size</dt><dd data-output></dd>
       <dt>Saved</dt><dd data-saved></dd><dt>Processing time</dt><dd data-engine-time></dd></dl>
       <p data-timings aria-label="Compression stage timings"></p><p data-outcome></p>
+      <p data-recovery role="status" aria-live="polite" hidden></p>
       <a data-download>Download PDF</a></section>
     <p>Keep your original PDF. Balanced, Strong and Maximum may reduce embedded-image quality; Maximum may make text within scanned images less readable. Existing selectable text stays selectable. Lossless preserves image quality. Some PDFs cannot be made smaller.</p>
   </div>`;
@@ -88,6 +89,11 @@ export function mountCompressor(root,{engine,limits}={}){
           'PDF structure optimized; image quality unchanged. Review the downloaded PDF before using it.':
           'Compression verified. Review the downloaded PDF before using it.'):
           'No smaller verified output was found. The download contains your original PDF.';
+      const recovered=(r.stages??[]).filter(stage=>stage.status==='preserved-after-failure');
+      const recovery=el('[data-recovery]');
+      recovery.hidden=recovered.length===0;
+      recovery.textContent=recovered.length?
+        'Some optional compression steps could not be completed. Their outputs were discarded; only the independently verified PDF was retained.': '';
       link.href=r.url;link.download=r.name;
     }else{link.removeAttribute('href');link.removeAttribute('download');}
   }});
