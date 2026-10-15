@@ -61,7 +61,7 @@ test('workers terminate on completion, abort, error and timeout; late messages c
 test('immutable File ownership uses File APIs while binding source and output digests',async()=>{
   const source=new File([bytes],'source.pdf',{type:'application/pdf'});let inspections=0,compressions=0;
   const session=createCompressionSession({engine:{inspect:async()=>{throw Error('unexpected byte inspection');},compress:async()=>{throw Error('unexpected byte compression');},
-    inspectFile:async f=>{assert.equal(f,source);inspections++;return inspector(new Uint8Array(await f.arrayBuffer()));},
+    inspectFile:async f=>{assert.equal(f,source);inspections++;return {...await inspector(new Uint8Array(await f.arrayBuffer())),sourceDigest:await digestPDFBytes(bytes)};},
     compressFile:async(f,{mode})=>{assert.equal(f,source);compressions++;return result(new Uint8Array(await f.arrayBuffer()),mode);}}});
   await session.select(source);assert.equal(session.snapshot().state,'ready');
   for(const mode of ['balanced','strong','lossless']){await session.compress(mode);assert.equal(session.snapshot().state,'completed');}
