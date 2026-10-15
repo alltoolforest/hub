@@ -6,7 +6,7 @@ import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-d
 // Locally generated 16x16 CMYK JPEG (no user document bytes).
 const source=Buffer.from('/9j/7gAOQWRvYmUAZAAAAAAA/9sAQwACAQEBAQECAQEBAgICAgIEAwICAgIFBAQDBAYFBgYGBQYGBgcJCAYHCQcGBggLCAkKCgoKCgYICwwLCgwJCgoK/8AAFAgAEAAQBEMRAE0RAFkRAEsRAP/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/aAA4EQwBNAFkASwAAPwD9SKp198V+1lFFFFFFFFFFFFf/2Q==','base64');
 async function fixture({appMarker=238,transform=0,colorSpace='DeviceCMYK',
-  legacyMetadata=false,conflictingAdobe=false,brokenLegacyLength=false}={}){
+  legacyMetadata=false,conflictingAdobe=false,brokenLegacyLength=false,badLegacySignature=false}={}){
  let jpg=Buffer.from(source); // Buffer.slice() would alias and corrupt later fixtures.
  assert.equal(jpg[3],238);jpg[3]=appMarker;jpg[17]=transform;
  if(legacyMetadata){
@@ -15,6 +15,7 @@ async function fixture({appMarker=238,transform=0,colorSpace='DeviceCMYK',
   const adobe=Buffer.from(jpg.subarray(2,18));
   if(conflictingAdobe)adobe[15]=transform===2?0:2;
   if(brokenLegacyLength)exif[3]=255;
+  if(badLegacySignature)exif[4]=88; // Correct length, but no EXIF identifier.
   jpg=Buffer.concat([jpg.subarray(0,18),exif,photoshop,adobe,jpg.subarray(18)]);
  }
  const doc=await PDF.PDFDocument.create(),page=doc.addPage([600,800]);
@@ -59,6 +60,12 @@ test('conflicting repeated Adobe transforms and malformed EXIF segments still fa
                      {transform:2,legacyMetadata:true,brokenLegacyLength:true}]){
   await assert.rejects(inspectPDFInput(await fixture(option),{PDF,readPages:pages}),
     e=>e.code==='image-header-unverifiable');
+ }
+});
+test('CMYK/YCCK legacy metadata preserve-only exception rejects invalid EXIF signatures',async()=>{
+ for(const transform of [0,2]){
+  await assert.rejects(inspectPDFInput(await fixture({transform,legacyMetadata:true,badLegacySignature:true}),
+    {PDF,readPages:pages}),e=>e.code==='image-header-unverifiable');
  }
 });
 test('JPEG images with up to 16 PDF whitespace bytes after EOI remain inspectable',async()=>{
