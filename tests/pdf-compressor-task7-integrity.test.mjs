@@ -5,7 +5,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
 import {createIndependentTextReader} from '../assets/js/pdf-compressor-v2/independent-text-reader.mjs';
-import {verifyFinalOutput,digestPDFBytes,compressAndVerifyPDF} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
+import {verifyFinalOutput,digestPDFBytes,compressAndVerifyPDF,createVerifiedOperationContext} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
 const options={PDF,readPages:createIndependentInputReader(pdfjs),readText:createIndependentTextReader(pdfjs)};
 const raw=(await buildFixture('digital')).bytes;
 const source=new Uint8Array(Buffer.concat([raw,Buffer.from('\n%'+'.'.repeat(20000)+'\n%%EOF\n')]));
@@ -89,4 +89,28 @@ test('operation inspection reuse cannot bypass byte changes, stricter limits or 
  await assert.rejects(inspect(bytes,{limits:{...INPUT_LIMITS,maxBytes:16}}),e=>e.code==='file-limit');
  await inspect((await buildFixture('mixed')).bytes);assert.equal(calls,2);
  const abort=new AbortController();abort.abort();await assert.rejects(inspect(bytes,{signal:abort.signal}));
+});
+
+test('two target attempts share SHA-bound inspection only for unchanged source; outputs remain independently inspectable',async()=>{
+ let reads=0;
+ const readPages=async(...args)=>{reads++;return options.readPages(...args);};
+ const context=createVerifiedOperationContext({PDF,readPages});
+ const original=(await buildFixture('mixed')).bytes;
+ const report=await context.inspectInput(original,{limits:(await import('../assets/js/pdf-compressor-v2/input-inspector.mjs')).INPUT_LIMITS});
+ assert.equal(report.valid,true);
+ const initialReads=reads;
+ assert.ok(initialReads>=1);
+ const second=await context.inspectInput(original.slice());
+ assert.equal(second.pageCount,report.pageCount);
+ assert.equal(reads,initialReads,'identical source not parsed a second time');
+ second.pageCount=999;
+ assert.equal((await context.inspectInput(original)).pageCount,report.pageCount);
+ assert.equal(reads,initialReads,'isolated report copies do not poison source cache');
+ const separate=(await buildFixture('digital')).bytes;
+ const distinct=await context.inspectInput(separate);
+ assert.equal(distinct.valid,true);
+ assert.ok(reads>initialReads,'different PDF bytes must be independently inspected');
+ assert.ok(Object.isFrozen(context));
+ const aborted=new AbortController();aborted.abort();
+ await assert.rejects(context.inspectInput(original,{signal:aborted.signal}));
 });

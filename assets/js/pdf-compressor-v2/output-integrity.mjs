@@ -53,9 +53,20 @@ export async function verifyFinalOutput(original,result,{PDF,readPages,readText,
     sourceDigest,outputDigest,inputBytes:original.length,outputBytes:output.length,
     savedBytes:saved,independentTextVerified:true});
 }
+// Source reports may be shared by the two attempts of one target-size job.
+// Caches are SHA-256- and parser-limit-bound, small, and scoped to the worker
+// operation. No unverified result or parser state is shared between jobs.
+export function createVerifiedOperationContext({PDF,readPages}={}){
+  if(!PDF||typeof readPages!=='function')throw Error('verified-readers-required');
+  const cachedPages=createOperationPageReader(readPages);
+  return Object.freeze({readPages:cachedPages,
+    inspectInput:createOperationInspector({PDF,readPages:cachedPages})});
+}
 export async function compressAndVerifyPDF(bytes,options){
-  options={...options,readPages:createOperationPageReader(options.readPages)};
-  options.inspectInput=createOperationInspector(options);
+  const context=options?.operationContext??createVerifiedOperationContext(options);
+  if(typeof context?.readPages!=='function'||typeof context?.inspectInput!=='function')
+    throw Error('verified-operation-context-required');
+  options={...options,readPages:context.readPages,inspectInput:context.inspectInput};
   const result=await compressPDF(bytes,options);
   options?.onProgress?.('final-output');
   const integrity=await verifyFinalOutput(bytes,result,options);

@@ -12,7 +12,15 @@ try{
  assert.equal(await page.locator('h1').count(),1);assert.match(await page.locator('[data-limit]').textContent(),/100.00 MB/);
  await page.addScriptTag({content:readFileSync(new URL('../node_modules/axe-core/axe.min.js',import.meta.url),'utf8')});
  const axeCheck=async()=>assert.deepEqual(await page.evaluate(async()=>(await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>v.id)),[]);
- await axeCheck();const {bytes}=await buildFixture('mixed');
+ await axeCheck();
+ assert.equal(await page.locator('#compressor-target').count(),1);
+ await page.locator('#compressor-mode').selectOption('lossless');
+ assert.equal(await page.locator('#compressor-target').isDisabled(),true);
+ await page.locator('#compressor-mode').selectOption('maximum');
+ await page.locator('#compressor-target').fill('-2');
+ assert.equal(await page.locator('[data-run]').isDisabled(),true);
+ await page.locator('#compressor-target').fill('');
+ const {bytes}=await buildFixture('mixed');
  await page.locator('#compressor-file').setInputFiles({name:'mixed.pdf',mimeType:'application/pdf',buffer:Buffer.from(bytes)});
  await page.waitForFunction(()=>RC_UI.session.snapshot().state==='ready');
  const rows=[];
@@ -27,6 +35,37 @@ try{
   assert.equal(await page.locator('[data-result-mode]').textContent(),mode);
   rows.push({mode,inputBytes:state.result.inputBytes,outputBytes:actual.length,downloadHashVerified:true});
  }
+ // Target goal tests actual worker profile retries, receipt and download.
+ await page.locator('#compressor-mode').selectOption('maximum');
+ await page.locator('#compressor-target').fill('0.000001');
+ await page.locator('[data-run]').click();
+ await page.waitForFunction(()=>['completed','failed'].includes(RC_UI.session.snapshot().state),{},{timeout:120000});
+ const targetState=await page.evaluate(()=>RC_UI.session.snapshot());
+ assert.equal(targetState.state,'completed',JSON.stringify(targetState).slice(0,1600));
+ assert.equal(targetState.result.target.requestedBytes,1);
+ assert.ok(['strong','maximum'].includes(targetState.result.target.effectiveMode));
+ assert.equal(targetState.result.target.reached,false);
+ assert.deepEqual(targetState.result.target.attempts.map(a=>a.profile),['maximum','strong']);
+ assert.equal(targetState.result.integrity.independentTextVerified,true);
+ assert.match(await page.locator('[data-result-mode]').textContent(),/limit: maximum/);
+ assert.match(await page.locator('[data-outcome]').textContent(),/target/i);
+ const targetDownloadPromise=page.waitForEvent('download');
+ await page.locator('[data-download]').click();
+ const targetDownload=await targetDownloadPromise;
+ assert.equal(readFileSync(await targetDownload.path()).length,targetState.result.outputBytes);
+ // A tight but reachable target must stop after one fully verified Maximum
+ // pass rather than needlessly completing Strong first.
+ await page.locator('#compressor-target').fill('0.03');
+ await page.locator('[data-run]').click();
+ await page.waitForFunction(()=>['completed','failed'].includes(RC_UI.session.snapshot().state),{},{timeout:120000});
+ const fast=await page.evaluate(()=>RC_UI.session.snapshot());
+ assert.equal(fast.state,'completed',JSON.stringify(fast).slice(0,1000));
+ assert.equal(fast.result.target.reached,true);
+ assert.deepEqual(fast.result.target.attempts.map(a=>a.profile),['maximum']);
+ assert.equal(fast.result.target.effectiveMode,'maximum');
+ assert.ok(fast.result.bytes===undefined,'UI session does not expose raw input/output bytes');
+ assert.equal(fast.result.integrity.independentTextVerified,true);
+ await axeCheck();
  await page.locator('[data-run]').click();await page.locator('[data-cancel]').click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>RC_UI.session.snapshot().state),'cancelled');assert.equal(await page.locator('[data-download]').isVisible(),false);
  await page.locator('[data-clear]').click();

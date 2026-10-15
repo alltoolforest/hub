@@ -4,10 +4,14 @@ export class WorkerOperationError extends Error {
 }
 export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='standard',fileInput=false,onProgress=()=>{},now=()=>Date.now(),visibilityTarget=globalThis.document}={}){
   if(typeof workerFactory!=='function')throw new TypeError('Isolated worker factory required');
-  const run=(op,bytes,{mode,signal}={})=>new Promise((resolve,reject)=>{
+  const run=(op,bytes,{mode,targetBytes,signal}={})=>new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(new WorkerOperationError('cancelled'));
     let worker,timer,settled=false;
-    const deadline=now()+timeoutMs;
+    // Target-size jobs may run two fully verified profiles. Grant a
+    // bounded second window only when the user explicitly requests a target.
+    // Ordinary compression retains the original deadline unchanged.
+    const effectiveTimeoutMs=targetBytes===undefined?timeoutMs:timeoutMs*2;
+    const deadline=now()+effectiveTimeoutMs;
     const finish=(error,value)=>{
       if(settled)return;settled=true;
       clearTimeout(timer);signal?.removeEventListener('abort',abort);
@@ -24,7 +28,7 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
       worker=workerFactory();
       worker.onmessage=event=>{
         if(settled||checkDeadline())return;
-        if(event.data?.type==='progress'&&['inspect','embedded-images','lossless','lossless-inspection','lossless-optimization','lossless-verification','final-output'].includes(event.data.stage)){
+        if(event.data?.type==='progress'&&['inspect','target-attempt','embedded-images','lossless','lossless-inspection','lossless-optimization','lossless-verification','final-output'].includes(event.data.stage)){
           onProgress(event.data.stage);return;
         }
         if(typeof event.data?.ok!=='boolean')return; // Ignore parser handshake.
@@ -36,9 +40,9 @@ export function createWorkerBridge({workerFactory,timeoutMs=120000,profile='stan
       signal?.addEventListener('abort',abort,{once:true});
       if(signal?.aborted){abort();return;}
       visibilityTarget?.addEventListener('visibilitychange',checkDeadline);
-      timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),timeoutMs);
-      if(fileInput&&typeof Blob!=='undefined'&&bytes instanceof Blob)worker.postMessage({op,file:bytes,mode,profile});
-      else {const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,profile},[copy.buffer]);}
+      timer=setTimeout(()=>finish(new WorkerOperationError('processing-timeout')),effectiveTimeoutMs);
+      if(fileInput&&typeof Blob!=='undefined'&&bytes instanceof Blob)worker.postMessage({op,file:bytes,mode,targetBytes,profile});
+      else {const copy=bytes.slice();worker.postMessage({op,bytes:copy,mode,targetBytes,profile},[copy.buffer]);}
     }catch(error){finish(error);}
   });
   const bridge={inspect:(bytes,options)=>run('inspect',bytes,options),compress:(bytes,options)=>run('compress',bytes,options)};

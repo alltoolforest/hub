@@ -1,6 +1,7 @@
 // Task 8 session model. The final adaptive UI belongs to Task 11.
 import {INPUT_LIMITS} from './input-inspector.mjs';
 import {MODES} from './mode-policy.mjs';
+import {profileAttempts,validateTargetSize} from './target-size-compression.mjs';
 import {digestPDFBytes} from './output-integrity.mjs';
 const messages=Object.freeze({
   'file-limit':'This PDF exceeds the current input limit. Select a smaller PDF.',
@@ -18,7 +19,10 @@ const messages=Object.freeze({
   'cancelled':'Cancelled. The original PDF is unchanged.',
   'processing-timeout':'Processing took too long. Retry with a smaller PDF.',
   'worker-failed':'Processing stopped. Retry with a smaller PDF or close other browser tabs.',
-  'memory-limit':'Insufficient memory for this operation. Try a smaller PDF or close other tabs.'
+  'memory-limit':'Insufficient memory for this operation. Try a smaller PDF or close other tabs.',
+  'invalid-target-size':'Enter a valid target size in MB.',
+  'target-requires-lossy-mode':'Target size requires Balanced, Strong, or Maximum Compression.',
+  'invalid-verified-target-candidate':'A target-size attempt did not pass output verification.'
 });
 export function describeProcessingError(error){
   const candidate=error?.name==='RangeError'?'memory-limit':error?.code;
@@ -71,13 +75,14 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
         controller=null;error=describeProcessingError(cause);state='failed';notify();return {status:'failed',error};
       }
     },
-    async compress(mode='balanced'){
+    async compress(mode='balanced',{targetBytes}={}){
       if(!MODES.includes(mode))throw new RangeError('Unsupported compression mode');
       if(!source||['loading','processing'].includes(state))throw Error('source-not-ready');
+      if(targetBytes!==undefined)validateTargetSize(targetBytes,{sourceBytes:source.size,mode});
       invalidate();clearOutput();error=null;state='processing';
       const token=generation,abort=new AbortController();controller=abort;notify();
       try{
-        const result=await (source.file?engine.compressFile(source.file,{mode,signal:abort.signal}):engine.compress(source.bytes,{mode,signal:abort.signal}));
+        const result=await (source.file?engine.compressFile(source.file,{mode,targetBytes,signal:abort.signal}):engine.compress(source.bytes,{mode,targetBytes,signal:abort.signal}));
         if(token!==generation)return {status:'stale'};
         const bytes=result?.bytes?.slice(),receipt=result?.integrity;
         if(!(bytes instanceof Uint8Array)||receipt?.version!==1||receipt.mode!==mode||
@@ -88,7 +93,14 @@ export function createCompressionSession({engine,onChange=()=>{},limits=INPUT_LI
           result.savedBytes!==receipt.savedBytes||receipt.independentTextVerified!==true||
           (receipt.savedBytes===0&&receipt.outputDigest!==source.digest)||
           result.status!==(receipt.savedBytes>0?'compressed':'original-retained')||
-          await digestPDFBytes(bytes)!==receipt.outputDigest)throw {code:'invalid-output-receipt'};
+          await digestPDFBytes(bytes)!==receipt.outputDigest||
+          (targetBytes===undefined?result.target!==undefined:
+            (result.target?.requestedBytes!==targetBytes||
+              result.settings?.requestedTargetBytes!==targetBytes||
+              result.target?.reached!==(bytes.length<=targetBytes)||
+              !profileAttempts[mode]?.includes(result.target?.effectiveMode)||
+              result.target.effectiveMode!==result.settings?.effectiveMode)))
+          throw {code:'invalid-output-receipt'};
         if(token!==generation)return {status:'stale'};
         const {bytes:ignored,...summary}=result;
         const name=source.name.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069/\\]/g,'-').replace(/\.pdf$/i,'').slice(0,100)||'document';
