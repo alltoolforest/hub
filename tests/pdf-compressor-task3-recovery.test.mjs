@@ -55,6 +55,12 @@ test('verified image compression survives later lossless optimizer failure witho
  assert.equal(result.integrity.independentTextVerified,true);
  assert.equal(result.integrity.outputBytes,result.bytes.length);
 });
+test('recovered stage cannot bypass a failed independent final PDF/text gate',async()=>{
+ await assert.rejects(compressAndVerifyPDF(source,{PDF,...readers,
+  readText:async()=>[],mode:'lossless',
+  optimize:async()=>{throw Error('qpdf-temporary-failure');}}),
+  e=>e.code==='final-text-or-geometry-changed');
+});
 test('allowlisted image-output verification failure discards that candidate and permits safe follow-up',async()=>{
  const events=[];
  const result=await attemptOptionalStage('embedded-images',async()=>{
