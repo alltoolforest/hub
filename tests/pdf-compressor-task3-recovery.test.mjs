@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
+import {createCanvas,ImageData} from '@napi-rs/canvas';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 import {createIndependentReaders} from '../assets/js/pdf-compressor-v2/independent-readers.mjs';
@@ -27,6 +28,32 @@ test('known lossless optimizer failure retains exact original with a fresh indep
  assert.equal(result.outputBytes,result.inputBytes);
  assert.ok(textCalls>=2,'failure recovery must not skip final source/output text verification');
  assert.deepEqual(source,unchanged,'no fallback attempt may mutate user input');
+});
+test('verified image compression survives later lossless optimizer failure without losing savings',async()=>{
+ const input=(await buildFixture('mixed')).bytes;
+ const encodeJpeg=async({rgb,width,height,quality})=>{
+  const canvas=createCanvas(width,height),rgba=new Uint8ClampedArray(width*height*4);
+  for(let p=0;p<width*height;p++){
+   rgba[p*4]=rgb[p*3];rgba[p*4+1]=rgb[p*3+1];
+   rgba[p*4+2]=rgb[p*3+2];rgba[p*4+3]=255;
+  }
+  canvas.getContext('2d').putImageData(new ImageData(rgba,width,height),0,0);
+  return new Uint8Array(await canvas.encode('jpeg',Math.round(quality*100)));
+ };
+ const result=await compressAndVerifyPDF(input,{PDF,...readers,mode:'balanced',
+  encodeJpeg,verifyJpeg:async()=>true,
+  optimize:async()=>{throw Error('temporary-qpdf-provider-failure');}});
+ assert.equal(result.status,'compressed');
+ assert.ok(result.outputBytes<input.length);
+ assert.equal(result.stages[0].engine,'embedded-images');
+ assert.equal(result.stages[0].status,'compressed');
+ assert.equal(result.stages[1].engine,'lossless');
+ assert.equal(result.stages[1].status,'preserved-after-failure');
+ assert.equal(result.stages[1].reason,'optimizer-failed');
+ assert.equal(result.stages[1].outputBytes,result.stages[0].outputBytes);
+ assert.equal(result.settings.imageTransformationApplied,true);
+ assert.equal(result.integrity.independentTextVerified,true);
+ assert.equal(result.integrity.outputBytes,result.bytes.length);
 });
 test('allowlisted image-output verification failure discards that candidate and permits safe follow-up',async()=>{
  const events=[];
