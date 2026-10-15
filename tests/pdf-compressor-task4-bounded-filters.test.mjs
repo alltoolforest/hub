@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decodeLZWBounded,decodeRunLengthBounded} from '../assets/js/pdf-compressor-v2/bounded-legacy-filters.mjs';
+import {decodeLZWBounded,decodeRunLengthBounded,decodeASCIIStreamBounded} from '../assets/js/pdf-compressor-v2/bounded-legacy-filters.mjs';
 import {buildFixture,PDF} from './pdf-compressor-task1-fixtures.mjs';
 import {inspectPDFInput,INPUT_LIMITS} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
@@ -49,6 +49,21 @@ test('RunLength streams decode literal and repeated runs without allocating past
     e=>e.code==='invalid-runlength-stream');
  }
  assert.throws(()=>decodeRunLengthBounded(encoded,2),e=>e.code==='decoded-stream-limit');
+});
+test('ASCII85/Hex filters decode by bytes under output budgets, without unbounded encoded-string copies',()=>{
+ const a85=decodeASCIIStreamBounded(text(' <~87cUR DZ~> '),'/ASCII85Decode',5);
+ assert.deepEqual(a85,text('Hello'));
+ assert.deepEqual(decodeASCIIStreamBounded(text('4865 6C6C6F>'),'/ASCIIHexDecode',5),text('Hello'));
+ assert.deepEqual(decodeASCIIStreamBounded(text('4>'),'/ASCIIHexDecode',1),new Uint8Array([64]));
+ assert.deepEqual(decodeASCIIStreamBounded(text('z~>'),'/ASCII85Decode',4),new Uint8Array(4));
+ for(const [str,filter] of [['<~87cURDZ~>','/ASCII85Decode'],['48656C6C6F>','/ASCIIHexDecode']])
+  assert.throws(()=>decodeASCIIStreamBounded(text(str),filter,4),e=>e.code==='decoded-stream-limit');
+ for(const [str,filter] of [['<~a~>','/ASCII85Decode'],['<~87cURD','/ASCII85Decode'],
+   ['ZZ','/ASCIIHexDecode'],['AA>Q','/ASCIIHexDecode']])
+   assert.throws(()=>decodeASCIIStreamBounded(text(str),filter,100));
+ const controller=new AbortController();controller.abort();
+ assert.throws(()=>decodeASCIIStreamBounded(text('4>'),'/ASCIIHexDecode',100,{signal:controller.signal}),
+   e=>e.code==='cancelled');
 });
 test('LZW PDF streams decode literal and KwKwK dictionary entries for either EarlyChange',()=>{
  for(const earlyChange of [0,1]){
