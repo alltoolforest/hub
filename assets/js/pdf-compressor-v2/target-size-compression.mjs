@@ -26,6 +26,8 @@ export async function compressToTarget(bytes,{targetBytes,mode,runVerified,signa
   if(typeof runVerified!=='function')throw new TargetSizeError('verified-engine-required');
   let best=null;
   const trials=[];
+  const stageTimings={inspectionMs:0,imageMs:0,losslessMs:0,finalVerificationMs:0};
+  let hasStageTimings=false;
   // One-third-or-less targets are aggressive. Maximum was explicitly
   // selected, so its fully verified profile can be tried first. If it reaches
   // the target, avoid an otherwise redundant Strong pass. For less demanding
@@ -48,6 +50,14 @@ export async function compressToTarget(bytes,{targetBytes,mode,runVerified,signa
       receipt.inputBytes!==bytes.length||receipt.outputBytes!==output.length||
       receipt.savedBytes!==bytes.length-output.length)
       throw new TargetSizeError('invalid-verified-target-candidate');
+    // Report the duration of every attempted profile, not only the winning
+    // one. This keeps stage diagnostics truthful for two-pass target jobs.
+    for(const key of Object.keys(stageTimings)){
+      const value=candidate.stageTimings?.[key];
+      if(Number.isFinite(value)&&value>=0){
+        stageTimings[key]+=value;hasStageTimings=true;
+      }
+    }
     trials.push(Object.freeze({profile,outputBytes:output.length,
       targetReached:output.length<=targetBytes}));
     if(!best||output.length<best.bytes.length)best=candidate;
@@ -59,6 +69,7 @@ export async function compressToTarget(bytes,{targetBytes,mode,runVerified,signa
   // from the independently verified candidate without modification.
   return {
     ...best,mode,integrity:{...best.integrity,mode},
+    ...(hasStageTimings?{stageTimings}:{}),
     settings:{...best.settings,effectiveMode:best.mode,requestedTargetBytes:targetBytes,
       targetReached:best.bytes.length<=targetBytes},
     target:{requestedBytes:targetBytes,reached:best.bytes.length<=targetBytes,
