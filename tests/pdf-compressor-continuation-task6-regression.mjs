@@ -40,7 +40,7 @@ async function encodeJpeg({rgb,width,height,quality,signal}){
 async function verifyJpeg({bytes,originalStream,descriptor,width,height,mode}){
  const encoded=await decodeJpeg({bytes,descriptor:{width,height,
   colorSpace:'/DeviceRGB',bitsPerComponent:8,filter:'/DCTDecode',streamBytes:bytes.length}});
- if(!(encoded instanceof Uint8Array)||encoded.length!==width*height*4)return false;
+ if(!(encoded instanceof Uint8Array||encoded instanceof Uint8ClampedArray)||encoded.length!==width*height*4)return false;
  const count=descriptor.width*descriptor.height;
  let original;
  if(descriptor.filter==='/DCTDecode')original=await decodeJpeg({
@@ -56,7 +56,7 @@ async function verifyJpeg({bytes,originalStream,descriptor,width,height,mode}){
    original[p*4+3]=255;
   }
  }
- if(!(original instanceof Uint8Array)||original.length!==count*4)return false;
+ if(!(original instanceof Uint8Array||original instanceof Uint8ClampedArray)||original.length!==count*4)return false;
  const canvas=createCanvas(descriptor.width,descriptor.height);
  canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(original),descriptor.width,descriptor.height),0,0);
  const target=createCanvas(width,height),ctx=target.getContext('2d');
