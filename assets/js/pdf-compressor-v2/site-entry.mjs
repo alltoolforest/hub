@@ -14,6 +14,6 @@ export async function mount(root){
    onProgress:stage=>app?.progress(stage)
  });
  let app=null;
- app=mountCompressor(root,{engine,limits:profile.limits});
+ app=mountCompressor(root,{engine,limits:profile.limits,headingLevel:'h2'});
  return app;
 }
