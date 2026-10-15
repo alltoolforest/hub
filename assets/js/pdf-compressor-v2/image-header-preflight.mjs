@@ -60,7 +60,7 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
     (preserveLegacy&&compatibleLegacyMetadata(m))||
     (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
-    (preservedLegacyCmyk&&[225,237].includes(m.marker)));
+    (preservedLegacyCmyk&&compatibleLegacyMetadata(m)));
   if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components)||
     frame.metadataAfterScan||!allowedMetadata)throw Error('unsupported-jpeg-frame');
   return frame;
