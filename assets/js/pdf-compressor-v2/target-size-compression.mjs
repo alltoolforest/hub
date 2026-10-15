@@ -26,7 +26,9 @@ export async function compressToTarget(bytes,{targetBytes,mode,runVerified,signa
   if(typeof runVerified!=='function')throw new TargetSizeError('verified-engine-required');
   let best=null;
   const trials=[];
-  for(const profile of profileAttempts[mode]){
+  const tightMaximum=mode==='maximum' && targetBytes*3<=bytes.length;
+  const order=tightMaximum?['maximum','strong']:profileAttempts[mode];
+  for(const profile of order){
     if(signal?.aborted)throw new TargetSizeError('cancelled');
     onProgress('target-attempt');
     // A runVerified implementation must complete independent PDF verification
