@@ -113,6 +113,7 @@ test('target-size retries receive a bounded second deadline, normal worker deadl
   workers.at(-1).onmessage({data:{ok:true,result:{bytes:bytes.slice()}}});
   assert.ok((await pending).bytes instanceof Uint8Array);
   const ordinary=bridge.compress(bytes,{mode:'strong'});
+  clock=2600;
   workers.at(-1).onmessage({data:{ok:true,result:{bytes:bytes.slice()}}});
   await assert.rejects(ordinary,e=>e.code==='processing-timeout');
 });
