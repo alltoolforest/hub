@@ -32,7 +32,8 @@ export async function optimizeLosslessly(original,{optimize,inspect,maximumBytes
     // recoverable optimizer failure.
     if(signal?.aborted||error?.code==='cancelled'||error?.name==='AbortError')
       throw new LosslessCompressionError('cancelled');
-    if(error instanceof RangeError||error?.name==='RuntimeError'||
+    if(error instanceof RangeError||['RuntimeError','QuotaExceededError','OutOfMemoryError'].includes(error?.name)||
+      /(?:out of memory|memory access out of bounds|cannot enlarge memory)/i.test(String(error?.message??''))||
       /^(?:invalid-|unsafe-|unsupported-|encrypted-|signed-|resource-|decoded-|invariant-|memory-|file-limit|processing-timeout)/.test(String(error?.code??'')))
       throw error;
     throw new LosslessCompressionError('optimizer-failed');
