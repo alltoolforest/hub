@@ -1,12 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
 import {transformEmbeddedImages} from '../assets/js/pdf-compressor-v2/embedded-image-transform.mjs';
 const require=createRequire(import.meta.url);
 const PDF=require('../assets/js/pdf-compressor-v2/vendor/pdf-lib/pdf-lib.js');
-const base=new Uint8Array(Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUEBAQEAwUEBAQGBQUGCA0ICAcHCBALDAkNExAUExIQEhIUFx0ZFBYcFhISGiMaHB4fISEhFBkkJyQgJh0gISD/2wBDAQUGBggHCA8ICA8gFRIVICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICD/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKjpKKKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDgqKKK/Wz89P/Z','base64'));
+// Test-only deterministic Pillow encoder; no user photos or network calls.
+// The input-integrity CI gate already pins Pillow and Python.
+const py=[
+ 'from PIL import Image',
+ 'import io,sys',
+ "img=Image.new('RGB',(16,16))",
+ 'img.putdata([((x*13+y*7)%256,(x*27+y*3)%256,(x*3+y*19)%256) for y in range(16) for x in range(16)])',
+ 'buf=io.BytesIO()',
+ "img.save(buf,format='JPEG',quality=75,progressive=False)",
+ 'sys.stdout.buffer.write(buf.getvalue())'
+].join('\\n');
+const base=new Uint8Array(execFileSync('python', ['-c',py]));
+assert.equal(base.length,722,'fixture JPEG encoder output must be stable');
 const N=PDF.PDFName.of;
 const exif=Buffer.from([255,225,0,8,69,120,105,102,0,0]);
 const photoshop=Buffer.from([255,237,0,8,56,66,73,77,0,0]);
