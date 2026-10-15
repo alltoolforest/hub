@@ -301,7 +301,7 @@ jobs:
           python-version: '3.12'
       - name: Install pinned independently-authored regression tooling
         run: |
-          npm install --no-save --no-package-lock pdfjs-dist@6.3.289
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 @napi-rs/canvas@1.0.11
           python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
       - name: Verify source-built runtime and generate real encrypted/signed controls
         run: |
