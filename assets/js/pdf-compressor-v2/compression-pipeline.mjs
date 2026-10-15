@@ -4,6 +4,7 @@ import {inspectPDFInput,INPUT_LIMITS} from './input-inspector.mjs';
 import {runVerifiedLossless} from './qpdf-lossless-adapter.mjs';
 import {runVerifiedImageCompression} from './image-compression.mjs';
 import {planCompression,describeResult,MODES} from './mode-policy.mjs';
+import {attemptOptionalStage} from './recoverable-stage-policy.mjs';
 
 export class CompressionPipelineError extends Error {
   constructor(code){super(code);this.name='CompressionPipelineError';this.code=code;}
@@ -28,22 +29,40 @@ export async function compressPDF(bytes,{PDF,readPages,optimize,encodeJpeg,
   if(mode!=='lossless'&&plan.imageCandidates>0){
     onProgress('embedded-images');
     const imageStarted=now();
-    const image=await runVerifiedImageCompression(current,{PDF,readPages,encodeJpeg,
-      verifyJpeg,decodeJpeg,mode,signal,limits,inspectInput});
+    const imageAttempt=await attemptOptionalStage('embedded-images',()=>
+      runVerifiedImageCompression(current,{PDF,readPages,encodeJpeg,
+        verifyJpeg,decodeJpeg,mode,signal,limits,inspectInput}),{signal});
     checkCancel(signal);
     stageTimings.imageMs=now()-imageStarted;
-    stages.push({engine:'embedded-images',status:image.status,
-      inputBytes:current.length,outputBytes:image.bytes.length});
-    current=image.bytes;
+    if(imageAttempt.status==='recovered'){
+      // The failed candidate is discarded entirely. Only the unchanged,
+      // originally inspected bytes may pass into the next verified stage.
+      stages.push({engine:'embedded-images',status:'preserved-after-failure',
+        reason:imageAttempt.reason,inputBytes:current.length,outputBytes:current.length});
+    }else{
+      const image=imageAttempt.value;
+      stages.push({engine:'embedded-images',status:image.status,
+        inputBytes:current.length,outputBytes:image.bytes.length});
+      current=image.bytes;
+    }
   }
   onProgress('lossless');
   const losslessStarted=now();
-  const lossless=await runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits,onProgress,inspectInput});
+  const losslessAttempt=await attemptOptionalStage('lossless',()=>
+    runVerifiedLossless(current,{PDF,readPages,optimize,signal,limits,onProgress,inspectInput}),{signal});
   checkCancel(signal);
   stageTimings.losslessMs=now()-losslessStarted;
-  stages.push({engine:'lossless',status:lossless.status,
-    inputBytes:current.length,outputBytes:lossless.bytes.length});
-  current=lossless.bytes;
+  if(losslessAttempt.status==='recovered'){
+    // Retain the last independently image-verified result, or exact original.
+    // Final independent verification is still mandatory before download.
+    stages.push({engine:'lossless',status:'preserved-after-failure',
+      reason:losslessAttempt.reason,inputBytes:current.length,outputBytes:current.length});
+  }else{
+    const lossless=losslessAttempt.value;
+    stages.push({engine:'lossless',status:lossless.status,
+      inputBytes:current.length,outputBytes:lossless.bytes.length});
+    current=lossless.bytes;
+  }
   // Final no-expansion policy refers to the original, not a staged input.
   if(current.length>=bytes.length)current=bytes.slice();
   const summary=describeResult({inputBytes:bytes.length,outputBytes:current.length});
