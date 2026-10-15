@@ -6,7 +6,9 @@ const source = await readFile(new URL('../assets/js/image-enhancer.js',import.me
 const begin=source.indexOf('class OnnxDeblurEngine extends');
 const end=source.indexOf('\nfunction clampByte',begin);
 const Engine=vm.runInNewContext(source.slice(begin,end)+'\nOnnxDeblurEngine;', {
-  EnhancementEngine:class {},validateDeblurOutput,validateDeblurFidelity,DOMException
+  EnhancementEngine:class {},validateDeblurOutput,validateDeblurFidelity,DOMException,
+  createRestorationBudget:()=>({check(){}}),estimateTileCount:()=>1,
+  isMemoryPressureError:()=>false
 });
 for(const scenario of ['valid','corrupt','nonfinite','dimensions','cancelled','conversion-error']) {
   const w=64,h=64,n=w*h*3;
@@ -44,3 +46,19 @@ validateDeblurFidelity(restored,input,w,h);
 for(let y=64;y<96;y++)for(let x=64;x<96;x++)for(let c=0;c<3;c++)restored[c*plane+y*w+x]=1;
 assert.throws(()=>validateDeblurFidelity(restored,input,w,h),/distortion/);
 console.log('PASS: six inference lifecycle scenarios, edge recovery, localized corruption rejection. Model execution mocked.');
+
+for(const scenario of ['distortion','cancelled','shape','fallback-failure']) {
+  let calls=0;
+  const engine=new Engine(null,{}, {fallbackDeblur:async()=>{
+    calls++; if(scenario==='fallback-failure')throw new Error('fallback failed');
+    return {width:64,height:64};
+  }});
+  engine.initialize=async()=>{};
+  engine.processTiled=async()=>{const e=new Error('fixture');e.name=scenario==='shape'?'Error':'DeblurDistortionError';throw e;};
+  const work=engine.process({image:{width:64,height:64},signal:{aborted:scenario==='cancelled'}});
+  if(scenario==='distortion') {
+    const result=await work;assert.equal(result.fallbackUsed,true);assert.equal(result.aiUsed,false);
+  } else await assert.rejects(work);
+  assert.equal(calls,['distortion','fallback-failure'].includes(scenario)?1:0);
+}
+console.log('PASS: whole-frame fallback routing, cancellation, malformed model rejection and fallback failure propagation.');

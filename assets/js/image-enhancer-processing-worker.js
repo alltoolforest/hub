@@ -1,5 +1,6 @@
 import { portraitProtectionAt } from './image-enhancer-portrait.js';
 import { unpackDeblurPixels } from './image-enhancer-deblur-pixels.js';
+import { recoverDeblurFallback } from './image-enhancer-deblur-fallback.js';
 import { faceSafetyAiLimitAt, createFaceRetentionMasks, faceRetentionLimitAt } from './image-enhancer-face-safety.js';
 import {
   resolveRegionRestorationPlan,
@@ -477,6 +478,51 @@ async function postprocess(bitmap, local, analysis, sharpening, id) {
   return output.transferToImageBitmap();
 }
 
+async function fallbackDeblur(bitmap, id) {
+  let output, scratch;
+  const started = Date.now();
+  try {
+    const { width, height } = bitmap;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 32e6) throw new Error('Unsupported fallback dimensions.');
+    output = new OffscreenCanvas(width, height);
+    scratch = new OffscreenCanvas(1, 1);
+    const ctx = output.getContext('2d', { alpha: false });
+    const read = scratch.getContext('2d', { alpha: false, willReadFrequently: true });
+    if (!ctx || !read) throw new Error('Fallback workspace is unavailable.');
+    const core = 256, halo = 9;
+    for (let y = 0; y < height; y += core) {
+      for (let x = 0; x < width; x += core) {
+        if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+        if (Date.now() - started > 120000) throw new Error('Conservative restoration timed out.');
+        const sx = Math.max(0, x - halo), sy = Math.max(0, y - halo);
+        const cw = Math.min(core, width - x), ch = Math.min(core, height - y);
+        const rw = Math.min(width, x + cw + halo) - sx, rh = Math.min(height, y + ch + halo) - sy;
+        scratch.width = rw; scratch.height = rh;
+        read.drawImage(bitmap, sx, sy, rw, rh, 0, 0, rw, rh);
+        const rgba = read.getImageData(0, 0, rw, rh).data, n = rw * rh;
+        const source = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) source[c * n + i] = rgba[4 * i + c] / 255;
+        const restored = recoverDeblurFallback(source, rw, rh);
+        const image = ctx.createImageData(cw, ch);
+        for (let yy = 0; yy < ch; yy++) for (let xx = 0; xx < cw; xx++) {
+          const i = (yy + y - sy) * rw + xx + x - sx, p = (yy * cw + xx) * 4;
+          for (let c = 0; c < 3; c++) image.data[p + c] = byte(restored[c * n + i] * 255);
+          image.data[p + 3] = 255;
+        }
+        ctx.putImageData(image, x, y);
+        // Yield to a task, not only a microtask, so cancellation can arrive.
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+    if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+    return output.transferToImageBitmap();
+  } finally {
+    bitmap.close?.();
+    if (scratch) scratch.width = scratch.height = 0;
+    if (output) output.width = output.height = 0;
+  }
+}
+
 self.onmessage = async event => {
   const message = event.data || {};
   const { id, type } = message;
@@ -486,7 +532,10 @@ self.onmessage = async event => {
   }
 
   try {
-    if (type === 'deblur-tensor-to-bitmap') {
+    if (type === 'fallback-deblur') {
+      const bitmap = await fallbackDeblur(message.bitmap, id);
+      self.postMessage({ id, ok: true, bitmap }, [bitmap]);
+    } else if (type === 'deblur-tensor-to-bitmap') {
       const bitmap = await deblurTensorToBitmap(message, id);
       self.postMessage({ id, ok: true, bitmap }, [bitmap]);
     } else if (type === 'pack-tile') {

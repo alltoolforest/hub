@@ -157,6 +157,27 @@ class ProcessingWorkerBridge {
     return canvas;
   }
 
+  async fallbackDeblur(image, signal) {
+    const bitmap = await createImageBitmap(image);
+    let result, canvas;
+    try {
+      result = await this.request('fallback-deblur', { bitmap }, [bitmap], signal);
+      if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+      if (result.bitmap.width !== image.width || result.bitmap.height !== image.height) throw new Error('Fallback dimensions changed.');
+      canvas = el('canvas', { width: image.width, height: image.height });
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) throw new Error('Fallback output canvas is unavailable.');
+      ctx.drawImage(result.bitmap, 0, 0);
+      return canvas;
+    } catch (error) {
+      if (canvas) canvas.width = canvas.height = 0;
+      throw error;
+    } finally {
+      bitmap.close?.();
+      result?.bitmap?.close?.();
+    }
+  }
+
   async regionAwareRestore(sourceImage, processedCanvas, analysis, faces, mode, signal) {
     if (!this.available) return null;
     const sourceBitmap = await createImageBitmap(sourceImage);
@@ -709,6 +730,16 @@ class OnnxDeblurEngine extends EnhancementEngine {
       } catch (error) {
         if (error?.name === 'AbortError' || signal?.aborted) throw error;
         lastError = error;
+        if (error?.name === 'DeblurDistortionError') {
+          onProgress?.('Using conservative blur reduction to preserve the photo…');
+          // Restart from the source for the whole frame: never join learned
+          // and fallback patches along inference tile boundaries.
+          await this.dispose();
+          if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
+          const canvas = await this.processor.fallbackDeblur(image, signal);
+          return { canvas, aiUsed: false, engine: this, backend: 'conservative-worker',
+            fallbackUsed: true, tileCount: 0, tileCore: 256, retryCount: attempt, deblurred: true };
+        }
         if (!isMemoryPressureError(error) || attempt === plans.length - 1) throw error;
         onProgress?.(`Deblur memory pressure detected. Retrying with smaller ${plans[attempt + 1]}px tiles…`);
         await sleepFrame();
@@ -1608,7 +1639,8 @@ export async function mount(root, slug) {
       output(blob, safeName(file.name, '-deblurred', 'png'));
       const retryLabel = result.retryCount ? ` · deblur memory retry ×${result.retryCount}` : '';
       const fidelityLabel = fidelityGuard.applied ? ` · artifact guard ×${fidelityGuard.stages}` : '';
-      status(`Deblur processed · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · dedicated deblur AI${retryLabel}${fidelityLabel}. Compare with the original; blur recovery is not guaranteed.`);
+      const recoveryLabel = result.fallbackUsed ? 'conservative blur reduction' : 'dedicated deblur AI';
+      status(`Deblur processed · original size ${width.toLocaleString()} × ${height.toLocaleString()} · ${format(blob.size / 1024)} KB · ${recoveryLabel}${retryLabel}${fidelityLabel}. Compare with the original; blur recovery is not guaranteed.`);
       return result;
     } catch (error) {
       if (result?.canvas) result.canvas.width = result.canvas.height = 0;

@@ -1,0 +1,50 @@
+[
+  {
+    "case": "event-motion",
+    "inputPSNR": 20.801330925354158,
+    "fallbackPSNR": 20.839139142353922,
+    "mse": 0.008243014916956476
+  },
+  {
+    "case": "event-defocus",
+    "inputPSNR": 24.759672978327533,
+    "fallbackPSNR": 25.705370447260467,
+    "mse": 0.002688208532769116
+  },
+  {
+    "case": "event-noise",
+    "inputPSNR": 27.967463630864117,
+    "fallbackPSNR": 29.73436612195063,
+    "mse": 0.0010630737337457786
+  },
+  {
+    "case": "event-sharp",
+    "inputPSNR": 120,
+    "fallbackPSNR": 36.13997129279906,
+    "mse": 0.00024322200861834453
+  },
+  {
+    "case": "print-motion",
+    "inputPSNR": 35.84526516061652,
+    "fallbackPSNR": 35.911617665235,
+    "mse": 0.0002563528992342488
+  },
+  {
+    "case": "print-defocus",
+    "inputPSNR": 39.925068804245264,
+    "fallbackPSNR": 40.44263597352513,
+    "mse": 0.0000903101165269957
+  },
+  {
+    "case": "print-noise",
+    "inputPSNR": 37.16880696854759,
+    "fallbackPSNR": 37.225713018934684,
+    "mse": 0.00018942124995241565
+  },
+  {
+    "case": "print-sharp",
+    "inputPSNR": 120,
+    "fallbackPSNR": 50.30352028390925,
+    "mse": 0.000009324981343948936
+  }
+]

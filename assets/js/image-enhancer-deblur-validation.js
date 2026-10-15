@@ -10,7 +10,9 @@ export function validateDeblurOutput(output, width, height) {
   }
   for (const value of output.data) {
     if (!Number.isFinite(value) || Math.abs(value) > 16) {
-      throw new Error('Deblur model returned unstable pixel values.');
+      const error = new Error('Deblur model returned unstable pixel values.');
+      error.name = 'DeblurDistortionError';
+      throw error;
     }
   }
 }
@@ -39,7 +41,9 @@ export function validateDeblurFidelity(result, source, width, height) {
         }
       }
       if (total / n > 0.20 || extreme / n > 0.10) {
-        throw new Error('Deblur produced excessive local distortion; no restored image was exported.');
+        const error = new Error('Deblur produced excessive local distortion.');
+        error.name = 'DeblurDistortionError';
+        throw error;
       }
     }
   }
