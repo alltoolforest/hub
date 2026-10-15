@@ -36,8 +36,10 @@ export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,h
         const delta=actual[p*4+c]-reference[p*3+c];square+=delta*delta;bias[c]+=delta;
       }
       const rmse=Math.sqrt(square/(count*3));
-      const limit=descriptor.filter==='/DCTDecode'?(mode==='strong'?10:6):(mode==='strong'?40:30);
-      return rmse<=limit&&bias.every(sum=>Math.abs(sum/count)<=5);
+      const limit=descriptor.filter==='/DCTDecode'?
+        (mode==='maximum'?24:mode==='strong'?10:6):
+        (mode==='maximum'?55:mode==='strong'?40:30);
+      return rmse<=limit&&bias.every(sum=>Math.abs(sum/count)<=(mode==='maximum'?12:5));
     }finally{image.close();}
   }
   const source=new OffscreenCanvas(descriptor.width,descriptor.height),target=new OffscreenCanvas(width,height);
@@ -65,7 +67,9 @@ export async function verifyBrowserJpeg({bytes,originalStream,descriptor,width,h
       const delta=actual[p*4+c]-reference[p*4+c];square+=delta*delta;bias[c]+=delta;
     }
     const rmse=Math.sqrt(square/(width*height*3));
-    const limit=descriptor.filter==='/DCTDecode'?(mode==='strong'?10:6):(mode==='strong'?40:30);
-    return rmse<=limit&&bias.every(sum=>Math.abs(sum/(width*height))<=5);
+    const limit=descriptor.filter==='/DCTDecode'?
+      (mode==='maximum'?24:mode==='strong'?10:6):
+      (mode==='maximum'?55:mode==='strong'?40:30);
+    return rmse<=limit&&bias.every(sum=>Math.abs(sum/(width*height))<=(mode==='maximum'?12:5));
   }finally{image.close();source.width=source.height=target.width=target.height=1;}
 }
