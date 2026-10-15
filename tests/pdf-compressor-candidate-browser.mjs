@@ -45,7 +45,7 @@ try{
  assert.equal(targetState.result.target.requestedBytes,1);
  assert.ok(['strong','maximum'].includes(targetState.result.target.effectiveMode));
  assert.equal(targetState.result.target.reached,false);
- assert.deepEqual(targetState.result.target.attempts.map(a=>a.profile),['strong','maximum']);
+ assert.deepEqual(targetState.result.target.attempts.map(a=>a.profile),['maximum','strong']);
  assert.equal(targetState.result.integrity.independentTextVerified,true);
  assert.match(await page.locator('[data-result-mode]').textContent(),/limit: maximum/);
  assert.match(await page.locator('[data-outcome]').textContent(),/target/i);
@@ -53,6 +53,18 @@ try{
  await page.locator('[data-download]').click();
  const targetDownload=await targetDownloadPromise;
  assert.equal(readFileSync(await targetDownload.path()).length,targetState.result.outputBytes);
+ // A tight but reachable target must stop after one fully verified Maximum
+ // pass rather than needlessly completing Strong first.
+ await page.locator('#compressor-target').fill('0.03');
+ await page.locator('[data-run]').click();
+ await page.waitForFunction(()=>['completed','failed'].includes(RC_UI.session.snapshot().state),{},{timeout:120000});
+ const fast=await page.evaluate(()=>RC_UI.session.snapshot());
+ assert.equal(fast.state,'completed',JSON.stringify(fast).slice(0,1000));
+ assert.equal(fast.result.target.reached,true);
+ assert.deepEqual(fast.result.target.attempts.map(a=>a.profile),['maximum']);
+ assert.equal(fast.result.target.effectiveMode,'maximum');
+ assert.ok(fast.result.bytes===undefined,'UI session does not expose raw input/output bytes');
+ assert.equal(fast.result.integrity.independentTextVerified,true);
  await axeCheck();
  await page.locator('[data-run]').click();await page.locator('[data-cancel]').click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>RC_UI.session.snapshot().state),'cancelled');assert.equal(await page.locator('[data-download]').isVisible(),false);
