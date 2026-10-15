@@ -8,6 +8,8 @@ import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lo
 import {compressAndVerifyPDF,createVerifiedOperationContext} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
 import {compressToTarget} from '../assets/js/pdf-compressor-v2/target-size-compression.mjs';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
+import {preflightPDFFile} from '../assets/js/pdf-compressor-v2/file-preflight.mjs';
+import {digestPDFBytes} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
 import {DEVICE_PROFILES} from '../assets/js/pdf-compressor-v2/device-policy.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
 import {encodeBrowserJpeg,verifyBrowserJpeg} from '../assets/js/pdf-compressor-v2/browser-image-codec.mjs';
@@ -32,8 +34,12 @@ self.onmessage=async event=>{
     const bytes=event.data.file?new Uint8Array(await event.data.file.arrayBuffer()):event.data.bytes;
     lastStage='input-loaded';
     if(event.data.op==='inspect'){
-      progress('inspect');const report=await inspectPDFInput(bytes,{PDF,readPages:reader,limits:profile.limits});
-      self.postMessage({ok:true,report});return;
+      // Fast structural preflight and source SHA-256 stay inside this disposable
+      // worker. The final compression still runs full independent inspection.
+      progress('inspect');
+      const checked=await preflightPDFFile(new Blob([bytes]),{limits:profile.limits});
+      const sourceDigest=await digestPDFBytes(bytes);
+      self.postMessage({ok:true,report:{...checked,sourceDigest}});return;
     }
     if(event.data.op!=='compress')throw Error('unsupported-operation');
     // Only requested target-size runs reuse the immutable source inspection
