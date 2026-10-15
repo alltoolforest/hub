@@ -6,6 +6,7 @@ import createQpdf from '../assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs';
 import {createIndependentReaders} from '../assets/js/pdf-compressor-v2/independent-readers.mjs';
 import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
 import {compressAndVerifyPDF} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
+import {compressToTarget} from '../assets/js/pdf-compressor-v2/target-size-compression.mjs';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {DEVICE_PROFILES} from '../assets/js/pdf-compressor-v2/device-policy.mjs';
 import {createPDFJpegDecoder} from '../assets/js/pdf-compressor-v2/jpeg-source-decoder.mjs';
@@ -24,7 +25,7 @@ self.onmessage=async event=>{
   const started=performance.now();
   try{
     lastStage='read-source';
-    const {mode}=event.data;
+    const {mode,targetBytes}=event.data;
     const profile=DEVICE_PROFILES[event.data.profile];if(!profile)throw Error('unsupported-device-profile');
     const size=event.data.file?.size??event.data.bytes.length;
     if(size>profile.limits.maxBytes)throw {code:'file-limit'};
@@ -35,8 +36,13 @@ self.onmessage=async event=>{
       self.postMessage({ok:true,report});return;
     }
     if(event.data.op!=='compress')throw Error('unsupported-operation');
-    const result=await compressAndVerifyPDF(bytes,{PDF,readPages:reader,readText,optimize,decodeJpeg,
-      encodeJpeg:encodeBrowserJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),mode,limits:profile.limits,onProgress:progress});
+    const runVerified=(source,{mode:trialMode,onProgress:trialProgress=progress}={})=>
+      compressAndVerifyPDF(source,{PDF,readPages:reader,readText,optimize,decodeJpeg,
+        encodeJpeg:encodeBrowserJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),
+        mode:trialMode,limits:profile.limits,onProgress:trialProgress});
+    const result=targetBytes===undefined?
+      await runVerified(bytes,{mode}):
+      await compressToTarget(bytes,{targetBytes,mode,runVerified,onProgress:progress});
     result.engineMs=Math.round(performance.now()-started);
     self.postMessage({ok:true,result},[result.bytes.buffer]);
   }catch(error){
