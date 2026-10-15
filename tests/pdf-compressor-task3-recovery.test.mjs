@@ -99,6 +99,12 @@ test('lossless core never downgrades memory exhaustion or cancellation to optimi
  await assert.rejects(optimizeLosslessly(input,{inspect,optimize:async()=>{
   throw Object.assign(Error('unsafe'),{code:'decoded-stream-limit'});
  }}),e=>e.code==='decoded-stream-limit');
+ await assert.rejects(optimizeLosslessly(input,{inspect,optimize:async()=>{
+  throw new DOMException('Unable to create backing store','QuotaExceededError');
+ }}),e=>e.name==='QuotaExceededError');
+ await assert.rejects(optimizeLosslessly(input,{inspect,optimize:async()=>{
+  throw Error('WebAssembly memory access out of bounds');
+ }}),/memory access out of bounds/);
  const controller=new AbortController();
  await assert.rejects(optimizeLosslessly(input,{inspect,signal:controller.signal,optimize:async()=>{
   controller.abort();throw Error('native-module-aborted');
