@@ -165,7 +165,9 @@ jobs:
         env:
           PDF_COMPRESSOR_QPDF_MODULE: assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
-        run: node tests/pdf-compressor-task4-source-gate.mjs
+        run: |
+          node tests/pdf-compressor-task4-source-gate.mjs
+          node tests/pdf-compressor-task5-legacy-source-gate.mjs
       - name: Module-worker and strict-CSP compatibility in three browser engines
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
