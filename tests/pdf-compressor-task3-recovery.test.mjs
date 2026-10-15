@@ -17,7 +17,7 @@ test('known lossless optimizer failure retains exact original with a fresh indep
  let textCalls=0;
  const result=await compressAndVerifyPDF(source,{PDF,...readers,
   readText:async(...args)=>{textCalls++;return readText(...args);},
-  mode:'lossless',optimize:async()=>{throw Error('provider-temporary-failure');}});
+  mode:'lossless',optimize:async()=>{throw Object.assign(Error('qpdf-unclean-exit'),{code:'qpdf-unclean-exit'});}});
  assert.equal(result.status,'original-retained');
  assert.deepEqual(result.bytes,unchanged);
  assert.equal(result.stages.length,1);
@@ -42,7 +42,7 @@ test('verified image compression survives later lossless optimizer failure witho
  };
  const result=await compressAndVerifyPDF(input,{PDF,...readers,mode:'balanced',
   encodeJpeg,verifyJpeg:async()=>true,
-  optimize:async()=>{throw Error('temporary-qpdf-provider-failure');}});
+  optimize:async()=>{throw Object.assign(Error('qpdf-unclean-exit'),{code:'qpdf-unclean-exit'});}});
  assert.equal(result.status,'compressed');
  assert.ok(result.outputBytes<input.length);
  assert.equal(result.stages[0].engine,'embedded-images');
@@ -58,7 +58,7 @@ test('verified image compression survives later lossless optimizer failure witho
 test('recovered stage cannot bypass a failed independent final PDF/text gate',async()=>{
  await assert.rejects(compressAndVerifyPDF(source,{PDF,...readers,
   readText:async()=>[],mode:'lossless',
-  optimize:async()=>{throw Error('qpdf-temporary-failure');}}),
+  optimize:async()=>{throw Object.assign(Error('qpdf-unclean-exit'),{code:'qpdf-unclean-exit'});}}),
   e=>e.code==='final-text-or-geometry-changed');
 });
 test('allowlisted image-output verification failure discards that candidate and permits safe follow-up',async()=>{
@@ -111,6 +111,11 @@ test('lossless core never downgrades memory exhaustion or cancellation to optimi
  await assert.rejects(optimizeLosslessly(input,{inspect,optimize:async()=>{
   throw Error('WebAssembly memory access out of bounds');
  }}),/memory access out of bounds/);
+ const unknown=Error('unclassified-optimizer-failure');
+ await assert.rejects(optimizeLosslessly(input,{inspect,optimize:async()=>{throw unknown;}}),
+  error=>error===unknown);
+ await assert.rejects(compressAndVerifyPDF(source,{PDF,...readers,mode:'lossless',
+  optimize:async()=>{throw unknown;}}),error=>error===unknown);
  const controller=new AbortController();
  await assert.rejects(optimizeLosslessly(input,{inspect,signal:controller.signal,optimize:async()=>{
   controller.abort();throw Error('native-module-aborted');
