@@ -1,7 +1,7 @@
 // Blueprint Task 6 — document-aware mode orchestration (no production imports).
 // This does not compress; only explicit, approved pipelines may produce output.
 import {classifyDocument,assessImage,QUALITY_MODES} from './image-policy.mjs';
-export const MODES=Object.freeze(['lossless','balanced','strong']);
+export const MODES=Object.freeze(['lossless','balanced','strong','maximum']);
 export function planCompression({mode='balanced',images=[],pages=1,signed=false,
   encrypted=false,hasUnknownSecurity=false,classification,allowJpeg=false}={}){
   if(!MODES.includes(mode))throw new RangeError('Unsupported compression mode');
@@ -16,7 +16,8 @@ export function planCompression({mode='balanced',images=[],pages=1,signed=false,
     images.filter(image=>assessImage(image,mode,undefined,{allowJpeg,allowAdaptive:true}).eligible).length;
   return {allowed:true,mode,lossless:true,imageCandidates:candidates,
     imagesPreserved:images.length-candidates,settings:QUALITY_MODES[mode],
-    quality:mode==='balanced'?'moderate-lossy-image-candidates':'higher-lossy-image-candidates',
+    quality:mode==='balanced'?'moderate-lossy-image-candidates':
+      mode==='strong'?'higher-lossy-image-candidates':'maximum-lossy-image-candidates',
     warning:'Not a compression result. Candidate images require independent pixel/PDF verification.'};
 }
 export function describeResult(result){
