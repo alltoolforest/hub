@@ -312,6 +312,11 @@ function mountOutputPlanner(root) {
 }
 
 export async function mount(root, slug) {
+  const task = new URLSearchParams(location.search).get('task');
+  if (!['upscale', 'deblur'].includes(task)) {
+    const simple = await import('./image-enhancer-simple.js');
+    return simple.mount(root);
+  }
   try {
     await ensureRuntime();
   } catch (error) {
@@ -323,6 +328,14 @@ export async function mount(root, slug) {
   mountOutputPlanner(root);
   mountInspector(root);
   mountExportControls(root);
+  // Existing specialist pipelines remain available, while Enhance returns to
+  // the single approved automatic pipeline rather than exposing lab controls.
+  const enhance = root.querySelector('#enhancer-mode-enhance');
+  enhance?.addEventListener('click', event => {
+    event.preventDefault(); event.stopImmediatePropagation();
+    location.assign(location.pathname);
+  }, true);
+  root.querySelector('#enhancer-mode-' + task)?.click();
   return result;
 }
 
@@ -332,3 +345,4 @@ window.addEventListener('pagehide', () => {
   runtimeScriptBlobURL = null;
   runtimeModuleBlobURL = null;
 }, { once: true });
+
