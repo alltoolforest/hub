@@ -11,7 +11,7 @@ export async function streamFlateImage(contents,{width,height,channels,signal,ta
   if(resize&&(!Number.isSafeInteger(targetWidth)||!Number.isSafeInteger(targetHeight)||
     targetWidth<1||targetHeight<1||targetWidth>width||targetHeight>height||
     targetWidth*targetHeight>4000000))throw Error('unsafe-image-output-size');
-  if(typeof DecompressionStream!=='function'||typeof Blob!=='function')throw Error('image-stream-decoder-unavailable');
+  if(typeof DecompressionStream!=='function')throw Error('image-stream-decoder-unavailable');
   const rowBytes=width*channels,expected=rowBytes*height,row=resize?new Uint8Array(rowBytes):null;
   const rgb=resize?new Uint8Array(targetWidth*targetHeight*3):null;
   const sums=resize?new Float64Array(targetWidth*3):null;
@@ -34,7 +34,18 @@ export async function streamFlateImage(contents,{width,height,channels,signal,ta
       sums.fill(0);counts.fill(0);
     }
   };
-  const reader=new Blob([contents]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+  // Writing small views directly avoids constructing a duplicate Blob of
+  // the entire compressed stream (up to 100 MB on supported input PDFs).
+  // Reader and writer run concurrently so backpressure cannot deadlock.
+  const decoder=new DecompressionStream('deflate');
+  const reader=decoder.readable.getReader(),writer=decoder.writable.getWriter();
+  const written=(async()=>{try{
+    for(let index=0;index<contents.length;index+=65536){
+      if(signal?.aborted)throw Error('cancelled');
+      await writer.write(contents.subarray(index,index+65536));
+    }
+    await writer.close();return null;
+  }catch(error){return error;}})();
   try{
     for(;;){
       if(signal?.aborted)throw Error('cancelled');
@@ -49,7 +60,13 @@ export async function streamFlateImage(contents,{width,height,channels,signal,ta
         if(offset===rowBytes){finishRow();offset=0;}
       }
     }
+    const writerError=await written;
+    if(writerError)throw writerError;
     if(decoded!==expected||(resize&&(y!==height||offset!==0)))throw Error('flate-image-size-mismatch');
     return resize?rgb:{decodedBytes:decoded,rows:height};
-  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+  }finally{
+    await reader.cancel().catch(()=>{});
+    await writer.abort().catch(()=>{});await written;
+    reader.releaseLock();writer.releaseLock();
+  }
 }
