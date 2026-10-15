@@ -52,6 +52,7 @@ self.onmessage = async ({ data: { bitmap, options } }) => {
   } catch (error) {
     self.postMessage({ error: error.message || 'Photographic enhancement failed.' });
   } finally {
+    releasePhotoWorkspace();
     bitmap.close();
     if (output) output.width = output.height = 0;
     if (scratch) scratch.width = scratch.height = 0;

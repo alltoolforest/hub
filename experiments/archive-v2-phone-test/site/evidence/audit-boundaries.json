@@ -1,0 +1,12 @@
+{
+  "boundaryCasesPassed": 20,
+  "largeCase": {
+    "width": 4000,
+    "height": 3000,
+    "ms": 9434,
+    "outputBytes": 48000000,
+    "opaqueAlphaPreserved": true,
+    "nonBlank": true
+  },
+  "limitations": "Node numeric buffers only. Does not exercise browser decode, canvas allocation, PNG encoding, or mobile memory."
+}

@@ -37,3 +37,7 @@ Rejected experiments: a direct dark-value exposure cap increased background fine
 Validation: `node check-shadows.mjs PRIVATE_FIXTURE_DIRECTORY` uses the worker's sample stride, strip size and offset scheme. Two original photographs retain native dimensions and full/strip equality. Switching the guard off reproduces test2 exactly. On two deterministic Gaussian-noise shadow patterns (means 12 and 24), composite output error versus independently processed clean patterns decreased about 2%; a mean-100 pattern was unchanged. Clean neutral texture adjacent differences were exactly unchanged. This is a narrow synthetic result, not a real-photo noise-reduction percentage: noisy and clean images each receive automatic analysis and the error includes tone and denoise effects. Real-photo luma differences, samples and single-run desktop timings are in evidence/test3-*. No 32MP/mobile/browser acceptance is claimed.
 
 The old portrait still has blur, colored cast, broad mottling and print glare. This trial is not a demonstrated overall photographic advantage and is not ready for freeze. Physical phone testing, held-out photos, spatial noise confidence and face-specific protection remain pending. Browser QA remains unavailable under the managed Sites workflow; numeric and syntax checks do not substitute for phone verification.
+
+## Audit build archive-v2-20261015-audit1
+
+See AUDIT.md for fixed lifecycle bugs, passing automated checks and remaining release gates. Numeric enhancement core unchanged. Not frozen.
