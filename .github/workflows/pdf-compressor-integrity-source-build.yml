@@ -321,6 +321,45 @@ jobs:
           path: /tmp/atf-task6-regression-results.log
           if-no-files-found: ignore
           retention-days: 7
+  release-blockers-integrated-route:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated pinned runtime build and browser tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify source hashes and build local static worker
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/build-pdf-compressor-site-worker.py
+          test -s assets/js/pdf-compressor-v2/dist/worker.js
+          (cd assets/js/pdf-compressor-v2/dist && sha256sum -c worker.sha256)
+      - name: File selection source digest and original unit regressions
+        run: node --test tests/pdf-compressor-task8-session.test.mjs tests/pdf-compressor-release-file-digest.test.mjs
+      - name: Mount real tool route and run integrated site PDF/download smoke
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/compressor-route-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-release-integrated-route-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-release-integrated-route-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-release-integrated-route-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: pdf-compressor-staged-route-worker-NOT-PRODUCTION
+          path: |
+            assets/js/pdf-compressor-v2/dist/worker.js
+            assets/js/pdf-compressor-v2/dist/worker.sha256
+          retention-days: 7
+
   continuation-task7-device-profiles:
     needs: input-integrity
     runs-on: ubuntu-latest
