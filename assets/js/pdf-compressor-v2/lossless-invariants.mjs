@@ -6,6 +6,7 @@ import {collectFontPrograms} from './font-program-policy.mjs';
 import {scalarBudget} from './scalar-budget.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
 import {streamFlateImage} from './streaming-flate-image.mjs';
+import {decodeASCIIStreamBounded} from './bounded-legacy-filters.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
 export class LosslessInvariantError extends Error {
@@ -64,43 +65,7 @@ async function boundedInflate(bytes,maxBytes){
     throw error;
   }
 }
-function decodeAscii(bytes,filter,maxBytes){
-  const text=new TextDecoder('ascii').decode(bytes).replace(/\s/g,'');
-  if(filter==='/ASCIIHexDecode'){
-    let encoded=text.endsWith('>')?text.slice(0,-1):text;
-    if(!/^[0-9a-f]*$/i.test(encoded))throw new LosslessInvariantError('invalid-ascii-hex');
-    if(encoded.length%2)encoded+='0';
-    if(encoded.length/2>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
-    const output=new Uint8Array(encoded.length/2);
-    const nibble=code=>code<=57?code-48:code<=70?code-55:code-87;
-    for(let i=0;i<output.length;i++)output[i]=nibble(encoded.charCodeAt(i*2))*16+nibble(encoded.charCodeAt(i*2+1));
-    return output;
-  }
-  let encoded=text.startsWith('<~')?text.slice(2):text;
-  if(!encoded.endsWith('~>'))throw new LosslessInvariantError('invalid-ascii85');
-  encoded=encoded.slice(0,-2);
-  const output=new Uint8Array(Math.min(maxBytes+1,encoded.length*4));let used=0,group=[];
-  const emit=(count)=>{
-    let number=0;for(const digit of group)number=number*85+digit;
-    if(number>0xffffffff)throw new LosslessInvariantError('invalid-ascii85');
-    if(used+count>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
-    for(let n=0;n<count;n++)output[used++]=(number>>>((3-n)*8))&255;
-    group=[];
-  };
-  for(const char of encoded){
-    if(char==='z'){
-      if(group.length)throw new LosslessInvariantError('invalid-ascii85');
-      group=[0,0,0,0,0];emit(4);continue;
-    }
-    const digit=char.charCodeAt(0)-33;
-    if(digit<0||digit>84)throw new LosslessInvariantError('invalid-ascii85');
-    group.push(digit);if(group.length===5)emit(4);
-  }
-  if(group.length===1)throw new LosslessInvariantError('invalid-ascii85');
-  if(group.length){const count=group.length-1;while(group.length<5)group.push(84);emit(count);}
-  return output.slice(0,used);
-}
-export {boundedInflate as inflateStreamBounded,decodeAscii as decodeAsciiStreamBounded};
+export {boundedInflate as inflateStreamBounded,decodeASCIIStreamBounded as decodeAsciiStreamBounded};
 export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
   maxTotalDecodedBytes=128000000,maxEntries=250000,maxDepth=100,onSnapshot}={}){
   if(!(bytes instanceof Uint8Array)||!PDF?.PDFDocument)
