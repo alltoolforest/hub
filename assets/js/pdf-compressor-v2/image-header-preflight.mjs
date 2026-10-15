@@ -73,7 +73,7 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
   const opaqueApp=m=>directColorSpace&&
     ((m.marker>=227&&m.marker<=236)||m.marker===239)&&
     m.bytes.length>=4&&!spoofedAdobe(m);
-  const xmpSignature=new TextEncoder().encode('http://ns.adobe.com/xap/1.0/\\0');
+  const xmpSignature=new Uint8Array([...new TextEncoder().encode('http://ns.adobe.com/xap/1.0/'),0]);
   const validXmp=m=>m.marker===225&&m.bytes.length>=4+xmpSignature.length&&
     xmpSignature.every((v,i)=>m.bytes[i+4]===v);
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
