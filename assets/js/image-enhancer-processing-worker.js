@@ -1,4 +1,5 @@
 import { portraitProtectionAt } from './image-enhancer-portrait.js';
+import { unpackDeblurPixels } from './image-enhancer-deblur-pixels.js';
 import { faceSafetyAiLimitAt, createFaceRetentionMasks, faceRetentionLimitAt } from './image-enhancer-face-safety.js';
 import {
   resolveRegionRestorationPlan,
@@ -71,6 +72,23 @@ async function tensorToBitmap(buffer, width, height, id) {
   }
   ctx.putImageData(image, 0, 0);
   return canvas.transferToImageBitmap();
+}
+
+async function deblurTensorToBitmap(message, id) {
+  if (cancelled.has(id)) throw new DOMException('Processing cancelled.', 'AbortError');
+  const { width, height, paddedWidth, paddedHeight, buffer } = message;
+  const rgba = unpackDeblurPixels(new Float32Array(buffer), paddedWidth, paddedHeight, width, height);
+  const canvas = new OffscreenCanvas(width, height);
+  try {
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Deblur output canvas is unavailable.');
+    const image = ctx.createImageData(width, height);
+    image.data.set(rgba);
+    ctx.putImageData(image, 0, 0);
+    return canvas.transferToImageBitmap();
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
 }
 
 async function adaptiveDeblurBlend(sourceBitmap, deblurBitmap, analysis, faces, id, strength = 1) {
@@ -468,7 +486,10 @@ self.onmessage = async event => {
   }
 
   try {
-    if (type === 'pack-tile') {
+    if (type === 'deblur-tensor-to-bitmap') {
+      const bitmap = await deblurTensorToBitmap(message, id);
+      self.postMessage({ id, ok: true, bitmap }, [bitmap]);
+    } else if (type === 'pack-tile') {
       const result = await packTile(message.bitmap, message.width, message.height, id);
       self.postMessage({ id, ok: true, ...result }, [result.buffer]);
     } else if (type === 'tensor-to-bitmap') {
@@ -499,3 +520,4 @@ self.onmessage = async event => {
     cancelled.delete(id);
   }
 };
+

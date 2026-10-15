@@ -14,3 +14,34 @@ export function validateDeblurOutput(output, width, height) {
     }
   }
 }
+
+// Catastrophic tile changes must be rejected before downsampling, clipping or
+// face blending can hide them. These are conservative failure thresholds,
+// not proof of recovered detail, identity, or photographic quality.
+export function validateDeblurFidelity(result, source, width, height) {
+  const plane = width * height;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
+      width > 1024 || height > 1024 || result.length !== plane * 3 || source.length !== plane * 3) {
+    throw new Error('Invalid deblur fidelity buffers.');
+  }
+  // Independent 32px regions catch localized damage hidden by a tile average.
+  for (let y = 0; y < height; y += 32) {
+    for (let x = 0; x < width; x += 32) {
+      let total = 0, extreme = 0, n = 0;
+      for (let yy = y; yy < Math.min(y + 32, height); yy++) {
+        for (let xx = x; xx < Math.min(x + 32, width); xx++) {
+          for (let c = 0; c < 3; c++) {
+            const i = c * plane + yy * width + xx;
+            if (!Number.isFinite(result[i]) || !Number.isFinite(source[i])) throw new Error('Unstable deblur fidelity input.');
+            const delta = Math.abs(Math.max(0, Math.min(1, result[i])) - source[i]);
+            total += delta; extreme += delta > 0.5 ? 1 : 0; n++;
+          }
+        }
+      }
+      if (total / n > 0.20 || extreme / n > 0.10) {
+        throw new Error('Deblur produced excessive local distortion; no restored image was exported.');
+      }
+    }
+  }
+}
+

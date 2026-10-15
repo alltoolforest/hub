@@ -27,7 +27,7 @@ import {
 } from './image-enhancer-face-safety.js';
 import { applyArtifactFidelityGuard } from './image-enhancer-artifact-guard.js';
 import { createRestorationBudget, RestorationBudgetError } from './image-enhancer-budget.js';
-import { validateDeblurOutput } from './image-enhancer-deblur-validation.js';
+import { validateDeblurOutput, validateDeblurFidelity } from './image-enhancer-deblur-validation.js';
 
 const MB = 1024 * 1024;
 const MODEL_CACHE = 'alltoolforest-image-enhancer-v1';
@@ -115,6 +115,15 @@ class ProcessingWorkerBridge {
         throw error;
       }
     }
+    return result.bitmap;
+  }
+
+  async deblurTensorToBitmap(data, paddedWidth, paddedHeight, width, height, signal) {
+    // Own the transferable buffer; the runtime still owns and disposes its tensor.
+    const buffer = new Float32Array(data).buffer;
+    const result = await this.request('deblur-tensor-to-bitmap', {
+      buffer, paddedWidth, paddedHeight, width, height
+    }, [buffer], signal);
     return result.bitmap;
   }
 
@@ -771,8 +780,9 @@ class OnnxDeblurEngine extends EnhancementEngine {
       results = await this.session.run({ [inputName]: tensor });
       const output = results[outputName];
       validateDeblurOutput(output, width, height);
+      validateDeblurFidelity(output.data, data, width, height);
       if (signal?.aborted) throw new DOMException('Processing cancelled.', 'AbortError');
-      return await this.processor.tensorToBitmap(output.data, width, height, signal);
+      return await this.processor.deblurTensorToBitmap(output.data, width, height, width, height, signal);
     } finally {
       tensor.dispose();
       for (const output of Object.values(results || {})) output.dispose();
@@ -1740,3 +1750,4 @@ export async function mount(root, slug) {
     browserEnhanceEngine.dispose();
   }, { once: true });
 }
+
