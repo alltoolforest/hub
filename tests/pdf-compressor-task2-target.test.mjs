@@ -35,11 +35,40 @@ test('unreachable requested size returns best independently verified output with
  const calls=[];
  const r=await compressToTarget(source,{mode:'maximum',targetBytes:100,
    runVerified:engine({strong:370,maximum:395},calls)});
- assert.deepEqual(calls,['strong','maximum']);
+ assert.deepEqual(calls,['maximum','strong']);
  assert.equal(r.target.reached,false);
  assert.equal(r.bytes.length,370);
  assert.equal(r.target.effectiveMode,'strong');
  assert.equal(r.integrity.outputBytes,370);
+});
+test('aggressive Maximum target starts with the fully verified Maximum engine and skips Strong if reached',async()=>{
+ const calls=[];
+ const r=await compressToTarget(source,{mode:'maximum',targetBytes:150,
+   runVerified:engine({strong:210,maximum:120},calls)});
+ assert.deepEqual(calls,['maximum']);
+ assert.deepEqual(r.target.attempts.map(a=>a.profile),['maximum']);
+ assert.equal(r.target.reached,true);
+ assert.equal(r.bytes.length,120);
+ assert.equal(r.integrity.independentTextVerified,true);
+ assert.equal(r.integrity.outputBytes,r.outputBytes);
+ assert.equal(r.target.effectiveMode,'maximum');
+});
+test('moderate Maximum targets still prefer Strong first to preserve image detail',async()=>{
+ const calls=[];
+ const r=await compressToTarget(source,{mode:'maximum',targetBytes:225,
+   runVerified:engine({strong:210,maximum:120},calls)});
+ assert.deepEqual(calls,['strong']);
+ assert.equal(r.target.effectiveMode,'strong');
+ assert.equal(r.bytes.length,210);
+});
+test('aggressive Maximum failure still compares Strong and returns the smallest verified candidate',async()=>{
+ const calls=[];
+ const r=await compressToTarget(source,{mode:'maximum',targetBytes:100,
+   runVerified:engine({maximum:395,strong:370},calls)});
+ assert.deepEqual(calls,['maximum','strong']);
+ assert.equal(r.target.reached,false);
+ assert.equal(r.target.effectiveMode,'strong');
+ assert.equal(r.bytes.length,370);
 });
 test('unchanged original may be returned if no profile makes a smaller verified result',async()=>{
  const calls=[];
