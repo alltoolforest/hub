@@ -17,7 +17,7 @@ export function mountCompressor(root,{engine,limits}={}){
     </select>
     <p id="compressor-quality"></p>
     <div class="compressor-target"><label for="compressor-target">Optional target size (MB)</label>
-      <input id="compressor-target" type="number" inputmode="decimal" min="0.01" max="100" step="any"
+      <input id="compressor-target" type="number" inputmode="decimal" min="0.000001" max="100" step="any"
         placeholder="e.g. 5" aria-describedby="compressor-target-help">
       <p id="compressor-target-help">Best effort, not a guaranteed size. The engine tries up to your selected compression level, preserves selectable text and verifies each result. Allow extra processing time.</p>
     </div>
