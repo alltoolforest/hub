@@ -1,10 +1,11 @@
 // Isolated Task 11 interface. Engine and resource budget are supplied by the host.
 import {createCompressionSession} from './compression-session.mjs';
 export const formatBytes=n=>n<1000000?(n/1000).toFixed(1)+' KB':(n/1000000).toFixed(2)+' MB';
-export function mountCompressor(root,{engine,limits}={}){
+export function mountCompressor(root,{engine,limits,headingLevel='h1'}={}){
   if(!root||!limits)throw new TypeError('A root and verified resource budget are required');
+  if(!['h1','h2'].includes(headingLevel))throw new TypeError('Unsupported compressor heading');
   root.innerHTML=`<div class="pdf-compressor">
-    <h1>PDF Compressor</h1>
+    <${headingLevel}>PDF Compressor</${headingLevel}>
     <p>Choose a PDF, select a compression mode, then review and download the result. Processing stays on this device.</p>
     <p data-limit></p>
     <label for="compressor-file">Select PDF</label>
