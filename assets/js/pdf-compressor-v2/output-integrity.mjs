@@ -69,6 +69,9 @@ export async function compressAndVerifyPDF(bytes,options){
   options={...options,readPages:context.readPages,inspectInput:context.inspectInput};
   const result=await compressPDF(bytes,options);
   options?.onProgress?.('final-output');
+  const verifyStarted=performance.now();
   const integrity=await verifyFinalOutput(bytes,result,options);
-  return {...result,integrity};
+  return {...result,integrity,stageTimings:{
+    ...result.stageTimings,finalVerificationMs:performance.now()-verifyStarted
+  }};
 }
