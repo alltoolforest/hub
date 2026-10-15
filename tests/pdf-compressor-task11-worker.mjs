@@ -4,7 +4,7 @@ import createModule from '../assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs';
 import {createIndependentInputReader} from '../assets/js/pdf-compressor-v2/independent-input-reader.mjs';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
-import {compressAndVerifyPDF} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
+import {compressAndVerifyPDF,digestPDFBytes} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
 import {createIndependentReaders} from '../assets/js/pdf-compressor-v2/independent-readers.mjs';
 import {encodeBrowserJpeg,verifyBrowserJpeg} from '../assets/js/pdf-compressor-v2/browser-image-codec.mjs';
 import {JpegImage} from '../node_modules/pdfjs-dist/image_decoders/pdf.image_decoders.mjs';
@@ -17,7 +17,8 @@ self.onmessage=async event=>{
     if((event.data.file?.size??event.data.bytes.length)>100000000)throw {code:'file-limit'};
     const bytes=event.data.file?new Uint8Array(await event.data.file.arrayBuffer()):event.data.bytes;
     if(event.data.op==='inspect'){
-      const report=await inspectPDFInput(bytes,{PDF:self.PDFLib,readPages:createIndependentInputReader(pdfjs)});
+      const inspected=await inspectPDFInput(bytes,{PDF:self.PDFLib,readPages:createIndependentInputReader(pdfjs)});
+      const report={...inspected,sourceDigest:await digestPDFBytes(bytes)};
       self.postMessage({ok:true,report});return;
     }
     const {readPages,readText}=createIndependentReaders(pdfjs);
