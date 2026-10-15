@@ -26,8 +26,19 @@ export async function transformEmbeddedImages(bytes,{PDF,mode='balanced',encodeJ
   await inspectInput(bytes); // Must reject signed/encrypted/unsafe inputs.
   const doc=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
   const N=PDF.PDFName.of,replacements=[];let inspected=0;
-  for(const [ref,stream] of doc.context.enumerateIndirectObjects()) {
-    if(!isPlainOpaqueImage(stream,PDF))continue;
+  const objects=doc.context.enumerateIndirectObjects(),maskRefs=new Set();
+  // A mask stream can look like an ordinary gray image, but its pixels are
+  // alpha/stencil values. Do not JPEG-reencode it or alter transparency.
+  for(const [,object] of objects){
+    if(!(object instanceof PDF.PDFRawStream)||
+       String(object.dict.get(N('Subtype')))!=='/Image')continue;
+    for(const key of ['SMask','Mask']){
+      const mask=object.dict.get(N(key));
+      if(mask instanceof PDF.PDFRef)maskRefs.add(String(mask));
+    }
+  }
+  for(const [ref,stream] of objects) {
+    if(maskRefs.has(String(ref))||!isPlainOpaqueImage(stream,PDF))continue;
     if(++inspected>1000)throw Error('image-inventory-limit');
     if(signal?.aborted)throw Error('cancelled');
     const d=stream.dict,descriptor={width:d.get(N('Width'))?.asNumber?.(),
