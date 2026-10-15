@@ -5,6 +5,7 @@ import {scalarBudget} from './scalar-budget.mjs';
 import {inflateStreamBounded,decodeAsciiStreamBounded} from './lossless-invariants.mjs';
 import {inspectEncodedJpeg} from './image-header-preflight.mjs';
 import {streamFlateImage} from './streaming-flate-image.mjs';
+import {decodeLZWBounded,decodeRunLengthBounded} from './bounded-legacy-filters.mjs';
 export const INPUT_LIMITS=Object.freeze({maxBytes:100000000,maxPages:500,maxOperators:2000000,
   maxInvariantEntries:2000000,maxTotalDecodedBytes:512000000,maxDecodedStreamBytes:32000000,
   maxObjects:50000,maxGraphEntries:250000,maxDepth:100,maxImages:1000,
@@ -140,14 +141,22 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
     }
     const filter=lookup('Filter');
     const values=filter instanceof PDF.PDFArray?filter.asArray().map(v=>context.lookup(v)):[filter];
-    const aliases={'/Fl':'/FlateDecode','/A85':'/ASCII85Decode','/AHx':'/ASCIIHexDecode'};
+    const aliases={'/Fl':'/FlateDecode','/A85':'/ASCII85Decode','/AHx':'/ASCIIHexDecode',
+      '/LZW':'/LZWDecode','/RL':'/RunLengthDecode'};
     let data=object.contents;
-    for(const value of values){
-      const name=aliases[String(value)]??String(value);
-      if(name==='/FlateDecode')data=await inflateStreamBounded(data,streamLimit);
-      else if(['/ASCII85Decode','/ASCIIHexDecode'].includes(name))data=decodeAsciiStreamBounded(data,name,streamLimit);
-      else if(['/LZWDecode','/LZW','/RunLengthDecode','/RL'].includes(name)){
-        data=PDF.decodePDFRawStream(object).decode();break;
+    for(let index=0;index<values.length;index++){
+      cancel(signal);
+      const filterName=aliases[String(values[index])]??String(values[index]);
+      if(filterName==='/FlateDecode')data=await inflateStreamBounded(data,streamLimit);
+      else if(['/ASCII85Decode','/ASCIIHexDecode'].includes(filterName))
+        data=decodeAsciiStreamBounded(data,filterName,streamLimit);
+      else if(filterName==='/RunLengthDecode')
+        data=decodeRunLengthBounded(data,streamLimit,{signal});
+      else if(filterName==='/LZWDecode'){
+        const parms=parameterList.length>1?parameterList[index]:parameterList[0];
+        const early=parms instanceof PDF.PDFDict?
+          context.lookup(parms.get(N('EarlyChange')))?.asNumber?.()??1:1;
+        data=decodeLZWBounded(data,streamLimit,{signal,earlyChange:early});
       }else break;
     }
     decodedTotal+=data.length;
