@@ -35,6 +35,8 @@ try{
   await page.waitForFunction(()=>ui.session.snapshot().state==='ready');
   assert.match(await page.locator('[data-source]').textContent(),/<script>/);
   assert.equal(await page.locator('[data-source] script').count(),0);
+  await page.locator('#compressor-mode').selectOption('maximum');
+  assert.match(await page.locator('#compressor-quality').textContent(),/may become harder to read/);
   await page.locator('#compressor-mode').selectOption('lossless');
   assert.match(await page.locator('#compressor-quality').textContent(),/without reducing image quality/);
   await page.locator('[data-run]').focus();await page.keyboard.press('Enter');

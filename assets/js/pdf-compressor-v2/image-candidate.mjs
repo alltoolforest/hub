@@ -49,7 +49,10 @@ export async function encodeRasterCandidate({descriptor,rgba,mode='balanced',enc
      data[0]!==0xff||data[1]!==0xd8||
      data[data.length-2]!==0xff||data[data.length-1]!==0xd9)
     throw new ImageCandidateError('invalid-jpeg');
-  if(descriptor.filter==='/DCTDecode')data=preserveJpegMetadata(sourceJpeg,data);
+  // CMYK and YCCK Adobe APP14 describe *four* encoded components.
+  // The newly encoded candidate is RGB; copying APP14 would corrupt colors.
+  if(descriptor.filter==='/DCTDecode'&&descriptor.colorSpace!=='/DeviceCMYK')
+    data=preserveJpegMetadata(sourceJpeg,data);
   if(data.length>=inputBytes||(descriptor.filter==='/DCTDecode'&&data.length>inputBytes*.9))
     return {status:'preserve',reason:'no-image-stream-savings'};
   // Do not assume saved PDF size: extra dictionaries, xrefs and resource

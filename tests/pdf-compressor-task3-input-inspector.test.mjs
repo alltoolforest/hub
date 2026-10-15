@@ -82,7 +82,7 @@ test('reader disagreement fails closed',async()=>{
   await rejects(bytes,'reader-disagreement',{readPages:async()=>({pages:[]})});
   await rejects(bytes,'independent-inspection-failed',{readPages:async()=>{throw Error('bad content');}});
 });
-test('oversized decoded image dimensions are rejected before the independent reader',async()=>{
+test('forged oversized image dimensions fail streamed validation before the independent reader',async()=>{
   const bytes=await modify('scanned',doc=>{
     for(const [,object] of doc.context.enumerateIndirectObjects()){
       if(object instanceof PDF.PDFRawStream&&String(object.dict.get(N('Subtype')))==='/Image'){
@@ -92,7 +92,7 @@ test('oversized decoded image dimensions are rejected before the independent rea
     }
   });
   let called=false;
-  await rejects(bytes,'image-pixel-limit',{readPages:async()=>{called=true;throw Error('must not decode');}});
+  await assert.rejects(inspectPDFInput(bytes,{...options,readPages:async()=>{called=true;throw Error('must not decode');}}),e=>['invalid-image-stream','encoded-image-dimensions'].includes(e.code));
   assert.equal(called,false);
 });
 test('failed replacement keeps the previous valid bytes and report; exposed bytes are copies',async()=>{

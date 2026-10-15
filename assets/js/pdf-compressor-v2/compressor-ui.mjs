@@ -13,7 +13,7 @@ export function mountCompressor(root,{engine,limits}={}){
     <label for="compressor-mode">Compression mode</label>
     <select id="compressor-mode" aria-describedby="compressor-quality">
       <option value="balanced">Balanced</option><option value="strong">Strong</option>
-      <option value="lossless">Lossless</option>
+      <option value="maximum">Maximum Compression</option><option value="lossless">Lossless</option>
     </select>
     <p id="compressor-quality"></p>
     <div class="compressor-actions"><button data-run disabled>Compress PDF</button>
@@ -23,11 +23,12 @@ export function mountCompressor(root,{engine,limits}={}){
       <dl><dt>Mode used</dt><dd data-result-mode></dd><dt>Original size</dt><dd data-original></dd><dt>Output size</dt><dd data-output></dd>
       <dt>Saved</dt><dd data-saved></dd></dl><p data-outcome></p>
       <a data-download>Download PDF</a></section>
-    <p>Keep your original PDF. Balanced and Strong may reduce image quality; existing text stays selectable. Lossless preserves image quality. Some PDFs cannot be made smaller.</p>
+    <p>Keep your original PDF. Balanced, Strong and Maximum may reduce embedded-image quality; Maximum may make text within scanned images less readable. Existing selectable text stays selectable. Lossless preserves image quality. Some PDFs cannot be made smaller.</p>
   </div>`;
   const el=s=>root.querySelector(s),file=el('#compressor-file'),mode=el('#compressor-mode');
   const quality={balanced:'Balanced reduces eligible images moderately while preserving text and page layout.',
     strong:'Strong prioritizes smaller files and may make eligible images less detailed.',
+    maximum:'Maximum Compression aggressively reduces eligible image quality and resolution. Fine detail and text inside scanned images may become harder to read. Original selectable text is preserved.',
     lossless:'Lossless optimizes PDF structure without reducing image quality. Savings may be small or zero.'};
   const showMode=()=>{el('#compressor-quality').textContent=quality[mode.value];};
   showMode();mode.addEventListener('change',showMode);

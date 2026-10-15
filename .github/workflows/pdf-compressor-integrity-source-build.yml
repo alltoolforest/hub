@@ -37,7 +37,7 @@ jobs:
       - name: Input integrity and adjacent compressor regression
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
-        run: node --test tests/pdf-compressor-font-dedup.test.mjs tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
+        run: node --test tests/pdf-compressor-task2-maximum.test.mjs tests/pdf-compressor-cmyk-ycck-preflight.test.mjs tests/pdf-compressor-adaptive-large-images.test.mjs tests/pdf-compressor-font-dedup.test.mjs tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
       - name: Isolated browser input gate
         env:
           PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
@@ -200,6 +200,9 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task5-worker-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task5-worker-browser.mjs
+          node tests/pdf-compressor-adaptive-browser.mjs
+          node tests/pdf-compressor-cmyk-browser.mjs
+          node tests/pdf-compressor-task2-maximum-browser.mjs
   document-aware-modes:
     needs: input-integrity
     runs-on: ubuntu-latest
@@ -292,6 +295,12 @@ jobs:
         run: |
           python tests/build-pdf-compressor-mobile-qa.py
           node tests/pdf-compressor-candidate-browser.mjs
+      - name: Retain isolated offline PDF Compressor build for manual Android QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-adaptive-mobile-test-build
+          path: /tmp/PDF_Compressor_Release_Candidate.html
+          retention-days: 7
       - name: Synthetic size, repeated-run, managed-memory and cancellation measurements
         env:
           PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html

@@ -75,3 +75,17 @@ test('direct stream inflation drains backpressure, enforces exact limits and rej
  const damaged=encoded.slice();damaged[damaged.length-1]^=1;
  await assert.rejects(inflateStreamBounded(damaged,source.length));
 });
+
+test('strict Flate decoder accepts only checksum-verified PDF whitespace padding',async()=>{
+ const original=new Uint8Array(Buffer.from('A valid Flate stream may have PDF line-ending padding. '.repeat(60)));
+ const encoded=new Uint8Array(deflateSync(original));
+ for(const trailing of [[10],[13,10],[0,9,12,32]]){
+  const candidate=new Uint8Array([...encoded,...trailing]);
+  assert.deepEqual(await inflateStreamBounded(candidate,original.length),original);
+ }
+ // Node's DecompressionStream historically tolerates trailing garbage.
+ // Rejecting non-whitespace tails is therefore asserted separately in
+ // actual Chromium browser QA, where the strict native decoder is exercised.
+ const corrupted=encoded.slice();corrupted[corrupted.length-1]^=0x21;
+ await assert.rejects(inflateStreamBounded(new Uint8Array([...corrupted,10]),original.length));
+});

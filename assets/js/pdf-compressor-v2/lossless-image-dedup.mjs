@@ -10,8 +10,10 @@ export function isPlainOpaqueImage(stream,PDF){
   const filter=d.get(N('Filter'));
   const filters=filter instanceof PDF.PDFArray?
     Array.from({length:filter.size()},(_,i)=>String(filter.get(i))):filter?[String(filter)]:[];
-  if(String(d.get(N('Subtype')))!=='/Image'||
-    !['/DeviceRGB','/DeviceGray'].includes(String(d.get(N('ColorSpace'))))||
+  const colorSpace=String(d.get(N('ColorSpace')));
+  const simpleColor=['/DeviceRGB','/DeviceGray'].includes(colorSpace)||
+    (colorSpace==='/DeviceCMYK'&&filters.length===1&&filters[0]==='/DCTDecode');
+  if(String(d.get(N('Subtype')))!=='/Image'||!simpleColor||
     d.get(N('BitsPerComponent'))?.asNumber?.()!==8||
     !filters.every(value=>['/FlateDecode','/DCTDecode','/ASCII85Decode','/ASCIIHexDecode'].includes(value)))return false;
   return d.keys().every(key=>allowedKeys.has(String(key))&&!(d.get(key) instanceof PDF.PDFRef));

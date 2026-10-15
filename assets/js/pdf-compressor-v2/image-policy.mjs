@@ -7,10 +7,11 @@ export const IMAGE_LIMITS=Object.freeze({
 });
 export const QUALITY_MODES=Object.freeze({
   balanced:Object.freeze({jpegQuality:0.82,maxDimension:2400}),
-  strong:Object.freeze({jpegQuality:0.68,maxDimension:1800})
+  strong:Object.freeze({jpegQuality:0.68,maxDimension:1800}),
+  maximum:Object.freeze({jpegQuality:0.42,maxDimension:1200})
 });
 function name(v){return typeof v==='string'?v.trim():'';}
-export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=false}={}){
+export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=false,allowAdaptive=false}={}){
   if(!QUALITY_MODES[mode])throw new RangeError('Unknown image quality mode');
   const skip=(reason)=>({eligible:false,action:'preserve',reason,mode});
   if(!item||typeof item!=='object')return skip('invalid-image-descriptor');
@@ -20,12 +21,14 @@ export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1)
     return skip('invalid-dimensions');
   const pixels=width*height;
-  if(!Number.isSafeInteger(pixels)||pixels>limits.maxPixels||
-      pixels*4>limits.maxDecodedBytes)return skip('pixel-budget-exceeded');
+  if(!Number.isSafeInteger(pixels))return skip('invalid-dimensions');
+  const adaptive=pixels>limits.maxPixels||pixels*4>limits.maxDecodedBytes;
+  if(adaptive&&!allowAdaptive)return skip('pixel-budget-exceeded');
   if(softMask||mask)return skip('mask-or-transparency');
   if(decode||decodeParms)return skip('custom-decode-parameters');
   if(bitsPerComponent!==8)return skip('unsupported-bit-depth');
-  if(!['/DeviceRGB','/DeviceGray'].includes(name(colorSpace)))
+  if(!['/DeviceRGB','/DeviceGray'].includes(name(colorSpace))&&
+    !(colorSpace==='/DeviceCMYK'&&filter==='/DCTDecode'&&allowJpeg))
     return skip('unverified-color-profile');
   if(!['/FlateDecode','/DCTDecode'].includes(name(filter)))
     return skip('unsupported-image-encoding');
@@ -35,11 +38,11 @@ export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=
   // candidates. The independent transform must still
   // validate decoded pixel bytes, original color, new stream, output PDF and
   // no visual/text or structural regression before export.
-  const channels=colorSpace==='/DeviceGray'?1:3;
-  if(pixels*channels>limits.maxDecodedBytes)return skip('decoded-byte-budget');
+  const channels=colorSpace==='/DeviceGray'?1:colorSpace==='/DeviceCMYK'?4:3;
+  if(pixels*channels>limits.maxDecodedBytes&&!allowAdaptive)return skip('decoded-byte-budget');
   return {
     eligible:true,action:'candidate-only',reason:filter==='/DCTDecode'?'bounded-opaque-jpeg-raster':'bounded-opaque-flate-raster',
-    mode,pixels,expectedRawBytes:pixels*channels,
+    mode,pixels,adaptive,expectedRawBytes:pixels*channels,
     jpegQuality:QUALITY_MODES[mode].jpegQuality,
     maxDimension:QUALITY_MODES[mode].maxDimension,
     guarantee:'none; must independently validate encoded candidate and PDF'

@@ -11,6 +11,10 @@ test('JPEG routing requires a decoder and painted images; masked/profiled images
     assert.equal(planCompression({images:[unsafe],allowJpeg:true}).imageCandidates,0);
   const defaultPlan=planCompression({images:[jpeg],allowJpeg:true});
   assert.equal(defaultPlan.mode,'balanced');assert.equal(defaultPlan.settings.jpegQuality,.82);
+  const max=planCompression({mode:'maximum',images:[jpeg],allowJpeg:true,classification:'image-only'});
+  assert.equal(max.imageCandidates,1);
+  assert.equal(max.settings.jpegQuality,.42);
+  assert.equal(max.settings.maxDimension,1200);
 });
 test('cancelled/invalid mode jobs cannot enter PDF inspection or produce output',async()=>{
   await assert.rejects(compressPDF(new Uint8Array(30),{signal:AbortSignal.abort()}),e=>e.code==='cancelled');

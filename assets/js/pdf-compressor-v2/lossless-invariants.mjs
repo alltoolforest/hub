@@ -5,12 +5,13 @@
 import {collectFontPrograms} from './font-program-policy.mjs';
 import {scalarBudget} from './scalar-budget.mjs';
 import {isPlainOpaqueImage} from './lossless-image-dedup.mjs';
+import {streamFlateImage} from './streaming-flate-image.mjs';
 const hex=bytes=>Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)));
 export class LosslessInvariantError extends Error {
   constructor(code){super(code);this.name='LosslessInvariantError';this.code=code;}
 }
-async function boundedInflate(bytes,maxBytes){
+async function boundedInflateStrict(bytes,maxBytes){
   // Feed resident bytes directly: Blob streams add asynchronous IO scheduling
   // for every small PDF stream (thousands in some digital documents). Drain
   // concurrently with writing so backpressure cannot deadlock large streams.
@@ -38,6 +39,30 @@ async function boundedInflate(bytes,maxBytes){
   const output=new Uint8Array(length);let offset=0;
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;
+}
+// Some PDF producers include PDF whitespace immediately after an otherwise
+// complete Flate/zlib stream. Browser DecompressionStream rejects that padding
+// even though tolerant PDF readers accept the decoded content. Retry only a
+// verified, bounded whitespace tail after the native decoder reports junk.
+// The retried decode must still validate the zlib checksum and output budget.
+// Never trim arbitrary data, preemptively truncate a valid stream, or suppress
+// a decompression/memory error.
+async function boundedInflate(bytes,maxBytes){
+  try{return await boundedInflateStrict(bytes,maxBytes);}
+  catch(error){
+    if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error)))throw error;
+    // The zlib Adler checksum itself can end in PDF whitespace bytes.
+    // Test one byte at a time and accept only a checksum-valid complete
+    // stream; stripping all whitespace at once can truncate valid data.
+    for(let trim=1;trim<=16&&trim<bytes.length;trim++){
+      if(![0,9,10,12,13,32].includes(bytes[bytes.length-trim]))break;
+      try{return await boundedInflateStrict(bytes.subarray(0,bytes.length-trim),maxBytes);}
+      catch(retryError){
+        if(retryError?.code==='decoded-stream-limit')throw retryError;
+      }
+    }
+    throw error;
+  }
 }
 function decodeAscii(bytes,filter,maxBytes){
   const text=new TextDecoder('ascii').decode(bytes).replace(/\s/g,'');
@@ -116,6 +141,13 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         // part of the dictionary and cannot silently change.
         // Other filters are retained as encoded-byte invariants. This avoids
         // pretending that an unsupported decoder proves pixel equivalence.
+        const width=context.lookup(dict.get(N('Width')))?.asNumber?.();
+        const height=context.lookup(dict.get(N('Height')))?.asNumber?.();
+        const channels=String(dict.get(N('ColorSpace')))==='/DeviceGray'?1:3;
+        const streamedImage=plainResource&&String(dict.get(N('Subtype')))==='/Image'&&
+          filters.length===1&&filters[0]==='/FlateDecode'&&
+          Number.isSafeInteger(width*height*channels)&&width>0&&height>0&&
+          width*channels<=maxStreamBytes&&width*height*channels>maxStreamBytes;
         let cached=streamCache.get(value);
         if(!cached){
           // Repeated programs share decoding work, never dictionary identity.
@@ -123,6 +155,13 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
           const encodedDigest=await hash(value.contents);
           const cacheKey=JSON.stringify(filters)+'|'+encodedDigest;
           cached=encodedCache.get(cacheKey);
+          if(!cached&&streamedImage){
+            // Large unchanged image streams are validated incrementally and
+            // compared by exact encoded identity, never fully inflated in RAM.
+            await streamFlateImage(value.contents,{width,height,channels,maxRowBytes:maxStreamBytes});
+            cached={remaining:filters,length:value.contents.length,digest:encodedDigest,streamedImage:true};
+            encodedCache.set(cacheKey,cached);
+          }
           if(!cached){
             let data=value.contents,consumed=0;
             for(const filter of filters){
@@ -137,9 +176,11 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
           streamCache.set(value,cached);
         }
         const {remaining,length,digest}=cached,decoded=remaining.length===0;
-        totalDecoded+=length;
-        if(length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
-          throw new LosslessInvariantError('invariant-byte-budget');
+        if(!cached.streamedImage){
+          totalDecoded+=length;
+          if(length>maxStreamBytes||totalDecoded>maxTotalDecodedBytes)
+            throw new LosslessInvariantError('invariant-byte-budget');
+        }
         for(const key of dict.keys())checkScalar(key);
         const keys=dict.keys().filter(k=>!['/Length','/Filter'].includes(String(k)))
           .sort((a,b)=>String(a).localeCompare(String(b),'en'));
