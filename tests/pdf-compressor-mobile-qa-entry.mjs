@@ -5,7 +5,7 @@ import {JpegImage} from 'pdfjs-dist/image_decoders/pdf.image_decoders.mjs';
 import createQpdf from '../assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs';
 import {createIndependentReaders} from '../assets/js/pdf-compressor-v2/independent-readers.mjs';
 import {createQpdfLosslessProvider} from '../assets/js/pdf-compressor-v2/qpdf-lossless-adapter.mjs';
-import {compressAndVerifyPDF} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
+import {compressAndVerifyPDF,createVerifiedOperationContext} from '../assets/js/pdf-compressor-v2/output-integrity.mjs';
 import {compressToTarget} from '../assets/js/pdf-compressor-v2/target-size-compression.mjs';
 import {inspectPDFInput} from '../assets/js/pdf-compressor-v2/input-inspector.mjs';
 import {DEVICE_PROFILES} from '../assets/js/pdf-compressor-v2/device-policy.mjs';
@@ -36,10 +36,14 @@ self.onmessage=async event=>{
       self.postMessage({ok:true,report});return;
     }
     if(event.data.op!=='compress')throw Error('unsupported-operation');
+    // Only requested target-size runs reuse the immutable source inspection
+    // for their second verified attempt. Regular Strong runs are unchanged.
+    const operationContext=targetBytes===undefined?undefined:
+      createVerifiedOperationContext({PDF,readPages:reader});
     const runVerified=(source,{mode:trialMode,onProgress:trialProgress=progress}={})=>
       compressAndVerifyPDF(source,{PDF,readPages:reader,readText,optimize,decodeJpeg,
         encodeJpeg:encodeBrowserJpeg,verifyJpeg:data=>verifyBrowserJpeg(data,{decodeJpeg}),
-        mode:trialMode,limits:profile.limits,onProgress:trialProgress});
+        mode:trialMode,limits:profile.limits,onProgress:trialProgress,operationContext});
     const result=targetBytes===undefined?
       await runVerified(bytes,{mode}):
       await compressToTarget(bytes,{targetBytes,mode,runVerified,onProgress:progress});
