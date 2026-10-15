@@ -33,7 +33,7 @@ test('File owned selection never calls main-thread arrayBuffer and retains exact
  session.dispose();
 });
 test('A missing, malformed or mismatched worker digest cannot release output',async()=>{
- for(const digest of [undefined,'x'.repeat(64),'F'.repeat(64)]){
+ for(const digest of [undefined,'a'.repeat(64),'F'.repeat(64)]){
    let outputs=0,compressions=0;
    const file=new File([sourceBytes],'untrusted.pdf');
    Object.defineProperty(file,'arrayBuffer',{value:()=>{throw Error('unexpected full read');}});
@@ -42,13 +42,13 @@ test('A missing, malformed or mismatched worker digest cannot release output',as
      inspectFile:async()=>({valid:true,sourceBytes:file.size,sourceDigest:digest}),
      compressFile:async()=>{compressions++;return fakeReceipt('lossless');}
    },createURL:()=>{outputs++;return 'blob:unsafe';}});
-   if(digest==='x'.repeat(64)){
+   if(digest==='a'.repeat(64)){
      // 64 lowercase hexadecimal but does NOT describe the selected source.
      assert.equal((await session.select(file)).status,'ready');
      assert.equal((await session.compress('lossless')).status,'failed');
    }else assert.equal((await session.select(file)).status,'failed');
    assert.equal(outputs,0);assert.equal(session.snapshot().canDownload,false);
-   if(digest!=='x'.repeat(64))assert.equal(compressions,0);
+   if(digest!=='a'.repeat(64))assert.equal(compressions,0);
    session.dispose();
  }
 });
