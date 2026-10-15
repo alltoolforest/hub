@@ -17,7 +17,7 @@ const py=[
  'buf=io.BytesIO()',
  "img.save(buf,format='JPEG',quality=75,progressive=False)",
  'sys.stdout.buffer.write(buf.getvalue())'
-].join('\\n');
+].join('\n');
 const base=new Uint8Array(execFileSync('python', ['-c',py]));
 assert.equal(base.length,722,'fixture JPEG encoder output must be stable');
 const N=PDF.PDFName.of;
