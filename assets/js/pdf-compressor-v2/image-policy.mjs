@@ -7,7 +7,8 @@ export const IMAGE_LIMITS=Object.freeze({
 });
 export const QUALITY_MODES=Object.freeze({
   balanced:Object.freeze({jpegQuality:0.82,maxDimension:2400}),
-  strong:Object.freeze({jpegQuality:0.68,maxDimension:1800})
+  strong:Object.freeze({jpegQuality:0.68,maxDimension:1800}),
+  maximum:Object.freeze({jpegQuality:0.42,maxDimension:1200})
 });
 function name(v){return typeof v==='string'?v.trim():'';}
 export function assessImage(item,mode='balanced',limits=IMAGE_LIMITS,{allowJpeg=false,allowAdaptive=false}={}){
