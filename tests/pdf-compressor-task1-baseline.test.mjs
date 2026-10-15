@@ -1,4 +1,4 @@
-// Task 1 only: characterize current PDF Optimizer without changing production.
+// Historical Task 1 legacy algorithm characterization plus controlled route replacement.
 // KNOWN-DEFECT assertions passing means the defect is reproduced, not fixed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,7 +22,7 @@ async function compare(id){
   const after=await PDF.PDFDocument.load(optimized,{updateMetadata:false});
   return {before,after,original,optimized};
 }
-test('production route still invokes exact legacy page copier',()=>{
+test('legacy copier remains byte-for-byte testable but the staged page invokes only the v2 boot',()=>{
   assert.match(source,/else if\(slug==='pdf-compressor'\)/);
   const fragment=source.split("else if(slug==='pdf-compressor'){")[1]
     ?.split("else if(slug==='jpg-to-pdf')")[0];
@@ -31,9 +31,10 @@ test('production route still invokes exact legacy page copier',()=>{
   assert.match(fragment,/out\.save\(\{useObjectStreams:true\}\)/);
   assert.doesNotMatch(fragment,/embedPng\(|embedJpg\(|canvasBlob\(|reencode\(/i);
   assert.match(fragment,/'-optimized','pdf'/);
-  assert.match(page,/<h1>PDF Optimizer<\/h1>/);
-  assert.match(page,/data-tool="pdf-compressor"/);
-  assert.match(catalog,/'pdf-compressor','PDF Optimizer'/);
+  assert.match(page,/<h1>PDF Compressor<\/h1>/);
+  assert.doesNotMatch(page,/data-tool="pdf-compressor"/);
+  assert.match(page,/src="\.\.\/\.\.\/assets\/js\/pdf-compressor-v2\/site-boot\.mjs"/);
+  assert.match(catalog,/'pdf-compressor','PDF Compressor'/);
   assert.match(core,/export function checkFile\(/);
   assert.match(core,/export function bindFile\(/);
 });
