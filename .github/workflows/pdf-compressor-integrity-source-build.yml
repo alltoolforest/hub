@@ -287,6 +287,40 @@ jobs:
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task8-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task8-browser.mjs
           PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task8-browser.mjs
+  continuation-regression:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned independently-authored regression tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+      - name: Verify source-built runtime and generate real encrypted/signed controls
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-task6
+      - name: Task 6 full-mode synthetic corpus, independent text and integrity receipts
+        env:
+          PDF_COMPRESSOR_QPDF_MODULE: assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-task6
+        run: |
+          set -o pipefail
+          node --test tests/pdf-compressor-continuation-task6-regression.mjs | tee /tmp/atf-task6-regression-results.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-continuation-task6-regression-evidence
+          path: /tmp/atf-task6-regression-results.log
+          if-no-files-found: ignore
+          retention-days: 7
   performance-diagnostic:
     needs: input-integrity
     runs-on: ubuntu-latest
