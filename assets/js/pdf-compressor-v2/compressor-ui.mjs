@@ -26,7 +26,8 @@ export function mountCompressor(root,{engine,limits}={}){
     <p data-status role="status" aria-live="polite" aria-atomic="true">Select a PDF to begin.</p>
     <section data-result hidden aria-label="Compression result"><h2>Your result</h2>
       <dl><dt>Mode used</dt><dd data-result-mode></dd><dt>Original size</dt><dd data-original></dd><dt>Output size</dt><dd data-output></dd>
-      <dt>Saved</dt><dd data-saved></dd><dt>Processing time</dt><dd data-engine-time></dd></dl><p data-outcome></p>
+      <dt>Saved</dt><dd data-saved></dd><dt>Processing time</dt><dd data-engine-time></dd></dl>
+      <p data-timings aria-label="Compression stage timings"></p><p data-outcome></p>
       <a data-download>Download PDF</a></section>
     <p>Keep your original PDF. Balanced, Strong and Maximum may reduce embedded-image quality; Maximum may make text within scanned images less readable. Existing selectable text stays selectable. Lossless preserves image quality. Some PDFs cannot be made smaller.</p>
   </div>`;
@@ -74,6 +75,11 @@ export function mountCompressor(root,{engine,limits}={}){
         r.target.effectiveMode+' (limit: '+r.mode+')':r.mode;el('[data-original]').textContent=formatBytes(r.inputBytes);
       el('[data-output]').textContent=formatBytes(r.outputBytes);
       el('[data-engine-time]').textContent=Number.isFinite(r.engineMs)?(r.engineMs/1000).toFixed(1)+' seconds':'Not measured';
+      const t=r.stageTimings??{};
+      const sec=ms=>Number.isFinite(ms)?(ms/1000).toFixed(1)+'s':'—';
+      el('[data-timings]').textContent='Stage time: inspect '+sec(t.inspectionMs)+
+        ' · images '+sec(t.imageMs)+' · structure '+sec(t.losslessMs)+
+        ' · final verification '+sec(t.finalVerificationMs);
       el('[data-saved]').textContent=`${formatBytes(r.savedBytes)} (${r.reductionPercent.toFixed(2)}%)`;
       el('[data-outcome]').textContent=r.target?
         (r.target.reached?'Requested target '+formatBytes(r.target.requestedBytes)+' achieved. Review the verified PDF before using it.':
