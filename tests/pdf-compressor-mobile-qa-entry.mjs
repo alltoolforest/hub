@@ -60,6 +60,8 @@ self.onmessage=async event=>{
     // The UI shows these locally so a generic failure is actionable on Android.
     self.postMessage({ok:false,code:error?.code??(error instanceof RangeError?'memory-limit':'processing-failed'),
       diagnostic:{stage:lastStage,name:String(error?.name??'Error').slice(0,60),
-        message:String(error?.message??error??'Unknown error').slice(0,200)}});
+        message:String(error?.message??error??'Unknown error').slice(0,200),
+        jpegReason:error?.code==='image-header-unverifiable'?
+          String(error?.cause?.message??'jpeg-inspection-failed').slice(0,64):undefined}});
   }
 };
