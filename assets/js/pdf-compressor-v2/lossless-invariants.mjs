@@ -131,7 +131,7 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
             let data=value.contents,consumed=0;
             for(const filter of filters){
               if(!['/FlateDecode','/ASCII85Decode','/ASCIIHexDecode'].includes(filter))break;
-              data=filter==='/FlateDecode'?await boundedInflate(data,maxStreamBytes):decodeAscii(data,filter,maxStreamBytes);
+              data=filter==='/FlateDecode'?await boundedInflate(data,maxStreamBytes):decodeASCIIStreamBounded(data,filter,maxStreamBytes);
               consumed++;
             }
             const remaining=filters.slice(consumed);
