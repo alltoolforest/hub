@@ -26,6 +26,12 @@ export async function compressToTarget(bytes,{targetBytes,mode,runVerified,signa
   if(typeof runVerified!=='function')throw new TargetSizeError('verified-engine-required');
   let best=null;
   const trials=[];
+  // One-third-or-less targets are aggressive. Maximum was explicitly
+  // selected, so its fully verified profile can be tried first. If it reaches
+  // the target, avoid an otherwise redundant Strong pass. For less demanding
+  // targets, retain the quality-first Strong -> Maximum order. If Maximum
+  // misses the aggressive goal, run Strong too and choose the smaller verified
+  // candidate; never bypass verification or change JPEG quality limits.
   const tightMaximum=mode==='maximum' && targetBytes*3<=bytes.length;
   const order=tightMaximum?['maximum','strong']:profileAttempts[mode];
   for(const profile of order){
