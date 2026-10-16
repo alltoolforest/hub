@@ -34,3 +34,14 @@ Static source audit found and corrected:
 - Intermediate bitmaps were not closed if a second resize or TIFF orientation canvas allocation failed. Cleanup now covers those failure paths.
 These follow-up fixes have NOT been executed or browser-tested: the execution environment failed to initialize. Previous PASS results above describe the earlier checkpoint, not these changes.
 Remaining validation: differently proportioned RAW/JPEG preview fixtures; reduced preview area limit; failed resize/canvas allocation cleanup; existing consent suite and real-browser integration. Private test Site remains unpublished (version 0). Main remains unchanged.
+
+## Restored execution and integration evidence — 2026-10-16
+Execution restored. PASS: decoder-recovery.mjs checks RAW preview geometry, selected reduced area, explicit preview consent and failed-resize bitmap cleanup with mocked APIs. Existing consent and TIFF/JPEG metadata suites pass against latest fixes. Static module/worker paths and JS syntax checks pass.
+
+PASS: native-canvas worker integration at 12000 x 8500 = 102MP. The fixture was an enlarged supplied portrait, not a real native 102MP camera file. Decode, unchanged numeric enhancement, strip PNG export and independent full-image PNG decode completed. Input 5768390 bytes; output 75340112 bytes; elapsed 149 seconds; peak observed process RSS 1095 MiB. Node/native canvas is not a browser, and its close shim does not model browser bitmap release. This memory figure is harness evidence, not a phone estimate or browser guarantee.
+
+PASS: 1152 x 1536 portrait candidate output pixels exactly match the accepted main worker output after independent PNG decoding. Photo, wavelet and portrait numeric modules remain byte-identical. This demonstrates pipeline parity for this fixture, not broad visual quality certification.
+
+Added reproducible harnesses tests/decoder-recovery.mjs and tests/worker-native-stress.mjs (the latter requires sharp and @napi-rs/canvas in CODEX_PRIMARY_RUNTIME_NODE_MODULES, plus the photo fixture path as third argument). Reports saved as tests/worker-stress-102.json and tests/worker-stress-2.json. User photograph is not committed.
+
+Still outstanding: browser/device validation and truly bounded source decoding. The test page is for manual evaluation, not a production readiness or universal 102MP support claim. Production main remains untouched.

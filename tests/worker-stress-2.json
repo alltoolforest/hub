@@ -1,0 +1,11 @@
+{
+  "fixture": "upsampled supplied photograph, stress test only",
+  "harness": "Node native canvas (not browser)",
+  "width": 1152,
+  "height": 1536,
+  "inputBytes": 371045,
+  "outputBytes": 2550168,
+  "seconds": 4,
+  "peakObservedRssMiB": 244,
+  "status": "PASS native-size decode / accepted enhancement / streamed PNG / independent full decode"
+}
