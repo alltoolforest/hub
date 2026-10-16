@@ -10,6 +10,29 @@ export const RASTER_PROFILES=Object.freeze({
   maximum:Object.freeze({dpi:78,jpegQuality:0.24,maxPagePixels:2_600_000})
 });
 function guard(signal){if(signal?.aborted)fail('cancelled');}
+// PDF.js must never attempt document.createElement in a dedicated worker.
+// Its CanvasFactory injection is independent of the per-page output canvas;
+// it handles decoding/intermediate image and mask canvases inside PDF.js.
+export class V3OffscreenCanvasFactory {
+  create(width,height){
+    if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1)
+      throw Error('invalid-intermediate-canvas');
+    const canvas=new OffscreenCanvas(width,height);
+    const context=canvas.getContext('2d');
+    if(!context)throw Error('intermediate-canvas-unavailable');
+    return {canvas,context};
+  }
+  reset(entry,width,height){
+    if(!entry?.canvas||!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1)
+      throw Error('invalid-intermediate-canvas');
+    entry.canvas.width=width;entry.canvas.height=height;
+  }
+  destroy(entry){
+    if(!entry)return;
+    if(entry.canvas){entry.canvas.width=0;entry.canvas.height=0;}
+    entry.canvas=null;entry.context=null;
+  }
+}
 function boundedViewport(page,profile){
   const initial=page.getViewport({scale:profile.dpi/72});
   if(!(initial.width>0&&initial.height>0)||!Number.isFinite(initial.width*initial.height))
@@ -48,7 +71,10 @@ export async function rasterizePdfAggressively(sourceBytes,{
   let task=null,source=null,canvas=null;
   const profile=RASTER_PROFILES[mode];
   try{
-    task=pdfjs.getDocument({data:workerOwnsInput?sourceBytes:sourceBytes.slice(),stopAtErrors:true,
+    task=pdfjs.getDocument({
+      ...(typeof document==='undefined'&&typeof OffscreenCanvas==='function'?
+        {CanvasFactory:V3OffscreenCanvasFactory}:{}),
+      data:workerOwnsInput?sourceBytes:sourceBytes.slice(),stopAtErrors:true,
       isEvalSupported:false,disableAutoFetch:true,disableStream:true});
     source=await task.promise;
     const pages=source.numPages;
