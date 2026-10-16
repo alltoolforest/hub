@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {rasterizePdfAggressively,AggressiveRasterError,RASTER_PROFILES,installV3StreamIterator}
+import {rasterizePdfAggressively,AggressiveRasterError,RASTER_PROFILES,installV3StreamIterator,V3OffscreenCanvasFactory}
  from '../assets/js/pdf-compressor-v3/aggressive-raster-core.mjs';
 
 const input=new Uint8Array(2000).fill(64);
@@ -102,4 +102,21 @@ test('worker-owned input avoids duplicate full-file copy and retains exact input
 test('page-count and wall-time budgets fail closed',async()=>{
  await assert.rejects(run(fixture({pages:5}),{maxPages:4}),isError('invalid-page-count'));
  await assert.rejects(run(fixture(),{maxRunMs:100}),isError('invalid-time-budget'));
+});
+
+test('dedicated-worker intermediate OffscreenCanvasFactory allocates and releases canvases',()=>{
+ const original=globalThis.OffscreenCanvas;
+ try{
+  class Canvas{constructor(width,height){this.width=width;this.height=height;}getContext(type){return type==='2d'?{}:null;}}
+  globalThis.OffscreenCanvas=Canvas;
+  const factory=new V3OffscreenCanvasFactory();
+  const entry=factory.create(120,80);
+  assert.equal(entry.canvas.width,120);
+  factory.reset(entry,64,32);
+  assert.equal(entry.canvas.height,32);
+  factory.destroy(entry);
+  assert.equal(entry.canvas,null);
+  assert.equal(entry.context,null);
+  assert.throws(()=>factory.create(0,10),/invalid-intermediate-canvas/);
+ }finally{globalThis.OffscreenCanvas=original;}
 });
