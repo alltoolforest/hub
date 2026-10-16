@@ -24,14 +24,14 @@ try{
   const {inflateStreamBounded}=await import('/assets/js/pdf-compressor-v2/lossless-invariants.mjs');
   const inflate=async arr=>{
    try{return {ok:true,result:Array.from(await inflateStreamBounded(new Uint8Array(arr),samples.source.length))};}
-   catch(e){return {ok:false,name:String(e?.name??''),code:String(e?.code??'')};}
+   catch(e){return {ok:false,name:String(e?.name??''),code:String(e?.code??''),message:String(e?.message??'').slice(0,160)};}
   };
   return {complete:await inflate(samples.complete),missingAdler:await inflate(samples.missingAdler),
    truncatedData:await inflate(samples.truncatedData),corruptChecksum:await inflate(samples.corruptChecksum)};
  },samples);
- assert.equal(result.complete.ok,true,JSON.stringify({browserName,result}));
+ assert.equal(result.complete.ok,true,JSON.stringify({browserName,missingAdler:result.missingAdler,completeOk:result.complete.ok}));
  assert.deepEqual(result.complete.result,samples.source);
- assert.equal(result.missingAdler.ok,true,JSON.stringify({browserName,result}));
+ assert.equal(result.missingAdler.ok,true,JSON.stringify({browserName,missingAdler:result.missingAdler,completeOk:result.complete.ok}));
  assert.deepEqual(result.missingAdler.result,samples.source);
  assert.equal(result.truncatedData.ok,false,'truncated compressed deflate must be rejected');
  assert.equal(result.corruptChecksum.ok,false,'wrong Adler checksum must be rejected');
