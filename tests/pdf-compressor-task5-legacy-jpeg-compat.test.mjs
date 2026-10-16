@@ -145,3 +145,34 @@ test('strong image stage retains the entire legacy-EXIF JPEG byte-for-byte witho
  assert.equal(result.replacements,0);
  assert.deepEqual(result.bytes,src);
 });
+
+
+test('valid EXIF plus valid XMP in the same JPEG remains inspectable and preserve-only',async()=>{
+ const xmpId=Buffer.concat([Buffer.from('http://ns.adobe.com/xap/1.0/'),Buffer.from([0])]);
+ const xmp=Buffer.concat([Buffer.from([255,225,0,xmpId.length+2]),xmpId]);
+ for(const markers of [[exif,xmp],[xmp,exif],[exif,photoshop,xmp,unknown]]){
+  const jpeg=prependMetadata(...markers);
+  const input=await makePDF(jpeg),snapshot=input.slice();
+  const report=await inspectPDFInput(input,{PDF,readPages:pages});
+  assert.equal(report.valid,true);
+  assert.deepEqual(input,snapshot);
+  const decode=createPDFJpegDecoder(class MustNotDecode{constructor(){throw Error('opaque metadata JPEG must not re-encode');}});
+  const result=await transformEmbeddedImages(input,{PDF,mode:'maximum',
+    inspectInput:b=>inspectPDFInput(b,{PDF,readPages:pages}),
+    decodeJpeg:decode,encodeJpeg:async()=>{throw Error('must preserve opaque JPEG');},
+    verifyOutput:async()=>{throw Error('no JPEG replacement authorized');}});
+  assert.equal(result.status,'original-retained');
+  assert.deepEqual(result.bytes,input);
+ }
+});
+
+test('specific safe diagnostic reasons never waive malformed JPEG checks',async()=>{
+ const invalid=Buffer.from(exif);invalid[5]=88;
+ await assert.rejects(inspectPDFInput(await makePDF(prependMetadata(invalid)),{PDF,readPages:pages}),
+   e=>e.code==='image-header-unverifiable'&&e.cause?.message==='jpeg-metadata-app1');
+ const xmpId=Buffer.concat([Buffer.from('http://ns.adobe.com/xap/1.0/'),Buffer.from([0])]);
+ const xmp=Buffer.concat([Buffer.from([255,225,0,xmpId.length+2]),xmpId]);
+ const bad=Buffer.from(xmp);bad[3]=255;
+ await assert.rejects(inspectPDFInput(await makePDF(prependMetadata(bad)),{PDF,readPages:pages}),
+   e=>e.code==='image-header-unverifiable'&&e.cause?.message==='truncated-source-jpeg');
+});
