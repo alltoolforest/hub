@@ -40,8 +40,7 @@ test('does not misreport reductions when candidates expand or both fail',async()
  const result=await run({nonFlatten:candidate(2100,false)});
  assert.equal(result.status,'no-smaller-verified-output');
  assert.equal(result.bytes,null);
- const rejected=await run({nonFlatten:candidate(1300,true)});
- assert.equal(rejected.status,'no-smaller-verified-output');
+ await assert.rejects(run({nonFlatten:candidate(1300,true)}),hasCode('flatten-consent-required'));
 });
 test('cancellation aborts all strategy attempts',async()=>{
  await assert.rejects(run({signal:AbortSignal.abort()}),hasCode('cancelled'));
