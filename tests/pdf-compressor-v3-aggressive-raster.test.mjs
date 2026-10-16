@@ -87,3 +87,19 @@ test('WebKit stream iterator shim preserves chunks and releases stream lock',asy
  assert.deepEqual(values,[1,2,3,4,5]);
  assert.equal(released,true);
 });
+
+test('worker-owned input avoids duplicate full-file copy and retains exact input byte accounting',async()=>{
+ const f=fixture();
+ let handed=null;const original=f.pdfjs.getDocument;
+ f.pdfjs.getDocument=options=>{handed=options.data;return original(options);};
+ const owned=await run(f,{workerOwnsInput:true});
+ assert.equal(handed,input,'a dedicated worker must pass owned source without a full copy');
+ assert.equal(owned.inputBytes,input.length);
+ const borrowed=await run(f,{workerOwnsInput:false});
+ assert.notEqual(handed,input,'borrowed input must still be isolated by copying');
+ assert.equal(borrowed.inputBytes,input.length);
+});
+test('page-count and wall-time budgets fail closed',async()=>{
+ await assert.rejects(run(fixture({pages:5}),{maxPages:4}),isError('invalid-page-count'));
+ await assert.rejects(run(fixture(),{maxRunMs:100}),isError('invalid-time-budget'));
+});
