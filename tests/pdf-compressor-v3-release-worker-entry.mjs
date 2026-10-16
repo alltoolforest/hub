@@ -9,6 +9,7 @@ import {inspectV3Source} from '../assets/js/pdf-compressor-v3/security-preflight
 import {rasterizePdfAggressively,installV3StreamIterator} from '../assets/js/pdf-compressor-v3/aggressive-raster-core.mjs';
 import {recompressJpegXObjects} from '../assets/js/pdf-compressor-v3/nonflatten-jpeg-recode.mjs';
 import {selectSmallestVerifiedPDF} from '../assets/js/pdf-compressor-v3/strategy-selector.mjs';
+import {losslessFingerprint} from '../assets/js/pdf-compressor-v2/lossless-invariants.mjs';
 const MAX_INPUT_BYTES=100_000_000;
 const decode=s=>{const raw=atob(s),bytes=new Uint8Array(raw.length);
  for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return bytes;};
@@ -69,13 +70,38 @@ self.onmessage=async event=>{
    const original=new Uint8Array(await file.arrayBuffer());
    progress('inspect');
    const security=await inspectV3Source(original,{PDF,maxBytes:MAX_INPUT_BYTES});
-   // Lossless may retain the original if structure-only rewriting is not
-   // independently proven smaller and safe. It MUST never flatten.
+   // Lossless must not silently rasterize: save a structure-optimized copy,
+   // require a complete independent graph fingerprint, then reopen every page.
    if(mode==='lossless'){
-     self.postMessage({type:'result',status:'original-retained',mode,
-       inputBytes:original.length,outputBytes:original.length,
-       savedBytes:0,destructive:false,engineMs:Math.round(performance.now()-start),
-       note:'Lossless optimization is pending separate verified integration.'});
+     let result=null;
+     try{
+       const doc=await PDF.PDFDocument.load(original,{updateMetadata:false,throwOnInvalidObject:true});
+       const output=new Uint8Array(await doc.save({useObjectStreams:true,addDefaultPage:false}));
+       if(output.length<original.length){
+         const graphOpts={PDF,maxEntries:250000,maxTotalDecodedBytes:512000000,
+           maxStreamBytes:64000000};
+         const fingerprint=await losslessFingerprint(original,graphOpts);
+         if(fingerprint!==await losslessFingerprint(output,graphOpts))
+           throw {code:'lossless-structure-differs'};
+         await verifyCandidate({original,bytes:output,security,destructive:false});
+         const sha256=async buffer=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)),
+           n=>n.toString(16).padStart(2,'0')).join('');
+         result={type:'result',status:'compressed',mode,
+           inputBytes:original.length,outputBytes:output.length,
+           savedBytes:original.length-output.length,
+           reductionPercent:Number((100*(1-output.length/original.length)).toFixed(2)),
+           destructive:false,selectedStrategy:'lossless',integrity:{
+             sourceDigest:await sha256(original),outputDigest:await sha256(output)},
+           engineMs:Math.round(performance.now()-start),bytes:output};
+       }
+     }catch{
+       // A failed or unverified candidate is never released, even when smaller.
+       result=null;
+     }
+     if(result){self.postMessage(result,[result.bytes.buffer]);}
+     else self.postMessage({type:'result',status:'original-retained',mode,
+       inputBytes:original.length,outputBytes:original.length,savedBytes:0,
+       destructive:false,engineMs:Math.round(performance.now()-start)});
      return;
    }
    const readPages=createIndependentInputReader(parser);
