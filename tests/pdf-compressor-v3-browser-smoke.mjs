@@ -51,7 +51,8 @@ try{
       pdfjs,PDF:globalThis.PDFLib,consentToFlatten:true,mode:'maximum',
       inspectRestrictions:async()=>({allowed:true}),requireSavings:false,
       onProgress:value=>events.push(value)});
-    const decoded=await pdfjs.getDocument({data:result.bytes.slice()}).promise;
+    const decodedTask=pdfjs.getDocument({data:result.bytes.slice()});
+    const decoded=await decodedTask.promise;
     if(decoded.numPages!==3)throw Error('PDF.js output page count changed');
     const pg=await decoded.getPage(1),vp=pg.getViewport({scale:0.5});
     const canvas=new OffscreenCanvas(Math.ceil(vp.width),Math.ceil(vp.height));
@@ -61,7 +62,7 @@ try{
       pages:result.pages,pageRenderWidth:vp.width,events:events.length,
       selectableTextAfterRaster:parsed.items.length,
       initialDpi:78,warning:result.warnings.includes('selectable-text-removed')};
-    await decoded.destroy();
+    await decodedTask.destroy();
     return {info:resultInfo,bytes:Array.from(result.bytes)};
    },Array.from(source));
    assert.equal(outcome.info.status,'compressed');
