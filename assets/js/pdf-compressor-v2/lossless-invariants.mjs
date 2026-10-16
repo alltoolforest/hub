@@ -90,7 +90,7 @@ async function recoverChecksumlessZlib(bytes,maxBytes){
 async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
-    if(/Compressed input was truncated/i.test(String(error))){
+    if(/(?:Compressed input was truncated|unexpected end of file)/i.test(String(error)+' '+String(error?.cause??''))){
       // Only recover an absent Adler-32 after a complete raw DEFLATE stream,
       // never truncation in the compressed content, data-check corruption or
       // memory/decoded-size errors.
