@@ -30,6 +30,18 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))))==='/DeviceCMYK'&&
     adobe.every(m=>adobeMarkerValid(m)&&m.bytes[15]===adobe[0].bytes[15]);
   const validAdobe=adobeCmyk&&adobe.length===1;
+  // Adobe APP14 transform=1 is valid YCbCr for three-component JPEGs.
+  // When the PDF dictionary declares /DeviceRGB the PDF image remains RGB
+  // for document-level verification. Accept only a single well-framed Adobe
+  // marker with transform 0 (RGB/unknown) or 1 (YCbCr) for *opaque* source
+  // preservation. The lossy image decoder refuses unsupportedMetadata and
+  // therefore cannot silently recolor/re-encode this source.
+  const validAdobeRgb=adobe.length===1&&frame.components===3&&
+    String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))))==='/DeviceRGB'&&
+    adobe[0].bytes.length===16&&adobe[0].bytes[0]===255&&
+    adobe[0].bytes[1]===238&&adobe[0].bytes[2]===0&&adobe[0].bytes[3]===14&&
+    [65,100,111,98,101].every((v,i)=>adobe[0].bytes[i+4]===v)&&
+    [0,1].includes(adobe[0].bytes[15]);
   // Legacy publishing software can embed valid APP1 (EXIF) and APP13
   // (Photoshop) blocks alongside repeated compatible Adobe APP14 markers.
   // Inspect their JPEG framing but preserve these complex images unchanged:
@@ -81,7 +93,7 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     xmpSignature.every((v,i)=>m.bytes[i+4]===v);
   const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
     (preserveLegacy&&compatibleLegacyMetadata(m))||
-    (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
+    (m.marker===238&&(validAdobe||validAdobeRgb||preservedLegacyCmyk))||
     (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
     (directColorSpace&&validXmp(m))||opaqueApp(m));
   // Fixed low-entropy reason codes only; never return image or document bytes.
@@ -94,7 +106,7 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
   if(!allowedMetadata){
     const rejected=frame.metadata.find(m=>!([224,226,254].includes(m.marker)||
       (preserveLegacy&&compatibleLegacyMetadata(m))||
-      (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
+      (m.marker===238&&(validAdobe||validAdobeRgb||preservedLegacyCmyk))||
       (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
       (directColorSpace&&validXmp(m))||opaqueApp(m)));
     const marker=rejected?.marker;
