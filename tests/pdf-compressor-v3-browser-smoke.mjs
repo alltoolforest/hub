@@ -72,6 +72,54 @@ try{
    assert.equal(outcome.info.warning,true);
    const output=new Uint8Array(outcome.bytes);
    assert.equal((await PDF.PDFDocument.load(output)).getPageCount(),3);
+   // Non-flattening JPEG path: exercise actual browser image transcoding AND
+   // the v2 independent graph/page verification that protects page text, forms,
+   // annotations and all non-image streams. No unverified candidate download.
+   const nonflat=await page.evaluate(async()=>{
+     const {recompressJpegXObjects}=await import('/assets/js/pdf-compressor-v3/nonflatten-jpeg-recode.mjs');
+     const {createImageOutputVerifier}=await import('/assets/js/pdf-compressor-v2/image-output-verifier.mjs');
+     const {createIndependentInputReader}=await import('/assets/js/pdf-compressor-v2/independent-input-reader.mjs');
+     const pdfjs=await import('/node_modules/pdfjs-dist/legacy/build/pdf.mjs');
+     pdfjs.GlobalWorkerOptions.workerSrc='/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs';
+     const PDF=globalThis.PDFLib;
+     const canvas=new OffscreenCanvas(1400,1000),ctx=canvas.getContext('2d');
+     const colors=ctx.createImageData(1400,1000),values=colors.data;
+     let seed=1234567;
+     for(let i=0;i<values.length;i+=4){
+       seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+       values[i]=seed&255;values[i+1]=(seed>>>8)&255;
+       values[i+2]=(seed>>>16)&255;values[i+3]=255;
+     }
+     ctx.putImageData(colors,0,0);
+     const jpeg=new Uint8Array(await (await canvas.convertToBlob({type:'image/jpeg',quality:0.98})).arrayBuffer());
+     const srcDoc=await PDF.PDFDocument.create();
+     const page=srcDoc.addPage([612,792]);
+     page.drawText('Important searchable text must remain selectable',{x:22,y:720,size:18});
+     const embedded=await srcDoc.embedJpg(jpeg);
+     page.drawImage(embedded,{x:20,y:100,width:560,height:500});
+     const original=new Uint8Array(await srcDoc.save());
+     const verifyJpeg=async({bytes,width,height})=>{
+       const image=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}));
+       try{return image.width===width&&image.height===height;}
+       finally{image.close();}
+     };
+     const verifyOutput=createImageOutputVerifier({PDF,readPages:createIndependentInputReader(pdfjs),verifyJpeg});
+     const result=await recompressJpegXObjects(original,{PDF,mode:'maximum',
+       inspectRestrictions:async()=>({allowed:true}),verifyOutput});
+     if(result.status!=='compressed')return {status:result.status};
+     const origTask=pdfjs.getDocument({data:original.slice()}),outTask=pdfjs.getDocument({data:result.bytes.slice()});
+     const orig=await origTask.promise,out=await outTask.promise;
+     const sourceText=(await (await orig.getPage(1)).getTextContent()).items.map(x=>x.str).join('');
+     const outputText=(await (await out.getPage(1)).getTextContent()).items.map(x=>x.str).join('');
+     await origTask.destroy();await outTask.destroy();
+     return {status:result.status,pages:result.pageCount,replacements:result.replacements.length,
+       saved:original.length-result.bytes.length,sourceText,outputText};
+   });
+   assert.equal(nonflat.status,'compressed','non-flattening JPEG candidate must reduce actual bytes');
+   assert.ok(nonflat.saved>50000,'large real JPEG must have significant savings');
+   assert.ok(nonflat.replacements>=1);
+   assert.equal(nonflat.pages,1);
+   assert.equal(nonflat.outputText,nonflat.sourceText,'nonflatten output must keep selectable text');
    assert.deepEqual(errors,[],'browser console must remain clean');
    assert.deepEqual(blocked,[],'no outgoing upload/external requests');
    console.log(JSON.stringify({browser:name,...outcome.info,inputBytes:source.length}));
