@@ -1,0 +1,11 @@
+import {readFile} from 'node:fs/promises';import {createRequire} from 'node:module';import vm from 'node:vm';import assert from 'node:assert/strict';import {reducedDimensions} from '../assets/js/enhancer-v2/input-plan.js';
+const require=createRequire(import.meta.url),{createCanvas,ImageData}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/@napi-rs/canvas');
+const original=await readFile(new URL('../assets/js/enhancer-v2/decode-photo.js',import.meta.url),'utf8');const code=original.replace(/^import .*;\n/,'').replace(/let tiffPromise;[\s\S]*?export async function decodePhoto/,'async function tiffDecoder(){return UTIF;}\nasync function decodePhoto');
+const expected=[[1,2,3,4,5,6],[3,2,1,6,5,4],[6,5,4,3,2,1],[4,5,6,1,2,3],[1,4,2,5,3,6],[4,1,5,2,6,3],[6,3,5,2,4,1],[3,6,2,5,1,4]];
+for(let o=1;o<=8;o++){
+ let closed=0;class Canvas{constructor(w,h){this.c=createCanvas(w,h);}set width(v){this.c.width=v;}set height(v){this.c.height=v;}getContext(){const ctx=this.c.getContext('2d'),draw=ctx.drawImage.bind(ctx);ctx.drawImage=(b,...a)=>draw(b.c,...a);return ctx;}transferToImageBitmap(){const c=createCanvas(this.c.width,this.c.height);c.getContext('2d').drawImage(this.c,0,0);return{c,width:c.width,height:c.height,close(){}};}}
+ const rgba=new Uint8Array(24);for(let i=0;i<6;i++){rgba[i*4]=(i+1)*30;rgba[i*4+3]=255;}
+ const ctx={Blob,Uint8ClampedArray,ImageData,reducedDimensions,OffscreenCanvas:Canvas,UTIF:{decode:()=>[{width:3,height:2,t274:[o]}],decodeImage(){},toRGBA8:()=>rgba},createImageBitmap:async v=>{if(v instanceof Blob)throw Error('fallback');const c=createCanvas(v.width,v.height);c.getContext('2d').putImageData(v,0,0);return{c,width:v.width,height:v.height,close(){closed++;}};}};
+ vm.createContext(ctx);vm.runInContext(code+'\nthis.decodePhoto=decodePhoto;',ctx);const file=new Blob(['fixture']);file.name='test.tiff';const r=await ctx.decodePhoto(file);assert.equal(r.bitmap.width,o>=5?2:3);assert.equal(r.bitmap.height,o>=5?3:2);const px=r.bitmap.c.getContext('2d').getImageData(0,0,r.bitmap.width,r.bitmap.height).data;assert.deepEqual(Array.from({length:6},(_,i)=>px[i*4]/30),expected[o-1]);assert.equal(closed,o===1?0:1);
+}
+console.log('PASS all 8 TIFF orientation transforms and dimensions (native canvas, fixture decoder)');

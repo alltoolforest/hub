@@ -45,3 +45,12 @@ PASS: 1152 x 1536 portrait candidate output pixels exactly match the accepted ma
 Added reproducible harnesses tests/decoder-recovery.mjs and tests/worker-native-stress.mjs (the latter requires sharp and @napi-rs/canvas in CODEX_PRIMARY_RUNTIME_NODE_MODULES, plus the photo fixture path as third argument). Reports saved as tests/worker-stress-102.json and tests/worker-stress-2.json. User photograph is not committed.
 
 Still outstanding: browser/device validation and truly bounded source decoding. The test page is for manual evaluation, not a production readiness or universal 102MP support claim. Production main remains untouched.
+
+## Compatibility audit continuation — 2026-10-16
+- User reported successful phone processing of the previously rejected camera photo. Supplied output PNG fully decoded: 3072x4096 (12.582912MP), opaque RGBA. Attached input copy is 1152x1536, so native source/output equality cannot be verified from these attachments. No inference of 102MP phone support.
+- PASS 24MP (6000x4000) and 48MP (8000x6000) worker stress: original-size enhancement, streamed PNG and independent full PNG decode. 24MP: 22s, observed RSS 465MiB; 48MP: 54s, 561MiB. Both use enlarged portrait fixtures in a Node native-canvas harness, not browser/device tests. Earlier 102MP test retained; not repeated.
+- PASS alpha-worker.mjs: zero/partial/opaque alpha across strip boundaries, all alpha exact; full RGBA equals accepted main output (max delta 0).
+- PASS tiff-orientation.mjs: all eight TIFF orientation transforms/dimensions using native canvas and fixture decoder. Actual TIFF compression was covered by the earlier format tests; this is not a real-browser decoder integration test.
+- Fixed HEIC native decode timeout ownership: late-resolving bitmaps are now closed. PASS heic-timeout-cleanup.mjs: late cleanup, successful ownership, rejection and timer cleanup. No numeric quality parameters or decoder dependency versions changed.
+- Remaining release blockers: real browser integration and real HEIC/HEIF corpus; native 48/102MP camera files on mobile; genuinely bounded source decoding / output storage. The HEIC fallback still runs on the UI thread and cannot be forcibly cancelled, although stale results are suppressed. Device termination from memory pressure cannot always be caught to offer a reduced copy.
+- Do not promote or freeze on the strength of these harness tests alone. Main and other tools remain unchanged.

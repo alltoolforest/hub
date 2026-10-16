@@ -7,14 +7,25 @@ const DECODER_TIMEOUT_MS = 45000;
 
 let decoderPromise = null;
 
-function withTimeout(promise, ms, message) {
-  let timer = null;
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), ms);
-    })
-  ]).finally(() => clearTimeout(timer));
+function withTimeout(promise, ms, message, disposeLate) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      reject(new Error(message));
+    }, ms);
+    Promise.resolve(promise).then(value => {
+      if (settled) { try { disposeLate?.(value); } catch {} return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    }, error => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
 }
 
 async function sha256Hex(bytes) {
@@ -50,7 +61,8 @@ async function decodeBrowserImage(blob, timeoutMs = NATIVE_TIMEOUT_MS) {
       const bitmap = await withTimeout(
         createImageBitmap(blob),
         timeoutMs,
-        'Native image decoding timed out.'
+        'Native image decoding timed out.',
+        bitmap => bitmap?.close?.()
       );
       if (bitmap?.width > 0 && bitmap?.height > 0) return bitmap;
       bitmap?.close?.();
@@ -127,3 +139,4 @@ export async function decodeEnhancerHeic(file, onStatus) {
   }
   return image;
 }
+

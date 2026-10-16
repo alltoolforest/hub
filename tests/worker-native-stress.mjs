@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url),root=process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES;
 const {createCanvas,loadImage,ImageData}=require(root+'/@napi-rs/canvas');
 const sharp=require(root+'/sharp');
-const size=Number(process.argv[2]||102),width=size===102?12000:1152,height=size===102?8500:1536;
+const size=Number(process.argv[2]||102),[width,height]=({24:[6000,4000],48:[8000,6000],102:[12000,8500]})[size]||[1152,1536];
 const photo=await readFile(process.argv[3] || new URL('../../upload/02-1000133429.jpg',import.meta.url));
 const jpeg=await sharp(photo).resize(width,height,{fit:'cover'}).jpeg({quality:92}).toBuffer();
 class Canvas {
@@ -25,7 +25,7 @@ await self.onmessage({data:{file:new Blob([jpeg],{type:'image/jpeg'}),decodeOpti
 assert.ok(result?.blob);assert.equal(result.width,width);assert.equal(result.height,height);
 const bytes=Buffer.from(await result.blob.arrayBuffer());
 const decoded=await sharp(bytes).stats();const meta=await sharp(bytes).metadata();assert.equal(meta.width,width);assert.equal(meta.height,height);assert.equal(decoded.channels.length,4);assert.equal(decoded.channels[3].min,255);
-if(size!==102){
+if(size===2){
  const candidate=await sharp(bytes).raw().toBuffer();result=null;
  await import('../../main-release/assets/js/enhancer-v2/image-enhancer-photo-worker.js');
  const bitmap=await createImageBitmap(new Blob([jpeg]));
