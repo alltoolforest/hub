@@ -27,7 +27,9 @@ export async function rasterizePdfAggressively(sourceBytes,{
   // independently authorize loss of text/forms/annotations/attachments.
   inspectRestrictions,signal,onProgress=()=>{},
   makeCanvas=(width,height)=>new OffscreenCanvas(width,height),
-  maxOutputBytes=100_000_000,requireSavings=true
+  maxOutputBytes=100_000_000,requireSavings=true,
+  // Only true for a File->worker transfer where this worker uniquely owns bytes.
+  workerOwnsInput=false,maxPages=1200,maxRunMs=180000
 }={}){
   if(!consentToFlatten)fail('flatten-consent-required');
   if(!RASTER_PROFILES[mode])fail('invalid-mode');
@@ -35,22 +37,26 @@ export async function rasterizePdfAggressively(sourceBytes,{
   if(typeof inspectRestrictions!=='function')fail('security-inspection-required');
   if(!pdfjs?.getDocument||!PDF?.PDFDocument?.create||!PDF?.PDFDocument?.load)fail('runtime-unavailable');
   if(!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1024)fail('invalid-output-budget');
-  guard(signal);
+  if(!Number.isSafeInteger(maxPages)||maxPages<1||maxPages>10000)fail('invalid-page-budget');
+  if(!Number.isFinite(maxRunMs)||maxRunMs<1000)fail('invalid-time-budget');
+  const inputBytes=sourceBytes.length,deadline=performance.now()+maxRunMs;
+  const budget=()=>{guard(signal);if(performance.now()>deadline)fail('processing-timeout');};
+  budget();
   const inspection=await inspectRestrictions(sourceBytes,{signal,mode});
   if(inspection?.allowed!==true)fail(inspection?.code??'restricted-document');
   guard(signal);
   let task=null,source=null,canvas=null;
   const profile=RASTER_PROFILES[mode];
   try{
-    task=pdfjs.getDocument({data:sourceBytes.slice(),stopAtErrors:true,
+    task=pdfjs.getDocument({data:workerOwnsInput?sourceBytes:sourceBytes.slice(),stopAtErrors:true,
       isEvalSupported:false,disableAutoFetch:true,disableStream:true});
     source=await task.promise;
     const pages=source.numPages;
-    if(!Number.isSafeInteger(pages)||pages<1)fail('invalid-page-count');
+    if(!Number.isSafeInteger(pages)||pages<1||pages>maxPages)fail('invalid-page-count');
     const output=await PDF.PDFDocument.create({updateMetadata:false});
     let totalEncoded=0,maxResidentPixels=0;
     for(let number=1;number<=pages;number++){
-      guard(signal);
+      budget();
       const page=await source.getPage(number);
       try{
         const {viewport,width,height}=boundedViewport(page,profile);
@@ -60,9 +66,12 @@ export async function rasterizePdfAggressively(sourceBytes,{
         const ctx=canvas.getContext('2d',{alpha:false,willReadFrequently:false});
         if(!ctx)fail('canvas-context-unavailable');
         ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
-        await page.render({canvasContext:ctx,viewport,intent:'print',
-          background:'rgb(255,255,255)'}).promise;
-        guard(signal);
+        const render=page.render({canvasContext:ctx,viewport,intent:'print',
+          background:'rgb(255,255,255)'});
+        const stop=()=>render.cancel();
+        signal?.addEventListener('abort',stop,{once:true});
+        try{await render.promise;}finally{signal?.removeEventListener('abort',stop);}
+        budget();
         const blob=await canvas.convertToBlob({type:'image/jpeg',quality:profile.jpegQuality});
         if(blob?.type!=='image/jpeg'||blob.size<4)fail('jpeg-encode-failed');
         const jpg=new Uint8Array(await blob.arrayBuffer());
@@ -82,11 +91,11 @@ export async function rasterizePdfAggressively(sourceBytes,{
         page.cleanup?.();
       }
     }
-    guard(signal);
+    budget();
     const bytes=new Uint8Array(await output.save({useObjectStreams:true,addDefaultPage:false}));
     if(bytes.length>maxOutputBytes)fail('output-budget');
-    if(requireSavings&&bytes.length>=sourceBytes.length)
-      return {status:'not-smaller',bytes:null,inputBytes:sourceBytes.length,outputBytes:bytes.length,
+    if(requireSavings&&bytes.length>=inputBytes)
+      return {status:'not-smaller',bytes:null,inputBytes,outputBytes:bytes.length,
         pages,destructive:true,mode,maxResidentPixels};
     const reopened=await PDF.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
     if(reopened.getPageCount()!==pages)fail('output-page-count-mismatch');
@@ -94,7 +103,7 @@ export async function rasterizePdfAggressively(sourceBytes,{
       const box=sheet.getMediaBox();
       if(!(box.width>0&&box.height>0))fail('invalid-output-page-geometry');
     }
-    return {status:'compressed',bytes,inputBytes:sourceBytes.length,outputBytes:bytes.length,
+    return {status:'compressed',bytes,inputBytes,outputBytes:bytes.length,
       pages,destructive:true,mode,maxResidentPixels,
       warnings:['all-pages-rasterized','selectable-text-removed','interactive-forms-and-attachments-not-preserved']};
   }catch(error){
