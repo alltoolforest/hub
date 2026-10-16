@@ -18,8 +18,8 @@ jobs:
           node-version: '24'
       - name: Static syntax check
         run: node --check assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
-      - name: Execute isolated v3 core regressions
-        run: node --test tests/pdf-compressor-v3-aggressive-raster.test.mjs
+      - name: Execute isolated v3 core and nonflattening regressions
+        run: node --test tests/pdf-compressor-v3-aggressive-raster.test.mjs tests/pdf-compressor-v3-nonflatten-jpeg.test.mjs
       - uses: actions/upload-artifact@v4
         if: success()
         with:
