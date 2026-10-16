@@ -43,7 +43,8 @@ try{
    });
    await page.goto(origin+'/');
    const outcome=await page.evaluate(async source=>{
-    const {rasterizePdfAggressively}=await import('/assets/js/pdf-compressor-v3/aggressive-raster-core.mjs');
+    const {rasterizePdfAggressively,installV3StreamIterator}=await import('/assets/js/pdf-compressor-v3/aggressive-raster-core.mjs');
+    if(!installV3StreamIterator())throw Error('No browser stream reader available');
     const pdfjs=await import('/node_modules/pdfjs-dist/legacy/build/pdf.mjs');
     pdfjs.GlobalWorkerOptions.workerSrc='/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs';
     const events=[];
