@@ -1,0 +1,72 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {rasterizePdfAggressively,AggressiveRasterError,RASTER_PROFILES}
+ from '../assets/js/pdf-compressor-v3/aggressive-raster-core.mjs';
+
+const input=new Uint8Array(2000).fill(64);
+function fixture({pages=3,outputBytes=140,failPage=null,onRender=()=>{}}={}){
+ const stats={active:0,peak:0,rendered:[],destroyed:0,taskDestroyed:0,boxes:[]};
+ const pdfjs={getDocument:()=>({promise:Promise.resolve({numPages:pages,
+   getPage:async n=>({getViewport:({scale})=>({width:612*scale,height:792*scale}),
+     render(){stats.active++;stats.peak=Math.max(stats.peak,stats.active);
+       stats.rendered.push(n);onRender(n);
+       if(n===failPage)throw Error('fixture-render-error');
+       return {promise:Promise.resolve().finally(()=>stats.active--)};},cleanup(){}}),
+   destroy:async()=>{stats.destroyed++}}),
+   destroy:async()=>{stats.taskDestroyed++}})};
+ class Document {
+   constructor(){this.pages=[];}
+   async embedJpg(bytes){assert.equal(bytes[0],255);return bytes;}
+   addPage(box){this.pages.push(box);stats.boxes.push(box);return {drawImage(){}};}
+   async save(){return new Uint8Array(outputBytes).fill(37);}
+   getPageCount(){return pages;}
+   getPages(){return Array.from({length:pages},()=>({getMediaBox:()=>({width:612,height:792})}));}
+ }
+ const PDF={PDFDocument:{create:async()=>new Document(),load:async()=>new Document()}};
+ const makeCanvas=(width,height)=>({width,height,getContext:()=>({fillRect(){},fillStyle:null}),
+   convertToBlob:async()=>new Blob([Uint8Array.from([255,216,1,2,255,217])],{type:'image/jpeg'})});
+ return {pdfjs,PDF,makeCanvas,stats};
+}
+const run=(f,overrides={})=>rasterizePdfAggressively(input,{...f,
+ consentToFlatten:true,inspectRestrictions:async()=>({allowed:true}),...overrides});
+const isError=code=>error=>error instanceof AggressiveRasterError&&error.code===code;
+
+test('requires consent and independent permission before rendering',async()=>{
+ const f=fixture();
+ await assert.rejects(rasterizePdfAggressively(input,{...f,
+   inspectRestrictions:async()=>({allowed:true})}),isError('flatten-consent-required'));
+ await assert.rejects(rasterizePdfAggressively(input,{...f,consentToFlatten:true}),
+   isError('security-inspection-required'));
+ await assert.rejects(run(f,{inspectRestrictions:async()=>({allowed:false,code:'signed-pdf'})}),
+   isError('signed-pdf'));
+ assert.deepEqual(f.stats.rendered,[]);
+});
+test('renders each page once, keeps geometry and outputs only independently reopened PDF',async()=>{
+ const f=fixture(),events=[];
+ const out=await run(f,{onProgress:stage=>events.push(stage)});
+ assert.equal(out.status,'compressed');assert.equal(out.pages,3);
+ assert.equal(out.bytes.length,140);assert.equal(out.mode,'maximum');
+ assert.deepEqual(f.stats.rendered,[1,2,3]);assert.equal(f.stats.peak,1);
+ assert.deepEqual(f.stats.boxes,[[612,792],[612,792],[612,792]]);
+ assert.deepEqual(events.map(x=>x.completed),[1,2,3]);
+ assert.ok(out.maxResidentPixels<=RASTER_PROFILES.maximum.maxPagePixels+20000);
+ assert.ok(out.warnings.includes('selectable-text-removed'));
+ assert.equal(f.stats.destroyed,1);assert.equal(f.stats.taskDestroyed,1);
+});
+test('discards expanded output, enforces byte budget and never falsely reports savings',async()=>{
+ const f=fixture({outputBytes:input.length+1});
+ const out=await run(f);assert.equal(out.status,'not-smaller');assert.equal(out.bytes,null);
+ await assert.rejects(run(fixture({outputBytes:3000}),{maxOutputBytes:2200}),
+   isError('output-budget'));
+});
+test('cancellation and rendering errors fail closed and release resources',async()=>{
+ await assert.rejects(run(fixture(),{signal:AbortSignal.abort()}),isError('cancelled'));
+ const f=fixture({failPage:2});
+ await assert.rejects(run(f),isError('raster-processing-failed'));
+ assert.deepEqual(f.stats.rendered,[1,2]);assert.equal(f.stats.destroyed,1);
+});
+test('mode settings progressively reduce resolution and JPEG quality',()=>{
+ const {balanced,strong,maximum}=RASTER_PROFILES;
+ assert.ok(balanced.dpi>strong.dpi&&strong.dpi>maximum.dpi);
+ assert.ok(balanced.jpegQuality>strong.jpegQuality&&strong.jpegQuality>maximum.jpegQuality);
+});
