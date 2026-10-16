@@ -106,6 +106,23 @@ try{
  assert.equal(loaded.getPageCount(),1);
  assert.ok(bytes.length<source.length);
  assert.match(dl.suggestedFilename(),/-compressed\.pdf$/);
+ // Lossless must never flatten. It may either produce a verified smaller
+ // structure or safely report no reduction; both outcomes preserve features.
+ await page.locator('#v3-mode').selectOption('lossless');
+ assert.equal(await page.locator('#v3-flatten').isDisabled(),true);
+ await page.locator('[data-v3-run]').click();
+ await page.waitForFunction(()=>/Verified PDF ready|Lossless did not produce|could not finish/i.test(
+  document.querySelector('[data-v3-status]')?.textContent??''),null,{timeout:80000});
+ const losslessStatus=await page.locator('[data-v3-status]').textContent();
+ assert.ok(!losslessStatus.includes('could not finish'),losslessStatus);
+ if(losslessStatus.includes('Verified PDF ready')){
+  assert.match(await page.locator('[data-v3-warning]').textContent(),/Document page programs/);
+  const losslessP=page.waitForEvent('download',{timeout:30000});
+  await page.locator('[data-v3-download]').click();
+  const losslessDl=await losslessP;
+  assert.equal((await PDF.PDFDocument.load(readFileSync(await losslessDl.path()))).getPageCount(),1);
+ }
+ await page.locator('#v3-mode').selectOption('maximum');
  // Fail-closed against signature even with destructive consent.
  await page.locator('#v3-file').setInputFiles({
    name:'signed.pdf',mimeType:'application/pdf',buffer:signed
