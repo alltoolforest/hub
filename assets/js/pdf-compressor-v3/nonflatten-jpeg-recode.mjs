@@ -91,8 +91,14 @@ export async function recompressJpegXObjects(source,{
       next.set(N('Height'),PDF.PDFNumber.of(outHeight));
       next.set(N('Length'),PDF.PDFNumber.of(encoded.length));
       doc.context.assign(ref,PDF.PDFRawStream.of(next,encoded));
-      replacements.push({ref:String(ref),originalBytes:data.length,outputBytes:encoded.length,
-        originalWidth:width,originalHeight:height,width:outWidth,height:outHeight});
+      // Keep the established verified-image manifest contract: the verifier
+      // restores each exact original stream, checks non-image graph identity,
+      // and independently reopens/compares page and text structure.
+      replacements.push({ref:String(ref),
+        descriptor:{width,height,bitsPerComponent:8,filter:'/DCTDecode',
+          colorSpace:'/DeviceRGB',streamBytes:data.length},
+        candidate:{bytes:encoded,width:outWidth,height:outHeight},
+        originalBytes:data.length,outputBytes:encoded.length});
       onProgress({processed:considered,replaced:replacements.length});
     }catch(error){
       if(error instanceof V3ImageRecodeError)throw error;
