@@ -107,3 +107,28 @@ export async function rasterizePdfAggressively(sourceBytes,{
     try{await task?.destroy?.();}catch{}
   }
 }
+
+// Worker-scoped WebKit compatibility. Some Safari/WebKit implementations lack
+// ReadableStream async iteration although getReader() is standards-compliant.
+// Call before loading PDF.js inside the isolated v3 worker; do not install
+// globally on shared AllToolForest pages or other frozen tools.
+export function installV3StreamIterator(scope=globalThis){
+ const proto=scope?.ReadableStream?.prototype;
+ if(!proto)return false;
+ if(typeof proto[Symbol.asyncIterator]==='function')return true;
+ Object.defineProperty(proto,Symbol.asyncIterator,{configurable:true,writable:true,
+   value:async function*(){
+     const reader=this.getReader();
+     try{
+       while(true){
+         const {done,value}=await reader.read();
+         if(done)break;
+         yield value;
+       }
+     }finally{
+       try{await reader.cancel();}catch{}
+       reader.releaseLock();
+     }
+   }});
+ return true;
+}
