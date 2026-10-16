@@ -43,3 +43,40 @@ A local PyMuPDF/Pillow proof of concept, *not the JavaScript engine*, flattened 
 6. Integrate behind a gated UI, run full v2 and neighboring frozen-tool regressions without changing their code; pre-deploy audit -> explicit deployment approval -> production audit -> physical manual acceptance -> regression -> explicit freeze.
 
 **Privacy:** No user medical reports or private PDF content is stored in this branch or GitHub CI.
+
+
+## Checkpoint 2 — actual ten-file browser benchmark (16 October 2026)
+
+All ten 5–98 MB synthetic PDFs were processed **locally** by the v3 JavaScript raster engine in a dedicated Chromium worker, including the 36.69 MB large-Flate image stress case and 97.78 MB mixed enterprise case. A worker OffscreenCanvas intermediate decoder factory was necessary; without it PDF.js attempted to access a nonexistent worker document object. The worker-owned input path avoids a redundant input buffer copy. All results used Maximum settings, 78 DPI, JPEG quality 0.24, with explicit destructive flattening consent and a **benchmark-only stubbed trusted-source preflight for the known synthetic inputs**. Never deploy that stub.
+
+| Case | Input MB | v3 output MB | Local wall sec | Ghostscript screen-profile output MB |
+|---|---:|---:|---:|---:|
+| 01 Office | 5.29 | 0.110 | 3.2 | 0.229 |
+| 02 Photos | 9.06 | 0.164 | 4.2 | 0.385 |
+| 03 Archive | 15.16 | 0.274 | 4.7 | 1.325 |
+| 04 Drawings | 23.90 | 0.565 | 10.0 | 1.205 |
+| 05 Flate RGB | 36.69 | 0.221 | 1.6 | 0.825 |
+| 06 Invoices | 48.66 | 0.784 | 15.4 | 4.106 |
+| 07 Contracts | 64.95 | 0.899 | 22.7 | 1.127 |
+| 08 Atlas | 74.34 | 1.534 | 28.6 | 1.925 |
+| 09 Photography | 86.45 | 1.122 | 31.6 | 1.406 |
+| 10 Enterprise | 97.78 | 1.257 | 34.5 | 1.573 |
+
+**Independent output verification:** All ten outputs were saved, reopened with PyMuPDF (separate from the engine's PDF-lib) and independently rendered on the first, middle and last page. All page counts and dimensions matched, and sampled page images were nonblank. The exact raster output clears an important validity gate but **loses text, bookmarks, forms, attachments and annotations by design**; it is not feature-equivalent to the Ghostscript local reference. Native Ghostscript screen-profile is not an iLovePDF benchmark.
+
+Two distinct, previously rejected real-world PDFs were also tested **privately and locally** with the v3 raster engine; outputs reduced by 60.87% and 98.25%, and a separate PDF parser reopened them with the same page counts. Their content is not in this repository.
+
+### New nonflattening track and candidate selector
+
+An isolated JPEG XObject recoder now attempts lower-quality/downsampled RGB JPEG replacement without replacing pages. Output cannot be returned without security clearance and the existing independent image-graph/page/text verifier. The new measured-byte strategy selector chooses the smallest verified output; it never tries page flattening unless the user consents. Neither new module is wired to the live compressor.
+
+### Explicit remaining blockers
+
+- Final green CI on this exact commit, including three browser engines, independent nonflatten verification and inherited v2 regressions.
+- Trusted security preflight for actual input PDFs; local synthetic benchmark acceptance stub must not enter production.
+- Peak RAM, CPU, thermal and 100 MB file admission verification on physical Android/iOS. The measured max page output canvas size (588,885 pixels) is not peak PDF.js decode memory.
+- Additional nonflatten formats including large Flate image paths and documents that hit the old decoded-stream verifier budget.
+- Equal-source iLovePDF comparison cannot be reported until the exact 10.71 MB original and 3.2 MB competitor output are provided. No third-party uploads were made.
+- Scoped integration and rollback; pre-deployment audit; explicit deployment approval; production and phone QA; regression; explicit freeze.
+
+No frozen tools, Image Enhancer, or production PDF Compressor code were modified.
