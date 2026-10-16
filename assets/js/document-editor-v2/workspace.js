@@ -71,7 +71,7 @@ async function open(file, draft = null) {
   try { await display(); }
   catch (error) {
     session = previous;
-    if (previous) await previous.engine.render(stage, changed).catch(() => {});
+    if (previous) { try { await previous.engine.render(stage, changed); } catch {} }
     throw error;
   }
   try { await previous?.engine.dispose?.(); } catch {}

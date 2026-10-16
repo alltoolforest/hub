@@ -31,6 +31,15 @@ test('lab workspace opens TXT, edits, undoes and keeps failed replacements intac
   await choose('wrong.txt', new Uint8Array([0, 1, 2]));
   assert.equal(document.querySelector('.document-v2-text').value, 'Original');
   assert.match(document.querySelector('#document-v2-status').textContent, /binary/);
+  const search = document.querySelector('.document-v2-search');
+  const [query, replacement] = search.querySelectorAll('input[type=text]');
+  query.value = 'Original'; query.dispatchEvent(new dom.window.Event('input'));
+  replacement.value = 'Replaced';
+  [...search.querySelectorAll('button')].find(button => button.textContent === 'Replace all').click();
+  assert.equal(document.querySelector('.document-v2-text').value, 'Replaced');
+  document.querySelector('[data-action=undo]').click();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('.document-v2-text').value, 'Original');
   let downloaded;
   const originalCreate = URL.createObjectURL;
   URL.createObjectURL = blob => { downloaded = blob; return 'blob:test-export'; };

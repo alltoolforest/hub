@@ -16,17 +16,22 @@ export function replaceRunText(runs, next) {
   while (start < old.length && start < next.length && old[start] === next[start]) start++;
   while (end > start && nextEnd > start && old[end - 1] === next[nextEnd - 1]) { end--; nextEnd--; }
   if (old === next) return [...runs];
-  if (!runs.length) return [next];
+  return replaceRunRange(runs, start, end, next.slice(start, nextEnd));
+}
+export function replaceRunRange(runs, start, end, replacement) {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > runs.join('').length)
+    throw new Error('Invalid replacement range.');
+  if (!runs.length) return [replacement];
   let offset = 0, inserted = false;
   const result = runs.map(text => {
     const from = offset, to = offset + text.length; offset = to;
     const prefix = text.slice(0, Math.max(0, Math.min(text.length, start - from)));
     const suffix = text.slice(Math.max(0, Math.min(text.length, end - from)));
     let middle = '';
-    if (!inserted && start >= from && (start < to || start === to && end === start)) { middle = next.slice(start, nextEnd); inserted = true; }
+    if (!inserted && start >= from && (start < to || start === to && end === start)) { middle = replacement; inserted = true; }
     return prefix + middle + suffix;
   });
-  if (!inserted) result[result.length - 1] += next.slice(start, nextEnd);
+  if (!inserted) result[result.length - 1] += replacement;
   return result;
 }
 function plainText(paragraph) {
@@ -139,4 +144,11 @@ export async function writeDocx(model, Zip, Parser, Serializer) {
       Object.keys(model.zip.files).some(name => !reopened.zip.files[name]))
     throw new Error('DOCX export validation failed. Your draft is retained.');
   return blob;
+}
+
+export function replaceDocxRange(model, index, start, end, replacement) {
+  if (!Number.isInteger(index) || index < 0 || index >= model.text.length || model.protected[index])
+    throw new Error('This paragraph cannot be replaced.');
+  model.runs[index] = replaceRunRange(model.runs[index], start, end, replacement);
+  model.text[index] = model.runs[index].join('');
 }

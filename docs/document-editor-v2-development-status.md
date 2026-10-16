@@ -12,6 +12,7 @@ Edit PDF and other frozen tools are unchanged. The replacement is an unlinked,
 | --- | --- | --- |
 | File routing | Signature and extension checks for DOC, DOCX, PDF, XLS, XLSX, CSV and TXT; ZIP directory checks, unsafe path and macro rejection | `document-editor-v2-router.test.mjs` |
 | Shared workspace | Local IndexedDB draft, undo/redo snapshots, recovery prompt, original file untouched, export copy | `document-editor-v2-workspace.test.mjs` covers TXT open/edit/undo/failed replacement and export without IndexedDB |
+| Find / replace | TXT and editable DOCX paragraphs: literal search, next/previous, case/whole-word options, replace/all, one undo step per action; protected paragraphs excluded | Search tests and workspace undo/export integration |
 | TXT | UTF-8 text editing and validated export | Workspace test |
 | DOCX | Paragraph text edits in a flowing preview; table cells shown in place; unchanged OOXML package parts retained | `document-editor-v2-docx.test.mjs` checks text, page break, image, table and relationships after reopen |
 | XLSX | Spreadsheet cells and formulas retained in an ExcelJS workbook; export reopens and compares sheets, formulas and edited cells | `document-editor-v2-spreadsheet.test.mjs` |
@@ -24,7 +25,7 @@ shortening it returned to one page. `pdftotext` retained the final paragraph in
 both exports. Both pages of the expanded result were visually inspected for
 overlap. This proves only the simple flowing-paragraph case, not complex layout.
 
-Automated checkpoint: 12 focused V2 tests passed. Sixteen directly related CSV
+Automated checkpoint: 15 focused V2 tests passed. Sixteen directly related CSV
 and PDF unit regression checks passed. No browser/device test has been completed.
 
 These are development paths, not launch-ready claims. The DOCX view does not yet
@@ -44,7 +45,7 @@ the only PDF edit in this lab. DOC and XLS are recognized but editing is disable
   filter, freeze panes, formula dependency behavior and large-sheet virtualization.
 - Native PDF text edits, scanned/mixed OCR, object editing, controlled upward and
   downward reflow, and searchable export.
-- Find/replace across engines, PDF conversion, complete export validation, large
+- Spreadsheet/PDF find and replace, PDF conversion, complete export validation, large
   file and resource limits, mobile and accessibility testing on target browsers.
 - Representative corpus, malicious-file tests, pre-deployment audit, production
   audit, owner manual verification, regression and freeze gates.

@@ -26,3 +26,8 @@
 .document-v2-pdf-page {display:block;max-width:none;cursor:crosshair;box-shadow:0 2px 14px #102b1b33;background:#fff}
 .document-v2 button:focus-visible,.document-v2 input:focus-visible,.document-v2 textarea:focus-visible {outline:3px solid #166e52;outline-offset:3px}
 @media(max-width:700px) {.document-v2-top {align-items:stretch;flex-direction:column}.document-v2-actions button {min-height:44px}.document-v2-text {min-height:55dvh;padding:14px;font-size:16px}.document-v2-page {min-height:60vh;padding:18px}.document-v2-doc-table {display:block;max-width:100%;overflow:auto}}
+.document-v2-search {margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:8px}
+.document-v2-search summary {cursor:pointer;min-height:44px;font-weight:600}
+.document-v2-search label {display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.document-v2-search input[type=text] {max-width:100%;min-width:0;min-height:44px;font:inherit}
+.document-v2-search button {min-height:44px}
