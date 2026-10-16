@@ -129,7 +129,13 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
        lookup('BitsPerComponent')?.asNumber?.()===8){
       const width=lookup('Width')?.asNumber?.(),height=lookup('Height')?.asNumber?.();
       const channels=name(d,'ColorSpace')==='/DeviceGray'?1:3;
-      if(width*height*channels>streamLimit){
+      // Stream large plain images instead of counting gigabytes of sequentially
+      // decoded pixel work as if all pixels must reside in RAM at once.
+      // The streaming reader still enforces complete zlib framing and EXACT
+      // width*height*channels output bytes, preserving the original source.
+      const streamingThreshold=Math.min(streamLimit,8000000,
+        Math.floor((limits.maxTotalDecodedBytes??512000000)/4));
+      if(width*height*channels>streamingThreshold){
         try{await streamFlateImage(object.contents,{width,height,channels,signal,maxRowBytes:streamLimit});}
         catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
         continue;
