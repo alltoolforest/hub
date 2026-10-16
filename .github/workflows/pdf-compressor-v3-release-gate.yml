@@ -1,0 +1,59 @@
+name: PDF Compressor V3 candidate release gates
+on:
+  push:
+    branches:
+      - pdf-compressor-v3-release-remediation-20261016
+  pull_request:
+    branches:
+      - pdf-compressor-v3-core-lab-20261016
+jobs:
+  security-and-release-integration:
+    name: security and website integration (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned build and browser engines
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1 pdfjs-dist@6.3.289 esbuild@0.28.2 @napi-rs/canvas@1.0.11
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Reject syntax errors and test source safety
+        run: |
+          node --check assets/js/pdf-compressor-v3/security-preflight.mjs
+          node --check assets/js/pdf-compressor-v3/site-ui.mjs
+          node --check tests/pdf-compressor-v3-release-worker-entry.mjs
+          node --test tests/pdf-compressor-v3-security.test.mjs
+      - name: Build exact pinned same-origin V3 worker
+        run: |
+          python tests/build-pdf-compressor-v3-site-worker.py
+          test -s assets/js/pdf-compressor-v3/dist/worker.js
+          (cd assets/js/pdf-compressor-v3/dist && sha256sum -c worker.sha256)
+          ! grep -q 'v3-benchmark' assets/js/pdf-compressor-v3/dist/worker.js
+      - name: Real route, consent, signed rejection, download, CSP, privacy
+        env:
+          ATF_BROWSER: ${{ matrix.browser }}
+        run: node tests/pdf-compressor-v3-release-integrated-browser.mjs
+      - name: Upload atomic release candidate (not deployed)
+        if: success() && matrix.browser == 'chromium'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-v3-staged-bundle-UNDEPLOYED
+          path: |
+            assets/js/pdf-compressor-v3/dist/worker.js
+            assets/js/pdf-compressor-v3/dist/worker.sha256
+            assets/js/pdf-compressor-v3/security-preflight.mjs
+            assets/js/pdf-compressor-v3/site-entry.mjs
+            assets/js/pdf-compressor-v3/site-ui.mjs
+            assets/js/pdf-compressor-v3/site.css
+            documents/pdf-compressor/index.html
+          retention-days: 7

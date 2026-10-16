@@ -33,7 +33,7 @@ test('legacy copier remains byte-for-byte testable but the staged page invokes o
   assert.match(fragment,/'-optimized','pdf'/);
   assert.match(page,/<h1>PDF Compressor<\/h1>/);
   assert.doesNotMatch(page,/data-tool="pdf-compressor"/);
-  assert.match(page,/src="\.\.\/\.\.\/assets\/js\/pdf-compressor-v2\/site-boot\.mjs"/);
+  assert.match(page,/src="\.\.\/\.\.\/assets\/js\/pdf-compressor-v3\/site-entry\.mjs"/);
   assert.match(catalog,/'pdf-compressor','PDF Compressor'/);
   assert.match(core,/export function checkFile\(/);
   assert.match(core,/export function bindFile\(/);
