@@ -44,7 +44,9 @@ export async function open(file, format) {
       const split = entry.lastIndexOf('!');
       const sheet = book.getWorksheet(entry.slice(0, split));
       if (!sheet) throw new Error('Recovered draft does not match this workbook.');
-      assignCell(sheet.getCell(entry.slice(split + 1)), value);
+      const cell = sheet.getCell(entry.slice(split + 1));
+      if (format === 'csv') cell.value = value;
+      else assignCell(cell, value);
       edits.set(entry, value);
     }
     active = state.active; page = state.page;
@@ -94,7 +96,8 @@ export async function open(file, format) {
           if (input.value === displayValue(cell.value)) return;
           const entry = key(sheet, cell.address);
           if (!original.has(entry)) original.set(entry, structuredClone(cell.value));
-          assignCell(cell, input.value);
+          if (format === 'csv') cell.value = input.value;
+          else assignCell(cell, input.value);
           edits.set(entry, input.value);
           onChange();
         });

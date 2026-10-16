@@ -17,9 +17,18 @@ test('XLSX cell edits preserve formulas, multiple sheets, style and reopen', asy
   const exported = await loaded.xlsx.writeBuffer();
   const reopened = new Excel.Workbook(); await reopened.xlsx.load(exported);
   assertPreserved(loaded, reopened, [['Inputs','A2']]);
+  assert.equal(reopened.getWorksheet('Inputs').getCell('A2').value, 12);
   assert.equal(displayValue(reopened.getWorksheet('Inputs').getCell('A3').value), '=SUM(A1:A2)');
   assert.equal(reopened.getWorksheet('Inputs').getCell('A1').font.bold, true);
   assert.equal(reopened.getWorksheet('Notes').getCell('A1').value, 'Retain me');
+});
+
+test('numeric edits keep leading-zero identifiers and long integers as text', () => {
+  const cell = {};
+  assignCell(cell, '00123'); assert.equal(cell.value, '00123');
+  assignCell(cell, '1234567890123456'); assert.equal(cell.value, '1234567890123456');
+  assignCell(cell, '-12.5'); assert.equal(cell.value, -12.5);
+  assignCell(cell, ''); assert.equal(cell.value, null);
 });
 
 test('validation rejects a lost formula', async () => {

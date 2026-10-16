@@ -13,6 +13,9 @@ export const displayValue = value => {
 
 export function assignCell(cell, text) {
   if (text.startsWith('=') && text.length > 1) cell.value = {formula:text.slice(1)};
+  else if (text === '') cell.value = null;
+  else if (/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(text) && Number.isFinite(Number(text)) &&
+      text.replace(/[^0-9]/g, '').length <= 15) cell.value = Number(text);
   else cell.value = text;
 }
 

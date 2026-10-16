@@ -100,7 +100,7 @@ actions.addEventListener('click', async event => {
       await display();
       await persist();
     } else if (action === 'export') {
-      await persist();
+      await persist().catch(() => say('Local autosave is unavailable. Preparing your export directly.', true));
       const blob = await session.engine.export();
       if (!(blob instanceof Blob) || !blob.size) throw new Error('Export did not produce a valid file. Your draft is retained.');
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);

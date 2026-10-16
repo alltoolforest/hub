@@ -1,5 +1,5 @@
 import {load} from '../../core.js';
-import {readDocx, writeDocx, updateDocxText, documentBlocks} from '../docx-package.js';
+import {readDocx, writeDocx, updateDocxText, documentBlocks, snapshotDocx, restoreDocx} from '../docx-package.js';
 
 export async function open(file, format) {
   if (format === 'docx') {
@@ -7,16 +7,13 @@ export async function open(file, format) {
     const model = await readDocx(file, zip, DOMParser);
     return {
       format,
-      snapshot() { return [...model.text]; },
-      restore(snapshot) {
-        if (!Array.isArray(snapshot) || snapshot.length !== model.text.length) throw new Error('Draft no longer matches this document.');
-        model.text = snapshot.map(String);
-      },
+      snapshot() { return snapshotDocx(model); },
+      restore(snapshot) { restoreDocx(model, snapshot); },
       render(host, onChange) {
         host.replaceChildren();
         const note = document.createElement('p');
         note.className = 'notice';
-        note.textContent = 'Text flows as you type. This is an approximate page preview; the exported DOCX retains its original tables, images, page settings and other package parts. Edited text inherits its paragraph’s first run style.';
+        note.textContent = 'Text flows as you type. This is an approximate page preview. Unchanged text keeps its original run formatting in the exported DOCX; inserted text inherits the run at the insertion point. Complex paragraphs are protected from editing.';
         host.append(note);
         const page = document.createElement('div'); page.className = 'document-v2-page';
         function editable(paragraph) {
@@ -27,12 +24,12 @@ export async function open(file, format) {
           }
           const field = document.createElement('div');
           field.className = 'document-v2-paragraph';
-          field.contentEditable = paragraph.hasDrawing ? 'false' : 'true';
+          field.contentEditable = paragraph.protected ? 'false' : 'true';
           field.setAttribute('role', 'textbox');
           field.setAttribute('aria-label', `Paragraph ${paragraph.index + 1}`);
           field.setAttribute('aria-multiline', 'true');
           field.textContent = model.text[paragraph.index];
-          if (!paragraph.hasDrawing) {
+          if (!paragraph.protected) {
             const insertPlain = text => {
               const selection = getSelection();
               if (!selection?.rangeCount || !field.contains(selection.anchorNode)) return;
@@ -52,7 +49,7 @@ export async function open(file, format) {
             });
             field.addEventListener('drop', event => event.preventDefault());
             field.addEventListener('input', () => { updateDocxText(model, paragraph.index, field.textContent); onChange(); });
-          } else field.textContent += ' [Embedded image retained in export; object editing is not available yet]';
+          } else { field.setAttribute('aria-readonly','true'); field.textContent += ' [Protected content retained in export]'; }
           wrap.append(field); return wrap;
         }
         for (const block of documentBlocks(model)) {

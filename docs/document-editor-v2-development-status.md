@@ -11,7 +11,7 @@ Edit PDF and other frozen tools are unchanged. The replacement is an unlinked,
 | Area | Current lab behavior | Evidence |
 | --- | --- | --- |
 | File routing | Signature and extension checks for DOC, DOCX, PDF, XLS, XLSX, CSV and TXT; ZIP directory checks, unsafe path and macro rejection | `document-editor-v2-router.test.mjs` |
-| Shared workspace | Local IndexedDB draft, undo/redo snapshots, recovery prompt, original file untouched, export copy | `document-editor-v2-workspace.test.mjs` covers TXT open/edit/undo/failed replacement |
+| Shared workspace | Local IndexedDB draft, undo/redo snapshots, recovery prompt, original file untouched, export copy | `document-editor-v2-workspace.test.mjs` covers TXT open/edit/undo/failed replacement and export without IndexedDB |
 | TXT | UTF-8 text editing and validated export | Workspace test |
 | DOCX | Paragraph text edits in a flowing preview; table cells shown in place; unchanged OOXML package parts retained | `document-editor-v2-docx.test.mjs` checks text, page break, image, table and relationships after reopen |
 | XLSX | Spreadsheet cells and formulas retained in an ExcelJS workbook; export reopens and compares sheets, formulas and edited cells | `document-editor-v2-spreadsheet.test.mjs` |
@@ -24,13 +24,13 @@ shortening it returned to one page. `pdftotext` retained the final paragraph in
 both exports. Both pages of the expanded result were visually inspected for
 overlap. This proves only the simple flowing-paragraph case, not complex layout.
 
-Automated checkpoint: 8 focused V2 tests passed. Sixteen directly related CSV
+Automated checkpoint: 12 focused V2 tests passed. Sixteen directly related CSV
 and PDF unit regression checks passed. No browser/device test has been completed.
 
 These are development paths, not launch-ready claims. The DOCX view does not yet
-faithfully render page geometry, headers/footers or images. Changed paragraphs
-inherit the first run's character style, so mixed formatting within an edited
-paragraph may be lost. XLSX output is guarded against known unsupported package
+faithfully render page geometry, headers/footers or images. DOCX text edits preserve surrounding run styles; inserted text inherits the
+insertion run. Fields, embedded objects and other complex paragraphs are
+protected from text edits. Mixed styles are not yet rendered in the preview. XLSX output is guarded against known unsupported package
 parts, but full feature preservation and formula recalculation are not proven.
 PDF page text cannot currently be edited natively or reflowed; additive text is
 the only PDF edit in this lab. DOC and XLS are recognized but editing is disabled.

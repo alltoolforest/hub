@@ -31,5 +31,15 @@ test('lab workspace opens TXT, edits, undoes and keeps failed replacements intac
   await choose('wrong.txt', new Uint8Array([0, 1, 2]));
   assert.equal(document.querySelector('.document-v2-text').value, 'Original');
   assert.match(document.querySelector('#document-v2-status').textContent, /binary/);
+  let downloaded;
+  const originalCreate = URL.createObjectURL;
+  URL.createObjectURL = blob => { downloaded = blob; return 'blob:test-export'; };
+  dom.window.HTMLAnchorElement.prototype.click = () => {};
+  try {
+    document.querySelector('[data-action=export]').click();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(await downloaded.text(), 'Original');
+    assert.match(document.querySelector('#document-v2-status').textContent, /Export prepared/);
+  } finally { URL.createObjectURL = originalCreate; }
   dom.window.close();
 });

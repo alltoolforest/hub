@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import JSZip from '../hybrid-build/node_modules/jszip/lib/index.js';
 import {JSDOM} from '../hybrid-build/node_modules/jsdom/lib/api.js';
 import {Document, Paragraph, TextRun, Table, TableRow, TableCell, Header, Footer, Packer} from '../hybrid-build/node_modules/docx/dist/index.mjs';
-import {readDocx, updateDocxText, writeDocx, documentBlocks} from '../assets/js/document-editor-v2/docx-package.js';
+import {readDocx, updateDocxText, writeDocx, documentBlocks, replaceRunText, snapshotDocx, restoreDocx} from '../assets/js/document-editor-v2/docx-package.js';
 
 const {DOMParser, XMLSerializer} = new JSDOM('').window;
 const body = `<?xml version="1.0" encoding="UTF-8"?>
@@ -12,6 +12,35 @@ const body = `<?xml version="1.0" encoding="UTF-8"?>
 <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
 <w:p><w:r><w:drawing/></w:r></w:p>
 </w:body></w:document>`;
+
+test('run edits preserve unchanged styled spans across growth, deletion and separate edits', () => {
+  let runs = replaceRunText(['Bold ', 'italic ', 'plain'], 'Bold new italic plain');
+  assert.deepEqual(runs, ['Bold new ', 'italic ', 'plain']);
+  runs = replaceRunText(runs, 'Bold new italic end');
+  assert.deepEqual(runs, ['Bold new ', 'italic ', 'end']);
+  assert.deepEqual(replaceRunText(['ab','cd','ef'], 'af'), ['a','','f']);
+  assert.deepEqual(replaceRunText([], 'new'), ['new']);
+});
+
+test('DOCX retains run properties through edits and restores formatting history', async () => {
+  const model = await readDocx(await fixture(), JSZip, DOMParser);
+  const before = snapshotDocx(model);
+  updateDocxText(model, 0, 'First longer line');
+  const after = snapshotDocx(model);
+  restoreDocx(model, before); assert.equal(model.text[0], 'First line');
+  restoreDocx(model, after);
+  const reopened = await readDocx(await writeDocx(model, JSZip, DOMParser, XMLSerializer), JSZip, DOMParser);
+  assert.deepEqual(reopened.runs[0], ['First', ' longer line']);
+  assert.equal(reopened.xml.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','b').length, 1);
+  assert.throws(() => updateDocxText(model, 2, 'unsafe'), /protected/);
+});
+
+test('newlines and tabs export as Word elements and reopen with the same text', async () => {
+  const model = await readDocx(await fixture(), JSZip, DOMParser);
+  updateDocxText(model, 0, 'First\nsecond\tcolumn');
+  const reopened = await readDocx(await writeDocx(model, JSZip, DOMParser, XMLSerializer), JSZip, DOMParser);
+  assert.equal(reopened.text[0], 'First\nsecond\tcolumn');
+});
 
 async function fixture() {
   const zip = new JSZip();
