@@ -12,11 +12,11 @@ const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',
 export class LosslessInvariantError extends Error {
   constructor(code){super(code);this.name='LosslessInvariantError';this.code=code;}
 }
-async function boundedInflateStrict(bytes,maxBytes){
+async function boundedInflateStrict(bytes,maxBytes,format='deflate'){
   // Feed resident bytes directly: Blob streams add asynchronous IO scheduling
   // for every small PDF stream (thousands in some digital documents). Drain
   // concurrently with writing so backpressure cannot deadlock large streams.
-  const stream=new DecompressionStream('deflate');
+  const stream=new DecompressionStream(format);
   const reader=stream.readable.getReader(),writer=stream.writable.getWriter();
   const written=(async()=>{try{
     for(let offset=0;offset<bytes.length;offset+=65536)
@@ -41,6 +41,45 @@ async function boundedInflateStrict(bytes,maxBytes){
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;
 }
+// Narrow compatibility for PDFs that contain a COMPLETE RFC1951 DEFLATE block
+// with a valid RFC1950 zlib header but NO trailing Adler-32 checksum.
+// This is NOT a permissive inflate: the raw DEFLATE decoder must reach EOF,
+// the checksum is recomputed from bounded decoded bytes, and the rebuilt zlib
+// stream must pass the original checksum-enforcing browser decoder.
+// Never modify original PDF/stream bytes. Other corruption still fails closed.
+function hasValidZlibHeader(bytes){
+ if(bytes.length<6)return false;
+ const cmf=bytes[0],flg=bytes[1];
+ return (cmf&15)===8&&(cmf>>4)<=7&&((cmf<<8)|flg)%31===0&&
+   (flg&32)===0; // preset dictionary is not supported
+}
+function adler32(bytes){
+ let a=1,b=0;
+ for(let i=0;i<bytes.length;i+=5552){
+   const end=Math.min(bytes.length,i+5552);
+   for(let j=i;j<end;j++){a+=bytes[j];b+=a;}
+   a%=65521;b%=65521;
+ }
+ return ((b<<16)|a)>>>0;
+}
+async function recoverChecksumlessZlib(bytes,maxBytes){
+ if(!hasValidZlibHeader(bytes))throw Error('invalid-zlib-header');
+ // Unsupported browsers fail closed here rather than fall back to an
+ // unchecked decoder. Completed raw DEFLATE EOF is enforced by the platform.
+ let decoded=await boundedInflateStrict(bytes.subarray(2),maxBytes,'deflate-raw');
+ const expectedSize=decoded.length,adler=adler32(decoded);
+ decoded=null;
+ const verifiedBytes=new Uint8Array(bytes.length+4);
+ verifiedBytes.set(bytes);
+ verifiedBytes[bytes.length]=(adler>>>24)&255;
+ verifiedBytes[bytes.length+1]=(adler>>>16)&255;
+ verifiedBytes[bytes.length+2]=(adler>>>8)&255;
+ verifiedBytes[bytes.length+3]=adler&255;
+ const checked=await boundedInflateStrict(verifiedBytes,maxBytes);
+ if(checked.length!==expectedSize||adler32(checked)!==adler)
+   throw Error('inconsistent-deflate-recovery');
+ return checked;
+}
 // Some PDF producers include PDF whitespace immediately after an otherwise
 // complete Flate/zlib stream. Browser DecompressionStream rejects that padding
 // even though tolerant PDF readers accept the decoded content. Retry only a
@@ -51,6 +90,12 @@ async function boundedInflateStrict(bytes,maxBytes){
 async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
+    if(/Compressed input was truncated/i.test(String(error))){
+      // Only recover an absent Adler-32 after a complete raw DEFLATE stream,
+      // never truncation in the compressed content, data-check corruption or
+      // memory/decoded-size errors.
+      return recoverChecksumlessZlib(bytes,maxBytes);
+    }
     if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error)))throw error;
     // The zlib Adler checksum itself can end in PDF whitespace bytes.
     // Test one byte at a time and accept only a checksum-valid complete
