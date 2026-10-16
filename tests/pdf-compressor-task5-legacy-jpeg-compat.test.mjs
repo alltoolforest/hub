@@ -176,3 +176,64 @@ test('specific safe diagnostic reasons never waive malformed JPEG checks',async(
  await assert.rejects(inspectPDFInput(await makePDF(prependMetadata(bad)),{PDF,readPages:pages}),
    e=>e.code==='image-header-unverifiable'&&['truncated-source-jpeg','invalid-source-jpeg'].includes(e.cause?.message));
 });
+
+
+// Synthetic-only reproductions of two real-world rejected PDF JPEG structures.
+// Never copy or upload user medical-report content into the repository or CI.
+const adobeRGB=transform=>Buffer.from([
+  255,238,0,14,65,100,111,98,101,0,100,192,0,0,0,transform
+]);
+const ducky=Buffer.from([255,236,0,9,68,117,99,107,121,0,0]);
+const xmpSig=Buffer.concat([Buffer.from('http://ns.adobe.com/xap/1.0/'),Buffer.from([0])]);
+const xmp=Buffer.concat([Buffer.from([255,225,(xmpSig.length+2)>>8,(xmpSig.length+2)&255]),xmpSig]);
+const fakeIcc=Buffer.from([255,226,0,18,73,67,67,95,80,82,79,70,73,76,69,0,1,1,0,0]);
+
+test('real-world Adobe APP14 RGB/YCbCr plus EXIF, Ducky, XMP and Photoshop metadata is preserved',async()=>{
+ for(const transform of [0,1]){
+  const image=prependMetadata(exif,ducky,xmp,photoshop,adobeRGB(transform));
+  const original=await makePDF(image),before=original.slice();
+  const report=await inspectPDFInput(original,{PDF,readPages:pages});
+  assert.equal(report.valid,true);
+  assert.equal(report.images.length,1);
+  assert.deepEqual(original,before,'input report must not mutate a source byte');
+  const decoder=createPDFJpegDecoder(class RefuseColorChange{
+    constructor(){throw Error('Adobe APP14 JPEG must never be decoded for lossy transform');}
+  });
+  assert.deepEqual(await decoder({bytes:image,descriptor:{width:1600,height:1600,
+    bitsPerComponent:8,colorSpace:'/DeviceRGB',filter:'/DCTDecode',streamBytes:image.length}}),
+    {status:'preserve'});
+  const result=await transformEmbeddedImages(original,{PDF,mode:'maximum',
+    inspectInput:b=>inspectPDFInput(b,{PDF,readPages:pages}),
+    decodeJpeg:decoder,encodeJpeg:async()=>{throw Error('opaque RGB JPEG must not be encoded');},
+    verifyOutput:async()=>{throw Error('unchanged image needs no candidate verifier');}});
+  assert.equal(result.status,'original-retained');
+  assert.deepEqual(result.bytes,original);
+ }
+});
+
+test('valid EXIF + ICC APP2 + XMP metadata on ordinary RGB JPEG is inspected, not re-encoded',async()=>{
+ const source=prependMetadata(exif,fakeIcc,xmp);
+ const input=await makePDF(source);
+ assert.equal((await inspectPDFInput(input,{PDF,readPages:pages})).valid,true);
+ const decoder=createPDFJpegDecoder(class RejectLossyDecode{
+  constructor(){throw Error('mixed EXIF/XMP must preserve source JPEG');}
+ });
+ assert.deepEqual(await decoder({bytes:source,descriptor:{width:1600,height:1600,
+   bitsPerComponent:8,colorSpace:'/DeviceRGB',filter:'/DCTDecode',streamBytes:source.length}}),
+   {status:'preserve'});
+});
+
+test('malformed, mismatched and conflicting Adobe RGB markers still fail closed',async()=>{
+ for(const modifiers of [
+   {transform:2},{transform:9},{transform:1,colorSpace:'DeviceGray'},
+   {transform:1,colorSpace:'DeviceCMYK'},{transform:1,duplicate:true},
+   {transform:1,malformed:true}
+ ]){
+  let adobe=adobeRGB(modifiers.transform);
+  if(modifiers.malformed){adobe=Buffer.from(adobe);adobe[4]=88;}
+  const jpeg=prependMetadata(exif,ducky,xmp,photoshop,adobe,
+    ...(modifiers.duplicate?[adobeRGB(0)]:[]));
+  await assert.rejects(inspectPDFInput(await makePDF(jpeg,modifiers.colorSpace??'DeviceRGB'),
+    {PDF,readPages:pages}),e=>e.code==='image-header-unverifiable');
+ }
+});
