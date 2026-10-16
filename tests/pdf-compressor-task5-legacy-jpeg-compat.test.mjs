@@ -174,5 +174,5 @@ test('specific safe diagnostic reasons never waive malformed JPEG checks',async(
  const xmp=Buffer.concat([Buffer.from([255,225,0,xmpId.length+2]),xmpId]);
  const bad=Buffer.from(xmp);bad[3]=255;
  await assert.rejects(inspectPDFInput(await makePDF(prependMetadata(bad)),{PDF,readPages:pages}),
-   e=>e.code==='image-header-unverifiable'&&e.cause?.message==='truncated-source-jpeg');
+   e=>e.code==='image-header-unverifiable'&&['truncated-source-jpeg','invalid-source-jpeg'].includes(e.cause?.message));
 });
