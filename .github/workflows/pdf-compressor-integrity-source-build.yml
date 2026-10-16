@@ -131,6 +131,7 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           node tests/pdf-compressor-task11-browser.mjs
+          node tests/pdf-compressor-checksumless-zlib-browser.mjs
   experimental-large-file:
     needs: input-integrity
     runs-on: ubuntu-latest
