@@ -1,0 +1,27 @@
+name: PDF Compressor v3 isolated core laboratory
+on:
+  push:
+    branches:
+      - pdf-compressor-v3-core-lab-20261016
+  pull_request:
+    branches:
+      - pdf-compressor-real-pdf-jpeg-compat-20261016
+jobs:
+  aggressive-raster-core:
+    name: consent / cancellation / page-bounded core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Static syntax check
+        run: node --check assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+      - name: Execute isolated v3 core regressions
+        run: node --test tests/pdf-compressor-v3-aggressive-raster.test.mjs
+      - name: Prove all changes are confined to v3 laboratory (no public route)
+        run: |
+          test -s assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+          test -s tests/pdf-compressor-v3-aggressive-raster.test.mjs
+          ! grep -q 'pdf-compressor-v3' documents/pdf-compressor/index.html
