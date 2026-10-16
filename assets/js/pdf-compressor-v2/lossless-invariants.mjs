@@ -163,7 +163,11 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         const streamedImage=plainResource&&String(dict.get(N('Subtype')))==='/Image'&&
           filters.length===1&&filters[0]==='/FlateDecode'&&
           Number.isSafeInteger(width*height*channels)&&width>0&&height>0&&
-          width*channels<=maxStreamBytes&&width*height*channels>maxStreamBytes;
+          width*channels<=maxStreamBytes&&
+          context.lookup(dict.get(N('BitsPerComponent')))?.asNumber?.()===8&&
+          !dict.has(N('DecodeParms'))&&!dict.has(N('DP'))&&
+          width*height*channels>Math.min(maxStreamBytes,8000000,
+            Math.floor(maxTotalDecodedBytes/4));
         let cached=streamCache.get(value);
         if(!cached){
           // Repeated programs share decoding work, never dictionary identity.
