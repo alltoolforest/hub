@@ -26,3 +26,11 @@ Run using Node 24: node tests/large-photo-consent.mjs; node tests/format-decode.
 - Further engineering needed: truly incremental codecs (including downsampled JPEG decode), disk-backed encoded output where available, codec-specific format validation and resource budgets, broad device corpus.
 
 Do not promote to main or claim complete 102MP support until these gates pass.
+
+## Continuation — 2026-10-16
+Static source audit found and corrected:
+- RAW embedded JPEG resizing incorrectly reused RAW IFD dimensions, potentially stretching a differently proportioned preview. The preview now uses its own JPEG header and the standard reduced decoder path.
+- Reduced RAW-preview exports bypassed the selected megapixel validation. All reduced exports now receive that validation.
+- Intermediate bitmaps were not closed if a second resize or TIFF orientation canvas allocation failed. Cleanup now covers those failure paths.
+These follow-up fixes have NOT been executed or browser-tested: the execution environment failed to initialize. Previous PASS results above describe the earlier checkpoint, not these changes.
+Remaining validation: differently proportioned RAW/JPEG preview fixtures; reduced preview area limit; failed resize/canvas allocation cleanup; existing consent suite and real-browser integration. Private test Site remains unpublished (version 0). Main remains unchanged.

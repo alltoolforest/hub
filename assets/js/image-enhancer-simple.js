@@ -56,7 +56,7 @@ export function mount(root) {
         try {
           if(!Number.isSafeInteger(data.width)||!Number.isSafeInteger(data.height)||data.width<1||data.height<1)throw new Error('Invalid output dimensions.');
           if(!reduced&&expectedNative&&(data.width!==expectedNative.width||data.height!==expectedNative.height))throw new Error('Original output dimensions changed.');
-          if(reduced&&!data.previewUsed&&data.width*data.height>maxPixels)throw new Error('Reduced output exceeded the selected size.');
+          if(reduced&&data.width*data.height>maxPixels)throw new Error('Reduced output exceeded the selected size.');
           await validatePngEnvelope(data.blob,data.width,data.height);
           if(!(data.originalPreview instanceof Blob)||!data.originalPreview.size||!(data.resultPreview instanceof Blob)||!data.resultPreview.size)throw new Error('Preview creation failed.');
           if(ticket!==job)return;
