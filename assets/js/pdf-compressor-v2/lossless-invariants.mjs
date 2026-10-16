@@ -90,13 +90,19 @@ async function recoverChecksumlessZlib(bytes,maxBytes){
 async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
-    if(/(?:Compressed input was truncated|unexpected end of file)/i.test(String(error)+' '+String(error?.cause??''))){
-      // Only recover an absent Adler-32 after a complete raw DEFLATE stream,
-      // never truncation in the compressed content, data-check corruption or
-      // memory/decoded-size errors.
-      return recoverChecksumlessZlib(bytes,maxBytes);
+    // Different engines report invalid/missing zlib trailers using unrelated
+    // TypeError strings; never trust error wording to authorize recovery.
+    // Authorization comes ONLY from the fully terminating raw DEFLATE decoder
+    // plus the rebuilt, checksum-verified strict native decoder.
+    const trailingJunk=/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error));
+    if(!trailingJunk){
+      if(error?.code==='decoded-stream-limit')throw error;
+      try{return await recoverChecksumlessZlib(bytes,maxBytes);}
+      catch(recoveryError){
+        if(recoveryError?.code==='decoded-stream-limit')throw recoveryError;
+        throw error;
+      }
     }
-    if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error)))throw error;
     // The zlib Adler checksum itself can end in PDF whitespace bytes.
     // Test one byte at a time and accept only a checksum-valid complete
     // stream; stripping all whitespace at once can truncate valid data.
