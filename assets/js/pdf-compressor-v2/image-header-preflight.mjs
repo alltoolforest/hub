@@ -17,6 +17,7 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     else throw Error('unverifiable-jpeg-filter-chain');
   }
   const frame=inspectJpegHeader(bytes);
+  if(frame.unsupported)throw Error('jpeg-unsupported-coding');
   // A well-formed Adobe APP14 marker is normal in CMYK/YCCK PDFs produced
   // by print-layout applications. Verify exact marker bytes and colorspace,
   // without permitting arbitrary APP markers, DNL, or post-scan metadata.
@@ -55,8 +56,10 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
   const space=String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))));
   const preserveLegacy=(frame.components===1&&space==='/DeviceGray'||
     frame.components===3&&space==='/DeviceRGB')&&
-    frame.metadata.some(m=>compatibleLegacyMetadata(m))&&
-    frame.metadata.every(m=>[224,226,254].includes(m.marker)||compatibleLegacyMetadata(m));
+    frame.metadata.some(m=>compatibleLegacyMetadata(m));
+  // Independently approve each known metadata segment. Previously a valid
+  // EXIF APP1 combined with valid XMP APP1 was falsely rejected because XMP
+  // made the whole 'legacy' collection fail an unrelated all-or-nothing test.
   // An APP marker can carry ordinary camera/editor metadata that the
   // compressor has no reason to interpret. Accept *well-framed* APP3–APP12
   // and APP15 only for opaque preservation, never for JPEG re-encoding.
@@ -81,8 +84,21 @@ export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
     (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
     (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
     (directColorSpace&&validXmp(m))||opaqueApp(m));
-  if(frame.unsupported||frame.precision!==8||![1,3,4].includes(frame.components)||
-    frame.width<1||frame.height<1||frame.metadataAfterScan||!allowedMetadata)
-    throw Error('unsupported-jpeg-frame');
+  // Fixed low-entropy reason codes only; never return image or document bytes.
+  // Unsupported families remain fail-closed. These codes let us distinguish
+  // valid-but-unrecognized metadata from unsupported coding and trailing data.
+  if(frame.precision!==8)throw Error('jpeg-unsupported-precision');
+  if(![1,3,4].includes(frame.components))throw Error('jpeg-unsupported-components');
+  if(frame.width<1||frame.height<1)throw Error('jpeg-invalid-dimensions');
+  if(frame.metadataAfterScan)throw Error('jpeg-postscan-metadata');
+  if(!allowedMetadata){
+    const rejected=frame.metadata.find(m=>!([224,226,254].includes(m.marker)||
+      (preserveLegacy&&compatibleLegacyMetadata(m))||
+      (m.marker===238&&(validAdobe||preservedLegacyCmyk))||
+      (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
+      (directColorSpace&&validXmp(m))||opaqueApp(m)));
+    const marker=rejected?.marker;
+    throw Error(marker>=224&&marker<=239?'jpeg-metadata-app'+(marker-224):'jpeg-unsupported-metadata');
+  }
   return frame;
 }
