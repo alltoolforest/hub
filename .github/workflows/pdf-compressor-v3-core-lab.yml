@@ -25,3 +25,19 @@ jobs:
           test -s assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
           test -s tests/pdf-compressor-v3-aggressive-raster.test.mjs
           ! grep -q 'pdf-compressor-v3' documents/pdf-compressor/index.html
+
+  aggressive-raster-browser:
+    name: Chromium / Firefox / WebKit real raster output
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned standalone browser QA tools
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1 pdfjs-dist@6.3.289
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Run actual page-rendering / output-reopen browser checks
+        run: node tests/pdf-compressor-v3-browser-smoke.mjs
