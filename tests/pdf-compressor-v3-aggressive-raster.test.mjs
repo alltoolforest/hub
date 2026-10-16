@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {rasterizePdfAggressively,AggressiveRasterError,RASTER_PROFILES}
+import {rasterizePdfAggressively,AggressiveRasterError,RASTER_PROFILES,installV3StreamIterator}
  from '../assets/js/pdf-compressor-v3/aggressive-raster-core.mjs';
 
 const input=new Uint8Array(2000).fill(64);
@@ -69,4 +69,21 @@ test('mode settings progressively reduce resolution and JPEG quality',()=>{
  const {balanced,strong,maximum}=RASTER_PROFILES;
  assert.ok(balanced.dpi>strong.dpi&&strong.dpi>maximum.dpi);
  assert.ok(balanced.jpegQuality>strong.jpegQuality&&strong.jpegQuality>maximum.jpegQuality);
+});
+
+test('WebKit stream iterator shim preserves chunks and releases stream lock',async()=>{
+ let released=false,read=0;
+ class MinimalReadableStream{
+  getReader(){return {read:async()=>{
+    read++;return read===1?{done:false,value:Uint8Array.of(1,2,3)}:
+      read===2?{done:false,value:Uint8Array.of(4,5)}:{done:true};
+  },cancel:async()=>{},releaseLock(){released=true;}};}
+ }
+ const context={ReadableStream:MinimalReadableStream};
+ assert.equal(installV3StreamIterator(context),true);
+ assert.equal(installV3StreamIterator(context),true);
+ const values=[];
+ for await(const chunk of new MinimalReadableStream())values.push(...chunk);
+ assert.deepEqual(values,[1,2,3,4,5]);
+ assert.equal(released,true);
 });
