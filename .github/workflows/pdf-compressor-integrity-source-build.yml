@@ -345,8 +345,21 @@ jobs:
           (cd assets/js/pdf-compressor-v2/dist && sha256sum -c worker.sha256)
       - name: File selection source digest and original unit regressions
         run: node --test tests/pdf-compressor-task8-session.test.mjs tests/pdf-compressor-release-file-digest.test.mjs
-      - name: Mount real tool route and run integrated site PDF/download smoke
+      - name: Mount isolated historical V2 route fixture, never the V3 release page
         run: |
+          # This is a CI-only checkout rewrite to keep V2 historical regression
+          # coverage after the live PDF Compressor route intentionally switches
+          # to V3. Dedicated V3 integration jobs test the unchanged V3 route.
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('documents/pdf-compressor/index.html')
+          text=p.read_text()
+          assert 'pdf-compressor-v3/site-entry.mjs' in text
+          assert 'pdf-compressor-v3/site.css' in text
+          text=text.replace('pdf-compressor-v3/site-entry.mjs','pdf-compressor-v2/site-boot.mjs')
+          text=text.replace('pdf-compressor-v3/site.css','pdf-compressor-v2/compressor-ui.css')
+          p.write_text(text)
+          PY
           python -m http.server 8766 --bind 127.0.0.1 >/tmp/compressor-route-server.log 2>&1 &
           PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-release-integrated-route-browser.mjs
           PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-release-integrated-route-browser.mjs
