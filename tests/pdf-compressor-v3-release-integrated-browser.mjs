@@ -61,6 +61,8 @@ try{
  const CSP="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'";
  await context.route('**/*',async route=>{
    const req=route.request(),uri=new URL(req.url());
+   if(uri.protocol==='blob:'&&uri.origin===origin&&req.method()==='GET')
+     return route.continue();
    if(uri.origin!==origin||req.method()!=='GET'){
      blocked.push({url:req.url(),method:req.method()});return route.abort();
    }
