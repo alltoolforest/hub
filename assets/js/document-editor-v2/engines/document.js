@@ -1,0 +1,102 @@
+import {load} from '../../core.js';
+import {readDocx, writeDocx, updateDocxText, documentBlocks} from '../docx-package.js';
+
+export async function open(file, format) {
+  if (format === 'docx') {
+    const zip = await load('zip');
+    const model = await readDocx(file, zip, DOMParser);
+    return {
+      format,
+      snapshot() { return [...model.text]; },
+      restore(snapshot) {
+        if (!Array.isArray(snapshot) || snapshot.length !== model.text.length) throw new Error('Draft no longer matches this document.');
+        model.text = snapshot.map(String);
+      },
+      render(host, onChange) {
+        host.replaceChildren();
+        const note = document.createElement('p');
+        note.className = 'notice';
+        note.textContent = 'Text flows as you type. This is an approximate page preview; the exported DOCX retains its original tables, images, page settings and other package parts. Edited text inherits its paragraph’s first run style.';
+        host.append(note);
+        const page = document.createElement('div'); page.className = 'document-v2-page';
+        function editable(paragraph) {
+          const wrap = document.createElement('div');
+          if (paragraph.pageBreak) {
+            const marker = document.createElement('div'); marker.className = 'document-v2-break';
+            marker.textContent = 'Explicit page break'; wrap.append(marker);
+          }
+          const field = document.createElement('div');
+          field.className = 'document-v2-paragraph';
+          field.contentEditable = paragraph.hasDrawing ? 'false' : 'true';
+          field.setAttribute('role', 'textbox');
+          field.setAttribute('aria-label', `Paragraph ${paragraph.index + 1}`);
+          field.setAttribute('aria-multiline', 'true');
+          field.textContent = model.text[paragraph.index];
+          if (!paragraph.hasDrawing) {
+            const insertPlain = text => {
+              const selection = getSelection();
+              if (!selection?.rangeCount || !field.contains(selection.anchorNode)) return;
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              const node = document.createTextNode(text);
+              range.insertNode(node);
+              range.setStartAfter(node); range.collapse(true);
+              selection.removeAllRanges(); selection.addRange(range);
+              field.dispatchEvent(new Event('input', {bubbles:true}));
+            };
+            field.addEventListener('beforeinput', event => {
+              if (event.inputType === 'insertParagraph') { event.preventDefault(); insertPlain('\n'); }
+            });
+            field.addEventListener('paste', event => {
+              event.preventDefault(); insertPlain(event.clipboardData.getData('text/plain'));
+            });
+            field.addEventListener('drop', event => event.preventDefault());
+            field.addEventListener('input', () => { updateDocxText(model, paragraph.index, field.textContent); onChange(); });
+          } else field.textContent += ' [Embedded image retained in export; object editing is not available yet]';
+          wrap.append(field); return wrap;
+        }
+        for (const block of documentBlocks(model)) {
+          if (block.kind === 'paragraph') page.append(editable(block.paragraph));
+          else {
+            const table = document.createElement('table'); table.className = 'document-v2-doc-table';
+            for (const cells of block.rows) {
+              const tr = document.createElement('tr');
+              for (const content of cells) {
+                const td = document.createElement('td');
+                content.forEach(paragraph => td.append(editable(paragraph)));
+                tr.append(td);
+              }
+              table.append(tr);
+            }
+            page.append(table);
+          }
+        }
+        host.append(page);
+      },
+      export() { return writeDocx(model, zip, DOMParser, XMLSerializer); }
+    };
+  }
+  if (format !== 'txt') throw new Error(`${format.toUpperCase()} editing is still under construction in this isolated workstream.`);
+  const text = await file.text();
+  return {
+    format, text,
+    snapshot() { return this.text; },
+    restore(snapshot) { this.text = String(snapshot); },
+    render(host, onChange) {
+      const textarea = document.createElement('textarea');
+      textarea.className = 'document-v2-text';
+      textarea.setAttribute('aria-label', 'Document text');
+      textarea.spellcheck = true;
+      textarea.value = this.text;
+      textarea.addEventListener('input', () => { this.text = textarea.value; onChange(); });
+      host.replaceChildren(textarea);
+      textarea.focus();
+    },
+    async export() {
+      const bytes = new TextEncoder().encode(this.text);
+      const decoded = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
+      if (decoded !== this.text) throw new Error('Text export validation failed. Your draft is retained.');
+      return new Blob([bytes], {type: 'text/plain;charset=utf-8'});
+    }
+  };
+}
