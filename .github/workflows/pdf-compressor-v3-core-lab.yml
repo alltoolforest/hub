@@ -20,6 +20,12 @@ jobs:
         run: node --check assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
       - name: Execute isolated v3 core regressions
         run: node --test tests/pdf-compressor-v3-aggressive-raster.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: pdf-compressor-v3-source-for-private-corpus-benchmark
+          path: assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+          retention-days: 3
       - name: Prove all changes are confined to v3 laboratory (no public route)
         run: |
           test -s assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
