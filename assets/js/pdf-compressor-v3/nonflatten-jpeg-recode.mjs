@@ -125,7 +125,7 @@ export async function recompressJpegXObjects(source,{
   if(await verifyOutput({original:source,output,replacements,mode,signal})!==true)
     fail('independent-output-verification-failed');
   check(signal);
-  return {status:'compressed',bytes,replacements,considered,skipped,
+  return {status:'compressed',bytes:output,replacements,considered,skipped,
     inputBytes:source.length,outputBytes:output.length,pageCount:originalPages,
     destructive:false,mode};
 }
