@@ -1,0 +1,18 @@
+/* Scope strictly to PDF Compressor V3 workspace. */
+.atf-v3{display:grid;gap:12px;max-width:100%;overflow-wrap:anywhere}
+.atf-v3 h2,.atf-v3 h3{margin:0}
+.atf-v3 label:not(.v3-agree){font-weight:650}
+.atf-v3 input[type=file],.atf-v3 select{width:100%;max-width:100%;min-height:48px;padding:10px;border:1px solid #9ba9a3;border-radius:8px;background:#fff;color:#193b2f}
+.atf-v3 .v3-agree{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid #899b91;border-radius:9px}
+.atf-v3 .v3-agree input{width:22px;height:22px;flex:none;margin:2px}
+.atf-v3 #v3-risk{font-size:.92rem;line-height:1.5}
+.atf-v3 .v3-controls{display:flex;gap:10px;flex-wrap:wrap}
+.atf-v3 button,.atf-v3 [data-v3-download]{min-height:46px;padding:11px 17px;border-radius:8px;cursor:pointer}
+.atf-v3 button:disabled{opacity:.54;cursor:not-allowed}
+.atf-v3 [data-v3-run],.atf-v3 [data-v3-download]{background:#145940;color:#fff;border:1px solid #145940;text-decoration:none}
+.atf-v3 [data-v3-cancel]{background:#fff;color:#6d231f;border:1px solid #6d231f}
+.atf-v3 [data-v3-result]{padding:16px;border:1px solid #aab9b0;border-radius:10px}
+.atf-v3 dl{display:grid;grid-template-columns:minmax(100px,1fr) minmax(90px,1fr);gap:12px;margin:12px 0 20px}
+.atf-v3 dt{font-weight:650}
+.atf-v3 dd{margin:0;overflow-wrap:anywhere}
+.atf-v3 [role=status]{min-height:1.5em}
