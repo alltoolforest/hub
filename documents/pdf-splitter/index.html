@@ -371,16 +371,37 @@ function showMsg(text, isErr) {
 
 const uploadError = message => { $('#uploadError').textContent=message||'';$('#uploadError').hidden=!message; };
 async function inspectComplex(lib) {
- const notes=[];const {PDFName,PDFDict}=PDFLib;
- try {const cat=lib.catalog;const af=cat.lookupMaybe(PDFName.of('AcroForm'),PDFDict);
- if(af) notes.push(af.has(PDFName.of('XFA'))?'XFA form: not preserved':'Form fields: may not be preserved');
- if(cat.has(PDFName.of('Outlines')))notes.push('Original bookmarks may be removed');
- const names=cat.lookupMaybe(PDFName.of('Names'),PDFDict);
- if(names?.has(PDFName.of('EmbeddedFiles')))notes.push('Embedded attachments may be removed');
- const fieldList=lib.getForm().getFields();
- if(fieldList.some(field=>/signature/i.test(field.constructor?.name||'')))notes.push('Signatures may become invalid');
- if(lib.getPages().some(page=>page.node.has(PDFName.of('Annots'))))notes.push('Annotations and interactive links may not be retained');
- } catch(e){notes.push('Complex document features could not be fully inspected');}
+ const notes=[], name=PDFLib.PDFName.of;
+ const {PDFDict,PDFArray}=PDFLib;
+ try {
+ const catalog=lib.catalog;
+ const acro=catalog.lookupMaybe(name('AcroForm'),PDFDict);
+ if(acro){
+   notes.push('Interactive form fields may not be preserved in extracted PDFs.');
+   if(acro.has(name('XFA'))) notes.push('XFA form data is not supported.');
+   if(acro.has(name('SigFlags'))) notes.push('Signature flags present: existing signatures may become invalid.');
+   const fields=acro.lookupMaybe(name('Fields'),PDFArray);
+   if(fields) {
+     const visit=(ref,depth=0)=>{
+       if(depth>32)return;
+       const field=lib.context.lookup(ref,PDFDict);if(!field)return;
+       if(String(field.get(name('FT'))||'').includes('Sig') || field.has(name('V')) && field.lookupMaybe(name('V'),PDFDict)?.has(name('ByteRange')))
+         notes.push('Digital signature field detected: signature validity cannot be preserved.');
+       const kids=field.lookupMaybe(name('Kids'),PDFArray);
+       if(kids)for(let i=0;i<kids.size();i++)visit(kids.get(i),depth+1);
+     };
+     for(let i=0;i<fields.size();i++)visit(fields.get(i));
+   }
+ }
+ if(catalog.has(name('Outlines')))notes.push('Original bookmarks may be removed.');
+ const names=catalog.lookupMaybe(name('Names'),PDFDict);
+ if(names?.has(name('EmbeddedFiles'))||catalog.has(name('AF')))notes.push('Embedded attachments may be removed.');
+ if(catalog.has(name('OpenAction'))||catalog.has(name('AA')))notes.push('Document actions may not survive extraction.');
+ if(catalog.has(name('OCProperties')))notes.push('Optional-content layers may change.');
+ for(const page of lib.getPages()){
+   if(page.node.has(name('Annots'))){notes.push('Page annotations and links may not be preserved.');break;}
+ }
+ }catch(e){notes.push('Document features could not be fully inspected. Export may be lossy.');}
  return [...new Set(notes)];
 }
 async function loadFile(file) {
@@ -658,6 +679,31 @@ function updateSummary() {
 }
 
 /* ---------- building PDFs ---------- */
+async function verifyPdf(bytes,indices,expectedRotations) {
+ const result=await PDFDocument.load(bytes,{updateMetadata:false});
+ if(result.getPageCount()!==indices.length)throw Error('Output page-count verification failed.');
+ const outputPages=result.getPages();
+ for(let k=0;k<indices.length;k++){
+   const src=state.lib.getPage(indices[k]),out=outputPages[k];
+   for(const b of ['MediaBox','CropBox','BleedBox','TrimBox','ArtBox']){
+     const a=src.node.lookupMaybe(PDFLib.PDFName.of(b),PDFLib.PDFArray);
+     const c=out.node.lookupMaybe(PDFLib.PDFName.of(b),PDFLib.PDFArray);
+     if(Boolean(a)!==Boolean(c))throw Error('Page box verification failed: '+b);
+     if(a&&c){
+       if(a.size()!==c.size())throw Error('Page box size mismatch: '+b);
+       for(let j=0;j<a.size();j++){
+         const v=Number(String(a.get(j))),w=Number(String(c.get(j)));
+         if(!Number.isFinite(v)||!Number.isFinite(w)||Math.abs(v-w)>.5)throw Error('Page box changed: '+b);
+       }
+     }
+   }
+   const rotation=(v)=>(v%360+360)%360;
+   if(rotation(out.getRotation().angle)!==rotation(src.getRotation().angle+expectedRotations[indices[k]]))throw Error('Rotation verification failed.');
+   const srcSize=src.getSize(),outSize=out.getSize();
+   if(Math.abs(srcSize.width-outSize.width)>.5||Math.abs(srcSize.height-outSize.height)>.5)throw Error('Page dimensions changed.');
+ }
+ return true;
+}
 async function buildPdf(pageIdxs) {
   const out = await PDFDocument.create();
   const copied = await out.copyPages(state.lib, pageIdxs);
@@ -701,6 +747,7 @@ async function runSplit() {
         const r = await fitChunk(i, plan.limit);
         if (tk !== state.token) return;
         if (r.oversize) oversize++;
+        await verifyPdf(r.bytes,range(i,i+r.count-1),state.rotations);
         const pages = range(i, i + r.count - 1); k++;
         outputs.push({ name: unique(`${plan.base}_part_${pad(k, n)}`), pages, bytes: r.bytes });
         i += r.count;
@@ -712,6 +759,7 @@ async function runSplit() {
         setProgress(k / plan.files.length, `Creating file ${k + 1} of ${plan.files.length}…`); await tick();
         const f = plan.files[k];
         const bytes = await buildPdf(f.pages);
+        await verifyPdf(bytes,f.pages,state.rotations);
         if (tk !== state.token) return;
         outputs.push({ name: unique(f.name), pages: f.pages, bytes });
       }
