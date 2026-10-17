@@ -12,11 +12,11 @@ const hash=async bytes=>hex(new Uint8Array(await crypto.subtle.digest('SHA-256',
 export class LosslessInvariantError extends Error {
   constructor(code){super(code);this.name='LosslessInvariantError';this.code=code;}
 }
-async function boundedInflateStrict(bytes,maxBytes){
+async function boundedInflateStrict(bytes,maxBytes,format='deflate'){
   // Feed resident bytes directly: Blob streams add asynchronous IO scheduling
   // for every small PDF stream (thousands in some digital documents). Drain
   // concurrently with writing so backpressure cannot deadlock large streams.
-  const stream=new DecompressionStream('deflate');
+  const stream=new DecompressionStream(format);
   const reader=stream.readable.getReader(),writer=stream.writable.getWriter();
   const written=(async()=>{try{
     for(let offset=0;offset<bytes.length;offset+=65536)
@@ -41,17 +41,69 @@ async function boundedInflateStrict(bytes,maxBytes){
   for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}
   return output;
 }
+const bytesEqual=(a,b)=>{
+  if(a.length!==b.length)return false;
+  for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;
+  return true;
+};
+function adler32(bytes){
+  // RFC 1950 Adler-32, chunked to keep the sums in safe integer range.
+  let a=1,b=0;
+  for(let offset=0;offset<bytes.length;offset+=5552){
+    const end=Math.min(bytes.length,offset+5552);
+    for(let i=offset;i<end;i++){a+=bytes[i];b+=a;}
+    a%=65521;b%=65521;
+  }
+  return ((b<<16)|a)>>>0;
+}
+function hasPlainZlibHeader(bytes){
+  if(bytes.length<3)return false;
+  const cmf=bytes[0],flg=bytes[1];
+  // CM=8 (DEFLATE), CINFO<=7, FCHECK valid, no preset dictionary.
+  return (cmf&15)===8&&(cmf>>>4)<=7&&(((cmf<<8)|flg)%31)===0&&(flg&32)===0;
+}
+async function boundedInflateMissingTrailer(bytes,maxBytes){
+  if(!hasPlainZlibHeader(bytes)||typeof DecompressionStream!=='function')
+    throw new LosslessInvariantError('invalid-zlib-recovery-input');
+  let raw;
+  try{raw=await boundedInflateStrict(bytes.subarray(2),maxBytes,'deflate-raw');}
+  catch(error){
+    if(error?.code==='decoded-stream-limit')throw error;
+    throw new LosslessInvariantError('invalid-zlib-recovery-input');
+  }
+  const sum=adler32(raw),repaired=new Uint8Array(bytes.length+4);
+  repaired.set(bytes,0);
+  repaired[bytes.length]=(sum>>>24)&255;
+  repaired[bytes.length+1]=(sum>>>16)&255;
+  repaired[bytes.length+2]=(sum>>>8)&255;
+  repaired[bytes.length+3]=sum&255;
+  // Prove that the exact raw payload becomes a checksum-valid zlib stream.
+  // This accepts only a wholly absent Adler trailer; partial trailers, trailing
+  // junk and damaged raw DEFLATE remain rejected by the raw/strict decoders.
+  const strict=await boundedInflateStrict(repaired,maxBytes,'deflate');
+  if(!bytesEqual(raw,strict))throw new LosslessInvariantError('zlib-recovery-mismatch');
+  return strict;
+}
 // Some PDF producers include PDF whitespace immediately after an otherwise
 // complete Flate/zlib stream. Browser DecompressionStream rejects that padding
-// even though tolerant PDF readers accept the decoded content. Retry only a
-// verified, bounded whitespace tail after the native decoder reports junk.
-// The retried decode must still validate the zlib checksum and output budget.
-// Never trim arbitrary data, preemptively truncate a valid stream, or suppress
-// a decompression/memory error.
+// even though tolerant PDF readers accept the decoded content. A smaller class
+// of legacy generators omit the four-byte Adler-32 trailer entirely while
+// still writing a complete raw DEFLATE payload. Recover only that exact case:
+// raw DEFLATE must close cleanly, stay within budget, and a reconstructed
+// checksum must then pass the strict zlib decoder. Never recover checksum
+// mismatches, partial trailers, trailing arbitrary bytes or truncated DEFLATE.
 async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
-    if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(String(error)))throw error;
+    const message=String(error);
+    if(/(?:Compressed input was truncated|unexpected end|incomplete compressed)/i.test(message)){
+      try{return await boundedInflateMissingTrailer(bytes,maxBytes);}
+      catch(recoveryError){
+        if(recoveryError?.code==='decoded-stream-limit')throw recoveryError;
+        throw error;
+      }
+    }
+    if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(message))throw error;
     // The zlib Adler checksum itself can end in PDF whitespace bytes.
     // Test one byte at a time and accept only a checksum-valid complete
     // stream; stripping all whitespace at once can truncate valid data.
