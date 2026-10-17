@@ -60,7 +60,15 @@ async function fitChunk(start,n,limit,measure,release=()=>{},check=()=>{}){
  }finally{if(result)release(result.art);}
  };
  try{
- if(!(await attempt(1))){const candidate=await measure(start,1);try{check();return {count:1,size:candidate.size,art:candidate.art,oversize:true};}catch(e){release(candidate.art);throw e;}}
+ // A single oversized page is handled without a second serialization.
+ const first=await measure(start,1);let firstKept=false;
+ try{
+ check();
+ if(!first||!Number.isFinite(first.size)||first.size<0)throw Error('Invalid measured size.');
+ if(first.size>limit){firstKept=true;return {count:1,size:first.size,art:first.art,oversize:true};}
+ best={count:1,size:first.size,art:first.art};firstKept=true;
+ }finally{if(!firstKept&&first)release(first.art);}
+
  let lo=1,hi=null;
  while(lo<max){const k=Math.min(lo*2,max);if(await attempt(k))lo=k;else{hi=k;break;}}
  while(hi!==null&&hi-lo>1){const mid=Math.floor((lo+hi)/2);if(await attempt(mid))lo=mid;else hi=mid;}
