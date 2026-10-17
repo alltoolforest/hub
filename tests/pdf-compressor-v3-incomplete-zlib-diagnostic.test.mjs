@@ -9,6 +9,8 @@ const noTrailer=complete.subarray(0,-4);
 const partialTrailer=complete.subarray(0,-2);
 const wrongChecksum=Buffer.from(complete);
 wrongChecksum[wrongChecksum.length-1]^=0xff;
+
+const trailingAfterRaw=Buffer.concat([noTrailer,Buffer.from([0x41,0x54,0x46])]);
 const damagedRaw=Buffer.from(noTrailer);
 damagedRaw[Math.max(3,Math.floor(damagedRaw.length/2))]^=0xff;
 
@@ -26,7 +28,14 @@ test('partial Adler trailer is rejected',async()=>{
   await assert.rejects(()=>inflateStreamBounded(new Uint8Array(partialTrailer),1_000_000));
 });
 
-test('wrong Adler checksum is rejected rather than repaired',async()=>{
+
+test('arbitrary bytes after BFINAL are rejected before raw decode',async()=>{
+  await assert.rejects(
+    ()=>inflateStreamBounded(new Uint8Array(trailingAfterRaw),1_000_000),
+    error=>error?.code==='trailing-deflate-data'||error instanceof Error
+  );
+});
+\ntest('wrong Adler checksum is rejected rather than repaired',async()=>{
   await assert.rejects(()=>inflateStreamBounded(new Uint8Array(wrongChecksum),1_000_000));
 });
 
