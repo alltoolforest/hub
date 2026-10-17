@@ -62,15 +62,99 @@ function hasPlainZlibHeader(bytes){
   // CM=8 (DEFLATE), CINFO<=7, FCHECK valid, no preset dictionary.
   return (cmf&15)===8&&(cmf>>>4)<=7&&(((cmf<<8)|flg)%31)===0&&(flg&32)===0;
 }
+const LENGTH_BASE=[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+const LENGTH_EXTRA=[0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+const DISTANCE_BASE=[1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+const DISTANCE_EXTRA=[0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+function reverseDeflateBits(value,count){let result=0;for(let i=0;i<count;i++){result=(result<<1)|(value&1);value>>>=1;}return result;}
+function buildDeflateTree(lengths){
+  let max=0;for(const length of lengths)if(length>max)max=length;
+  if(max===0)throw new LosslessInvariantError('invalid-deflate-tree');
+  const count=Array(max+1).fill(0);for(const length of lengths)if(length)count[length]++;
+  let left=1;for(let bits=1;bits<=max;bits++){left=(left<<1)-count[bits];if(left<0)throw new LosslessInvariantError('invalid-deflate-tree');}
+  const next=Array(max+1).fill(0);let code=0;
+  for(let bits=1;bits<=max;bits++){code=(code+(count[bits-1]??0))<<1;next[bits]=code;}
+  const map=new Map();
+  lengths.forEach((length,symbol)=>{if(length)map.set(length+':'+reverseDeflateBits(next[length]++,length),symbol);});
+  return {map,max};
+}
+const FIXED_LITERAL_TREE=buildDeflateTree(Array.from({length:288},(_,i)=>i<=143?8:i<=255?9:i<=279?7:8));
+const FIXED_DISTANCE_TREE=buildDeflateTree(Array(32).fill(5));
+function validateExactRawDeflate(bytes,maxBytes){
+  let bit=0,outputLength=0,final=0;
+  const need=count=>{if(bit+count>bytes.length*8)throw new LosslessInvariantError('truncated-deflate-payload');};
+  const readBits=count=>{need(count);let value=0;for(let i=0;i<count;i++){value|=((bytes[bit>>3]>>(bit&7))&1)<<i;bit++;}return value;};
+  const readSymbol=tree=>{let code=0;for(let length=1;length<=tree.max;length++){code|=readBits(1)<<(length-1);const symbol=tree.map.get(length+':'+code);if(symbol!==undefined)return symbol;}throw new LosslessInvariantError('invalid-deflate-code');};
+  while(!final){
+    final=readBits(1);const type=readBits(2);
+    if(type===0){
+      bit=(bit+7)&~7;need(32);const offset=bit>>3;
+      const length=bytes[offset]|bytes[offset+1]<<8,complement=bytes[offset+2]|bytes[offset+3]<<8;bit+=32;
+      if(((length^0xffff)&0xffff)!==complement)throw new LosslessInvariantError('invalid-deflate-stored-length');
+      need(length*8);bit+=length*8;outputLength+=length;
+      if(outputLength>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
+      continue;
+    }
+    if(type===3)throw new LosslessInvariantError('invalid-deflate-block-type');
+    let literalTree,distanceTree;
+    if(type===1){literalTree=FIXED_LITERAL_TREE;distanceTree=FIXED_DISTANCE_TREE;}
+    else{
+      const literalCount=readBits(5)+257,distanceCount=readBits(5)+1,codeLengthCount=readBits(4)+4;
+      if(literalCount>286||distanceCount>32)throw new LosslessInvariantError('invalid-deflate-dynamic-count');
+      const order=[16,17,18,0,8,7,9,6,11,4,12,3,13,2,14,1,15],codeLengths=Array(19).fill(0);
+      order.splice(8,0,10,5);
+      for(let i=0;i<codeLengthCount;i++)codeLengths[order[i]]=readBits(3);
+      const codeLengthTree=buildDeflateTree(codeLengths),lengths=[];
+      while(lengths.length<literalCount+distanceCount){
+        const symbol=readSymbol(codeLengthTree);
+        if(symbol<=15)lengths.push(symbol);
+        else if(symbol===16){
+          if(!lengths.length)throw new LosslessInvariantError('invalid-deflate-repeat');
+          const repeat=readBits(2)+3,previous=lengths[lengths.length-1];for(let i=0;i<repeat;i++)lengths.push(previous);
+        }else if(symbol===17){const repeat=readBits(3)+3;for(let i=0;i<repeat;i++)lengths.push(0);}
+        else if(symbol===18){const repeat=readBits(7)+11;for(let i=0;i<repeat;i++)lengths.push(0);}
+        if(lengths.length>literalCount+distanceCount)throw new LosslessInvariantError('invalid-deflate-repeat');
+      }
+      if(!lengths[256])throw new LosslessInvariantError('invalid-deflate-missing-eob');
+      literalTree=buildDeflateTree(lengths.slice(0,literalCount));
+      const distanceLengths=lengths.slice(literalCount);
+      if(distanceLengths.every(length=>length===0))distanceTree=null;
+      else distanceTree=buildDeflateTree(distanceLengths);
+    }
+    for(;;){
+      const symbol=readSymbol(literalTree);
+      if(symbol<256){outputLength++;if(outputLength>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');continue;}
+      if(symbol===256)break;
+      if(symbol<257||symbol>285||!distanceTree)throw new LosslessInvariantError('invalid-deflate-length-symbol');
+      const index=symbol-257,length=LENGTH_BASE[index]+readBits(LENGTH_EXTRA[index]);
+      const distanceSymbol=readSymbol(distanceTree);
+      if(distanceSymbol>29)throw new LosslessInvariantError('invalid-deflate-distance-symbol');
+      const distance=DISTANCE_BASE[distanceSymbol]+readBits(DISTANCE_EXTRA[distanceSymbol]);
+      if(distance>outputLength)throw new LosslessInvariantError('invalid-deflate-distance');
+      outputLength+=length;if(outputLength>maxBytes)throw new LosslessInvariantError('decoded-stream-limit');
+    }
+  }
+  const used=Math.ceil(bit/8);
+  if(used!==bytes.length)throw new LosslessInvariantError('trailing-deflate-data');
+  const remainder=bit&7;
+  if(remainder&&bytes[bytes.length-1]&((0xff<<remainder)&0xff))throw new LosslessInvariantError('nonzero-deflate-padding');
+  return outputLength;
+}
 async function boundedInflateMissingTrailer(bytes,maxBytes){
   if(!hasPlainZlibHeader(bytes)||typeof DecompressionStream!=='function')
     throw new LosslessInvariantError('invalid-zlib-recovery-input');
+  const rawPayload=bytes.subarray(2);
+  // Chromium's raw inflater tolerates bytes after BFINAL, so validate the
+  // DEFLATE grammar ourselves before decoding. This is what distinguishes a
+  // wholly missing trailer from partial Adler bytes or arbitrary trailing data.
+  const expectedLength=validateExactRawDeflate(rawPayload,maxBytes);
   let raw;
-  try{raw=await boundedInflateStrict(bytes.subarray(2),maxBytes,'deflate-raw');}
+  try{raw=await boundedInflateStrict(rawPayload,maxBytes,'deflate-raw');}
   catch(error){
     if(error?.code==='decoded-stream-limit')throw error;
     throw new LosslessInvariantError('invalid-zlib-recovery-input');
   }
+  if(raw.length!==expectedLength)throw new LosslessInvariantError('zlib-recovery-length-mismatch');
   const sum=adler32(raw),repaired=new Uint8Array(bytes.length+4);
   repaired.set(bytes,0);
   repaired[bytes.length]=(sum>>>24)&255;
