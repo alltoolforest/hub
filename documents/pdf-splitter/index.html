@@ -426,7 +426,7 @@ async function loadFile(file) {
  const warnings=await inspectComplex(lib);
  resetAll(true);
  state.file=file;state.lib=lib;state.doc=candidate;candidate=null;
- state.pageCount=lib.getPageCount();state.baseName=sanitize(file.name.replace(/\\.pdf$/i,''))||'document';
+ state.pageCount=lib.getPageCount();state.baseName=sanitize(file.name.replace(/\.pdf$/i,''))||'document';
  state.selected=new Set();state.rotations=Array(state.pageCount).fill(0);state.lastClicked=null;
  state.outline=await loadOutline(state.doc);
  $('#fName').textContent=file.name;$('#fMeta').textContent=plural(state.pageCount,'page')+' · '+fmtBytes(file.size)+(lacksEOF?' · missing EOF marker':'');
@@ -685,17 +685,12 @@ async function verifyPdf(bytes,indices,expectedRotations) {
  const outputPages=result.getPages();
  for(let k=0;k<indices.length;k++){
    const src=state.lib.getPage(indices[k]),out=outputPages[k];
-   for(const b of ['MediaBox','CropBox','BleedBox','TrimBox','ArtBox']){
-     const a=src.node.lookupMaybe(PDFLib.PDFName.of(b),PDFLib.PDFArray);
-     const c=out.node.lookupMaybe(PDFLib.PDFName.of(b),PDFLib.PDFArray);
-     if(Boolean(a)!==Boolean(c))throw Error('Page box verification failed: '+b);
-     if(a&&c){
-       if(a.size()!==c.size())throw Error('Page box size mismatch: '+b);
-       for(let j=0;j<a.size();j++){
-         const v=Number(String(a.get(j))),w=Number(String(c.get(j)));
-         if(!Number.isFinite(v)||!Number.isFinite(w)||Math.abs(v-w)>.5)throw Error('Page box changed: '+b);
-       }
-     }
+   // Compare effective boxes, not raw dictionary entries (inherited boxes may be normalized when copied).
+   for(const [label,get] of [['MediaBox',p=>p.getMediaBox()],['CropBox',p=>p.getCropBox()],['BleedBox',p=>p.getBleedBox()],['TrimBox',p=>p.getTrimBox()],['ArtBox',p=>p.getArtBox()]]){
+      const left=get(src),right=get(out);
+      for(const prop of ['x','y','width','height']){
+        if(Math.abs(left[prop]-right[prop])>.5)throw Error(label+' verification failed: '+prop);
+      }
    }
    const rotation=(v)=>(v%360+360)%360;
    if(rotation(out.getRotation().angle)!==rotation(src.getRotation().angle+expectedRotations[indices[k]]))throw Error('Rotation verification failed.');
