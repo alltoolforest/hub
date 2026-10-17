@@ -163,10 +163,17 @@ export async function losslessFingerprint(bytes,{PDF,maxStreamBytes=32000000,
         const width=context.lookup(dict.get(N('Width')))?.asNumber?.();
         const height=context.lookup(dict.get(N('Height')))?.asNumber?.();
         const channels=String(dict.get(N('ColorSpace')))==='/DeviceGray'?1:3;
+        // Large plain scan images are validated incrementally and compared by
+        // exact encoded identity rather than materializing their decoded pixels.
+        // Use a threshold below the per-stream ceiling so a many-page scan with
+        // individually moderate images cannot exhaust the aggregate invariant
+        // byte budget. This is stricter, not looser: equivalent recompression of
+        // these large streams is rejected unless the exact encoded bytes remain.
+        const streamImageThreshold=Math.min(maxStreamBytes,16000000);
         const streamedImage=plainResource&&String(dict.get(N('Subtype')))==='/Image'&&
           filters.length===1&&filters[0]==='/FlateDecode'&&
           Number.isSafeInteger(width*height*channels)&&width>0&&height>0&&
-          width*channels<=maxStreamBytes&&width*height*channels>maxStreamBytes;
+          width*channels<=maxStreamBytes&&width*height*channels>streamImageThreshold;
         let cached=streamCache.get(value);
         if(!cached){
           // Repeated programs share decoding work, never dictionary identity.
