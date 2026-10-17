@@ -95,6 +95,43 @@ test('forged oversized image dimensions fail streamed validation before the inde
   await assert.rejects(inspectPDFInput(bytes,{...options,readPages:async()=>{called=true;throw Error('must not decode');}}),e=>['invalid-image-stream','encoded-image-dimensions'].includes(e.code));
   assert.equal(called,false);
 });
+
+test('many moderate plain Flate images use bounded streaming instead of aggregate decoded allocation',async()=>{
+  const doc=await PDF.PDFDocument.create({updateMetadata:false}),c=doc.context;
+  const width=256,height=256,raw=new Uint8Array(width*height*3);
+  for(let i=0;i<raw.length;i++)raw[i]=(i*29+7)&255;
+  const {deflateSync}=await import('node:zlib');
+  for(let pageNo=0;pageNo<8;pageNo++){
+    const page=doc.addPage([300,300]);
+    const ref=c.register(c.stream(new Uint8Array(deflateSync(raw)),{
+      Type:'XObject',Subtype:'Image',Width:width,Height:height,
+      ColorSpace:'DeviceRGB',BitsPerComponent:8,Filter:'FlateDecode'
+    }));
+    page.node.set(N('Resources'),c.obj({XObject:{Img:ref}}));
+    page.pushOperators(PDF.pushGraphicsState(),PDF.scale(250,250),
+      PDF.drawObject('Img'),PDF.popGraphicsState());
+  }
+  const bytes=new Uint8Array(await doc.save({useObjectStreams:false}));
+  const limits={...INPUT_LIMITS,maxTotalDecodedBytes:raw.length*2,maxDecodedStreamBytes:raw.length+1024};
+  const report=await inspectPDFInput(bytes,{...options,limits});
+  assert.equal(report.pageCount,8);
+  assert.equal(report.images.length,8);
+  assert.equal(report.classification,'image-only');
+});
+
+test('streamed plain Flate image still fails closed on truncated compressed bytes',async()=>{
+  const bytes=await modify('scanned',doc=>{
+    for(const [,object] of doc.context.enumerateIndirectObjects()){
+      if(object instanceof PDF.PDFRawStream&&String(object.dict.get(N('Subtype')))==='/Image'&&
+        String(object.dict.get(N('Filter')))==='/FlateDecode'){
+        object.contents=object.contents.subarray(0,Math.max(1,object.contents.length-8));
+        break;
+      }
+    }
+  });
+  await rejects(bytes,'invalid-image-stream');
+});
+
 test('failed replacement keeps the previous valid bytes and report; exposed bytes are copies',async()=>{
   const session=createInputSession((bytes)=>inspectPDFInput(bytes,options));
   const bytes=(await buildFixture('digital')).bytes;
