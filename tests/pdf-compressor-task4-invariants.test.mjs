@@ -90,6 +90,21 @@ test('strict Flate decoder accepts only checksum-verified PDF whitespace padding
  await assert.rejects(inflateStreamBounded(new Uint8Array([...corrupted,10]),original.length));
 });
 
+test('moderately large plain Flate image uses strict streaming invariant path',async()=>{
+ const doc=await PDF.PDFDocument.create({updateMetadata:false}),page=doc.addPage([300,300]),c=doc.context;
+ const width=2400,height=2400,raw=new Uint8Array(width*height*3);
+ for(let i=0;i<raw.length;i+=4096)raw[i]=(i/4096)&255;
+ const ref=c.register(c.stream(new Uint8Array(deflateSync(raw)),{
+  Type:'XObject',Subtype:'Image',Width:width,Height:height,
+  ColorSpace:'DeviceRGB',BitsPerComponent:8,Filter:'FlateDecode'
+ }));
+ page.node.set(N('Resources'),c.obj({XObject:{Img:ref}}));
+ page.pushOperators(PDF.pushGraphicsState(),PDF.scale(280,280),PDF.drawObject('Img'),PDF.popGraphicsState());
+ const bytes=new Uint8Array(await doc.save({useObjectStreams:false}));
+ const digest=await losslessFingerprint(bytes,{PDF,maxStreamBytes:32000000,maxTotalDecodedBytes:10000});
+ assert.equal(typeof digest,'string');assert.equal(digest.length,64);
+});
+
 test('legacy Flate recovery accepts only a wholly absent Adler-32 trailer',async()=>{
  const original=new Uint8Array(Buffer.from('legacy producer with complete raw deflate'.repeat(80)));
  const encoded=new Uint8Array(deflateSync(original));
