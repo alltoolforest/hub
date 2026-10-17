@@ -107,7 +107,7 @@ button,select,input,summary{touch-action:manipulation}@media (pointer:coarse){in
 import * as pdfjsLib from "../../assets/vendor/pdf.mjs";
 window.pdfjsLib = pdfjsLib;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const S={files:[],pages:[],hist:[]};let nid=1,pageNid=1,drag=-1,busy=false,last=null,DL=null,activeJob=null;
+const S={files:[],pages:[],hist:[]};let nid=1,pageNid=1,drag=-1,busy=false,importing=false,last=null,DL=null,activeJob=null;
 const MOB=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1),LIM=MOB?1.2e8:8e8,TH=new Map(),TH_MAX=MOB?36:96,esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const say=(t,e)=>{const s=$('#st');s.textContent=t;s.className=e?'err':'';s.setAttribute('role',e?'alert':'status')};
 // Task 7: reject clearly invalid/spoofed inputs before parser or decoder work.
@@ -116,6 +116,9 @@ function hasPdfHeader(bytes){const n=Math.min(bytes.length,1029);for(let i=0;i+4
 const SAFE_IMAGE_MIME=new Set(['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/avif','image/heic','image/heif']);
 const SAFE_IMAGE_EXT=/\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
 function classifyInput(file){const name=file.name||'',type=(file.type||'').toLowerCase();if(type==='image/svg+xml'||/\.svgz?$/i.test(name))throw new Error('SVG files are not supported; choose a raster photo');if(type==='application/pdf'||/\.pdf$/i.test(name))return 'pdf';if(SAFE_IMAGE_MIME.has(type)||SAFE_IMAGE_EXT.test(name))return 'img';throw new Error('isn’t a supported PDF or raster image')}
+
+// Task 7: Check raster signatures before decoding files supplied by untrusted sources.
+function hasRasterHeader(b){if(b.length<4)return false;const at=(...v)=>v.every((x,i)=>b[i]===x);const ascii=(i,t)=>[...t].every((x,j)=>b[i+j]===x.charCodeAt(0));return at(0xff,0xd8,0xff)||at(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a)||ascii(0,'GIF8')||ascii(0,'BM')||(ascii(0,'RIFF')&&ascii(8,'WEBP'))||(ascii(4,'ftyp')&&(['avif','avis','heic','heix','hevc','hevx','mif1','msf1'].some(t=>ascii(8,t))))}
 
 try{(window.claude&&claude.use?claude.use('downloads'):Promise.resolve(null)).then(d=>DL=d,()=>{})}catch(e){}
 const PDF_ENGINE_READY=!!(window.PDFLib&&window.PDFLib.PDFDocument&&window.pdfjsLib&&window.pdfjsLib.getDocument&&window.createImageBitmap&&HTMLCanvasElement.prototype.toBlob);
@@ -132,20 +135,20 @@ async function addOne(file){
  const kind=classifyInput(file);if(!file.size)throw new Error('is empty');
  const f={id:nid++,name:file.name,bytes:new Uint8Array(await file.arrayBuffer()),type:file.type||''};f.hue=(f.id*67)%360;
  if(kind==='pdf'){if(!hasPdfHeader(f.bytes))throw new Error('does not have a valid PDF header');f.kind='pdf';f.doc=await openPdf(f);f.n=f.doc.numPages;f.size=f.bytes.length;f.bytes=null}
- else if(kind==='img'){f.kind='img';let src=file;try{f.bmp=await createImageBitmap(src)}catch(e){if(/hei[cf]/i.test(f.type+f.name)){try{src=await heic(file);f.bmp=await createImageBitmap(src);f.type='image/jpeg'}catch(e2){throw new Error('HEIC photo couldn’t be converted')}}else throw new Error('image format isn’t supported by this browser')}f.url=URL.createObjectURL(src);f.size=file.size;f.bytes=null;f.n=1}
+ else if(kind==='img'){if(!hasRasterHeader(f.bytes))throw new Error('does not have a supported raster image signature');f.kind='img';let src=file;try{f.bmp=await createImageBitmap(src)}catch(e){if(/hei[cf]/i.test(f.type+f.name)){try{src=await heic(file);f.bmp=await createImageBitmap(src);f.type='image/jpeg'}catch(e2){throw new Error('HEIC photo couldn’t be converted')}}else throw new Error('image format isn’t supported by this browser')}f.url=URL.createObjectURL(src);f.size=file.size;f.bytes=null;f.n=1}
  else throw new Error('isn’t a PDF or an image');
  S.files.push(f);for(let i=0;i<f.n;i++)S.pages.push({id:pageNid++,f,p:i,r:0});
 }
-async function addFiles(list){if(busy){say('Finish or cancel the current merge before adding files.',true);return}list=[...list];if(!list.length)return;say('Reading '+list.length+(list.length>1?' files…':' file…'));const before=snapshot(),bad=[];
- for(const file of list){try{await addOne(file)}catch(e){if(e.message!=='skipped')bad.push(file.name+' '+e.message);else bad.push(file.name+' was skipped')}}
+async function addFiles(list){if(busy||importing){say('Finish the current file import or merge before adding more files.',true);return}list=[...list];if(!list.length)return;importing=true;say('Reading '+list.length+(list.length>1?' files…':' file…'));const before=snapshot(),bad=[];
+ try{for(const file of list){try{await addOne(file)}catch(e){if(e.message!=='skipped')bad.push(file.name+' '+e.message);else bad.push(file.name+' was skipped')}}
  if(S.files.length!==before.files.length)record(before);draw();say(bad.length?bad.join('. ')+'.':'',!!bad.length);
- if(S.files.reduce((a,f)=>a+f.size,0)>LIM)say('These files are large for this device. If merging stalls or the page reloads, merge fewer files at a time.',true)}
+ if(S.files.reduce((a,f)=>a+f.size,0)>LIM)say('These files are large for this device. If merging stalls or the page reloads, merge fewer files at a time.',true)}finally{importing=false}}
 // Store complete shallow-immutable page records and the active source registry.
 // Source objects hold browser PDF/image handles and intentionally retain identity.
 function snapshot(){return {files:S.files.slice(),pages:S.pages.map(p=>({...p}))}}
 function record(before){S.hist.push(before);if(S.hist.length>40)S.hist.shift()}
 function restore(state){S.files=state.files.slice();S.pages=state.pages.map(p=>({...p}))}
-function mut(fn){if(busy)return;const before=snapshot();try{fn()}catch(e){restore(before);draw();throw e}record(before);draw()}
+function mut(fn){if(busy||importing)return;const before=snapshot();try{fn()}catch(e){restore(before);draw();throw e}record(before);draw()}
 function undo(){if(!S.hist.length||busy)return;restore(S.hist.pop());say('Last change undone.');draw()}
 const order=()=>[...new Set(S.pages.map(p=>p.f))];
 const regroup=o=>{S.pages=o.flatMap(g=>S.pages.filter(p=>p.f===g))};
@@ -247,7 +250,7 @@ async function save(){if(!last)return;const nm=last.name;
  if(DL){try{await DL.save({filename:nm,data:last.blob});say('Saved '+nm+'.');return}catch(e){if(e&&e.code==='declined'){say('Download cancelled. Use “Download again” to save '+nm+'.');return}if(e&&e.code!=='unavailable'&&e.code!=='not_granted'){say('Couldn’t save the file: '+(e.message||e.code),true);return}}}
  const a=document.createElement('a');a.href=URL.createObjectURL(last.blob);a.download=nm;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),6e4);say('Downloaded '+nm+'.')}
 async function merge(){
- if(busy||!S.pages.length)return;
+ if(busy||importing||!S.pages.length)return;
  const approved=getConversionApproval(S.pages,{cm:+$('#cm').value,ps:$('#ps').value,recover:$('#recover').checked,ff:$('#ff').checked},message=>window.confirm(message));
  if(approved.blocked){say(approved.blocked,true);return}
  busy=true;$('#go').disabled=true;const job={cancelled:false};activeJob=job;$('#cancel').hidden=false;const pr=$('#pr');pr.hidden=false;pr.value=0;say('Merging…');
