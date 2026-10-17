@@ -410,7 +410,7 @@ async function loadFile(file) {
  let candidate=null;
  try {
  if(!file||!file.size)throw Error('The PDF file is empty.');
- if(!/\\.pdf$/i.test(file.name)&&file.type!=='application/pdf')throw Error('Choose a PDF file.');
+ if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf')throw Error('Choose a PDF file.');
  const head=new TextDecoder('latin1').decode(await file.slice(0,1024).arrayBuffer());
  if(!head.includes('%PDF-'))throw Error('The file has no valid PDF signature.');
  const tail=new TextDecoder('latin1').decode(await file.slice(Math.max(0,file.size-2048)).arrayBuffer());
