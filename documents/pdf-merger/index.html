@@ -7,25 +7,23 @@
 <meta name="color-scheme" content="light dark">
 <title>PDF Merger | AllToolForest</title>
 <style>
-:root{--bg:#f1f5ef;--sf:#fff;--ink:#13231b;--mut:#55665c;--br:#145940;--brt:#fff;--ln:#d2dcd4;--dg:#b3392f;--hl:#e6efe7;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1913;--sf:#16251d;--ink:#e5eee8;--mut:#9aaea3;--br:#52c48f;--brt:#06130c;--ln:#2a3d33;--dg:#ff8d80;--hl:#1c3025;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0e1913;--sf:#16251d;--ink:#e5eee8;--mut:#9aaea3;--br:#52c48f;--brt:#06130c;--ln:#2a3d33;--dg:#ff8d80;--hl:#1c3025;color-scheme:dark}
+:root{--bg:#f8faf9;--sf:#fff;--ink:#192e28;--mut:#61746c;--br:#145940;--brt:#fff;--ln:#dce6e0;--dg:#b3392f;--hl:#eaf4ed;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .w{max-width:1100px;margin:0 auto;padding:0 18px}
 header{padding:20px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-header b{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-size:1.05rem;color:var(--br)}
+header b{font-family:inherit;font-size:1.05rem;color:var(--br)}
 header span{color:var(--mut);font-size:.875rem}
-h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:700;font-size:clamp(1.9rem,5vw,3rem);line-height:1.1;margin:18px 0 8px;letter-spacing:-.01em}
+h1{font-family:inherit;font-weight:650;font-size:clamp(1.9rem,5vw,3rem);line-height:1.1;margin:18px 0 8px;letter-spacing:-.01em}
 .lede{color:var(--mut);margin:0 0 20px;max-width:60ch}
-button{font:inherit;cursor:pointer;border:1px solid var(--ln);background:var(--sf);color:var(--ink);border-radius:8px;padding:7px 12px;min-height:38px}
+button{font:inherit;cursor:pointer;border:1px solid var(--ln);background:var(--sf);color:var(--ink);border-radius:9px;padding:7px 12px;min-height:38px}
 button:hover:not(:disabled){border-color:var(--br)}button:disabled{opacity:.45;cursor:default}
 button.p{background:var(--br);color:var(--brt);border-color:var(--br);font-weight:600;padding:9px 20px}
 :focus-visible{outline:3px solid var(--br);outline-offset:2px}
 #drop{border:2px dashed var(--ln);border-radius:16px;background:var(--sf);padding:44px 20px;text-align:center;transition:border-color .15s,background .15s}
 #drop.on{border-color:var(--br);background:var(--hl)}
-#drop strong{display:block;font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.35rem;margin-bottom:4px}
+#drop strong{display:block;font-family:inherit;font-size:1.35rem;margin-bottom:4px}
 #drop p{margin:0 0 16px;color:var(--mut)}
 body.has #drop{display:none}
 #work{display:none}body.has #work{display:block}
