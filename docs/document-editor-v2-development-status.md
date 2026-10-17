@@ -25,7 +25,7 @@ shortening it returned to one page. `pdftotext` retained the final paragraph in
 both exports. Both pages of the expanded result were visually inspected for
 overlap. This proves only the simple flowing-paragraph case, not complex layout.
 
-Automated checkpoint: 15 focused V2 tests passed. Sixteen directly related CSV
+Automated checkpoint: 21 focused V2 tests passed. Sixteen directly related CSV
 and PDF unit regression checks passed. No browser/device test has been completed.
 
 These are development paths, not launch-ready claims. The DOCX view does not yet
@@ -64,3 +64,10 @@ for legacy Office conversion. If server processing is selected, file upload,
 retention, privacy disclosure and hosting must be designed and approved before
 integration. Keep the current public editor until the replacement passes the
 specified release sequence.
+
+## Active sequence update
+
+PDF-first development is now required. Other engine feature work is paused until
+the PDF handoff requirements are complete. See `document-editor-v2-pdf-engine.md`
+for the isolated Edit PDF copy, verification evidence and full PDF acceptance
+tracker. The copied candidate is not yet wired into shared autosave/history.
