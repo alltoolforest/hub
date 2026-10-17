@@ -1,0 +1,14 @@
+.pdf-compressor { max-width: 48rem; margin: auto; padding: 1rem; color: #183126; font: 1rem/1.6 system-ui, sans-serif; overflow-wrap: anywhere; }
+.pdf-compressor *, .pdf-compressor *::before, .pdf-compressor *::after { box-sizing: border-box; }
+.pdf-compressor label { display: block; font-weight: 600; margin-top: 1rem; }
+.pdf-compressor input, .pdf-compressor select { width: 100%; max-width: 100%; min-height: 3rem; font: inherit; }
+.pdf-compressor button, .pdf-compressor [data-download] { min-height: 3rem; padding: .65rem 1rem; font: inherit; border: 1px solid #315940; border-radius: .5rem; background: #fff; color: #183126; }
+.pdf-compressor [data-run], .pdf-compressor [data-download] { background: #215c3c; color: #fff; }
+.pdf-compressor [data-download] { display: inline-block; text-decoration: none; }
+.pdf-compressor :focus-visible { outline: 3px solid #175cc4; outline-offset: 3px; }
+.pdf-compressor button:disabled { opacity: .6; }
+.pdf-compressor [hidden] { display: none !important; }
+.pdf-compressor .compressor-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+.pdf-compressor dl { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1rem; }
+.pdf-compressor dd { margin: 0; }
+@media (max-width: 30rem) { .pdf-compressor .compressor-actions button { flex: 1 1 100%; } }

@@ -1,0 +1,24 @@
+name: PDF Compressor Task 4 lossless isolation
+on:
+  push:
+    branches:
+      - pdf-compressor-task4-lossless-20261012
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lossless-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native reference optimizer (CI only)
+        run: sudo apt-get update && sudo apt-get install -y qpdf
+      - name: Task 4 lossless contract and native reference
+        run: node --test tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-native-reference.test.mjs
+      - name: Task 3 policy and inventory regression
+        run: node --test tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs
+      - name: Task 1 baseline regression
+        run: node --test tests/pdf-compressor-task1-baseline.test.mjs

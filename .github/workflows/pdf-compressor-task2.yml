@@ -1,0 +1,90 @@
+name: PDF Compressor — Task 2 architecture feasibility
+
+on:
+  pull_request:
+    branches:
+      - pdf-compressor-task1-baseline-isolation-20261012
+    paths:
+      - 'tests/pdf-compressor-task2-benchmark.mjs'
+      - 'tests/pdf-compressor-task2-browser.mjs'
+      - 'tests/pdf-compressor-task2-qpdfwasm.browser.mjs'
+      - 'docs/pdf-compressor-task2-architecture.md'
+      - '.github/workflows/pdf-compressor-task2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  task2-references:
+    name: Task 2 scope guard and native reference benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restrict PR changes to research-only Task 2 artifacts
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}"
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          echo "$changed"
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            case "$path" in
+              tests/pdf-compressor-task2-benchmark.mjs|tests/pdf-compressor-task2-browser.mjs|tests/pdf-compressor-task2-qpdfwasm.browser.mjs|docs/pdf-compressor-task2-architecture.md|.github/workflows/pdf-compressor-task2.yml) ;;
+              *) echo "TASK 2 OUT-OF-SCOPE: $path"; exit 1 ;;
+            esac
+          done <<< "$changed"
+          echo "Task 2 isolated scope passes."
+      - name: Check benchmark syntax
+        run: |
+          node --check tests/pdf-compressor-task2-benchmark.mjs
+          node --check tests/pdf-compressor-task2-browser.mjs
+          node --check tests/pdf-compressor-task2-qpdfwasm.browser.mjs
+      - name: Install native qpdf reference binary in CI only
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qpdf
+          qpdf --version
+      - name: Run real reference benchmark against unchanged Task 1 synthetic PDFs
+        run: node tests/pdf-compressor-task2-benchmark.mjs
+      - name: Re-run baseline Task 1 checks for directly related regressions
+        run: node --test tests/pdf-compressor-task1-baseline.test.mjs
+
+  task2-browser:
+    name: Desktop and mobile browser WASM / image codec feasibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install temporary browser-test and qpdf WASM research dependencies only
+        run: npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1 qpdf-wasm-esm-embedded@1.1.1
+      - name: Install browser binaries in CI only
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start local nonproduction static server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/pdf-compressor-task2-http.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8765/documents/pdf-compressor/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/pdf-compressor-task2-http.log
+          exit 1
+      - name: Probe existing page sandbox APIs without processing PDFs
+        env:
+          PDF_COMPRESSOR_BASE_URL: http://127.0.0.1:8765/
+        run: node tests/pdf-compressor-task2-browser.mjs
+      - name: Trial isolated third-party qpdf WASM candidate with synthetic inputs
+        env:
+          PDF_COMPRESSOR_BASE_URL: http://127.0.0.1:8765/
+        run: node tests/pdf-compressor-task2-qpdfwasm.browser.mjs

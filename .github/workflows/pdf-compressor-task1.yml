@@ -1,0 +1,76 @@
+name: PDF Compressor — Task 1 baseline isolation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/pdf-compressor-task1-*.mjs'
+      - 'docs/pdf-compressor-task1-baseline.md'
+      - 'assets/js/pdf-compressor-v2/README.md'
+      - '.github/workflows/pdf-compressor-task1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compressor-task1-scope-and-native:
+    name: Task 1 scope guard and reproducible PDF baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deny modifications outside the six Task 1 baseline files
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" | tee /tmp/pdf-compressor-task1-files.txt
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            case "$path" in
+              tests/pdf-compressor-task1-fixtures.mjs|tests/pdf-compressor-task1-baseline.test.mjs|tests/pdf-compressor-task1-browser.mjs|docs/pdf-compressor-task1-baseline.md|assets/js/pdf-compressor-v2/README.md|.github/workflows/pdf-compressor-task1.yml) ;;
+              *) echo "TASK 1 OUT-OF-SCOPE FILE: $path"; exit 1 ;;
+            esac
+          done < /tmp/pdf-compressor-task1-files.txt
+          echo 'Task 1 scope protection passed. Main and frozen tools were not modified.'
+      - name: Validate Task 1 source syntax
+        run: |
+          node --check tests/pdf-compressor-task1-fixtures.mjs
+          node --check tests/pdf-compressor-task1-baseline.test.mjs
+          node --check tests/pdf-compressor-task1-browser.mjs
+      - name: Verify unmodified existing PDF Optimizer implementation
+        run: node --test tests/pdf-compressor-task1-baseline.test.mjs
+
+  compressor-task1-browser:
+    name: Current PDF Optimizer baseline in desktop and mobile browsers
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test dependency only
+        run: npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1
+      - name: Install test browsers (not deployed)
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start local nonproduction static server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/pdf-compressor-task1-http.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8765/documents/pdf-compressor/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/pdf-compressor-task1-http.log
+          exit 1
+      - name: Characterize actual baseline UI and known defects
+        env:
+          PDF_COMPRESSOR_BASE_URL: http://127.0.0.1:8765/
+        run: node tests/pdf-compressor-task1-browser.mjs

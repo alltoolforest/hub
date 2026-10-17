@@ -1,0 +1,116 @@
+// Bound direct and generally wrapped JPEG headers before independent decoding.
+import {inspectJpegHeader} from './jpeg-source-decoder.mjs';
+import {inflateStreamBounded,decodeAsciiStreamBounded} from './lossless-invariants.mjs';
+const aliases={'/DCT':'/DCTDecode','/Fl':'/FlateDecode','/A85':'/ASCII85Decode','/AHx':'/ASCIIHexDecode'};
+export async function inspectEncodedJpeg(stream,{PDF,context,maxBytes}={}){
+  const filter=context.lookup(stream.dict.get(PDF.PDFName.of('Filter')));
+  const values=filter instanceof PDF.PDFArray?filter.asArray().map(value=>context.lookup(value)):[filter];
+  const filters=values.map(value=>aliases[String(value)]??String(value));
+  if(!filters.includes('/DCTDecode'))return null;
+  if(filters.at(-1)!=='/DCTDecode'||filters.filter(value=>value==='/DCTDecode').length!==1)
+    throw Error('unverifiable-jpeg-filter-chain');
+  let bytes=stream.contents;
+  if(bytes.length>maxBytes)throw Error('jpeg-stream-budget');
+  for(const name of filters.slice(0,-1)){
+    if(name==='/FlateDecode')bytes=await inflateStreamBounded(bytes,maxBytes);
+    else if(['/ASCIIHexDecode','/ASCII85Decode'].includes(name))bytes=decodeAsciiStreamBounded(bytes,name,maxBytes);
+    else throw Error('unverifiable-jpeg-filter-chain');
+  }
+  const frame=inspectJpegHeader(bytes);
+  if(frame.unsupported)throw Error('jpeg-unsupported-coding');
+  // A well-formed Adobe APP14 marker is normal in CMYK/YCCK PDFs produced
+  // by print-layout applications. Verify exact marker bytes and colorspace,
+  // without permitting arbitrary APP markers, DNL, or post-scan metadata.
+  const adobe=frame.metadata.filter(m=>m.marker===238);
+  const adobeMarkerValid=m=>m.bytes.length===16&&m.bytes[0]===255&&
+    m.bytes[1]===238&&m.bytes[2]===0&&m.bytes[3]===14&&
+    [65,100,111,98,101].every((v,i)=>m.bytes[4+i]===v)&&
+    [0,2].includes(m.bytes[15]);
+  const adobeCmyk=adobe.length>0&&frame.components===4&&
+    String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))))==='/DeviceCMYK'&&
+    adobe.every(m=>adobeMarkerValid(m)&&m.bytes[15]===adobe[0].bytes[15]);
+  const validAdobe=adobeCmyk&&adobe.length===1;
+  // Adobe APP14 transform=1 is valid YCbCr for three-component JPEGs.
+  // When the PDF dictionary declares /DeviceRGB the PDF image remains RGB
+  // for document-level verification. Accept only a single well-framed Adobe
+  // marker with transform 0 (RGB/unknown) or 1 (YCbCr) for *opaque* source
+  // preservation. The lossy image decoder refuses unsupportedMetadata and
+  // therefore cannot silently recolor/re-encode this source.
+  const validAdobeRgb=adobe.length===1&&frame.components===3&&
+    String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))))==='/DeviceRGB'&&
+    adobe[0].bytes.length===16&&adobe[0].bytes[0]===255&&
+    adobe[0].bytes[1]===238&&adobe[0].bytes[2]===0&&adobe[0].bytes[3]===14&&
+    [65,100,111,98,101].every((v,i)=>adobe[0].bytes[i+4]===v)&&
+    [0,1].includes(adobe[0].bytes[15]);
+  // Legacy publishing software can embed valid APP1 (EXIF) and APP13
+  // (Photoshop) blocks alongside repeated compatible Adobe APP14 markers.
+  // Inspect their JPEG framing but preserve these complex images unchanged:
+  // verifiedAdobeCmyk / unsupportedMetadata still deny lossy transformation.
+  // Malformed segment lengths, conflicting transforms, unknown APP markers,
+  // or four-component frames mislabeled as RGB remain rejected.
+  const preservedLegacyCmyk=adobeCmyk&&
+    (adobe.length>1||frame.metadata.some(m=>[225,237].includes(m.marker)));
+  // Preserve common publishing/photography JPEG metadata exactly as-is.
+  // We can validate image framing and dictionary dimensions without assuming
+  // EXIF orientation/Photoshop resource blocks survive RGB re-encoding.
+  // createPDFJpegDecoder already refuses transformation when either marker
+  // is present (unsupportedMetadata): this broadens INPUT compatibility only.
+  const compatibleLegacyMetadata=m=>{
+    if(m.marker===225) // APP1: standard EXIF signature, not arbitrary payload
+      return m.bytes.length>=10&&[69,120,105,102,0,0].every((n,i)=>m.bytes[i+4]===n);
+    if(m.marker===237) // APP13: Photoshop 3.0 or legacy 8BIM header
+      return m.bytes.length>=8&&(
+        [56,66,73,77].every((n,i)=>m.bytes[i+4]===n)||
+        (m.bytes.length>=18&&[80,104,111,116,111,115,104,111,112,32,51,46,48,0]
+          .every((n,i)=>m.bytes[i+4]===n)));
+    return false;
+  };
+  const space=String(context.lookup(stream.dict.get(PDF.PDFName.of('ColorSpace'))));
+  const preserveLegacy=(frame.components===1&&space==='/DeviceGray'||
+    frame.components===3&&space==='/DeviceRGB')&&
+    frame.metadata.some(m=>compatibleLegacyMetadata(m));
+  // Independently approve each known metadata segment. Previously a valid
+  // EXIF APP1 combined with valid XMP APP1 was falsely rejected because XMP
+  // made the whole 'legacy' collection fail an unrelated all-or-nothing test.
+  // An APP marker can carry ordinary camera/editor metadata that the
+  // compressor has no reason to interpret. Accept *well-framed* APP3–APP12
+  // and APP15 only for opaque preservation, never for JPEG re-encoding.
+  // The verified decoder sees unsupportedMetadata=true and returns 'preserve';
+  // qpdf's lossless stage and the final PDF graph/encoded-stream SHA-256 gates
+  // still require the exact original image bytes. Do not admit malformed
+  // frame/segment lengths, post-scan metadata, unsupported color spaces,
+  // unrecognized APP1/APP13 layouts or an invalid Adobe APP14 transform.
+  const directColorSpace=(frame.components===1&&space==='/DeviceGray'||
+    frame.components===3&&space==='/DeviceRGB'||
+    frame.components===4&&space==='/DeviceCMYK'&&adobeCmyk);
+  const spoofedAdobe=m=>m.bytes.length>=9&&
+    [65,100,111,98,101].every((v,i)=>m.bytes[4+i]===v);
+  const opaqueApp=m=>directColorSpace&&
+    ((m.marker>=227&&m.marker<=236)||m.marker===239)&&
+    m.bytes.length>=4&&!spoofedAdobe(m);
+  const xmpSignature=new Uint8Array([...new TextEncoder().encode('http://ns.adobe.com/xap/1.0/'),0]);
+  const validXmp=m=>m.marker===225&&m.bytes.length>=4+xmpSignature.length&&
+    xmpSignature.every((v,i)=>m.bytes[i+4]===v);
+  const allowedMetadata=frame.metadata.every(m=>[224,226,254].includes(m.marker)||
+    (preserveLegacy&&compatibleLegacyMetadata(m))||
+    (m.marker===238&&(validAdobe||validAdobeRgb||preservedLegacyCmyk))||
+    (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
+    (directColorSpace&&validXmp(m))||opaqueApp(m));
+  // Fixed low-entropy reason codes only; never return image or document bytes.
+  // Unsupported families remain fail-closed. These codes let us distinguish
+  // valid-but-unrecognized metadata from unsupported coding and trailing data.
+  if(frame.precision!==8)throw Error('jpeg-unsupported-precision');
+  if(![1,3,4].includes(frame.components))throw Error('jpeg-unsupported-components');
+  if(frame.width<1||frame.height<1)throw Error('jpeg-invalid-dimensions');
+  if(frame.metadataAfterScan)throw Error('jpeg-postscan-metadata');
+  if(!allowedMetadata){
+    const rejected=frame.metadata.find(m=>!([224,226,254].includes(m.marker)||
+      (preserveLegacy&&compatibleLegacyMetadata(m))||
+      (m.marker===238&&(validAdobe||validAdobeRgb||preservedLegacyCmyk))||
+      (preservedLegacyCmyk&&compatibleLegacyMetadata(m))||
+      (directColorSpace&&validXmp(m))||opaqueApp(m)));
+    const marker=rejected?.marker;
+    throw Error(marker>=224&&marker<=239?'jpeg-metadata-app'+(marker-224):'jpeg-unsupported-metadata');
+  }
+  return frame;
+}

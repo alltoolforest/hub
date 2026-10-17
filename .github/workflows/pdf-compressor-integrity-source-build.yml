@@ -1,0 +1,494 @@
+name: PDF Compressor isolated integrity and pinned source build
+on:
+  push:
+    branches:
+      - pdf-compressor-task3-integrity-foundation-20261012
+      - pdf-compressor-task4-source-build-20261013
+      - pdf-compressor-task5-images-20261013
+  pull_request:
+    paths:
+      - assets/js/pdf-compressor-v2/**
+      - tests/pdf-compressor-*.mjs
+      - tests/pdf-compressor-*.py
+      - tests/build-pdf-compressor-qpdf-wasm.sh
+      - .github/workflows/pdf-compressor-integrity-source-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  input-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test-only dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+          npx playwright install --with-deps chromium
+      - name: Generate independent signed and encrypted fixtures
+        run: python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-pdfs
+      - name: Input integrity and adjacent compressor regression
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+          PDF_COMPRESSOR_TASK5_FIXTURES: /tmp/atf-task5-phone-fixtures
+        run: node --test tests/pdf-compressor-task5-signature-certification.test.mjs tests/pdf-compressor-task5-complex-corpus.test.mjs tests/pdf-compressor-task5-legacy-jpeg-compat.test.mjs tests/pdf-compressor-task4-stream-flate-memory.test.mjs tests/pdf-compressor-task4-bounded-filters.test.mjs tests/pdf-compressor-task3-recovery.test.mjs tests/pdf-compressor-task2-pixel-math.test.mjs tests/pdf-compressor-verified-jpeg-evidence.test.mjs tests/pdf-compressor-task2-target.test.mjs tests/pdf-compressor-task2-maximum.test.mjs tests/pdf-compressor-cmyk-ycck-preflight.test.mjs tests/pdf-compressor-adaptive-large-images.test.mjs tests/pdf-compressor-font-dedup.test.mjs tests/pdf-compressor-task3-input-inspector.test.mjs tests/pdf-compressor-task3-independent-inputs.test.mjs tests/pdf-compressor-task1-baseline.test.mjs tests/pdf-compressor-task3-policy.test.mjs tests/pdf-compressor-task3-image-inventory.test.mjs tests/pdf-compressor-task4-lossless.test.mjs tests/pdf-compressor-task4-invariants.test.mjs tests/pdf-compressor-task4-adapter.test.mjs tests/pdf-compressor-task4-dedup.test.mjs tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-remediation-policy.test.mjs
+      - name: Isolated browser input gate
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-input-server.log 2>&1 &
+          node tests/pdf-compressor-task3-browser.mjs
+      - name: Collect synthetic valid/negative Task 5 samples for manual phone QA
+        run: |
+          test -f /tmp/atf-task5-phone-fixtures/task5-120-page-text.pdf
+          test -f /tmp/atf-task5-phone-fixtures/task5-36-page-shared-softmask.pdf
+          cp /tmp/atf-independent-pdfs/independent-scan-color.pdf /tmp/atf-task5-phone-fixtures/
+          cp /tmp/atf-independent-pdfs/signed.pdf /tmp/atf-task5-phone-fixtures/
+          cp /tmp/atf-independent-pdfs/encrypted.pdf /tmp/atf-task5-phone-fixtures/
+          cat > /tmp/atf-task5-phone-fixtures/README.txt <<'EOF'
+          AllToolForest PDF Compressor Task 5 - SYNTHETIC test PDFs only.
+          Test valid: task5-120-page-text.pdf, task5-36-page-shared-softmask.pdf,
+          independent-scan-color.pdf.
+          Test must reject: signed.pdf, encrypted.pdf.
+          The QA-only encrypted.pdf password is QA-only-password.
+          None of these are user documents or physical scanner captures.
+          No production release or quality acceptance is implied.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-task5-phone-compatibility-fixtures
+          path: /tmp/atf-task5-phone-fixtures/
+          retention-days: 7
+  qpdf-source-build:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned compiler and sources into disposable workspace
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') == '' }}
+        run: |
+          mkdir -p /tmp/atf-qpdf-build
+          git clone --depth 1 --branch 3.1.74 https://github.com/emscripten-core/emsdk.git /tmp/atf-qpdf-build/emsdk
+          git clone --depth 1 --branch v12.4.2 https://github.com/qpdf/qpdf.git /tmp/atf-qpdf-build/qpdf-source
+          git clone --depth 1 --branch v1.3.2 https://github.com/madler/zlib.git /tmp/atf-qpdf-build/zlib-source
+          git clone --depth 1 --branch 3.1.4.1 https://github.com/libjpeg-turbo/libjpeg-turbo.git /tmp/atf-qpdf-build/jpeg-source
+          test "$(git -C /tmp/atf-qpdf-build/emsdk rev-parse HEAD)" = 3d6d8ee910466516a53e665b86458faa81dae9ba
+          /tmp/atf-qpdf-build/emsdk/emsdk install 3.1.74
+          /tmp/atf-qpdf-build/emsdk/emsdk activate 3.1.74
+      - name: Build isolated module from reviewed source pins
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') == '' }}
+        run: |
+          source /tmp/atf-qpdf-build/emsdk/emsdk_env.sh
+          bash tests/build-pdf-compressor-qpdf-wasm.sh /tmp/atf-qpdf-build /tmp/atf-qpdf-artifact
+      - name: Reuse the hash-verified artifact from the confirmed pinned source build
+        if: ${{ hashFiles('assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm') != '' }}
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          mkdir -p /tmp/atf-qpdf-artifact
+          cp assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.wasm /tmp/atf-qpdf-artifact/
+      - name: Report actual version without approving production integration
+        run: |
+          node --input-type=module - <<'JS'
+          import create from '/tmp/atf-qpdf-artifact/qpdf.mjs';
+          const module=await create({noInitialRun:true});
+          module.callMain(['--version']);
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-qpdf-experimental-source-build
+          path: /tmp/atf-qpdf-artifact
+          retention-days: 7
+  candidate-interface:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned interface QA tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Verified interface workflow and accessibility checks
+        env:
+          PDF_COMPRESSOR_BROWSER: ${{ matrix.browser }}
+        run: |
+          python -m http.server 8766 >/tmp/pdf-interface-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          node tests/pdf-compressor-task11-browser.mjs
+  experimental-large-file:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned large-file QA tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11
+          npx playwright install --with-deps chromium
+      - name: Near-100 MB actual-content pipeline probes
+        run: |
+          python -m http.server 8766 >/tmp/pdf-large-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for mode in balanced strong lossless; do
+            PDF_COMPRESSOR_TEST_MODE="$mode" PDF_COMPRESSOR_100MB_EVIDENCE="/tmp/pdf-large-$mode.json" node tests/pdf-compressor-100mb-experimental-browser.mjs
+          done
+          PDF_COMPRESSOR_TEST_ENTROPY=1 PDF_COMPRESSOR_100MB_EVIDENCE=/tmp/pdf-large-entropy.json node tests/pdf-compressor-100mb-experimental-browser.mjs
+          for mode in balanced strong lossless; do
+            PDF_COMPRESSOR_LARGE_FIXTURE=scan PDF_COMPRESSOR_TEST_MODE="$mode" PDF_COMPRESSOR_LARGE_EVIDENCE="/tmp/pdf-large-scan-$mode.json" node tests/pdf-compressor-large-file-session-browser.mjs
+          done
+          PDF_COMPRESSOR_LARGE_FIXTURE=scan-mixed PDF_COMPRESSOR_TEST_MODE=strong PDF_COMPRESSOR_LARGE_EVIDENCE=/tmp/pdf-large-scan-mixed.json node tests/pdf-compressor-large-file-session-browser.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-experimental-large-file-evidence
+          path: /tmp/pdf-large-*.json
+          retention-days: 7
+  lossless-output:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install independent QA tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify pinned runtime and generate independent inputs
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-pdfs
+      - name: Actual source-built engine outputs, graph identity, text and exact rendered pixels
+        env:
+          PDF_COMPRESSOR_QPDF_MODULE: assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: |
+          node tests/pdf-compressor-task4-source-gate.mjs
+          node tests/pdf-compressor-task5-legacy-source-gate.mjs
+      - name: Module-worker and strict-CSP compatibility in three browser engines
+        env:
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-pdfs
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 >/tmp/atf-lossless-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task4-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task4-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task4-worker-browser.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-independent-lossless-output-evidence
+          path: /tmp/atf-qpdf-verified-outputs
+          retention-days: 7
+  embedded-image-output:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Image candidate and protected structure tests
+        run: node --test tests/pdf-compressor-task5-image-candidate.test.mjs tests/pdf-compressor-task5-transform.test.mjs tests/pdf-compressor-task5-jpeg-decoder.test.mjs tests/pdf-compressor-task3-policy.test.mjs
+      - name: Browser image compression and strict CSP gates
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-image-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task5-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task5-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task5-worker-browser.mjs
+          node tests/pdf-compressor-adaptive-browser.mjs
+          node tests/pdf-compressor-cmyk-browser.mjs
+          node tests/pdf-compressor-task2-maximum-browser.mjs
+  document-aware-modes:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install independent browser and render tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Mode routing and combined verified engine tests
+        run: |
+          node --test tests/pdf-compressor-task6-policy.test.mjs
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-mode-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task6-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task6-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task6-worker-browser.mjs
+  final-output-integrity:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install independent browser and render tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Final output, exact text and deliberate corruption gates
+        run: |
+          node --test tests/pdf-compressor-task7-integrity.test.mjs
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-output-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task7-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task7-worker-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task7-worker-browser.mjs
+  file-lifecycle:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated worker QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Cancellation, recovery, receipts and worker cleanup
+        run: |
+          node --test tests/pdf-compressor-task8-session.test.mjs
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/atf-lifecycle-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-task8-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-task8-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-task8-browser.mjs
+  continuation-regression:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned independently-authored regression tooling
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 @napi-rs/canvas@1.0.11
+          python -m pip install reportlab==4.4.9 Pillow==12.3.0 pypdf==6.10.0 pyHanko==0.37.0
+      - name: Verify source-built runtime and generate real encrypted/signed controls
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/pdf-compressor-independent-fixtures.py /tmp/atf-independent-task6
+      - name: Task 6 full-mode synthetic corpus, independent text and integrity receipts
+        env:
+          PDF_COMPRESSOR_QPDF_MODULE: assets/js/pdf-compressor-v2/vendor/qpdf/qpdf.mjs
+          PDF_COMPRESSOR_INDEPENDENT_FIXTURES: /tmp/atf-independent-task6
+        run: |
+          set -o pipefail
+          node --test tests/pdf-compressor-continuation-task6-regression.mjs | tee /tmp/atf-task6-regression-results.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-continuation-task6-regression-evidence
+          path: /tmp/atf-task6-regression-results.log
+          if-no-files-found: ignore
+          retention-days: 7
+  release-blockers-integrated-route:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated pinned runtime build and browser tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify source hashes and build local static worker
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/build-pdf-compressor-site-worker.py
+          test -s assets/js/pdf-compressor-v2/dist/worker.js
+          (cd assets/js/pdf-compressor-v2/dist && sha256sum -c worker.sha256)
+      - name: File selection source digest and original unit regressions
+        run: node --test tests/pdf-compressor-task8-session.test.mjs tests/pdf-compressor-release-file-digest.test.mjs
+      - name: Mount real tool route and run integrated site PDF/download smoke
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/compressor-route-server.log 2>&1 &
+          PDF_COMPRESSOR_BROWSER=chromium node tests/pdf-compressor-release-integrated-route-browser.mjs
+          PDF_COMPRESSOR_BROWSER=firefox node tests/pdf-compressor-release-integrated-route-browser.mjs
+          PDF_COMPRESSOR_BROWSER=webkit node tests/pdf-compressor-release-integrated-route-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: pdf-compressor-staged-route-worker-NOT-PRODUCTION
+          path: |
+            assets/js/pdf-compressor-v2/dist/worker.js
+            assets/js/pdf-compressor-v2/dist/worker.sha256
+          retention-days: 7
+
+  continuation-task7-device-profiles:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: android-chromium
+            browser: chromium
+          - profile: ios-webkit
+            browser: webkit
+          - profile: windows-chromium
+            browser: chromium
+          - profile: windows-firefox
+            browser: firefox
+          - profile: macos-webkit
+            browser: webkit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned candidate builder and browser QA dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Verify source-built runtime and build isolated self-contained HTML
+        env:
+          PDF_COMPRESSOR_CANDIDATE: '1'
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+        run: |
+          node tests/pdf-compressor-runtime-hashes.mjs
+          python tests/build-pdf-compressor-mobile-qa.py
+      - name: Task 7 source/output/download acceptance on emulated device/browser
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+          PDF_COMPRESSOR_TASK7_PROFILE: ${{ matrix.profile }}
+          PDF_COMPRESSOR_TASK7_EVIDENCE: /tmp/task7-device-profile.json
+        run: node tests/pdf-compressor-continuation-task7-acceptance-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-task7-${{ matrix.profile }}-acceptance
+          path: /tmp/task7-device-profile.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: matrix.profile == 'android-chromium'
+        with:
+          name: pdf-compressor-task7-isolated-release-candidate
+          path: /tmp/PDF_Compressor_Task7_Release_Candidate.html
+          retention-days: 7
+
+  continuation-task7-size-ladder:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned size/protection test dependencies
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11
+          npx playwright install --with-deps chromium
+      - name: Real-content 10, 20 and 50 MB worker and independent receipt probes
+        run: |
+          python -m http.server 8766 --bind 127.0.0.1 >/tmp/task7-size-server.log 2>&1 &
+          for mb in 10 20 50; do
+            PDF_COMPRESSOR_TASK7_MB="$mb" PDF_COMPRESSOR_TASK7_EVIDENCE="/tmp/task7-$mb-mb.json" node tests/pdf-compressor-continuation-task7-size-ladder.mjs
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-compressor-task7-size-ladder-evidence
+          path: /tmp/task7-*-mb.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  performance-diagnostic:
+    needs: input-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned diagnostic and measurement tools
+        run: |
+          npm install --no-save --no-package-lock pdfjs-dist@6.3.289 playwright@1.56.1 @napi-rs/canvas@1.0.11 esbuild@0.28.2 axe-core@4.10.3
+          npx playwright install --with-deps chromium
+      - name: Device budgets and initial-decode regression gates
+        run: node --test tests/pdf-compressor-task10-policy.test.mjs tests/pdf-compressor-task9-security.test.mjs tests/pdf-compressor-name-escapes.test.mjs tests/pdf-compressor-decoded-resource-budgets.test.mjs
+      - name: Build and verify integrated offline diagnostic
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
+        run: |
+          python tests/build-pdf-compressor-mobile-qa.py
+          node tests/pdf-compressor-mobile-qa-browser.mjs
+          node tests/pdf-compressor-task9-browser.mjs
+      - name: Build and verify final offline candidate
+        env:
+          PDF_COMPRESSOR_CANDIDATE: '1'
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Release_Candidate.html
+        run: |
+          python tests/build-pdf-compressor-mobile-qa.py
+          node tests/pdf-compressor-candidate-browser.mjs
+      - name: Retain isolated offline PDF Compressor build for manual Android QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-adaptive-mobile-test-build
+          path: /tmp/PDF_Compressor_Release_Candidate.html
+          retention-days: 7
+      - name: Synthetic size, repeated-run, managed-memory and cancellation measurements
+        env:
+          PDF_COMPRESSOR_MOBILE_QA_OUTPUT: /tmp/PDF_Compressor_Mobile_Engine_Test.html
+          PDF_COMPRESSOR_PERFORMANCE_OUTPUT: /tmp/pdf-compressor-performance.json
+        run: node tests/pdf-compressor-task10-performance.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compressor-synthetic-performance-evidence
+          path: /tmp/pdf-compressor-performance.json
+          retention-days: 7

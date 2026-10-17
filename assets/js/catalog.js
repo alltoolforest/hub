@@ -12,7 +12,7 @@ export const tools=[
 ['documents','pdf-merger','PDF Merger','Bring multiple PDFs together in your preferred order.','merge'],
 ['documents','pdf-splitter','PDF Splitter','Keep the pages you need in a separate PDF.','scissors'],
 ['documents','pdf-organizer','Organize PDF Pages','Reorder, rotate, remove and restore pages.','grid'],
-['documents','pdf-compressor','PDF Optimizer','Rebuild a PDF and compare the file size honestly.','minimize'],
+['documents','pdf-compressor','PDF Compressor','Compress eligible PDF images or optimize PDF structure on your device.','minimize'],
 ['documents','jpg-to-pdf','Images to PDF','Combine photos and images into a single PDF.','file'],
 ['documents','pdf-to-images','PDF to JPG / PNG','Save individual PDF pages as images.','image'],
 ['documents','pdf-to-text','Extract PDF Text','Copy selectable text from your PDF.','text'],

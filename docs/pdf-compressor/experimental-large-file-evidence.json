@@ -1,0 +1,179 @@
+{
+  "environment": "Linux headless Chromium 141; automated development-only probes",
+  "limitations": [
+    "Encoded-byte ceiling overridden only in the experimental worker, not published support policy",
+    "Attachments are real protected resources; these fixtures do not cover 100 MB scans, complex drawing operations or mobile peak RAM",
+    "UI ticks indicate responsiveness, not CPU utilization; wall times exclude fixture generation",
+    "Outputs passed the same final integrity gate as the existing compressor pipeline"
+  ],
+  "cases": [
+    {
+      "fixture": "ten distinct embedded CSV datasets; near 100 MB actual payload",
+      "inputBytes": 99999995,
+      "wallMs": 3242,
+      "uiTicks": 32,
+      "ok": true,
+      "result": {
+        "status": "compressed",
+        "inputBytes": 99999995,
+        "outputBytes": 342379,
+        "savedBytes": 99657616,
+        "reductionPercent": 99.66,
+        "mode": "lossless",
+        "classification": "vector-or-empty",
+        "settings": {
+          "imageQualityReductionAllowed": false,
+          "imageTransformationApplied": false
+        },
+        "stages": [
+          {
+            "engine": "lossless",
+            "status": "compressed",
+            "inputBytes": 99999995,
+            "outputBytes": 342379
+          }
+        ],
+        "message": "Verified byte reduction",
+        "integrity": {
+          "version": 1,
+          "mode": "lossless",
+          "pageCount": 1,
+          "sourceDigest": "15cbad97d08755ef4f91047792b6ce06a36dcc75a1d69c9268962b9d152b1b70",
+          "outputDigest": "de9f4aa560b11fadd2075fe2b7c41decb683994c5fb74d53c9c86f083a9d09f0",
+          "inputBytes": 99999995,
+          "outputBytes": 342379,
+          "savedBytes": 99657616,
+          "independentTextVerified": true
+        }
+      },
+      "outputBytes": 342379
+    },
+    {
+      "fixture": "ten distinct embedded CSV datasets near 100 MB",
+      "inputBytes": 99999995,
+      "wallMs": 3095,
+      "uiTicks": 30,
+      "ok": true,
+      "result": {
+        "status": "compressed",
+        "inputBytes": 99999995,
+        "outputBytes": 342379,
+        "savedBytes": 99657616,
+        "reductionPercent": 99.66,
+        "mode": "balanced",
+        "classification": "vector-or-empty",
+        "settings": {
+          "imageQualityReductionAllowed": true,
+          "imageTransformationApplied": false,
+          "jpegQuality": 0.82,
+          "maxDimension": 2400
+        },
+        "stages": [
+          {
+            "engine": "lossless",
+            "status": "compressed",
+            "inputBytes": 99999995,
+            "outputBytes": 342379
+          }
+        ],
+        "message": "Verified byte reduction",
+        "integrity": {
+          "version": 1,
+          "mode": "balanced",
+          "pageCount": 1,
+          "sourceDigest": "c47a79cd1fb30f742c1fb871544978d74904e54057911cf19ea953d8129d9662",
+          "outputDigest": "c3c4873537b4b411aad91f5ce34fdfb52f324d8a042f0cbbb42e5f5466652fbe",
+          "inputBytes": 99999995,
+          "outputBytes": 342379,
+          "savedBytes": 99657616,
+          "independentTextVerified": true
+        }
+      },
+      "outputBytes": 342379
+    },
+    {
+      "fixture": "ten distinct embedded CSV datasets near 100 MB",
+      "inputBytes": 99999995,
+      "wallMs": 3213,
+      "uiTicks": 32,
+      "ok": true,
+      "result": {
+        "status": "compressed",
+        "inputBytes": 99999995,
+        "outputBytes": 342379,
+        "savedBytes": 99657616,
+        "reductionPercent": 99.66,
+        "mode": "strong",
+        "classification": "vector-or-empty",
+        "settings": {
+          "imageQualityReductionAllowed": true,
+          "imageTransformationApplied": false,
+          "jpegQuality": 0.68,
+          "maxDimension": 1800
+        },
+        "stages": [
+          {
+            "engine": "lossless",
+            "status": "compressed",
+            "inputBytes": 99999995,
+            "outputBytes": 342379
+          }
+        ],
+        "message": "Verified byte reduction",
+        "integrity": {
+          "version": 1,
+          "mode": "strong",
+          "pageCount": 1,
+          "sourceDigest": "e4dd5aeda354ea54ec86de4ac653ad64060fe516a20a7df1da106a5b5bb7b01f",
+          "outputDigest": "731e0bc3c471f70ff81211e9cebb8f8443428608e7de1a631e467a1a8a1277bb",
+          "inputBytes": 99999995,
+          "outputBytes": 342379,
+          "savedBytes": 99657616,
+          "independentTextVerified": true
+        }
+      },
+      "outputBytes": 342379
+    },
+    {
+      "fixture": "ten distinct high-entropy binary attachments near 100 MB",
+      "inputBytes": 99999455,
+      "wallMs": 6818,
+      "uiTicks": 68,
+      "ok": true,
+      "result": {
+        "status": "original-retained",
+        "inputBytes": 99999455,
+        "outputBytes": 99999455,
+        "savedBytes": 0,
+        "reductionPercent": 0,
+        "mode": "lossless",
+        "classification": "vector-or-empty",
+        "settings": {
+          "imageQualityReductionAllowed": false,
+          "imageTransformationApplied": false
+        },
+        "stages": [
+          {
+            "engine": "lossless",
+            "status": "original-retained",
+            "inputBytes": 99999455,
+            "outputBytes": 99999455
+          }
+        ],
+        "message": "No reduction; original retained",
+        "integrity": {
+          "version": 1,
+          "mode": "lossless",
+          "pageCount": 1,
+          "sourceDigest": "ca59dd87729612bd31c0a6f0ea0cfa9d37435a991790333f1b4ef93dd64009fb",
+          "outputDigest": "ca59dd87729612bd31c0a6f0ea0cfa9d37435a991790333f1b4ef93dd64009fb",
+          "inputBytes": 99999455,
+          "outputBytes": 99999455,
+          "savedBytes": 0,
+          "independentTextVerified": true
+        }
+      },
+      "outputBytes": 99999455
+    }
+  ]
+}

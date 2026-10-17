@@ -1,0 +1,320 @@
+{
+  "browser": "chromium",
+  "embeddedImageCompression": true,
+  "moduleWorker": true,
+  "strictCSP": true,
+  "localBlobRequests": 0,
+  "unexpectedRequests": [],
+  "report": [
+    {
+      "fixture": "scanned",
+      "mode": "balanced",
+      "renderedRMS": [
+        2.1141479730108093,
+        2.1121483752162327
+      ],
+      "status": "compressed",
+      "inputBytes": 339211,
+      "outputBytes": 72969,
+      "savedBytes": 266242,
+      "elapsedMs": 1988
+    },
+    {
+      "fixture": "image-heavy",
+      "mode": "balanced",
+      "renderedRMS": [
+        2.1130882000218136,
+        2.1109971936944194,
+        2.1104380257932913
+      ],
+      "status": "compressed",
+      "inputBytes": 708693,
+      "outputBytes": 148806,
+      "savedBytes": 559887,
+      "elapsedMs": 3345
+    },
+    {
+      "fixture": "mixed",
+      "mode": "balanced",
+      "renderedRMS": [
+        0,
+        1.2675470102700657
+      ],
+      "status": "compressed",
+      "inputBytes": 113682,
+      "outputBytes": 26149,
+      "savedBytes": 87533,
+      "elapsedMs": 825
+    },
+    {
+      "fixture": "form",
+      "mode": "balanced",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 2124,
+      "outputBytes": 2124,
+      "savedBytes": 0,
+      "elapsedMs": 329
+    },
+    {
+      "fixture": "bookmarks",
+      "mode": "balanced",
+      "renderedRMS": [
+        0,
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1489,
+      "outputBytes": 1489,
+      "savedBytes": 0,
+      "elapsedMs": 274
+    },
+    {
+      "fixture": "attachment",
+      "mode": "balanced",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1441,
+      "outputBytes": 1441,
+      "savedBytes": 0,
+      "elapsedMs": 281
+    },
+    {
+      "fixture": "tagged",
+      "mode": "balanced",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1287,
+      "outputBytes": 1287,
+      "savedBytes": 0,
+      "elapsedMs": 292
+    },
+    {
+      "fixture": "gray-scan",
+      "mode": "balanced",
+      "renderedRMS": [
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 92877,
+      "outputBytes": 92877,
+      "savedBytes": 0,
+      "elapsedMs": 1146
+    },
+    {
+      "fixture": "shared-image",
+      "mode": "balanced",
+      "renderedRMS": [
+        1.749985267795132,
+        1.749985267795132
+      ],
+      "status": "compressed",
+      "inputBytes": 178734,
+      "outputBytes": 121034,
+      "savedBytes": 57700,
+      "elapsedMs": 1934
+    },
+    {
+      "fixture": "masked-image",
+      "mode": "balanced",
+      "renderedRMS": [
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 178271,
+      "outputBytes": 178271,
+      "savedBytes": 0,
+      "elapsedMs": 1336
+    },
+    {
+      "fixture": "hidden-ocr",
+      "mode": "balanced",
+      "renderedRMS": [
+        1.752339656240574
+      ],
+      "status": "compressed",
+      "inputBytes": 178252,
+      "outputBytes": 120552,
+      "savedBytes": 57700,
+      "elapsedMs": 1533
+    },
+    {
+      "fixture": "downsample-scan",
+      "mode": "balanced",
+      "renderedRMS": [
+        8.875062939917665
+      ],
+      "status": "compressed",
+      "inputBytes": 627180,
+      "outputBytes": 407439,
+      "savedBytes": 219741,
+      "elapsedMs": 4819
+    },
+    {
+      "fixture": "scanned",
+      "mode": "strong",
+      "renderedRMS": [
+        2.660083158608822,
+        2.661633410279163
+      ],
+      "status": "compressed",
+      "inputBytes": 339211,
+      "outputBytes": 49909,
+      "savedBytes": 289302,
+      "elapsedMs": 1708
+    },
+    {
+      "fixture": "image-heavy",
+      "mode": "strong",
+      "renderedRMS": [
+        2.6385485813362295,
+        2.641148669545669,
+        2.640249075100951
+      ],
+      "status": "compressed",
+      "inputBytes": 708693,
+      "outputBytes": 100571,
+      "savedBytes": 608122,
+      "elapsedMs": 2983
+    },
+    {
+      "fixture": "mixed",
+      "mode": "strong",
+      "renderedRMS": [
+        0,
+        1.5907326318853265
+      ],
+      "status": "compressed",
+      "inputBytes": 113682,
+      "outputBytes": 18453,
+      "savedBytes": 95229,
+      "elapsedMs": 737
+    },
+    {
+      "fixture": "form",
+      "mode": "strong",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 2124,
+      "outputBytes": 2124,
+      "savedBytes": 0,
+      "elapsedMs": 296
+    },
+    {
+      "fixture": "bookmarks",
+      "mode": "strong",
+      "renderedRMS": [
+        0,
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1489,
+      "outputBytes": 1489,
+      "savedBytes": 0,
+      "elapsedMs": 276
+    },
+    {
+      "fixture": "attachment",
+      "mode": "strong",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1441,
+      "outputBytes": 1441,
+      "savedBytes": 0,
+      "elapsedMs": 288
+    },
+    {
+      "fixture": "tagged",
+      "mode": "strong",
+      "renderedRMS": [
+        0,
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 1287,
+      "outputBytes": 1287,
+      "savedBytes": 0,
+      "elapsedMs": 269
+    },
+    {
+      "fixture": "gray-scan",
+      "mode": "strong",
+      "renderedRMS": [
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 92877,
+      "outputBytes": 92877,
+      "savedBytes": 0,
+      "elapsedMs": 1149
+    },
+    {
+      "fixture": "shared-image",
+      "mode": "strong",
+      "renderedRMS": [
+        2.7953481633182418,
+        2.7953481633182418
+      ],
+      "status": "compressed",
+      "inputBytes": 178734,
+      "outputBytes": 93937,
+      "savedBytes": 84797,
+      "elapsedMs": 1774
+    },
+    {
+      "fixture": "masked-image",
+      "mode": "strong",
+      "renderedRMS": [
+        0
+      ],
+      "status": "original-retained",
+      "inputBytes": 178271,
+      "outputBytes": 178271,
+      "savedBytes": 0,
+      "elapsedMs": 1359
+    },
+    {
+      "fixture": "hidden-ocr",
+      "mode": "strong",
+      "renderedRMS": [
+        2.798673700016968
+      ],
+      "status": "compressed",
+      "inputBytes": 178252,
+      "outputBytes": 93455,
+      "savedBytes": 84797,
+      "elapsedMs": 1453
+    },
+    {
+      "fixture": "downsample-scan",
+      "mode": "strong",
+      "renderedRMS": [
+        8.38319797770119
+      ],
+      "status": "compressed",
+      "inputBytes": 627180,
+      "outputBytes": 215096,
+      "savedBytes": 412084,
+      "elapsedMs": 3664
+    }
+  ],
+  "scope": "Local Linux Chromium, synthetic/independently drawn QA PDFs; not physical mobile or scanner acceptance",
+  "productionApproved": false
+}
