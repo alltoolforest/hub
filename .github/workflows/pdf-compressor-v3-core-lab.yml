@@ -1,0 +1,49 @@
+name: PDF Compressor v3 isolated core laboratory
+on:
+  push:
+    branches:
+      - pdf-compressor-v3-core-lab-20261016
+  pull_request:
+    branches:
+      - pdf-compressor-real-pdf-jpeg-compat-20261016
+jobs:
+  aggressive-raster-core:
+    name: consent / cancellation / page-bounded core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Static syntax check
+        run: node --check assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+      - name: Execute isolated v3 core and nonflattening regressions
+        run: node --test tests/pdf-compressor-v3-aggressive-raster.test.mjs tests/pdf-compressor-v3-nonflatten-jpeg.test.mjs tests/pdf-compressor-v3-strategy-selector.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: pdf-compressor-v3-source-for-private-corpus-benchmark
+          path: assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+          retention-days: 3
+      - name: Prove all changes are confined to v3 laboratory (no public route)
+        run: |
+          test -s assets/js/pdf-compressor-v3/aggressive-raster-core.mjs
+          test -s tests/pdf-compressor-v3-aggressive-raster.test.mjs
+          ! grep -q 'pdf-compressor-v3' documents/pdf-compressor/index.html
+
+  aggressive-raster-browser:
+    name: Chromium / Firefox / WebKit real raster output
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned standalone browser QA tools
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1 pdfjs-dist@6.3.289
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Run actual page-rendering / output-reopen browser checks
+        run: node tests/pdf-compressor-v3-browser-smoke.mjs
