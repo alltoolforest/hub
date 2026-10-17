@@ -404,17 +404,20 @@ async function inspectComplex(lib) {
  }catch(e){notes.push('Document features could not be fully inspected. Export may be lossy.');}
  return [...new Set(notes)];
 }
+let loadingGeneration=0;
 async function loadFile(file) {
  if(state.busy)return;
+ const generation=++loadingGeneration;
  uploadError('');
  let candidate=null;
  try {
  if(!file||!file.size)throw Error('The PDF file is empty.');
  if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf')throw Error('Choose a PDF file.');
  const head=new TextDecoder('latin1').decode(await file.slice(0,1024).arrayBuffer());
- if(!head.includes('%PDF-'))throw Error('The file has no valid PDF signature.');
+ if(!/^%PDF-1\\.[0-7]|^%PDF-2\\.0/.test(head.trimStart()))throw Error('The file has no valid PDF signature.');
  const tail=new TextDecoder('latin1').decode(await file.slice(Math.max(0,file.size-2048)).arrayBuffer());
  const lacksEOF=!tail.includes('%%EOF');
+ if(lacksEOF) throw Error('This PDF has a missing end-of-file marker. It may be truncated; please use a repaired copy.');
  await workerReady;
  const bytes=new Uint8Array(await file.arrayBuffer());
  let lib;
@@ -424,6 +427,7 @@ async function loadFile(file) {
  candidate=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
  if(candidate.numPages!==lib.getPageCount())throw Error('PDF parsing engines disagree about the page count.');
  const warnings=await inspectComplex(lib);
+ if(generation!==loadingGeneration){await candidate.destroy();candidate=null;return;}
  resetAll(true);
  state.file=file;state.lib=lib;state.doc=candidate;candidate=null;
  state.pageCount=lib.getPageCount();state.baseName=sanitize(file.name.replace(/\.pdf$/i,''))||'document';
@@ -436,7 +440,7 @@ async function loadFile(file) {
  const bm=$('[data-mode="bookmarks"]');bm.disabled=!state.outline.length;
  $('#uploadSection').hidden=true;$('#work').hidden=false;
  buildGrid();setMode('extract');
- } catch(e){uploadError(e.message||'Could not load this PDF.');if(candidate)try{await candidate.destroy()}catch{};}
+ } catch(e){if(generation===loadingGeneration)uploadError(e.message||'Could not load this PDF.');if(candidate)try{await candidate.destroy()}catch{}}
  fileInput.value='';
 }
 async function loadOutline(doc) {
@@ -459,6 +463,7 @@ async function loadOutline(doc) {
 }
 
 function resetAll(keepUpload) {
+  if(!keepUpload)loadingGeneration++;
   state.token++; queue.length = 0;
   if (observer) observer.disconnect();
   try { state.doc && state.doc.destroy(); } catch {}
@@ -680,24 +685,29 @@ function updateSummary() {
 
 /* ---------- building PDFs ---------- */
 async function verifyPdf(bytes,indices,expectedRotations) {
- const result=await PDFDocument.load(bytes,{updateMetadata:false});
- if(result.getPageCount()!==indices.length)throw Error('Output page-count verification failed.');
- const outputPages=result.getPages();
+ if(!indices.length)throw Error('No pages selected for output.');
+ let result,secondary;
+ try{
+ result=await PDFDocument.load(bytes,{updateMetadata:false});
+ if(result.getPageCount()!==indices.length)throw Error('Output page count mismatch.');
  for(let k=0;k<indices.length;k++){
-   const src=state.lib.getPage(indices[k]),out=outputPages[k];
-   // Compare effective boxes, not raw dictionary entries (inherited boxes may be normalized when copied).
-   for(const [label,get] of [['MediaBox',p=>p.getMediaBox()],['CropBox',p=>p.getCropBox()],['BleedBox',p=>p.getBleedBox()],['TrimBox',p=>p.getTrimBox()],['ArtBox',p=>p.getArtBox()]]){
-      const left=get(src),right=get(out);
-      for(const prop of ['x','y','width','height']){
-        if(Math.abs(left[prop]-right[prop])>.5)throw Error(label+' verification failed: '+prop);
-      }
-   }
-   const rotation=(v)=>(v%360+360)%360;
-   if(rotation(out.getRotation().angle)!==rotation(src.getRotation().angle+expectedRotations[indices[k]]))throw Error('Rotation verification failed.');
-   const srcSize=src.getSize(),outSize=out.getSize();
-   if(Math.abs(srcSize.width-outSize.width)>.5||Math.abs(srcSize.height-outSize.height)>.5)throw Error('Page dimensions changed.');
+  const src=state.lib.getPage(indices[k]),out=result.getPage(k);
+  for(const [label,get] of [['MediaBox',p=>p.getMediaBox()],['CropBox',p=>p.getCropBox()],['BleedBox',p=>p.getBleedBox()],['TrimBox',p=>p.getTrimBox()],['ArtBox',p=>p.getArtBox()]]){
+   const left=get(src),right=get(out);
+   for(const prop of ['x','y','width','height'])if(Math.abs(left[prop]-right[prop])>.5)throw Error(label+' changed on output page '+(k+1));
+  }
+  const normalize=v=>(v%360+360)%360;
+  if(normalize(out.getRotation().angle)!==normalize(src.getRotation().angle+expectedRotations[indices[k]]))throw Error('Rotation changed on output page '+(k+1));
+  const content=out.node.get(PDFLib.PDFName.of('Contents'));
+  const srcContent=src.node.get(PDFLib.PDFName.of('Contents'));
+  if(Boolean(content)!==Boolean(srcContent))throw Error('Page content stream missing on output page '+(k+1));
  }
+ // Independent decoding guards against a PDF that pdf-lib can parse but PDF.js cannot open.
+ secondary=await pdfjsLib.getDocument({data:bytes.slice(),disableAutoFetch:true}).promise;
+ if(secondary.numPages!==indices.length)throw Error('Independent PDF parser rejected output page count.');
+ await secondary.getPage(1);
  return true;
+ }finally{if(secondary)try{await secondary.destroy()}catch{}}
 }
 async function buildPdf(pageIdxs) {
   const out = await PDFDocument.create();
