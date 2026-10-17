@@ -96,7 +96,7 @@ async function boundedInflate(bytes,maxBytes){
   try{return await boundedInflateStrict(bytes,maxBytes);}
   catch(error){
     const message=String(error);
-    if(/(?:Compressed input was truncated|unexpected end|incomplete compressed)/i.test(message)){
+    if(error?.name==='TypeError'||/(?:Compressed input was truncated|unexpected end|incomplete compressed)/i.test(message)){
       try{return await boundedInflateMissingTrailer(bytes,maxBytes);}
       catch(recoveryError){
         if(recoveryError?.code==='decoded-stream-limit')throw recoveryError;
