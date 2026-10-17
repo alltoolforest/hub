@@ -355,7 +355,7 @@ async function initWorker() {
 const workerReady = initWorker();
 
 /* ---------- range parsing ---------- */
-const parseRanges = (str,n) => Core.parseRanges(str,n,{allowDup:false}).map(r=>({...r,a:r.pages[0]+1,b:r.pages[r.pages.length-1]+1}));
+const parseRanges = (str,n) => Core.parseRanges(str,n,{allowDup:true}).map(r=>({...r,a:r.pages[0]+1,b:r.pages[r.pages.length-1]+1}));
 
 /* ---------- file loading ---------- */
 const drop = $('#drop'), fileInput = $('#fileInput');
@@ -386,7 +386,6 @@ async function inspectComplex(lib) {
 async function loadFile(file) {
  if(state.busy)return;
  uploadError('');
- const prior=state.file;
  let candidate=null;
  try {
  if(!file||!file.size)throw Error('The PDF file is empty.');
@@ -600,7 +599,7 @@ function computePlan() {
     case 'ranges': {
       const txt = $('#rangesInput').value;
       let rs; try { rs = parseRanges(txt, n); } catch (e) { return { error: e.message, soft: !txt.trim() }; }
-      if ($('#mergeRanges').checked) return { files: [{ name: `${base}_selection`, pages: rs.flatMap(r => r.pages) }] };
+      if ($('#mergeRanges').checked) return { files: [{ name: `${base}_selection`, pages: [...new Set(rs.flatMap(r => r.pages))] }] };
       return { files: rs.map(r => ({ name: `${base}_pages_${r.label}`, pages: r.pages })) };
     }
     case 'every': {
@@ -673,24 +672,11 @@ async function buildPdf(pageIdxs) {
 }
 
 // Largest page count starting at `start` whose saved PDF stays under `limit` (exponential + binary search).
-async function fitChunk(start, limit) {
-  const maxK = state.pageCount - start, cache = new Map();
-  const trial = async k => {
-    if (!cache.has(k)) cache.set(k, await buildPdf(range(start, start + k - 1)));
-    return cache.get(k);
-  };
-  const first = await trial(1);
-  if (first.length > limit) return { count: 1, bytes: first, oversize: true };
-  let lo = 1, hi = null;
-  while (lo < maxK) {
-    const k = Math.min(lo * 2, maxK), b = await trial(k);
-    if (b.length <= limit) lo = k; else { hi = k; break; }
-  }
-  while (hi !== null && hi - lo > 1) {
-    const mid = (lo + hi) >> 1, b = await trial(mid);
-    if (b.length <= limit) lo = mid; else hi = mid;
-  }
-  return { count: lo, bytes: cache.get(lo) };
+async function fitChunk(start,limit) {
+ const result=await Core.fitChunk(start,state.pageCount,limit,
+ async(s,k)=>{const bytes=await buildPdf(Core.range(s,s+k-1));return {size:bytes.length,art:bytes};},
+ ()=>{},()=>{if(state.busy===false)throw Error('Processing interrupted.');});
+ return {count:result.count,bytes:result.art,oversize:result.oversize};
 }
 
 function setProgress(v, label) {
