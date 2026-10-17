@@ -10,10 +10,10 @@ engine. DOCX, spreadsheet and TXT feature development is paused.
 
 The candidate lives at `documents/document-editor-v2-lab/pdf-engine/`. This is a
 noindex development test harness, not a new public tool or a deployment. The
-workspace lab links to the harness for development. The shared workspace PDF
-adapter still uses the earlier additive implementation until the candidate has a
-safe snapshot/restore/lifecycle contract. This integration is **pending**; the
-copied candidate must not be described as the active shared PDF engine yet.
+workspace lab routes PDF uploads into the copied engine through
+`assets/js/document-editor-v2/engines/pdf.js`. The separate harness remains for
+isolated regression work. Shared autosave/history integration now has a DOM test;
+real browser/device acceptance remains pending.
 
 ## Isolation and provenance
 
@@ -136,3 +136,62 @@ are deterministic in this test; canvas pixels and PDF serialization are real.
 Affected native recovery/isolation, browser stability, OCR geometry, scan mobile
 and OCR export regressions pass. Shared-workspace automatic saving, change
 notifications and history integration are still pending. No production deployment.
+
+## 2026-10-17 — workspace integration and native find/replace
+
+The shared PDF adapter now mounts the copied native/OCR engine with its precision
+formatting and reflow extensions. It stages restoration into a fresh instance and
+replaces the live session only on success. Shared export, asynchronous local
+snapshots, history and refresh recovery use the same workspace actions as the
+other formats. Binary history is trimmed toward a 64 MB budget, retaining at least
+the latest snapshot; a single larger snapshot can exceed that history budget.
+Pending edits prevent snapshot/history operations rather than being discarded.
+Native and OCR change notifications trigger the workspace autosave path.
+
+Native PDF find/replace supports literal search, next/previous region navigation,
+replace/all, case matching and Unicode word boundaries. Replacements are rebuilt
+against source regions and validated as one operation before installation. Unsafe
+layout replacements retain the existing session. OCR and protected-region search
+remain explicitly excluded. Search navigation focuses the matching text region;
+exact substring highlighting is pending.
+
+New `document-editor-v2-pdf-adapter.test.mjs` exercises actual PDF parsing/export
+through the workspace UI with DOM/canvas simulation and an IndexedDB test double:
+open, edit, save draft, undo, redo, restore, search/replace, invalid replacement
+retention, download and unfinished-edit protection. It does not certify a real
+browser's IndexedDB or physical devices.
+
+A real Chromium test runner was added in `document-editor-v2-pdf-browser.mjs` for
+1280 px and 390 px viewports. Runtime installation succeeded, but browser launch
+was blocked by the execution environment: `socket() failed: Operation not
+permitted`. The browser test did **not run** and must not be counted as passed.
+The runner remains available for a permitted browser environment.
+
+Still blocking PDF completion: OCR search/replace, searchable OCR output,
+image/object editing, hyperlink editing, text-colour controls, page thumbnails,
+complete reflow/preservation corpus, conversion support, live OCR validation,
+resource/security review and real browser/device accessibility verification.
+Other format engines stay paused. Nothing deployed or frozen.
+
+## 2026-10-17 — searchable OCR export and save-cycle preservation
+
+Scanned-page controls now offer an explicit searchable OCR text option. Export
+adds transparent text for recognized/reviewed words, verifies text extraction
+from the actual exported PDF, and retains visible scan pixels. It supports the
+current Helvetica/WinAnsi character set; unsupported glyphs fail with an explicit
+message, retaining the draft. Unicode font embedding and searchable added scan
+text remain pending, so this is not complete searchable-PDF acceptance.
+
+The hybrid engine now retains original per-page scan bytes plus editable OCR
+snapshots separately from the validated export bytes. This prevents stale hidden
+words from surviving subsequent edits, retains recognized words after save/page
+switching, and avoids cumulative raster/export overlays. Inactive page drafts can
+be recovered with their validated export and original geometry checks.
+
+Evidence: 27 focused V2 tests, native browser-stability DOM regression, scan-mobile
+regression, rotated/cropped geometry regression, and OCR recovery/export tests.
+The OCR recovery suite additionally checks searchable export, a second edit/save
+cycle with the former hidden word removed, persisted searchable option, and
+turning searchable output off without retaining the generated hidden layer.
+Real browser execution is still blocked as described above. No launch-ready or
+physical-device claim is made.

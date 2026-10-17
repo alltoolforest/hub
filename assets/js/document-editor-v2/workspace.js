@@ -8,7 +8,7 @@ const status = root.querySelector('#document-v2-status');
 const title = root.querySelector('#document-v2-title');
 const recovery = root.querySelector('#document-v2-recovery');
 const actions = root.querySelector('#document-v2-actions');
-let session = null, timer = null, downloadUrl = null, generation = 0, pendingSave = Promise.resolve();
+let session = null, timer = null, downloadUrl = null, generation = 0, pendingSave = Promise.resolve(), actionBusy = false;
 
 function say(message, error = false) {
   status.textContent = message;
@@ -19,21 +19,38 @@ function nameForExport(name, format) {
 }
 function controls() {
   for (const button of actions.querySelectorAll('button')) {
-    button.disabled = !session || button.dataset.action === 'undo' && session.cursor === 0 ||
+    button.disabled = actionBusy || !session || button.dataset.action === 'undo' && session.cursor === 0 ||
       button.dataset.action === 'redo' && session.cursor >= session.history.length - 1;
   }
 }
-async function persist() {
+async function persist(allowStorageFailure = false) {
   if (!session) return;
   const current = session, token = generation;
-  const draft = {file:current.file, format:current.format, snapshot:current.engine.snapshot(),
+  const snapshot = await current.engine.snapshot();
+  if(current !== session || token !== generation)return;
+  if(current.engine.asyncSnapshots && snapshot.revision !== current.history[current.cursor]?.revision){
+    current.history = current.history.slice(0,current.cursor+1);
+    current.history.push(snapshot);
+    // Binary scan snapshots are bounded independently of text-engine history.
+    const size = value => value instanceof Blob ? value.size : value instanceof Uint8Array ? value.byteLength :
+      Array.isArray(value) ? value.reduce((sum,item)=>sum+size(item),0) : value && typeof value==='object' ? Object.values(value).reduce((sum,item)=>sum+size(item),0) : typeof value==='string' ? value.length*2 : 8;
+    while(current.history.length>1 && (current.history.length>20 || size(current.history)>64*1024*1024))current.history.shift();
+    current.cursor=current.history.length-1;controls();
+  }
+  const draft = {file:current.file, format:current.format, snapshot,
     history:current.history, cursor:current.cursor, modified:Date.now()};
   pendingSave = pendingSave.catch(() => {}).then(() => token === generation ? writeDraft(draft) : undefined);
-  await pendingSave;
+  try { await pendingSave; } catch(error) { if(!allowStorageFailure)throw error; return; }
   if (current === session) say('Draft saved on this device. Export to save a document file.');
 }
 function changed() {
   if (!session) return;
+  if(session.engine.asyncSnapshots){
+    session.dirty=true;
+    say('Unsaved PDF changes. Finish the edit to save a local draft.');
+    clearTimeout(timer);timer=setTimeout(()=>persist().catch(error=>say(error.message||'Local autosave failed. Export your work.',true)),700);
+    return;
+  }
   const next = session.engine.snapshot();
   if (JSON.stringify(next) !== JSON.stringify(session.history[session.cursor])) {
     session.history = session.history.slice(0, session.cursor + 1);
@@ -59,18 +76,20 @@ async function open(file, draft = null) {
   if (draft && detected.format !== draft.format) throw new Error('Recovery file type has changed.');
   const module = await import(`./engines/${detected.engine}.js`);
   const engine = await module.open(file, detected.format);
-  if (draft) engine.restore(draft.snapshot);
+  let initialSnapshot;
+  try { if (draft) await engine.restore(draft.snapshot); initialSnapshot=await engine.snapshot(); } catch(error) { await engine.dispose?.(); throw error; }
   // Do not replace a working session until detection and parsing succeed.
   clearTimeout(timer);
   generation++;
   await pendingSave.catch(() => {});
   const previous = session;
   session = {file, format:detected.format, engine, dirty:!!draft,
-    history:draft?.history?.length ? draft.history : [engine.snapshot()],
+    history:draft?.history?.length ? draft.history : [initialSnapshot],
     cursor:draft?.cursor ?? 0};
   try { await display(); }
   catch (error) {
     session = previous;
+    await engine.dispose?.();
     if (previous) { try { await previous.engine.render(stage, changed); } catch {} }
     throw error;
   }
@@ -90,12 +109,16 @@ pick.addEventListener('change', async () => {
 });
 actions.addEventListener('click', async event => {
   const action = event.target.closest('button')?.dataset.action;
-  if (!session || !action) return;
+  if (!session || !action || actionBusy) return;
+  actionBusy=true;controls();pick.disabled=true;stage.inert=true;
   try {
     if (action === 'undo' || action === 'redo') {
       clearTimeout(timer);
-      session.cursor += action === 'undo' ? -1 : 1;
-      session.engine.restore(session.history[session.cursor]);
+      if(session.engine.asyncSnapshots)await persist(true);
+      const nextCursor=session.cursor+(action === 'undo' ? -1 : 1);
+      if(nextCursor<0||nextCursor>=session.history.length)return;
+      await session.engine.restore(session.history[nextCursor]);
+      session.cursor=nextCursor;
       session.dirty = true;
       await display();
       await persist();
@@ -125,10 +148,15 @@ actions.addEventListener('click', async event => {
       say('Workspace cleared.');
     }
   } catch (error) { say(error.message || 'The action failed; your editing session is retained.', true); }
+  finally {actionBusy=false;stage.inert=false;pick.disabled=false;controls();}
 });
 root.querySelector('#document-v2-restore').addEventListener('click', async () => {
+  if(actionBusy)return;
+  if(session?.dirty&&!confirm('Restore the saved draft and replace this editing session?'))return;
+  actionBusy=true;pick.disabled=true;stage.inert=true;controls();
   try { const draft = await readDraft(); if (draft?.file) await open(draft.file, draft); }
   catch (error) { say(error.message || 'Could not restore the local draft.', true); }
+  finally {actionBusy=false;pick.disabled=false;stage.inert=false;controls();}
 });
 root.querySelector('#document-v2-discard').addEventListener('click', async () => {
   try { await clearDraft(); recovery.hidden = true; say('Local draft discarded.'); }

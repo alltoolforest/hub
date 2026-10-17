@@ -36,5 +36,5 @@ export async function validateScanDraft(draft,source,pageCount) {
     }else if(saved.edits.length)throw new Error('The scan draft is missing edited pixels.');
     pages.push(scanPageDraft(saved.index,saved,saved.editedBlob||null));
   }
-  return {version:1,source,pageIndex:draft.pageIndex,pages};
+  return {version:1,source,pageIndex:draft.pageIndex,searchable:!!draft.searchable,pages};
 }

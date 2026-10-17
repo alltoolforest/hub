@@ -741,6 +741,58 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     }
   }
 
+  async function textEntries(){
+    if(!requireFinishedEdit()||viewBusy)throw new Error('Finish the current PDF operation before searching.');
+    const oldAnalysis=analysis,entries=[];
+    try{
+      for(let index=0;index<pdfDoc.getPageCount();index++){
+        const result=await analyzePage(index,{announce:false});
+        for(const block of result.blocks)entries.push({id:block.id,pageIndex:index,text:currentText(block),protected:!isEditable(block)});
+      }
+      for(const tx of txByBlock.values())if(tx.kind==='INSERT_TEXT')entries.push({id:tx.id,pageIndex:tx.pageIndex,text:tx.displayUnicode??tx.replacementUnicode,protected:false});
+      return entries;
+    }finally{analysis=oldAnalysis;}
+  }
+  async function replaceTextRanges(matches,replacement){
+    if(typeof replacement!=='string'||!Array.isArray(matches))throw new Error('Invalid PDF replacement.');
+    const entries=new Map((await textEntries()).map(entry=>[entry.id,entry]));
+    const draft=snapshot(),intents=new Map(draft.transactions.map(tx=>[transactionMapKey(tx),tx]));
+    const grouped=new Map();
+    for(const match of matches){
+      const entry=entries.get(match.id);
+      if(!entry||entry.protected||entry.text!==match.text||!Number.isInteger(match.start)||!Number.isInteger(match.end)||match.start<0||match.end<=match.start||match.end>entry.text.length)
+        throw new Error('Search results changed. Search again before replacing.');
+      if(!grouped.has(match.id))grouped.set(match.id,[]);grouped.get(match.id).push(match);
+    }
+    const oldAnalysis=analysis;
+    try{
+      for(const [id,ranges] of grouped){
+        const entry=entries.get(id);let text=entry.text,last=entry.text.length;
+        for(const match of ranges.sort((a,b)=>b.start-a.start)){
+          if(match.end>last)throw new Error('Overlapping PDF replacements are not supported.');
+          text=text.slice(0,match.start)+replacement+text.slice(match.end);last=match.start;
+        }
+        let intent=intents.get(id);
+        if(!intent){
+          const result=await analyzePage(entry.pageIndex,{announce:false}),block=result.blocks.find(block=>block.id===id);
+          intent=nativeDraft([createEditTransaction({pageIndex:entry.pageIndex,block,replacementUnicode:text})],draftSource,pageIndex,zoom).transactions[0];
+        }else{intent={...intent,replacementUnicode:text};if(intent.displayUnicode!==undefined)intent.displayUnicode=text;}
+        intents.set(id,intent);
+      }
+    }finally{analysis=oldAnalysis;}
+    await restore({...draft,transactions:[...intents.values()]});
+    return matches.length;
+  }
+  async function revealText(id,page){
+    if(!requireFinishedEdit()||viewBusy)throw new Error('Finish the current PDF edit before navigating.');
+    pageIndex=page;await renderPage();
+    const entry=analysis?.blocks.find(block=>block.id===id),tx=txByBlock.get(id);
+    const prefix=entry?'Edit text: ':'Edit added text: ';
+    const text=entry?currentText(entry):tx?.replacementUnicode;
+    const target=[...container.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label')===prefix+String(text||'').slice(0,100));
+    target?.focus();target?.scrollIntoView?.({block:'nearest'});
+  }
+
   function snapshot(){
     if(!draftSource)throw new Error('No PDF open.');
     if(hasPendingEdit()||viewBusy)throw new Error('Finish the current PDF operation before saving a draft.');
@@ -808,5 +860,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',()=>changeView(()=>{zoom=Math.min(2,zoom+.15);}));
   updateHistory();updatePageLabel();
 
-  return {open,snapshot,restore,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
+  return {open,snapshot,restore,textEntries,replaceTextRanges,revealText,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }

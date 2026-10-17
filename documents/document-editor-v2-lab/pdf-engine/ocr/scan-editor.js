@@ -1,3 +1,5 @@
+import {addSearchableText} from './searchable-text.js';
+import {withPdfDocument} from '../fortress/src/rendering/with-document.js';
 import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
 import {scanPageDraft,validateScanDraft} from './scan-draft.js';
 import { renderAddedText } from './added-text.js';
@@ -75,11 +77,11 @@ async function drawBlobToCanvas(blob,canvas){
   const url=URL.createObjectURL(blob);try{await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve();};img.onerror=reject;img.src=url;});}finally{URL.revokeObjectURL(url);}
 }
 
-export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onExport=()=>{},onClose=()=>{},allowGroupedEditing=false}={}){
+export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onExport=()=>{},onClose=()=>{},onChange=()=>{},allowGroupedEditing=false}={}){
   if(!container)throw new Error('OCR editor container is required.');
   let sourceBytes=null,sourceName='document.pdf',pdf=null,pageCount=0,pageIndex=0,destroyed=false,selectedTarget=null,granularity='word',ocrBusy=false;
   const pages=new Map();
-  let draftSource=null,draftBusy=false;
+  let draftSource=null,draftBusy=false,searchable=false;
   let placingText=false,pickerTargets=[];
   const reportStatus=onStatus,reportWarning=onWarning,reportError=onError;
   onStatus=message=>{status.textContent=message;status.dataset.kind='status';reportStatus(message);};
@@ -97,7 +99,9 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   for(const [value,label] of granularities){const o=document.createElement('option');o.value=value;o.textContent=label;mode.append(o);}
   mode.hidden=!allowGroupedEditing;
   const add=button('Add text');add.setAttribute('aria-pressed','false');
-  toolbar.append(prev,pageLabel,next,mode,run,add,save,close);
+  const searchableLabel=document.createElement('label'),searchableInput=document.createElement('input');searchableInput.type='checkbox';searchableLabel.append(searchableInput,' Include searchable OCR text');
+  searchableInput.addEventListener('change',()=>{searchable=searchableInput.checked;updateToolbar();onChange();});
+  toolbar.append(prev,pageLabel,next,mode,run,add,searchableLabel,save,close);
   const status=document.createElement('p');status.className='ocr-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const picker=document.createElement('select');picker.className='ocr-text-picker';picker.setAttribute('aria-label','Choose text to edit');picker.hidden=true;
   const editbar=document.createElement('div');editbar.className='ocr-editbar';editbar.hidden=true;
@@ -111,7 +115,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   editbar.append(oldLabel,input,format,apply,remove,cancel);
   const stage=document.createElement('div');stage.className='ocr-stage';root.append(toolbar,status,picker,editbar,stage);container.replaceChildren(root);
 
-  function updateToolbar(){pageLabel.textContent=`Page ${pageIndex+1} of ${pageCount||1}`;prev.disabled=pageIndex<=0;next.disabled=pageIndex>=pageCount-1;save.disabled=![...pages.values()].some(p=>p.edited);}
+  function updateToolbar(){pageLabel.textContent=`Page ${pageIndex+1} of ${pageCount||1}`;prev.disabled=pageIndex<=0;next.disabled=pageIndex>=pageCount-1;save.disabled=![...pages.values()].some(p=>p.edited||(searchable&&p.words?.length));}
   function cancelEdit(){selectedTarget=null;placingText=false;root.classList.remove('ocr-placing');add.setAttribute('aria-pressed','false');editbar.hidden=true;format.hidden=true;input.value='';picker.value='';updateToolbar();}
   function revealEdit(){editbar.hidden=false;editbar.scrollIntoView?.({block:'nearest'});input.focus();input.select();}
   function selectTarget(target,state){
@@ -205,8 +209,9 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
         return edited?{...word,sourceText:edited.sourceText,bbox:{...edited.bbox}}:word;
       });rebuildLayout(state);renderOverlay(state);
       onStatus(`${state.words.length} OCR words detected. ${pre.inverted?'Dark-page OCR normalization used. ':''}${allowGroupedEditing?'Choose Word, Line, or Paragraph and click text to edit.':'Tap a highlighted word or use Choose text to edit.'}`);
+      onChange();
       if(!state.words.length)onWarning({code:'OCR_NO_TEXT',message:'No reliable words were detected. You can still use Add text, or try a clearer scan and run OCR again.'});
-    }catch(error){onError(error);}finally{releaseCanvas(pre?.canvas);ocrBusy=false;run.disabled=false;add.disabled=false;run.textContent='Run OCR';}
+    }catch(error){onError(error);}finally{releaseCanvas(pre?.canvas);ocrBusy=false;run.disabled=false;add.disabled=false;run.textContent='Run OCR';updateToolbar();}
   }
 
   function removeWordsInside(state,bbox){state.words=(state.words||[]).filter(w=>!boxesOverlap(w.bbox,bbox));}
@@ -221,7 +226,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
         const {canvas}=renderAddedText(next,state);releaseCanvas(canvas);
         const index=state.additions.findIndex(item=>item.id===next.id);if(index<0)state.additions.push(next);else state.additions[index]=next;
       }
-      state.additionChanges++;state.edited=true;cancelEdit();renderOverlay(state);updateToolbar();onStatus(forceDelete?'Added text removed. Save a copy when finished.':'Text added to the scan. Tap it to edit, or save a copy.');
+      state.additionChanges++;state.edited=true;onChange();cancelEdit();renderOverlay(state);updateToolbar();onStatus(forceDelete?'Added text removed. Save a copy when finished.':'Text added to the scan. Tap it to edit, or save a copy.');
     }catch(error){onWarning({code:'OCR_ADD_TEXT_INVALID',message:error.message});}
   }
 
@@ -243,16 +248,16 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
     if(replacement){workCtx.fillStyle=`rgb(${color.r} ${color.g} ${color.b})`;workCtx.font=cssFont(style,fitted.fontPx);workCtx.textBaseline='alphabetic';workCtx.textAlign='left';const baselineStart=fitted.baseline??bb.y0+fitted.fontPx;for(let i=0;i<fitted.lines.length;i++)workCtx.fillText(fitted.lines[i],fitted.x??bb.x0,baselineStart+i*fitted.lineHeight);}
     workCtx.restore();
     state.edited=true;state.editedBlob=null;state.edits.push({type:target.type,oldText:target.text,newText:replacement,bbox:{...bb},patchRect:{...eraseRect},confidence:target.confidence,style,tone:safety.tone});
-    removeWordsInside(state,bb);addSyntheticWord(state,replacement,bb,target.confidence,target.sourceText||target.text);rebuildLayout(state);cancelEdit();renderOverlay(state);updateToolbar();onStatus(replacement?'Scanned text changed locally. Save a copy when finished.':'Scanned text removed locally. Save a copy when finished.');
+    removeWordsInside(state,bb);addSyntheticWord(state,replacement,bb,target.confidence,target.sourceText||target.text);rebuildLayout(state);cancelEdit();renderOverlay(state);updateToolbar();onChange();onStatus(replacement?'Scanned text changed locally. Save a copy when finished.':'Scanned text removed locally. Save a copy when finished.');
   }
 
   async function exportCopy(){
     if(!sourceBytes)return;
     if(selectedTarget||placingText||ocrBusy){onWarning({code:'OCR_PENDING_EDIT',message:'Apply or cancel the current edit and wait for OCR before saving.'});return;}
-    const edited=[...pages.entries()].filter(([,s])=>s.edited);if(!edited.length){onWarning({code:'OCR_NO_EDITS',message:'No scanned-text changes have been made yet.'});return;}
+    const edited=[...pages.entries()].filter(([,s])=>s.edited||(searchable&&s.words?.length));if(!edited.length){onWarning({code:'OCR_NO_EDITS',message:'No scanned-text changes have been made yet.'});return;}
     save.disabled=true;
     try{
-      onStatus('Building size-controlled edited scanned PDF…');const sourceDoc=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});const doc=await PDFDocument.create();
+      onStatus('Building size-controlled edited scanned PDF…');const expectedText=new Map();const sourceDoc=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});const doc=await PDFDocument.create();
       const editedMap=new Map(edited);
       for(let idx=0;idx<pageCount;idx++){
         const [copied]=await doc.copyPages(sourceDoc,[idx]);doc.addPage(copied);
@@ -265,6 +270,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
           const patch=await doc.embedPng(await blobBytes(patchBlob));
           copied.drawImage(patch,placement(rect));
         }
+        if(searchable&&state.words?.length)expectedText.set(idx,await addSearchableText(doc,copied,state));
         for(const addition of state.additions){
           const {canvas,rect}=renderAddedText(addition,state);
           try{const patch=await doc.embedPng(await blobBytes(await canvasBlob(canvas,'image/png')));copied.drawImage(patch,placement(rect));}
@@ -272,7 +278,13 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
         }
       }
       const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));const verify=await PDFDocument.load(bytes.slice(),{ignoreEncryption:true,updateMetadata:false});if(verify.getPageCount()!==pageCount)throw new Error('OCR export page-count validation failed.');
-      const blob=new Blob([bytes],{type:'application/pdf'});onExport({blob,bytes,filename:safeName(sourceName),mode:'ocr-scan',edits:edited.reduce((n,[,s])=>n+s.edits.length+s.additionChanges,0)});onStatus(`Edited scanned PDF validated — ${(bytes.length/1048576).toFixed(2)} MB download ready.`);
+      if(expectedText.size)await withPdfDocument(bytes,async check=>{
+        for(const [index,words] of expectedText){const page=await check.getPage(index+1);try{
+          const content=await page.getTextContent(),text=content.items.map(item=>item.str||'').join(' ');
+          if(words.some(word=>!text.includes(word)))throw new Error('Searchable OCR export validation failed. The draft is retained.');
+        }finally{page.cleanup();}}
+      });
+      const blob=new Blob([bytes],{type:'application/pdf'});onExport({blob,bytes,filename:safeName(sourceName),mode:'ocr-scan',edits:edited.reduce((n,[,s])=>n+s.edits.length+s.additionChanges+(searchable&&s.words?.length?1:0),0)});onStatus(`Edited scanned PDF validated — ${(bytes.length/1048576).toFixed(2)} MB download ready.`);
     }catch(error){onError(error);onStatus(error?.message||'Could not save this scanned PDF safely.');}finally{updateToolbar();}
   }
 
@@ -303,7 +315,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
         const blob=state.edits.length?(state.canvas?await canvasBlob(state.canvas,'image/png'):state.editedBlob):null;
         saved.push(scanPageDraft(index,state,blob));
       }
-      return validateScanDraft({version:1,source:draftSource,pageIndex,pages:saved},draftSource,pageCount);
+      return validateScanDraft({version:1,source:draftSource,pageIndex,searchable,pages:saved},draftSource,pageCount);
     });
   }
   async function restore(value){
@@ -323,15 +335,16 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
           rebuildLayout(state);
           if(saved.index!==draft.pageIndex){releaseCanvas(state.canvas);releaseCanvas(state.base);state.canvas=null;state.base=null;}
         }
-        const previous=new Map(pages),oldPage=pageIndex;
+        const previous=new Map(pages),oldPage=pageIndex,oldSearchable=searchable;
+        searchable=!!draft.searchable;searchableInput.checked=searchable;
         pages.clear();for(const [index,state] of staged)pages.set(index,state);
         try{await renderPage(draft.pageIndex);}
-        catch(error){pages.clear();for(const [index,state] of previous)pages.set(index,state);try{await renderPage(oldPage);}catch{}throw error;}
+        catch(error){searchable=oldSearchable;searchableInput.checked=searchable;pages.clear();for(const [index,state] of previous)pages.set(index,state);try{await renderPage(oldPage);}catch{}throw error;}
         disposeStates(previous);onStatus('Scanned PDF draft restored.');
       }catch(error){disposeStates(staged);throw error;}
     });
   }
-  function getState(){return {mode:'ocr-scan',busy:ocrBusy,hasPendingEdit:!!selectedTarget||placingText,pageIndex,pageCount,granularity,allowGroupedEditing,editedPages:[...pages.entries()].filter(([,s])=>s.edited).map(([i])=>i),editCount:[...pages.values()].reduce((n,s)=>n+s.edits.length+s.additionChanges,0),renderPlans:[...pages.entries()].map(([i,s])=>({pageIndex:i,...s.renderPlan}))};}
+  function getState(){return {mode:'ocr-scan',busy:ocrBusy,hasPendingEdit:!!selectedTarget||placingText,pageIndex,pageCount,granularity,allowGroupedEditing,editedPages:[...pages.entries()].filter(([,s])=>s.edited).map(([i])=>i),editCount:[...pages.values()].reduce((n,s)=>n+s.edits.length+s.additionChanges+(searchable&&s.words?.length?1:0),0),renderPlans:[...pages.entries()].map(([i,s])=>({pageIndex:i,...s.renderPlan}))};}
   async function destroy(){if(destroyed)return;destroyed=true;cancelEdit();try{await provider.terminate();}catch{}try{await loadingTask?.destroy();}catch{}loadingTask=null;pdf=null;sourceBytes=null;for(const state of pages.values()){releaseCanvas(state.canvas);releaseCanvas(state.base);}pages.clear();container.replaceChildren();}
 
   add.addEventListener('click',beginAdd);

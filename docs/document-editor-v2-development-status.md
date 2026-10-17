@@ -17,7 +17,7 @@ Edit PDF and other frozen tools are unchanged. The replacement is an unlinked,
 | DOCX | Paragraph text edits in a flowing preview; table cells shown in place; unchanged OOXML package parts retained | `document-editor-v2-docx.test.mjs` checks text, page break, image, table and relationships after reopen |
 | XLSX | Spreadsheet cells and formulas retained in an ExcelJS workbook; export reopens and compares sheets, formulas and edited cells | `document-editor-v2-spreadsheet.test.mjs` |
 | CSV | Cell editing, CSV reparse before export and formula injection check | Engine implemented; browser round-trip test pending |
-| PDF | Page render/navigation and additive text, with reopen validation | Engine implemented; browser round-trip test pending |
+| PDF | Copied native/OCR engine now runs inside the shared workspace, with async snapshots, undo/redo, native search/replace and validated export | Adapter integration, recovery and isolated engine regressions; real browser gate blocked by environment |
 
 Additional DOCX render check: a generated 35-paragraph file rendered as one page
 in LibreOffice; expanding its first paragraph rendered as two pages, and
@@ -25,7 +25,7 @@ shortening it returned to one page. `pdftotext` retained the final paragraph in
 both exports. Both pages of the expanded result were visually inspected for
 overlap. This proves only the simple flowing-paragraph case, not complex layout.
 
-Automated checkpoint: 21 focused V2 tests passed. Sixteen directly related CSV
+Automated checkpoint: 27 focused V2 tests passed. Sixteen directly related CSV
 and PDF unit regression checks passed. No browser/device test has been completed.
 
 These are development paths, not launch-ready claims. The DOCX view does not yet
@@ -33,8 +33,8 @@ faithfully render page geometry, headers/footers or images. DOCX text edits pres
 insertion run. Fields, embedded objects and other complex paragraphs are
 protected from text edits. Mixed styles are not yet rendered in the preview. XLSX output is guarded against known unsupported package
 parts, but full feature preservation and formula recalculation are not proven.
-PDF page text cannot currently be edited natively or reflowed; additive text is
-the only PDF edit in this lab. DOC and XLS are recognized but editing is disabled.
+Native PDF editing and guarded reflow now use the copied Edit PDF engine; full
+PDF acceptance, OCR search, searchable export and object editing remain pending. DOC and XLS are recognized but editing is disabled.
 
 ## Requirements still open
 
@@ -70,4 +70,4 @@ specified release sequence.
 PDF-first development is now required. Other engine feature work is paused until
 the PDF handoff requirements are complete. See `document-editor-v2-pdf-engine.md`
 for the isolated Edit PDF copy, verification evidence and full PDF acceptance
-tracker. The copied candidate is not yet wired into shared autosave/history.
+tracker. The copied engine is now wired into shared autosave/history; see the latest PDF checkpoint.

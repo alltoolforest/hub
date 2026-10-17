@@ -82,6 +82,7 @@ export function createHybridPdfEditor({
   onError=()=>{},
   onExport=()=>{},
   onClose=()=>{},
+  onChange=()=>{},
   prepareNativeDocument=null,
 }={}){
   if(!container)throw new Error('Hybrid Edit PDF container is required.');
@@ -141,7 +142,7 @@ export function createHybridPdfEditor({
       onStatus:message=>{if(activePage()?.route==='native')setStatus(message||'');},
       onWarning:warning=>onWarning(warning),
       onError:error=>onError(error),
-      onChange:transactions=>markNativeDirty(transactions),
+      onChange:transactions=>{markNativeDirty(transactions);onChange();},
       onExport:result=>{nativeExportCapture=result;},
     });
     await nativeEngine.open(sourceFile||sourceBytes);
@@ -181,6 +182,7 @@ export function createHybridPdfEditor({
     const editor=activeOcrEditor;
     const pageIndex=activeOcrPageIndex;
     if(!editor){activeOcrPageIndex=null;ocrHost.replaceChildren();return;}
+    const scanDraft=persist?await editor.snapshot():null;
     if(persist&&Number(editor.getState?.().editCount)>0){
       let captured=null;
       const previousCapture=pages[pageIndex]?.ocrCapture;
@@ -190,11 +192,13 @@ export function createHybridPdfEditor({
         if(!captured?.bytes)throw Object.assign(new Error('OCR page changes could not be serialized safely.'),{code:'HYBRID_OCR_FLUSH_FAILED'});
         pages[pageIndex].ocrBytes=copyBytes(captured.bytes);
         pages[pageIndex].ocrDirty=true;
-        pages[pageIndex].ocrEditCount=(pages[pageIndex].ocrEditCount||0)+(Number(captured.edits)||Number(editor.getState?.().editCount)||0);
+        pages[pageIndex].ocrEditCount=Number(captured.edits)||Number(editor.getState?.().editCount)||0;
       }finally{
         pages[pageIndex].ocrCapture=previousCapture||null;
       }
     }
+    if(persist&&Number(editor.getState?.().editCount)===0){pages[pageIndex].ocrBytes=null;pages[pageIndex].ocrDirty=false;pages[pageIndex].ocrEditCount=0;}
+    if(persist){pages[pageIndex].ocrBaseBytes=copyBytes(activeOcrSource);pages[pageIndex].ocrDraft=scanDraft;}
     activeOcrEditor=null;activeOcrPageIndex=null;
     try{await editor.destroy?.();}catch(error){console.warn('Hybrid OCR cleanup failed:',error);}
     ocrHost.replaceChildren();
@@ -203,12 +207,13 @@ export function createHybridPdfEditor({
   async function openOcrPage(pageIndex){
     const page=pages[pageIndex];
     if(!page||page.route!=='ocr')throw new Error('Requested page is not routed to OCR.');
-    const pageBytes=page.ocrBytes||await extractSinglePage(sourceBytes,pageIndex);
+    const pageBytes=page.ocrBaseBytes||page.ocrBytes||await extractSinglePage(sourceBytes,pageIndex);
     const pageFile=makePdfFile(pageBytes,`${sourceName.replace(/\.pdf$/i,'')}-page-${pageIndex+1}.pdf`);
     activeOcrPageIndex=pageIndex;activeOcrSource=copyBytes(pageBytes);
     const openingEditor=createScannedPdfEditor({
       container:ocrHost,
       allowGroupedEditing:false,
+      onChange:()=>onChange(),
       onStatus:message=>{if(activeOcrPageIndex===pageIndex)setStatus(message||'');},
       onWarning:warning=>onWarning(warning),
       onError:error=>onError(error),
@@ -221,7 +226,7 @@ export function createHybridPdfEditor({
     activeOcrEditor=openingEditor;
     try{
       await openingEditor.open(pageFile);
-      if(page.recoveryDraft){await openingEditor.restore(page.recoveryDraft);page.recoveryDraft=null;}
+      if(page.ocrDraft)await openingEditor.restore(page.ocrDraft);
       if(activeOcrEditor!==openingEditor)throw new Error('OCR page session was replaced while opening.');
       hideOcrManagedControls(ocrHost);
     }catch(error){
@@ -372,8 +377,18 @@ export function createHybridPdfEditor({
           if(JSON.stringify(original.getMediaBox())!==JSON.stringify(replacement.getMediaBox())||JSON.stringify(original.getCropBox())!==JSON.stringify(replacement.getCropBox())||original.getRotation().angle!==replacement.getRotation().angle)
             throw new Error('Recovered OCR page geometry differs from the original.');
           const recovered=saved.draft?await validateScanDraft(saved.draft,await sourceDigest(saved.bytes),1):null;
-          if(recovered&&saved.index!==draft.pageIndex)throw new Error('Only the active OCR page may contain an unexported scan draft.');
-          Object.assign(pages[saved.index],{ocrBytes:copyBytes(saved.bytes),ocrDirty:!!saved.dirty,ocrEditCount:saved.editCount,recoveryDraft:recovered});
+          let exported=saved.exportBytes||(!recovered?saved.bytes:null);
+          if(exported){
+            if(!(exported instanceof Uint8Array))throw new Error('Invalid recovered OCR export.');
+            total+=exported.byteLength;if(total>128*1024*1024)throw new Error('OCR recovery exceeds the memory budget.');
+            const exportedDoc=await PDFDocument.load(exported.slice(),{ignoreEncryption:false,updateMetadata:false});
+            if(exportedDoc.getPageCount()!==1)throw new Error('Recovered OCR export must contain one page.');
+            const exportedPage=exportedDoc.getPage(0);
+            if(JSON.stringify(original.getMediaBox())!==JSON.stringify(exportedPage.getMediaBox())||JSON.stringify(original.getCropBox())!==JSON.stringify(exportedPage.getCropBox())||original.getRotation().angle!==exportedPage.getRotation().angle)
+              throw new Error('Recovered OCR export geometry differs from the original.');
+          }
+          if(saved.dirty&&!exported&&saved.index!==draft.pageIndex)throw new Error('Inactive OCR draft is missing its validated export.');
+          Object.assign(pages[saved.index],{ocrBytes:exported?copyBytes(exported):null,ocrBaseBytes:copyBytes(saved.bytes),ocrDirty:!!saved.dirty,ocrEditCount:saved.editCount,ocrDraft:recovered});
         }
         if(draft.native){const engine=await ensureNativeEngine();await engine.restore(draft.native);}
       }
@@ -386,6 +401,17 @@ export function createHybridPdfEditor({
     }
   }
 
+  async function nativeTextAction(action){
+    if(busy||!requireFinishedEdit())throw new Error('Finish the current PDF operation first.');
+    setBusy(true);root.inert=true;
+    try{return await action(await ensureNativeEngine());}finally{root.inert=false;setBusy(false);}
+  }
+  const textEntries=()=>nativeTextAction(engine=>engine.textEntries());
+  const replaceTextRanges=(matches,replacement)=>nativeTextAction(engine=>engine.replaceTextRanges(matches,replacement));
+  const revealText=(id,index)=>nativeTextAction(async engine=>{
+    await activatePage(index);await engine.revealText(id,index);
+  });
+
   async function snapshot(){
     if(busy||destroyed||!sourceBytes||!requireFinishedEdit())throw new Error('Finish the current PDF operation before saving a draft.');
     setBusy(true);root.inert=true;
@@ -394,9 +420,9 @@ export function createHybridPdfEditor({
       for(let index=0;index<pages.length;index++){
         const page=pages[index];
         if(activeOcrEditor&&activeOcrPageIndex===index){
-          ocrPages.push({index,bytes:copyBytes(activeOcrSource),dirty:page.ocrDirty,editCount:page.ocrEditCount,
+          ocrPages.push({index,bytes:copyBytes(activeOcrSource),exportBytes:page.ocrBytes?copyBytes(page.ocrBytes):null,dirty:page.ocrDirty,editCount:page.ocrEditCount,
             draft:await activeOcrEditor.snapshot()});
-        }else if(page.ocrBytes)ocrPages.push({index,bytes:copyBytes(page.ocrBytes),dirty:page.ocrDirty,editCount:page.ocrEditCount,draft:null});
+        }else if(page.ocrBaseBytes||page.ocrBytes)ocrPages.push({index,bytes:copyBytes(page.ocrBaseBytes||page.ocrBytes),exportBytes:page.ocrBytes?copyBytes(page.ocrBytes):null,dirty:page.ocrDirty,editCount:page.ocrEditCount,draft:page.ocrDraft||null});
       }
       return {version:1,source:draftSource,pageIndex:activePageIndex,native:nativeEngine?.snapshot()||null,ocrPages};
     }finally{root.inert=false;setBusy(false);}
@@ -447,5 +473,5 @@ export function createHybridPdfEditor({
   close.addEventListener('click',()=>{destroy().then(()=>onClose()).catch(onError);});
   updateToolbar();
 
-  return {open,snapshot,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
+  return {open,snapshot,textEntries,replaceTextRanges,revealText,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
 }
