@@ -108,3 +108,31 @@ this does not establish wider replacement/reflow acceptance.
 OCR snapshots and shared workspace wiring remain pending. The candidate's new
 APIs do not yet enable automatic recovery in the workspace UI. No other engine
 feature work or frozen tool code was changed.
+
+## 2026-10-17 — OCR and hybrid recovery foundation
+
+Added asynchronous scan snapshots/restoration with original-file SHA-256 binding,
+recognized word metadata, replacement records, added text and lossless PNG pixels.
+PNG dimensions, page geometry, duplicate pages and encoded-memory budget are
+checked before installation. Restoration stages state before replacing the live
+session; invalid drafts retain existing work. Page freezing now uses PNG to avoid
+JPEG degradation across recovery/navigation; transparent pixels are cleared before
+rehydration to avoid compositing them twice. Pending edits and OCR operations block
+snapshot/restore until finished.
+
+The hybrid editor now exposes `snapshot()` and `open(file, draft)` for a **fresh**
+session. It stores the actual OCR page bytes used as the recognition base, plus the
+active scan draft, native editing intent, and the selected page. Recovered OCR page
+boxes/rotation must match the original. The workspace adapter must stage a new
+hybrid instance and keep the old instance until recovery succeeds; `open` is not
+an in-place restore method for an existing hybrid session.
+
+New `ocr-draft-regression.mjs` verifies structured-clone persistence, byte-identical
+edited canvas PNG recovery, word retention, pending-edit refusal, corrupt/source
+mismatch rejection, reset and two-page PDF export. It also restores a hybrid OCR
+session and validates its export. OCR recognition/classification and scan rendering
+are deterministic in this test; canvas pixels and PDF serialization are real.
+
+Affected native recovery/isolation, browser stability, OCR geometry, scan mobile
+and OCR export regressions pass. Shared-workspace automatic saving, change
+notifications and history integration are still pending. No production deployment.

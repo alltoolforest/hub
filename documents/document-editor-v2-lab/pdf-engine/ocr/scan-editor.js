@@ -1,3 +1,5 @@
+import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
+import {scanPageDraft,validateScanDraft} from './scan-draft.js';
 import { renderAddedText } from './added-text.js';
 import { patchPlacement } from './patch-placement.js';
 import { PDFDocument,degrees } from '../fortress/src/core/pdf-lib.js';
@@ -69,14 +71,15 @@ function fitReplacement(ctx,target,text,style,rect){
 }
 
 async function drawBlobToCanvas(blob,canvas){
-  if(globalThis.createImageBitmap){const bitmap=await createImageBitmap(blob);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return;}
-  const url=URL.createObjectURL(blob);try{await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve();};img.onerror=reject;img.src=url;});}finally{URL.revokeObjectURL(url);}
+  if(globalThis.createImageBitmap){const bitmap=await createImageBitmap(blob);canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return;}
+  const url=URL.createObjectURL(blob);try{await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve();};img.onerror=reject;img.src=url;});}finally{URL.revokeObjectURL(url);}
 }
 
 export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>{},onError=()=>{},onExport=()=>{},onClose=()=>{},allowGroupedEditing=false}={}){
   if(!container)throw new Error('OCR editor container is required.');
   let sourceBytes=null,sourceName='document.pdf',pdf=null,pageCount=0,pageIndex=0,destroyed=false,selectedTarget=null,granularity='word',ocrBusy=false;
   const pages=new Map();
+  let draftSource=null,draftBusy=false;
   let placingText=false,pickerTargets=[];
   const reportStatus=onStatus,reportWarning=onWarning,reportError=onError;
   onStatus=message=>{status.textContent=message;status.dataset.kind='status';reportStatus(message);};
@@ -112,15 +115,15 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   function cancelEdit(){selectedTarget=null;placingText=false;root.classList.remove('ocr-placing');add.setAttribute('aria-pressed','false');editbar.hidden=true;format.hidden=true;input.value='';picker.value='';updateToolbar();}
   function revealEdit(){editbar.hidden=false;editbar.scrollIntoView?.({block:'nearest'});input.focus();input.select();}
   function selectTarget(target,state){
-    if(ocrBusy)return;
+    if(ocrBusy||draftBusy)return;
     cancelEdit();selectedTarget={target,state};oldLabel.textContent=`Replace ${target.type} “${target.text}”`;input.value=target.text;input.setAttribute('aria-label','Replacement OCR text');remove.hidden=false;revealEdit();
   }
   function selectAddition(addition,state){
-    if(ocrBusy)return;
+    if(ocrBusy||draftBusy)return;
     cancelEdit();selectedTarget={addition,state};oldLabel.textContent=addition.id?'Edit added text':'New text at selected position';input.value=addition.text||'';input.setAttribute('aria-label','New text');size.value=String(addition.fontSize||12);color.value=addition.color||'#17211d';format.hidden=false;remove.hidden=!addition.id;revealEdit();
   }
   function beginAdd(){
-    if(ocrBusy||destroyed)return;
+    if(ocrBusy||draftBusy||destroyed)return;
     if(selectedTarget){onWarning({code:'OCR_PENDING_EDIT',message:'Apply or cancel the current text edit first.'});return;}
     if(placingText){cancelEdit();onStatus('Text placement cancelled.');return;}
     placingText=true;root.classList.add('ocr-placing');add.setAttribute('aria-pressed','true');onStatus('Tap the page where you want to add text. OCR is not required. Tap Add text again to cancel.');
@@ -129,7 +132,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
 
   async function freezeOtherPages(exceptIndex){
     for(const [idx,state] of pages){if(idx===exceptIndex||!state.canvas)continue;
-      if(state.edited){state.editedBlob=await canvasBlob(state.canvas,'image/jpeg',.88);state.pixelWidth=state.canvas.width;state.pixelHeight=state.canvas.height;}
+      if(state.edited){state.editedBlob=await canvasBlob(state.canvas,'image/png');state.pixelWidth=state.canvas.width;state.pixelHeight=state.canvas.height;}
       releaseCanvas(state.canvas);releaseCanvas(state.base);state.canvas=null;state.base=null;state.overlay=null;
       if(!state.edited&&!state.words)pages.delete(idx);
     }
@@ -190,7 +193,7 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   }
 
   async function runOcr(){
-    const state=pages.get(pageIndex);if(!state?.base||ocrBusy||destroyed)return;
+    const state=pages.get(pageIndex);if(!state?.base||ocrBusy||draftBusy||destroyed)return;
     if(selectedTarget||placingText){onWarning({code:'OCR_PENDING_EDIT',message:'Apply or cancel the current text edit first.'});return;}
     ocrBusy=true;run.disabled=true;add.disabled=true;run.textContent='Running OCR…';let pre=null;
     try{
@@ -275,7 +278,8 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
 
   async function open(file){
     if(destroyed)throw new Error('OCR session is closed.');
-    sourceName=file?.name||'document.pdf';sourceBytes=file instanceof Uint8Array?file:new Uint8Array(await file.arrayBuffer());
+    sourceName=file?.name||'document.pdf';sourceBytes=file instanceof Uint8Array?file.slice():new Uint8Array(await file.arrayBuffer());
+    draftSource=await sourceDigest(sourceBytes);
     const pdfjs=await loadPdfjs();
     if(destroyed)throw new Error('OCR session is closed.');
     const task=pdfjs.getDocument({data:sourceBytes.slice(),isEvalSupported:false,useWorkerFetch:false});loadingTask=task;
@@ -286,6 +290,47 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
       await renderPage(0);return getState();
     }catch(error){try{await task.destroy();}catch{}if(loadingTask===task)loadingTask=null;pdf=null;throw error;}
   }
+  async function withDraftLock(operation){
+    if(destroyed||!pdf||draftBusy||ocrBusy||selectedTarget||placingText)
+      throw new Error('Finish the current scanned-page operation before saving or restoring a draft.');
+    draftBusy=true;root.inert=true;
+    try{return await operation();}finally{draftBusy=false;root.inert=false;}
+  }
+  async function snapshot(){
+    return withDraftLock(async()=>{
+      const saved=[];
+      for(const [index,state] of pages){
+        const blob=state.edits.length?(state.canvas?await canvasBlob(state.canvas,'image/png'):state.editedBlob):null;
+        saved.push(scanPageDraft(index,state,blob));
+      }
+      return validateScanDraft({version:1,source:draftSource,pageIndex,pages:saved},draftSource,pageCount);
+    });
+  }
+  async function restore(value){
+    return withDraftLock(async()=>{
+      const draft=await validateScanDraft(value,draftSource,pageCount),staged=new Map();
+      const disposeStates=states=>{for(const state of states.values()){releaseCanvas(state.canvas);releaseCanvas(state.base);}};
+      try{
+        for(const saved of draft.pages){
+          const state=await createPageState(saved.index);staged.set(saved.index,state);
+          if(state.pixelWidth!==saved.pixelWidth||state.pixelHeight!==saved.pixelHeight)
+            throw new Error('Scan rendering dimensions changed; this draft cannot be restored safely.');
+          Object.assign(state,{words:saved.words,edits:saved.edits,additions:saved.additions,
+            additionChanges:saved.additionChanges,edited:saved.edited,editedBlob:saved.editedBlob});
+          if(saved.editedBlob)await drawBlobToCanvas(saved.editedBlob,state.canvas);
+          // Check added text before exposing any restored state.
+          for(const addition of state.additions){const rendered=renderAddedText(addition,state);releaseCanvas(rendered.canvas);}
+          rebuildLayout(state);
+          if(saved.index!==draft.pageIndex){releaseCanvas(state.canvas);releaseCanvas(state.base);state.canvas=null;state.base=null;}
+        }
+        const previous=new Map(pages),oldPage=pageIndex;
+        pages.clear();for(const [index,state] of staged)pages.set(index,state);
+        try{await renderPage(draft.pageIndex);}
+        catch(error){pages.clear();for(const [index,state] of previous)pages.set(index,state);try{await renderPage(oldPage);}catch{}throw error;}
+        disposeStates(previous);onStatus('Scanned PDF draft restored.');
+      }catch(error){disposeStates(staged);throw error;}
+    });
+  }
   function getState(){return {mode:'ocr-scan',busy:ocrBusy,hasPendingEdit:!!selectedTarget||placingText,pageIndex,pageCount,granularity,allowGroupedEditing,editedPages:[...pages.entries()].filter(([,s])=>s.edited).map(([i])=>i),editCount:[...pages.values()].reduce((n,s)=>n+s.edits.length+s.additionChanges,0),renderPlans:[...pages.entries()].map(([i,s])=>({pageIndex:i,...s.renderPlan}))};}
   async function destroy(){if(destroyed)return;destroyed=true;cancelEdit();try{await provider.terminate();}catch{}try{await loadingTask?.destroy();}catch{}loadingTask=null;pdf=null;sourceBytes=null;for(const state of pages.values()){releaseCanvas(state.canvas);releaseCanvas(state.base);}pages.clear();container.replaceChildren();}
 
@@ -294,5 +339,5 @@ export function createScannedPdfEditor({container,onStatus=()=>{},onWarning=()=>
   prev.addEventListener('click',()=>pageIndex>0&&renderPage(pageIndex-1));next.addEventListener('click',()=>pageIndex<pageCount-1&&renderPage(pageIndex+1));run.addEventListener('click',runOcr);save.addEventListener('click',exportCopy);close.addEventListener('click',async()=>{await destroy();onClose();});
   apply.addEventListener('click',()=>applyReplacement(false));remove.addEventListener('click',()=>applyReplacement(true));cancel.addEventListener('click',cancelEdit);mode.addEventListener('change',()=>{granularity=mode.value;const state=pages.get(pageIndex);if(state?.layout)renderOverlay(state);onStatus(`${granularity[0].toUpperCase()+granularity.slice(1)} selection enabled.`);});
   input.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();applyReplacement(false);}else if(event.key==='Escape'){event.preventDefault();cancelEdit();}});
-  updateToolbar();return {open,destroy,getState,runOcr:()=>runOcr(),save:()=>exportCopy()};
+  updateToolbar();return {open,snapshot,restore,destroy,getState,runOcr:()=>runOcr(),save:()=>exportCopy()};
 }

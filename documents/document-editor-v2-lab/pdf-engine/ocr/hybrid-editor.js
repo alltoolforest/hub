@@ -1,3 +1,5 @@
+import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
+import {validateScanDraft} from './scan-draft.js';
 import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
 import { withPdfDocument } from '../fortress/src/rendering/with-document.js';
 import { createAdvancedPdfTextEngine } from '../fortress/src/main.js';
@@ -84,6 +86,7 @@ export function createHybridPdfEditor({
 }={}){
   if(!container)throw new Error('Hybrid Edit PDF container is required.');
 
+  let draftSource=null,activeOcrSource=null;
   let sourceFile=null,sourceBytes=null,sourceName='document.pdf',pageCount=0,pages=[];
   let activePageIndex=0,nativeEngine=null,activeOcrEditor=null,activeOcrPageIndex=null;
   let classifier=null,nativeExportCapture=null,destroyed=false,busy=false,nativePrepared=false;
@@ -202,7 +205,7 @@ export function createHybridPdfEditor({
     if(!page||page.route!=='ocr')throw new Error('Requested page is not routed to OCR.');
     const pageBytes=page.ocrBytes||await extractSinglePage(sourceBytes,pageIndex);
     const pageFile=makePdfFile(pageBytes,`${sourceName.replace(/\.pdf$/i,'')}-page-${pageIndex+1}.pdf`);
-    activeOcrPageIndex=pageIndex;
+    activeOcrPageIndex=pageIndex;activeOcrSource=copyBytes(pageBytes);
     const openingEditor=createScannedPdfEditor({
       container:ocrHost,
       allowGroupedEditing:false,
@@ -218,6 +221,7 @@ export function createHybridPdfEditor({
     activeOcrEditor=openingEditor;
     try{
       await openingEditor.open(pageFile);
+      if(page.recoveryDraft){await openingEditor.restore(page.recoveryDraft);page.recoveryDraft=null;}
       if(activeOcrEditor!==openingEditor)throw new Error('OCR page session was replaced while opening.');
       hideOcrManagedControls(ocrHost);
     }catch(error){
@@ -330,7 +334,7 @@ export function createHybridPdfEditor({
     }
   }
 
-  async function open(file){
+  async function open(file,draft=null){
     if(destroyed)throw new Error('Hybrid editor has been destroyed.');
     if((file?.byteLength??file?.size??0)>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
     sourceFile=file instanceof Uint8Array?null:file;
@@ -339,6 +343,7 @@ export function createHybridPdfEditor({
     if(sourceBytes.byteLength>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
     setBusy(true);
     try{
+      draftSource=await sourceDigest(sourceBytes);
       const securityCheck=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
       if(securityCheck.isEncrypted)throw Object.assign(new Error('Encrypted PDFs are not supported yet. Open an unlocked copy.'),{code:'PDF_ENCRYPTED_UNSUPPORTED'});
       setStatus('Analyzing every PDF page for native or OCR editing…');
@@ -352,13 +357,49 @@ export function createHybridPdfEditor({
       const nativeCount=pages.filter(page=>page.route==='native').length;
       const ocrCount=pageCount-nativeCount;
       setStatus(`Hybrid routing ready — ${nativeCount} native page${nativeCount===1?'':'s'}, ${ocrCount} OCR page${ocrCount===1?'':'s'}.`);
-      await activatePage(0,{skipOcrFlush:true});
+      if(draft){
+        if(draft.version!==1||draft.source!==draftSource||!Number.isInteger(draft.pageIndex)||draft.pageIndex<0||draft.pageIndex>=pageCount||!Array.isArray(draft.ocrPages))
+          throw new Error('The hybrid PDF draft does not match this document.');
+        const seen=new Set();let total=0;
+        for(const saved of draft.ocrPages){
+          if(!saved||!Number.isInteger(saved.index)||seen.has(saved.index)||pages[saved.index]?.route!=='ocr'||!(saved.bytes instanceof Uint8Array)||!Number.isInteger(saved.editCount)||saved.editCount<0)
+            throw new Error('Invalid recovered OCR page.');
+          seen.add(saved.index);total+=saved.bytes.byteLength;
+          if(total>128*1024*1024)throw new Error('OCR recovery exceeds the memory budget.');
+          const check=await PDFDocument.load(saved.bytes.slice(),{ignoreEncryption:false,updateMetadata:false});
+          if(check.getPageCount()!==1)throw new Error('Recovered OCR page must contain one PDF page.');
+          const original=securityCheck.getPage(saved.index),replacement=check.getPage(0);
+          if(JSON.stringify(original.getMediaBox())!==JSON.stringify(replacement.getMediaBox())||JSON.stringify(original.getCropBox())!==JSON.stringify(replacement.getCropBox())||original.getRotation().angle!==replacement.getRotation().angle)
+            throw new Error('Recovered OCR page geometry differs from the original.');
+          const recovered=saved.draft?await validateScanDraft(saved.draft,await sourceDigest(saved.bytes),1):null;
+          if(recovered&&saved.index!==draft.pageIndex)throw new Error('Only the active OCR page may contain an unexported scan draft.');
+          Object.assign(pages[saved.index],{ocrBytes:copyBytes(saved.bytes),ocrDirty:!!saved.dirty,ocrEditCount:saved.editCount,recoveryDraft:recovered});
+        }
+        if(draft.native){const engine=await ensureNativeEngine();await engine.restore(draft.native);}
+      }
+      await activatePage(draft?.pageIndex??0,{skipOcrFlush:true});
       setBusy(false);
       return getState();
     }catch(error){
       try{await classifier?.destroy();}catch{}classifier=null;
       setBusy(false);onError(error);throw error;
     }
+  }
+
+  async function snapshot(){
+    if(busy||destroyed||!sourceBytes||!requireFinishedEdit())throw new Error('Finish the current PDF operation before saving a draft.');
+    setBusy(true);root.inert=true;
+    try{
+      const ocrPages=[];
+      for(let index=0;index<pages.length;index++){
+        const page=pages[index];
+        if(activeOcrEditor&&activeOcrPageIndex===index){
+          ocrPages.push({index,bytes:copyBytes(activeOcrSource),dirty:page.ocrDirty,editCount:page.ocrEditCount,
+            draft:await activeOcrEditor.snapshot()});
+        }else if(page.ocrBytes)ocrPages.push({index,bytes:copyBytes(page.ocrBytes),dirty:page.ocrDirty,editCount:page.ocrEditCount,draft:null});
+      }
+      return {version:1,source:draftSource,pageIndex:activePageIndex,native:nativeEngine?.snapshot()||null,ocrPages};
+    }finally{root.inert=false;setBusy(false);}
   }
 
   function getState(){
@@ -406,5 +447,5 @@ export function createHybridPdfEditor({
   close.addEventListener('click',()=>{destroy().then(()=>onClose()).catch(onError);});
   updateToolbar();
 
-  return {open,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
+  return {open,snapshot,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
 }
