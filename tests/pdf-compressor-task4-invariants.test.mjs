@@ -89,3 +89,20 @@ test('strict Flate decoder accepts only checksum-verified PDF whitespace padding
  const corrupted=encoded.slice();corrupted[corrupted.length-1]^=0x21;
  await assert.rejects(inflateStreamBounded(new Uint8Array([...corrupted,10]),original.length));
 });
+
+test('legacy Flate recovery accepts only a wholly absent Adler-32 trailer',async()=>{
+ const original=new Uint8Array(Buffer.from('legacy producer with complete raw deflate'.repeat(80)));
+ const encoded=new Uint8Array(deflateSync(original));
+ const missingTrailer=encoded.subarray(0,encoded.length-4);
+ assert.deepEqual(await inflateStreamBounded(missingTrailer,original.length),original);
+ // Partial trailers, incorrect checksums and damaged DEFLATE are not repaired.
+ await assert.rejects(inflateStreamBounded(encoded.subarray(0,encoded.length-2),original.length));
+ const wrongChecksum=encoded.slice();wrongChecksum[wrongChecksum.length-1]^=0xff;
+ await assert.rejects(inflateStreamBounded(wrongChecksum,original.length));
+ const damaged=missingTrailer.slice();damaged[Math.max(3,Math.floor(damaged.length/2))]^=0xff;
+ await assert.rejects(inflateStreamBounded(damaged,original.length));
+ await assert.rejects(
+  inflateStreamBounded(missingTrailer,32),
+  error=>error?.code==='decoded-stream-limit'
+ );
+});
