@@ -120,8 +120,14 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   for(const [,object] of objects){
     if(!(object instanceof PDF.PDFRawStream))continue;
     const lookup=key=>context.lookup(object.dict.get(N(key)));
-    // A high-resolution plain Flate image can be checked incrementally without
-    // buffering all decoded pixels. This is not an unchecked decompression bypass.
+    // Plain 8-bit RGB/gray Flate images are verified incrementally regardless
+    // of their individual decoded size. A many-page scan can contain hundreds
+    // of individually moderate images whose aggregate raw pixels exceed the
+    // general decoded-stream budget even though only one bounded row needs to
+    // be resident at a time. This remains strict verification: exact decoded
+    // byte count, stream closure, dimensions, cancellation and row limits are
+    // all enforced by streamFlateImage. Predictor/custom image streams stay on
+    // the general bounded decoder below.
     const d=object.dict,filterName=String(lookup('Filter'));
     if(name(d,'Subtype')==='/Image'&&filterName==='/FlateDecode'&&
        !lookup('DecodeParms')&&!lookup('DP')&&
@@ -129,11 +135,9 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
        lookup('BitsPerComponent')?.asNumber?.()===8){
       const width=lookup('Width')?.asNumber?.(),height=lookup('Height')?.asNumber?.();
       const channels=name(d,'ColorSpace')==='/DeviceGray'?1:3;
-      if(width*height*channels>streamLimit){
-        try{await streamFlateImage(object.contents,{width,height,channels,signal,maxRowBytes:streamLimit});}
-        catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
-        continue;
-      }
+      try{await streamFlateImage(object.contents,{width,height,channels,signal,maxRowBytes:streamLimit});}
+      catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
+      continue;
     }
     const params=lookup('DecodeParms')??lookup('DP');
     const parameterList=params instanceof PDF.PDFArray?params.asArray().map(v=>context.lookup(v)):[params];
