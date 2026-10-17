@@ -100,7 +100,9 @@ async function boundedInflate(bytes,maxBytes){
       try{return await boundedInflateMissingTrailer(bytes,maxBytes);}
       catch(recoveryError){
         if(recoveryError?.code==='decoded-stream-limit')throw recoveryError;
-        throw error;
+        // A TypeError may also represent strict trailing-junk rejection.
+        // If missing-trailer recovery does not prove the stream, continue to
+        // the pre-existing whitespace-tail verifier instead of weakening it.
       }
     }
     if(!/(?:Junk found after end of compressed data|Trailing junk found after the end of the compressed stream)/i.test(message))throw error;
