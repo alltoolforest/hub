@@ -144,7 +144,9 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
         for(;;){
           cancel(signal);
           const index=cursor++;if(index>=plainImages.length)return;
-          await streamFlateImage(plainImages[index],{signal,maxRowBytes:streamLimit});
+          const image=plainImages[index];
+          await streamFlateImage(image.contents,{width:image.width,height:image.height,
+            channels:image.channels,signal,maxRowBytes:streamLimit});
         }
       }));
     }catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
