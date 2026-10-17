@@ -117,28 +117,40 @@ export async function inspectPDFInput(bytes,{PDF,readPages,signal,limits=INPUT_L
   // Bound general stream expansion and predictor rows before the independent decoder.
   let decodedTotal=0;
   const streamLimit=limits.maxDecodedStreamBytes??32000000;
+  // Strictly verify ordinary scan images with a small bounded concurrency.
+  // Their compressed inputs and decoded rows remain independently bounded;
+  // parallelism reduces wall time on multi-core devices without accumulating
+  // full decoded images in memory.
+  const plainImages=[],generalStreams=[];
   for(const [,object] of objects){
     if(!(object instanceof PDF.PDFRawStream))continue;
-    const lookup=key=>context.lookup(object.dict.get(N(key)));
-    // Plain 8-bit RGB/gray Flate images are verified incrementally regardless
-    // of their individual decoded size. A many-page scan can contain hundreds
-    // of individually moderate images whose aggregate raw pixels exceed the
-    // general decoded-stream budget even though only one bounded row needs to
-    // be resident at a time. This remains strict verification: exact decoded
-    // byte count, stream closure, dimensions, cancellation and row limits are
-    // all enforced by streamFlateImage. Predictor/custom image streams stay on
-    // the general bounded decoder below.
-    const d=object.dict,filterName=String(lookup('Filter'));
+    const lookup=key=>context.lookup(object.dict.get(N(key))),d=object.dict;
+    const filterName=String(lookup('Filter'));
     if(name(d,'Subtype')==='/Image'&&filterName==='/FlateDecode'&&
        !lookup('DecodeParms')&&!lookup('DP')&&
        ['/DeviceGray','/DeviceRGB'].includes(name(d,'ColorSpace'))&&
        lookup('BitsPerComponent')?.asNumber?.()===8){
-      const width=lookup('Width')?.asNumber?.(),height=lookup('Height')?.asNumber?.();
-      const channels=name(d,'ColorSpace')==='/DeviceGray'?1:3;
-      try{await streamFlateImage(object.contents,{width,height,channels,signal,maxRowBytes:streamLimit});}
-      catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
-      continue;
-    }
+      plainImages.push({contents:object.contents,
+        width:lookup('Width')?.asNumber?.(),height:lookup('Height')?.asNumber?.(),
+        channels:name(d,'ColorSpace')==='/DeviceGray'?1:3});
+    }else generalStreams.push(object);
+  }
+  if(plainImages.length){
+    let cursor=0;
+    const reported=Math.trunc(Number(globalThis.navigator?.hardwareConcurrency));
+    const concurrency=Math.min(4,Math.max(1,Number.isFinite(reported)&&reported>0?reported:2),plainImages.length);
+    try{
+      await Promise.all(Array.from({length:concurrency},async()=>{
+        for(;;){
+          cancel(signal);
+          const index=cursor++;if(index>=plainImages.length)return;
+          await streamFlateImage(plainImages[index],{signal,maxRowBytes:streamLimit});
+        }
+      }));
+    }catch(error){cancel(signal);fail('invalid-image-stream','An embedded image could not be decoded safely.');}
+  }
+  for(const object of generalStreams){
+    const lookup=key=>context.lookup(object.dict.get(N(key)));
     const params=lookup('DecodeParms')??lookup('DP');
     const parameterList=params instanceof PDF.PDFArray?params.asArray().map(v=>context.lookup(v)):[params];
     for(const param of parameterList){
