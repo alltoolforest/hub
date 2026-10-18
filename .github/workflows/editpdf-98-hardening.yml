@@ -1,0 +1,31 @@
+name: Edit PDF 98 hardening
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'documents/edit-pdf/**'
+      - '.github/workflows/editpdf-98-hardening.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  editpdf-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check Task 16 integration
+        run: |
+          node --check documents/edit-pdf/fortress/src/mapping/source-mapper.js
+          node --check documents/edit-pdf/fortress/src/core/document-model.js
+          node --check documents/edit-pdf/fortress/src/export/exporter-core.js
+      - name: Run accumulated 98 hardening gate
+        run: node documents/edit-pdf/fortress/tests/run-hardening-98.mjs
+      - name: Run Form invocation rewriter gate
+        run: node documents/edit-pdf/fortress/tests/form-invocation-rewriter-regression.mjs
+      - name: Run repeated Form isolation integration
+        run: node documents/edit-pdf/fortress/tests/form-invocation-isolation-integration.mjs
