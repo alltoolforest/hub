@@ -1,0 +1,99 @@
+name: Application Prep Live GitHub Pages Audit
+on:
+  pull_request:
+    paths:
+      - 'tests/application-prep-postdeploy-audit.mjs'
+      - 'tests/application-prep-final-live-*.mjs'
+      - '.github/workflows/application-prep-postdeploy-audit.yml'
+  workflow_dispatch:
+jobs:
+  live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify audit script
+        run: node --check tests/application-prep-postdeploy-audit.mjs
+      - name: Install Playwright
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Inspect actual published response and browser outputs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          LIVE_SITE_URL: https://alltoolforest.github.io/hub/
+          EXPECTED_DEPLOY_SHA: c5d82369191b0a9f7be5b6b0b804db659bed8672
+        run: node tests/application-prep-postdeploy-audit.mjs
+
+  final-production-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check scripts and regression scope
+        run: |
+          node --check tests/application-prep-final-live-fidelity.mjs
+          node --check tests/application-prep-final-live-reliability.mjs
+          node --check tests/application-prep-final-live-accessibility.mjs
+          node --check tests/application-prep-final-live-security.mjs
+          unexpected="$(git diff --name-only c5d82369191b0a9f7be5b6b0b804db659bed8672 HEAD | grep -Ev '^(tests/application-prep-(postdeploy-audit|final-live-[a-z]+)\\.mjs|\\.github/workflows/application-prep-postdeploy-audit\\.yml)
+      - name: Install QA-only browser dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Validate pixel fidelity, EXIF, PNG/JPEG, output-size constraints and PDF rendering LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-fidelity.mjs
+      - name: Validate mobile preflight, repeated outputs and import-failure recovery LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-reliability.mjs
+      - name: Validate WCAG guided flow, keyboard control, stale states and mobile reflow LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-accessibility.mjs
+      - name: Validate malicious-file handling, CSP and privacy LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-security.mjs
+ || true)"
+          if [ -n "$unexpected" ]; then echo "NON-QA CODE CHANGED: $unexpected"; exit 1; fi
+      - name: Install QA-only browser dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.10.3
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Validate pixel fidelity, EXIF, PNG/JPEG, output-size constraints and PDF rendering LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-fidelity.mjs
+      - name: Validate mobile preflight, repeated outputs and import-failure recovery LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-reliability.mjs
+      - name: Validate WCAG guided flow, keyboard control, stale states and mobile reflow LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-accessibility.mjs
+      - name: Validate malicious-file handling, CSP and privacy LIVE
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node tests/application-prep-final-live-security.mjs
