@@ -1,4 +1,5 @@
 import { planInsertionReflow } from './layout/reflow-planner.js';
+import { assertMoveDependencySafety } from './transaction-dependency-graph.js';
 
 function copyPlan(plan){
   if(!plan||typeof plan!=='object')return plan;
@@ -73,6 +74,11 @@ export async function replanDependentInsertions({
     throw Object.assign(new Error('This generated text cannot be moved independently.'),{code:'MOVE_TRANSACTION_UNSAFE'});
   }
 
+  // Task 10 dependency preflight: do not silently move an earlier insertion
+  // when a later deletion/contracting edit depends on the same page geometry.
+  // Later insertions remain supported and are replanned below.
+  assertMoveDependencySafety(transactions,targetId);
+
   const working=(transactions||[]).map(cloneTransaction);
   const moved=working[targetIndex];
   if(Number.isFinite(Number(patch.x)))moved.x=Number(patch.x);
@@ -93,9 +99,6 @@ export async function replanDependentInsertions({
       if(i>targetIndex&&tx?.expandedFromBlockId){
         throw Object.assign(new Error('A later generated paragraph depends on this layout and cannot be replanned independently.'),{code:'MOVE_DEPENDENCY_EXPANDED_INSERT_UNSAFE',dependentId:tx.id});
       }
-      // Rebuild the prefix preview if unrelated transactions were appended
-      // since the last affected insert. REPLACE_TEXT/upward-compaction entries
-      // can contribute page-flow metrics too, so a later insert must see them.
       if(prefix.length!==previewLength){
         prefixPreview=prefix.length?await previewTransactions(prefix):null;
         previewLength=prefix.length;
