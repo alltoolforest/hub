@@ -1,12 +1,8 @@
 import { PDFDocument } from '../core/pdf-lib.js';
 import { getPageContentStreams } from '../core/document-model.js';
 import { extractSourceRunsFromStreams } from '../mapping/source-mapper.js';
+import { resolveListSemanticUnit, listRunKey } from './list-semantic-units.js';
 
-const MARKER_RE=/^(?:[•●◦▪‣⁃·]|(?:\d{1,3}|[A-Za-z])[.)])$/u;
-
-function compact(value){return String(value||'').replace(/\s+/g,'').trim();}
-function isMarker(run){return MARKER_RE.test(compact(run?.text));}
-function runKey(run){return `${run?.sourceContainerKey||`page:${run?.streamRef||run?.streamIndex}`}:${run?.operatorIndex}`;}
 function deletesWholeLine(tx){
   return tx?.kind==='REPLACE_TEXT'&&!!tx?.block&&String(tx?.originalUnicode??tx?.block?.text??'').trim().length>0&&String(tx?.replacementUnicode??'').trim().length===0;
 }
@@ -17,93 +13,57 @@ function geometry(tx){
   const size=Math.max(6,Number(line?.fontSize||block?.fontSize)||12);
   return Number.isFinite(baseline)&&Number.isFinite(left)?{baseline,left,size}:null;
 }
-function markerRight(run,size){
-  const x=Number(run?.x),advance=Math.abs(Number(run?.advance));
-  if(!Number.isFinite(x))return null;
-  return x+(Number.isFinite(advance)&&advance>.1?advance:Math.max(3,size*.6));
+function claimedRunsOf(tx){
+  const runs=[];
+  for(const run of tx?.block?.sourceRuns||[])if(run)runs.push(run);
+  for(const line of tx?.block?.sourceLines||[])for(const run of line||[])if(run)runs.push(run);
+  return runs;
 }
-function sameVisualRow(run,g){return Math.abs(Number(run?.y)-g.baseline)<=Math.max(3.2,g.size*.40);}
-function markerOnBaseline(runs,baseline,size){return runs.some(run=>isMarker(run)&&Math.abs(Number(run?.y)-baseline)<=Math.max(3.2,size*.40));}
-function continuationBelow(runs,g){
-  const minGap=Math.max(3,g.size*.45),maxGap=Math.max(10,g.size*1.85);
-  const below=runs.filter(run=>{
-    if(!String(run?.text||'').trim()||isMarker(run))return false;
-    const y=Number(run?.y),x=Number(run?.x),size=Math.max(1,Number(run?.fontSize)||g.size);
-    if(!Number.isFinite(y)||!Number.isFinite(x))return false;
-    const gap=g.baseline-y;
-    if(gap<minGap||gap>maxGap)return false;
-    if(Math.abs(x-g.left)>Math.max(20,g.size*1.9))return false;
-    if(Math.abs(size-g.size)>Math.max(1.8,g.size*.24))return false;
-    return true;
-  });
-  if(!below.length)return false;
-  const nextBaseline=Math.max(...below.map(run=>Number(run.y)));
-  return !markerOnBaseline(runs,nextBaseline,g.size);
-}
-function findCompanionMarker(tx,runs,claimed){
-  const g=geometry(tx);if(!g||continuationBelow(runs,g))return null;
-  const candidates=[];
-  for(const run of runs){
-    if(!isMarker(run)||claimed.has(runKey(run))||!sameVisualRow(run,g))continue;
-    const x=Number(run?.x),right=markerRight(run,g.size);
-    if(!Number.isFinite(x)||!Number.isFinite(right)||x>=g.left-.5)continue;
-    const gap=g.left-right;
-    if(gap<-.5||gap>Math.max(52,g.size*4.8))continue;
-    candidates.push({run,vertical:Math.abs(Number(run.y)-g.baseline),gap});
+function groupRunsByBaseline(runs,size){
+  const groups=[];const tolerance=Math.max(3.2,size*.40);
+  for(const run of runs||[]){
+    const y=Number(run?.y);if(!Number.isFinite(y))continue;
+    let group=groups.find(item=>Math.abs(item.baseline-y)<=tolerance);
+    if(!group){group={baseline:y,runs:[]};groups.push(group);}
+    group.runs.push(run);
   }
-  candidates.sort((a,b)=>a.vertical-b.vertical||a.gap-b.gap);
-  return candidates[0]?.run||null;
+  return groups.sort((a,b)=>b.baseline-a.baseline).map(group=>group.runs);
 }
-function companionBlock(tx,run,index){
-  const size=Math.max(6,Number(run?.fontSize)||Number(tx?.block?.fontSize)||12);
-  const x=Number(run?.x)||0,y=Number(run?.y)||0;
-  const width=Math.max(2,Math.abs(Number(run?.advance))||size*.6);
-  const text=String(run?.text||'');
-  const line={text,y,minX:x,maxX:x+width,fontSize:size,fontName:run?.fontName||null,runs:[],bounds:{x,y:y-size*.24,width,height:size*1.10}};
+function runBox(run,size){
+  const x=Number(run?.x)||0,y=Number(run?.y)||0,runSize=Math.max(6,Number(run?.fontSize)||size);
+  const width=Math.max(2,Math.abs(Number(run?.advance))||Math.max(3,String(run?.text||'').length*runSize*.45));
+  return {left:x,right:x+width,bottom:y-runSize*.24,top:y+runSize*.86,size:runSize};
+}
+function companionBlock(tx,runs,index){
+  const fallbackSize=Math.max(6,Number(tx?.block?.fontSize)||12);
+  const boxes=(runs||[]).map(run=>runBox(run,fallbackSize));
+  const left=Math.min(...boxes.map(box=>box.left)),right=Math.max(...boxes.map(box=>box.right)),bottom=Math.min(...boxes.map(box=>box.bottom)),top=Math.max(...boxes.map(box=>box.top));
+  const sourceLines=groupRunsByBaseline(runs,fallbackSize);
+  const lines=sourceLines.map(group=>{
+    const groupBoxes=group.map(run=>runBox(run,fallbackSize));
+    const minX=Math.min(...groupBoxes.map(box=>box.left)),maxX=Math.max(...groupBoxes.map(box=>box.right));
+    const y=Math.max(...group.map(run=>Number(run?.y)||bottom));
+    const fontSize=Math.max(...groupBoxes.map(box=>box.size));
+    const text=group.map(run=>String(run?.text||'')).join(' ').replace(/\s+/g,' ').trim();
+    return {text,y,minX,maxX,fontSize,fontName:group[0]?.fontName||null,runs:[],bounds:{x:minX,y:y-fontSize*.24,width:maxX-minX,height:fontSize*1.10}};
+  });
+  const text=lines.map(line=>line.text).filter(Boolean).join('\n');
   return {
-    id:`${tx?.blockId||tx?.block?.id||tx?.id||'edit'}__list_marker_${index}`,
-    pageIndex:Number(tx.pageIndex),
-    pageRotation:Number(tx?.block?.pageRotation)||0,
-    text,
-    lines:[line],
-    fontSize:size,
-    fontName:run?.fontName||null,
-    bounds:line.bounds,
-    tier:'DIRECT_EDIT',
-    confidence:1,
-    reason:null,
-    sourceRuns:[run],
-    sourceLines:[[run]],
+    id:`${tx?.blockId||tx?.block?.id||tx?.id||'edit'}__list_semantic_${index}`,
+    pageIndex:Number(tx.pageIndex),pageRotation:Number(tx?.block?.pageRotation)||0,text,lines,
+    fontSize:fallbackSize,fontName:runs?.[0]?.fontName||null,bounds:{x:left,y:bottom,width:right-left,height:top-bottom},
+    tier:'DIRECT_EDIT',confidence:1,reason:null,sourceRuns:[...runs],sourceLines,
   };
 }
-function companionTransaction(tx,run,index){
-  const block=companionBlock(tx,run,index);
+function companionTransaction(tx,runs,index){
+  const block=companionBlock(tx,runs,index);
   return {
-    id:`${tx.id}__list_marker_${index}`,
-    kind:'REPLACE_TEXT',
-    pageIndex:Number(tx.pageIndex),
-    blockId:block.id,
-    sourceMap:block.sourceLines,
-    // Leave originalUnicode empty intentionally. The marker is a source-level
-    // companion edit, not a second user deletion. This prevents duplicate
-    // page-wide deletion validation and prevents a second compaction shift.
-    originalUnicode:'',
-    replacementUnicode:'',
-    originalEncodedBytes:null,
-    replacementEncodedBytes:null,
-    originalOperators:block.sourceRuns,
-    replacementOperators:null,
-    fontContext:run?.fontContext||null,
-    layoutValidation:null,
-    fontFamily:null,
-    fontSize:null,
-    bold:null,
-    italic:null,
-    styleChanged:false,
-    status:'COMMITTED',
-    block,
-    autoListMarkerCompanion:true,
-    companionOf:tx.id,
+    id:`${tx.id}__list_semantic_${index}`,kind:'REPLACE_TEXT',pageIndex:Number(tx.pageIndex),blockId:block.id,sourceMap:block.sourceLines,
+    // This companion only removes list-owned source operators. It must not
+    // trigger a second upward-compaction transaction or duplicate validation.
+    originalUnicode:'',replacementUnicode:'',originalEncodedBytes:null,replacementEncodedBytes:null,originalOperators:block.sourceRuns,replacementOperators:null,
+    fontContext:runs?.[0]?.fontContext||null,layoutValidation:null,fontFamily:null,fontSize:null,bold:null,italic:null,styleChanged:false,status:'COMMITTED',block,
+    autoListMarkerCompanion:true,autoListSemanticCompanion:true,companionOf:tx.id,
   };
 }
 
@@ -114,23 +74,28 @@ export async function addDeletionMarkerCompanions(originalBytes,transactions){
 
   const doc=await PDFDocument.load(originalBytes instanceof Uint8Array?originalBytes.slice():new Uint8Array(originalBytes||0),{ignoreEncryption:true,updateMetadata:false});
   const pageRuns=new Map(),claimed=new Set();
-  for(const tx of source){
-    for(const run of tx?.block?.sourceRuns||[])claimed.add(runKey(run));
-  }
+  for(const tx of source)for(const run of claimedRunsOf(tx))claimed.add(listRunKey(run));
 
-  const companions=[];
-  let index=0;
+  const companions=[];let index=0;
   for(const tx of deletions){
+    const g=geometry(tx);if(!g)continue;
     const pageIndex=Number(tx.pageIndex);
     if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=doc.getPageCount())continue;
     if(!pageRuns.has(pageIndex)){
       const streams=getPageContentStreams(doc,pageIndex);
       pageRuns.set(pageIndex,extractSourceRunsFromStreams(doc,pageIndex,streams).sourceRuns||[]);
     }
-    const marker=findCompanionMarker(tx,pageRuns.get(pageIndex),claimed);
-    if(!marker)continue;
-    claimed.add(runKey(marker));
-    companions.push(companionTransaction(tx,marker,index++));
+    const unit=resolveListSemanticUnit({runs:pageRuns.get(pageIndex),claimed,baseline:g.baseline,left:g.left,size:g.size});
+    if(!unit.ok){
+      if(unit.reason==='LIST_MARKER_OWNERSHIP_AMBIGUOUS'){
+        throw Object.assign(new Error('List marker ownership is ambiguous, so deletion was refused to protect neighboring list items.'),{code:'LIST_MARKER_OWNERSHIP_AMBIGUOUS',transactionId:tx.id,pageIndex});
+      }
+      continue;
+    }
+    const owned=[unit.marker,...unit.continuationRuns].filter(run=>run&&!claimed.has(listRunKey(run)));
+    if(!owned.length)continue;
+    for(const run of owned)claimed.add(listRunKey(run));
+    companions.push(companionTransaction(tx,owned,index++));
   }
   return companions.length?[...source,...companions]:source;
 }

@@ -1,0 +1,30 @@
+name: Edit PDF 98 hardening
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'documents/edit-pdf/**'
+      - '.github/workflows/editpdf-98-hardening.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  editpdf-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check critical integration paths
+        run: |
+          node --check documents/edit-pdf/fortress/src/mapping/source-mapper.js
+          node --check documents/edit-pdf/fortress/src/core/document-model.js
+          node --check documents/edit-pdf/fortress/src/export/exporter-core.js
+          node --check documents/edit-pdf/fortress/src/export/exporter.js
+          node --check documents/edit-pdf/fortress/src/transaction-dependency-graph.js
+      - name: Run complete Edit PDF 98 regression matrix
+        working-directory: documents/edit-pdf/fortress
+        run: npm run test:98
