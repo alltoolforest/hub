@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:98": "node ./tests/run-hardening-98.mjs && node ./tests/form-invocation-rewriter-regression.mjs && node ./tests/table-cell-safety-regression.mjs"
+  }
+}
