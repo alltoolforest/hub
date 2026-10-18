@@ -1,8 +1,9 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from '../core/pdf-lib.js';
-import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream } from '../core/document-model.js';
+import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream, replacePageFormXObjectInvocationStream } from '../core/document-model.js';
 import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
+import { inferSourceFontTraits, fallbackReason, isCoverageFailure } from '../fonts/font-fallback-policy.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
 import { applyVerticalRegionReflow } from './page-reflow.js';
 
@@ -11,9 +12,16 @@ function sourceBucket(map,pageIndex,run){
   if(sourceKind==='form'){
     const formRefKey=run?.formRefKey||run?.streamRef;
     const formResourceName=run?.formResourceName;
+    const formRequiresIsolation=!!run?.formRequiresIsolation;
+    const formPageStreamIndex=Number(run?.formPageStreamIndex);
+    const formInvocationOperatorIndex=Number(run?.formInvocationOperatorIndex);
     if(!formRefKey||!formResourceName)throw Object.assign(new Error('Form XObject source metadata is incomplete.'),{code:'FORM_SOURCE_METADATA_MISSING'});
-    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}`;
-    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,edits:[]});
+    if(formRequiresIsolation&&(!Number.isInteger(formPageStreamIndex)||formPageStreamIndex<0||!Number.isInteger(formInvocationOperatorIndex)||formInvocationOperatorIndex<0)){
+      throw Object.assign(new Error('Repeated Form invocation metadata is incomplete.'),{code:'FORM_INVOCATION_IDENTITY_MISSING'});
+    }
+    const identity=formRequiresIsolation?`${formPageStreamIndex}:${formInvocationOperatorIndex}`:'unique';
+    const key=`form:${pageIndex}:${formRefKey}:${formResourceName}:${identity}`;
+    if(!map.has(key))map.set(key,{sourceKind,pageIndex,formRefKey,formResourceName,formRequiresIsolation,formPageStreamIndex,formInvocationOperatorIndex,edits:[]});
     return map.get(key);
   }
   const streamIndex=Number(run?.streamIndex);
@@ -43,15 +51,8 @@ function standardFontForChoice(family,bold=false,italic=false){
 }
 
 function standardFontForBlock(block,tx=null){
-  if(tx?.styleChanged){
-    return standardFontForChoice(tx.fontFamily||'serif',!!tx.bold,!!tx.italic);
-  }
-  const raw=[block.fontName,block.lines?.[0]?.fontName,block.sourceRuns?.[0]?.fontContext?.baseFont].filter(Boolean).join(' ').toLowerCase();
-  const bold=/bold|black|semibold|demi/.test(raw);
-  const italic=/italic|oblique/.test(raw);
-  if(/courier|mono/.test(raw))return standardFontForChoice('mono',bold,italic);
-  if(/times|serif|roman/.test(raw))return standardFontForChoice('serif',bold,italic);
-  return standardFontForChoice('sans',bold,italic);
+  const traits=inferSourceFontTraits(block,tx);
+  return standardFontForChoice(traits.family,traits.bold,traits.italic);
 }
 
 function standardFontForInsert(tx){
@@ -63,18 +64,21 @@ async function getEmbeddedStandardFont(doc,cache,name){
   return cache.get(name);
 }
 
-async function drawReconstructedText(doc,item,fontCache,warnings){
+async function prepareReconstructedText(doc,item,fontCache){
   const {tx,block}=item;
   const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'RECONSTRUCT_PAGE_MISSING'});
   const pageSize=page.getSize();
+  const sourceTraits=inferSourceFontTraits(block,tx);
   const fontName=standardFontForBlock(block,tx);
   const font=await getEmbeddedStandardFont(doc,fontCache,fontName);
   const outputLines=String(tx.replacementUnicode).split('\n');
+  const drawLines=[];
   for(let i=0;i<outputLines.length;i++){
     const text=outputLines[i];
     if(!text)continue;
     try{font.encodeText(text);}catch(error){
-      throw Object.assign(new Error('Replacement contains characters unavailable in the selected PDF font.'),{code:'RECONSTRUCT_FONT_UNSUPPORTED',cause:error});
+      throw Object.assign(new Error('Replacement contains characters unavailable in the selected fallback PDF font.'),{code:'RECONSTRUCT_FONT_UNSUPPORTED',cause:error,fontName,sourceFont:sourceTraits.source});
     }
     const line=block.lines?.[i]||block.lines?.at(-1);
     if(!line)throw Object.assign(new Error('Missing visual line geometry for reconstructed text.'),{code:'RECONSTRUCT_GEOMETRY_MISSING'});
@@ -93,9 +97,6 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
       if(width>targetWidth*1.18){
         throw Object.assign(new Error('Formatted text would extend beyond the mapped text region.'),{code:'LAYOUT_COLLISION'});
       }
-      if(width>targetWidth*1.04){
-        warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is slightly wider than the original text region.'});
-      }
     }else{
       if(width>targetWidth*1.04){
         size=Math.max(6,size*(targetWidth/Math.max(width,1)));
@@ -106,9 +107,29 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
 
     const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
     const angle=line.runs?.[0]?.angle||0;
-    page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:rgb(0,0,0)});
+    drawLines.push({text,x:minX,y,size,width,targetWidth,angle});
   }
-  warnings.push({code:tx.styleChanged?'STYLE_APPLIED':'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:tx.styleChanged?'Selected font formatting was written into the PDF.':'Replacement was reconstructed with a safe standard PDF font.'});
+  return {...item,fontName,font,sourceTraits,drawLines};
+}
+
+function drawReconstructedText(doc,plan,warnings){
+  const {tx,block,font,fontName,sourceTraits,drawLines}=plan;
+  const page=doc.getPage(tx.pageIndex);
+  if(!page)throw Object.assign(new Error('Target page is unavailable.'),{code:'RECONSTRUCT_PAGE_MISSING'});
+  for(const line of drawLines){
+    page.drawText(line.text,{x:line.x,y:line.y,size:line.size,font,rotate:degrees(line.angle*180/Math.PI),color:rgb(0,0,0)});
+    if(tx.styleChanged&&line.width>line.targetWidth*1.04){
+      warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is slightly wider than the original text region.'});
+    }
+  }
+  warnings.push({
+    code:tx.styleChanged?'STYLE_APPLIED':'STYLE_APPROXIMATED',
+    pageIndex:tx.pageIndex,
+    blockId:block.id,
+    fontName,
+    sourceFont:sourceTraits.source||null,
+    message:tx.styleChanged?'Selected font formatting was written into the PDF.':'Replacement was reconstructed with a coverage-checked fallback PDF font.',
+  });
 }
 
 function splitLongWord(word,font,size,maxWidth){
@@ -261,6 +282,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     if(outputLines.length>sourceLines.length)throw Object.assign(new Error('Replacement requires additional source lines.'),{code:'TEXT_OVERFLOW'});
 
     let usedDirect=false;
+    let directFailure=null;
     if(block.tier==='DIRECT_EDIT'&&!tx.styleChanged){
       const direct=planDirectReplacement(block,tx.replacementUnicode);
       tx.layoutValidation=direct.layout||null;
@@ -270,8 +292,13 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
         }
         usedDirect=true;
       }else{
-        if(direct.reason==='LAYOUT_COLLISION'){
-          throw Object.assign(new Error(direct.layout?.message||'Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION',layout:direct.layout||null});
+        directFailure=direct;
+        // A detected table-cell boundary is authoritative: reconstruction must
+        // not bypass it. Ordinary text that is merely wider than its original
+        // line may be reconstructed with a coverage-checked fallback font and
+        // re-measured/shrunk into the mapped region instead of being refused.
+        if(direct.reason==='TABLE_CELL_WIDTH_OVERFLOW'){
+          throw Object.assign(new Error(direct.layout?.message||'Replacement would cross the detected table-cell boundary.'),{code:'TABLE_CELL_WIDTH_OVERFLOW',layout:direct.layout||null});
         }
         warnings.push({code:'DIRECT_EDIT_FELL_BACK_TO_RECONSTRUCTION',pageIndex:tx.pageIndex,blockId:block.id,reason:direct.reason});
       }
@@ -280,8 +307,19 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     }
 
     if(!usedDirect){
+      const reconstruction=await prepareReconstructedText(doc,{tx,block},fontCache);
       neutralizeSourceLines(byStream,tx,sourceLines);
-      reconstructions.push({tx,block});
+      reconstructions.push(reconstruction);
+      const reason=fallbackReason({directReason:directFailure?.reason,block});
+      warnings.push({
+        code:isCoverageFailure(directFailure?.reason)||block.tier==='FONT_SUBSTITUTION'?'FONT_COVERAGE_FALLBACK':'RECONSTRUCTION_PREFLIGHT_PASSED',
+        pageIndex:tx.pageIndex,
+        blockId:block.id,
+        reason,
+        sourceFont:reconstruction.sourceTraits.source||null,
+        fallbackFont:reconstruction.fontName,
+        unsupportedCharacters:directFailure?.unsupportedCharacters||[],
+      });
     }
 
     checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
@@ -292,8 +330,25 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     if(bucket.sourceKind==='form'){
       const stream=getPageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey});
       const rewritten=rewriteByteRanges(stream.bytes,edits);
-      replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
-      warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      if(bucket.formRequiresIsolation){
+        const isolated=replacePageFormXObjectInvocationStream(doc,pageIndex,{
+          resourceName:bucket.formResourceName,
+          expectedRefKey:bucket.formRefKey,
+          pageStreamIndex:bucket.formPageStreamIndex,
+          invocationOperatorIndex:bucket.formInvocationOperatorIndex,
+        },rewritten);
+        warnings.push({
+          code:'FORM_XOBJECT_INVOCATION_ISOLATED_FOR_EDIT',
+          pageIndex,
+          originalResourceName:bucket.formResourceName,
+          isolatedResourceName:isolated.resourceName,
+          pageStreamIndex:bucket.formPageStreamIndex,
+          invocationOperatorIndex:bucket.formInvocationOperatorIndex,
+        });
+      }else{
+        replacePageFormXObjectStream(doc,pageIndex,{resourceName:bucket.formResourceName,expectedRefKey:bucket.formRefKey},rewritten);
+        warnings.push({code:'FORM_XOBJECT_CLONED_FOR_EDIT',pageIndex,resourceName:bucket.formResourceName});
+      }
       continue;
     }
     const {streamIndex}=bucket;
@@ -305,11 +360,8 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     if(rep.sharedCloned)warnings.push({code:'SHARED_STREAM_CLONED',pageIndex,streamIndex});
   }
 
-  for(const item of reconstructions)await drawReconstructedText(doc,item,fontCache,warnings);
+  for(const plan of reconstructions)drawReconstructedText(doc,plan,warnings);
 
-  // Process pages from last to first. In final export, continuation pages are
-  // inserted immediately after their source page. Descending order prevents
-  // those insertions from invalidating indexes of pages still to be processed.
   const insertionPages=[...insertionsByPage.keys()].sort((a,b)=>b-a);
   for(const sourcePageIndex of insertionPages){
     const items=insertionsByPage.get(sourcePageIndex)||[];

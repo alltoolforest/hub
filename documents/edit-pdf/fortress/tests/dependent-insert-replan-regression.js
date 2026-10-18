@@ -50,6 +50,21 @@ export async function runDependentInsertReplanRegression(){
     same(calls,[[],['a','replace']],'A later insert did not see intervening flow metrics');
   });
 
+  await record('later deletion dependency fails closed before move replanning',async()=>{
+    const a=insert('a');
+    const deletion={id:'delete',kind:'REPLACE_TEXT',pageIndex:0,originalUnicode:'old line',replacementUnicode:'',block:{text:'old line'}};
+    let code='';
+    try{
+      await replanDependentInsertions({
+        transactions:[a,deletion],targetId:'a',patch:{x:145},blocks:[],
+        geometryForPage:()=>({width:595,height:842,rotation:0}),
+        previewTransactions:async()=>({bytes:new Uint8Array([1]),reflowMetrics:[]}),
+        planner:()=>({enabled:true}),
+      });
+    }catch(error){code=error?.code||'';}
+    assert(code==='MOVE_DEPENDENCY_CONTRACTION_UNSAFE','Later deletion should block geometry-changing move');
+  });
+
   await record('generated expansion insert cannot be moved independently',async()=>{
     const generated={...insert('generated'),expandedFromBlockId:'block-1'};
     let code='';

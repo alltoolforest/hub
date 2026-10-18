@@ -104,12 +104,15 @@ function directFormInvocations(pdfDoc,pageIndex,streams){
     }
   }
 
-  // Editing a Form stream changes every invocation that references it. Until
-  // path cloning is implemented for repeated/nested forms, only expose a Form
-  // that is invoked exactly once on the page.
   const counts=new Map();
   for(const item of invocations)counts.set(item.formRefKey,(counts.get(item.formRefKey)||0)+1);
-  return invocations.filter(item=>(counts.get(item.formRefKey)||0)===1&&item.depth<=MAX_FORM_DEPTH);
+  return invocations
+    .filter(item=>item.depth<=MAX_FORM_DEPTH)
+    .map(item=>({
+      ...item,
+      invocationCount:counts.get(item.formRefKey)||1,
+      requiresIsolation:(counts.get(item.formRefKey)||1)>1,
+    }));
 }
 
 export function extractSourceRunsFromStreams(pdfDoc,pageIndex,streams){
@@ -149,7 +152,7 @@ export function extractSourceRunsFromStreams(pdfDoc,pageIndex,streams){
       return formFontCache.get(name);
     };
     const streamIndex=virtualStreamIndex++;
-    const containerKey=`form:${form.formRefKey}`;
+    const containerKey=`form:${form.formRefKey}:${form.pageStreamIndex}:${form.invocationOperatorIndex}`;
     const runs=interpretTextRuns(instructions,{
       fontResolver:formFontResolver,
       streamRef:form.formRefKey,
@@ -166,6 +169,8 @@ export function extractSourceRunsFromStreams(pdfDoc,pageIndex,streams){
       formResourceName:form.resourceName,
       formPageStreamIndex:form.pageStreamIndex,
       formInvocationOperatorIndex:form.invocationOperatorIndex,
+      formInvocationCount:form.invocationCount,
+      formRequiresIsolation:form.requiresIsolation,
       formDepth:form.depth,
       operator:instructions[r.operatorIndex]?.op||r.kind,
       x:r.trm[4],
