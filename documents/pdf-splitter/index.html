@@ -195,6 +195,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 <button role="tab" type="button" data-mode="size" aria-selected="false">By file size</button>
         <button role="tab" type="button" data-mode="bookmarks" aria-selected="false">By bookmarks</button>
         <button role="tab" type="button" data-mode="remove" aria-selected="false">Remove pages</button>
+<button role="tab" type="button" data-mode="groups" aria-selected="false">Visual groups</button>
       </div>
       <div class="panels">
         <div class="panel" data-panel="extract">
@@ -232,6 +233,12 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
           <div class="row"><input type="text" id="quickSelRemove" placeholder="Quick select, e.g. 2, 4-6" aria-label="Quick select pages to remove"><button class="btn sm" type="button" id="quickBtnRemove">Select</button></div>
         </div>
         <div id="featureWarning" class="note" hidden role="alert"><strong>Complex PDF features may not survive page extraction.</strong><ul id="featureWarningItems"></ul><label><input id="featureAcknowledgment" type="checkbox"> I understand and accept the listed changes.</label></div>
+<div class="panel" data-panel="groups" hidden>
+<p>Select pages in the thumbnail grid, then add them to a named output group. Repeat for each output. Pages not assigned to a group are excluded.</p>
+<div class="row"><label class="f">Group name <input id="groupName" type="text" placeholder="Section 1" maxlength="90"></label><button class="btn sm" id="addGroup" type="button">Create group from selection</button><button class="btn sm" id="clearGroupSelection" type="button">Clear selection</button></div>
+<div id="groupList" role="list" aria-label="Output groups"></div>
+<div class="note" id="groupCoverage"></div>
+</div>
 <div class="common">
           <label class="f" for="outName">Output name</label>
           <input type="text" id="outName" aria-label="Output file name prefix">
@@ -327,7 +334,7 @@ const jobController = new Core.JobController();
 const state = {
   file: null, baseName: 'document', lib: null, doc: null,
   pageCount: 0, selected: new Set(), rotations: [], outline: [],
-  mode: 'extract', lastClicked: null, token: 0, outputs: [], plan: null,
+  mode: 'extract', lastClicked: null, token: 0, outputs: [], plan: null, groups: [],
   rendered: new Set(), previewIdx: 0, busy: false
 };
 
@@ -435,7 +442,7 @@ async function loadFile(file) {
  $('#featureWarning').hidden=warnings.length===0;$('#featureAcknowledgment').checked=false;
  const bm=$('[data-mode="bookmarks"]');bm.disabled=!state.outline.length;
  $('#uploadSection').hidden=true;$('#work').hidden=false;
- buildGrid();setMode('extract');
+ buildGrid();renderGroups();setMode('extract');
  } catch(e){uploadError(e.message||'Could not load this PDF.');if(candidate)try{await candidate.destroy()}catch{};}
  fileInput.value='';
 }
@@ -462,7 +469,7 @@ function resetAll(keepUpload) {
   state.token++; queue.length = 0;
   if (observer) observer.disconnect();
   try { state.doc && state.doc.destroy(); } catch {}
-  Object.assign(state, { file: null, lib: null, doc: null, pageCount: 0, selected: new Set(), rotations: [], outline: [], outputs: [], plan: null, rendered: new Set() });
+  Object.assign(state, { file: null, lib: null, doc: null, pageCount: 0, selected: new Set(), rotations: [], outline: [], outputs: [], plan: null, groups: [], rendered: new Set() });
   $('#grid').innerHTML = ''; $('#results').hidden = true; $('#resList').innerHTML = '';
   $('#progWrap').hidden = true; showMsg('');
   $('#work').hidden = true; $('#uploadSection').hidden = false;
@@ -531,20 +538,21 @@ function syncThumb(i) {
 const syncAll = () => { for (let i = 0; i < state.pageCount; i++) syncThumb(i); };
 
 /* ---------- grid interaction ---------- */
-const selectable = () => state.mode === 'extract' || state.mode === 'remove';
+const selectable = () => state.mode === 'extract' || state.mode === 'remove' || state.mode === 'groups';
 
 $('#grid').addEventListener('click', e => {
   const thumb = e.target.closest('.thumb'); if (!thumb) return;
   const i = +thumb.dataset.i;
   const act = e.target.closest('[data-act]');
   if (act) {
+    if(state.busy)return;
     const a = act.dataset.act;
     if (a === 'zoom') return openPreview(i);
     state.rotations[i] = (state.rotations[i] + (a === 'rr' ? 90 : 270)) % 360;
     syncThumb(i); const tk = state.token; enqueue(() => renderThumb(i, tk));
     return;
   }
-  if (!e.target.closest('.thumb-btn') || !selectable()) return;
+  if (state.busy || !e.target.closest('.thumb-btn') || !selectable()) return;
   if (e.shiftKey && state.lastClicked !== null) {
     const val = !state.selected.has(i);
     range(Math.min(state.lastClicked, i), Math.max(state.lastClicked, i)).forEach(p => {
@@ -563,7 +571,7 @@ $('#grid').addEventListener('dblclick', e => {
 });
 
 $('#selTools').addEventListener('click', e => {
-  const b = e.target.closest('[data-sel]'); if (!b) return;
+  const b = e.target.closest('[data-sel]'); if (!b || state.busy) return;
   const n = state.pageCount, k = b.dataset.sel, s = state.selected;
   if (k === 'all') for (let i = 0; i < n; i++) s.add(i);
   if (k === 'none') s.clear();
@@ -601,12 +609,55 @@ function setMode(m) {
 
 const isAcknowledged = () => $('#featureWarning').hidden || $('#featureAcknowledgment').checked;
 $('#featureAcknowledgment').addEventListener('change',updateSummary);
+
+/* Visual-group management: page indices are always zero-based; selection is never mutated by group edits. */
+function normalizeGroupPages(pages){
+ const seen=new Set();const out=[];
+ for(const p of pages){if(!Number.isSafeInteger(p)||p<0||p>=state.pageCount)throw Error('Invalid group page.');if(!seen.has(p)){seen.add(p);out.push(p);}}
+ if(!out.length)throw Error('Select at least one page.');
+ return out;
+}
+function renderGroups(){
+ const list=$('#groupList');list.replaceChildren();
+ const all=new Set();
+ state.groups.forEach((g,i)=>{
+   g.pages.forEach(p=>all.add(p));
+   const row=document.createElement('div');row.className='row';row.setAttribute('role','listitem');row.style.cssText='padding:10px 0;border-bottom:1px solid var(--border)';
+   const name=document.createElement('input');name.type='text';name.value=g.name;name.maxLength=90;name.setAttribute('aria-label','Group '+(i+1)+' name');
+   name.addEventListener('change',()=>{if(state.busy)return;g.name=sanitize(name.value)||('Group '+(i+1));name.value=g.name;updateSummary();});
+   const info=document.createElement('span');info.className='note';info.textContent=g.pages.map(p=>p+1).join(', ')+' ('+plural(g.pages.length,'page')+')';
+   const make=(label,fn)=>{const b=document.createElement('button');b.type='button';b.className='btn sm';b.textContent=label;b.addEventListener('click',()=>{if(state.busy)return;fn();renderGroups();updateSummary();});return b;};
+   row.append(name,info,
+     make('Select pages',()=>{state.selected=new Set(g.pages);syncAll();}),
+     make('Replace with selection',()=>{g.pages=normalizeGroupPages([...state.selected].sort((a,b)=>a-b));}),
+     make('Move up',()=>{if(i){[state.groups[i-1],state.groups[i]]=[state.groups[i],state.groups[i-1]];}}),
+     make('Move down',()=>{if(i<state.groups.length-1){[state.groups[i+1],state.groups[i]]=[state.groups[i],state.groups[i+1]];}}),
+     make('Remove group',()=>state.groups.splice(i,1)));
+   list.append(row);
+ });
+ $('#groupCoverage').textContent=state.groups.length?all.size+' of '+state.pageCount+' unique pages assigned. '+(state.pageCount-all.size)+' unassigned.':'No groups yet.';
+}
+$('#addGroup').addEventListener('click',()=>{
+ if(state.busy)return;
+ try{
+  const pages=normalizeGroupPages([...state.selected].sort((a,b)=>a-b));
+  state.groups.push({name:sanitize($('#groupName').value)||'Group '+(state.groups.length+1),pages});
+  state.selected.clear();syncAll();$('#groupName').value='';renderGroups();updateSummary();
+ }catch(e){showMsg(e.message,true);}
+});
+$('#clearGroupSelection').addEventListener('click',()=>{if(state.busy)return;state.selected.clear();syncAll();updateSummary();});
+
 /* ---------- planning ---------- */
 function computePlan() {
   const n = state.pageCount;
   const base = sanitize($('#outName').value) || state.baseName;
   const sel = [...state.selected].sort((a, b) => a - b);
   switch (state.mode) {
+    case 'groups': {
+      if(!state.groups.length)return {error:'Create at least one output group.',soft:true};
+      try{return {files:state.groups.map((g,i)=>({name:base+'_group_'+(i+1)+'_'+(sanitize(g.name)||'section'),pages:normalizeGroupPages(g.pages)}))};}
+      catch(e){return {error:e.message};}
+    }
     case 'extract':
       if (!sel.length) return { error: 'Select at least one page to keep.', soft: true };
       if ($('#sepEach').checked) return { files: sel.map(p => ({ name: `${base}_page_${pad(p + 1, n)}`, pages: [p] })) };
