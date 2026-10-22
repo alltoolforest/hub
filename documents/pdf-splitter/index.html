@@ -497,16 +497,19 @@ function pump(){
  }
 }
 function releaseDistantCanvases(){
- const rendered=$$('#grid .pagebox.ready');
- if(rendered.length<=MAX_RENDERED_THUMBNAILS)return;
- for(const el of rendered){
-   if(rendered.length<=MAX_RENDERED_THUMBNAILS)break;
-   if(visibleThumbnails.has(el.closest('.thumb')))continue;
+ const ready=$$('#grid .pagebox.ready');
+ let remaining=ready.length;
+ if(remaining<=MAX_RENDERED_THUMBNAILS)return;
+ for(const el of ready){
+   if(remaining<=MAX_RENDERED_THUMBNAILS)break;
+   const thumb=el.closest('.thumb');
+   if(visibleThumbnails.has(thumb))continue;
    const canvas=el.querySelector('canvas');
-   if(canvas){canvas.width=1;canvas.height=1;}
+   if(!canvas||canvas.dataset.rendering==='1')continue;
+   canvas.width=1;canvas.height=1;
    el.classList.remove('ready');
-   observer?.observe(el.closest('.thumb'));
-   rendered.pop();
+   observer?.observe(thumb);
+   remaining--;
  }
 }
 function buildGrid() {
