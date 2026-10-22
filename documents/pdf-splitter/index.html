@@ -313,7 +313,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const THUMB_W = 240;           // px width used to render thumbnails
-const CONCURRENCY = 3;         // simultaneous thumbnail renders
+const CONCURRENCY = 2; // base cap; adaptive concurrency is applied by pump()
 const SOFT_LIMIT_MB = 150;     // show a memory warning above this
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -329,6 +329,7 @@ const { PDFDocument, degrees } = PDFLib;
 const Core = window.SplitterCore;
 if (!Core) { $('#libError').hidden=false; return; }
 const jobController = new Core.JobController();
+const thumbnailConcurrency = Core.concurrencyFor(navigator.deviceMemory, navigator.hardwareConcurrency);
 
 /* ---------- state ---------- */
 const state = {
@@ -466,7 +467,7 @@ async function loadOutline(doc) {
 }
 
 function resetAll(keepUpload) {
-  state.token++; queue.length = 0;
+  state.token++; queue.length = 0;queuedPages.clear();visibleThumbnails.clear();
   if (observer) observer.disconnect();
   try { state.doc && state.doc.destroy(); } catch {}
   Object.assign(state, { file: null, lib: null, doc: null, pageCount: 0, selected: new Set(), rotations: [], outline: [], outputs: [], plan: null, groups: [], rendered: new Set() });
@@ -478,17 +479,38 @@ function resetAll(keepUpload) {
 }
 
 /* ---------- thumbnails ---------- */
-const queue = []; let active = 0, observer = null;
-function enqueue(job) { queue.push(job); pump(); }
-function pump() {
-  while (active < CONCURRENCY && queue.length) {
-    const j = queue.shift(); active++;
-    j().catch(() => {}).finally(() => { active--; pump(); });
-  }
+const queue=[];let active=0,observer=null;
+const queuedPages=new Set();
+const MAX_RENDERED_THUMBNAILS=72;
+let visibleThumbnails=new Set();
+function enqueue(job, pageIndex=null){
+ if(pageIndex!==null){if(queuedPages.has(pageIndex))return;queuedPages.add(pageIndex);}
+ queue.push({job,pageIndex});pump();
 }
-
+function pump(){
+ while(active<Math.min(CONCURRENCY,thumbnailConcurrency)&&queue.length){
+   const {job,pageIndex}=queue.shift();active++;
+   Promise.resolve().then(job).catch(()=>{}).finally(()=>{
+     if(pageIndex!==null)queuedPages.delete(pageIndex);
+     active--;pump();
+   });
+ }
+}
+function releaseDistantCanvases(){
+ const rendered=$$('#grid .pagebox.ready');
+ if(rendered.length<=MAX_RENDERED_THUMBNAILS)return;
+ for(const el of rendered){
+   if(rendered.length<=MAX_RENDERED_THUMBNAILS)break;
+   if(visibleThumbnails.has(el.closest('.thumb')))continue;
+   const canvas=el.querySelector('canvas');
+   if(canvas){canvas.width=1;canvas.height=1;}
+   el.classList.remove('ready');
+   observer?.observe(el.closest('.thumb'));
+   rendered.pop();
+ }
+}
 function buildGrid() {
-  const grid = $('#grid'); grid.innerHTML = '';
+  const grid = $('#grid'); grid.innerHTML = '';visibleThumbnails.clear();queuedPages.clear();
   const frag = document.createDocumentFragment();
   for (let i = 0; i < state.pageCount; i++) {
     const el = document.createElement('div');
@@ -504,11 +526,11 @@ function buildGrid() {
   }
   grid.appendChild(frag);
   observer = new IntersectionObserver(entries => {
-    for (const en of entries) if (en.isIntersecting) {
-      observer.unobserve(en.target);
-      const i = +en.target.dataset.i, tk = state.token;
-      enqueue(() => renderThumb(i, tk));
+    for (const en of entries){
+      if(en.isIntersecting){visibleThumbnails.add(en.target);observer.unobserve(en.target);const i=+en.target.dataset.i,tk=state.token;enqueue(()=>renderThumb(i,tk),i);}
+      else visibleThumbnails.delete(en.target);
     }
+    releaseDistantCanvases();
   }, { rootMargin: '500px' });
   $$('.thumb', grid).forEach(t => observer.observe(t));
 }
@@ -522,11 +544,13 @@ async function renderThumb(i, tk) {
   const vp = page.getViewport({ scale: THUMB_W / base.width, rotation });
   const thumb = $(`.thumb[data-i="${i}"]`); if (!thumb) return;
   const canvas = $('canvas', thumb);
+  if(!canvas || canvas.dataset.rendering==='1')return;
+  canvas.dataset.rendering='1';
   canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-  if (tk !== state.token) return;
+  try {await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  if (tk !== state.token)return;
   $('.pagebox', thumb).classList.add('ready');
-  page.cleanup();
+  }finally {delete canvas.dataset.rendering;try{page.cleanup()}catch{}}
 }
 
 function syncThumb(i) {
@@ -795,7 +819,7 @@ async function runSplit() {
         if (r.oversize) oversize++;
         await verifyPdf(r.bytes,range(i,i+r.count-1),state.rotations);
         const pages = range(i, i + r.count - 1); k++;
-        outputs.push({ name: unique(`${plan.base}_part_${pad(k, n)}`), pages, bytes: r.bytes });
+        outputs.push({ name: unique(`${plan.base}_part_${pad(k, n)}`), pages, blob:new Blob([r.bytes],{type:'application/pdf'}) });
         i += r.count;
       }
       if (oversize) showMsg(`${plural(oversize, 'page')} alone exceeded the limit and got their own file.`);
@@ -807,13 +831,13 @@ async function runSplit() {
         const bytes = await buildPdf(f.pages);
         await verifyPdf(bytes,f.pages,state.rotations);
         if (tk !== state.token) return;
-        outputs.push({ name: unique(f.name), pages: f.pages, bytes });
+        outputs.push({ name: unique(f.name), pages: f.pages, blob:new Blob([bytes],{type:'application/pdf'}) });
       }
     }
     setProgress(1, 'Finished');
-    outputs.forEach(o => o.blob = new Blob([o.bytes], { type: 'application/pdf' }));
     state.outputs = outputs; showResults();
   } catch (err) {
+    outputs.length=0;
     console.error(err); showMsg('Something went wrong while splitting: ' + (err.message || err), true);
   } finally {
     state.busy = false; $('#splitBtn').disabled = false; setTimeout(() => $('#progWrap').hidden = true, 800);
