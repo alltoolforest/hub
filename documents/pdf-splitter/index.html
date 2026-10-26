@@ -138,6 +138,27 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 .also a{text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:99px;background:var(--surface);font-size:.9rem}
 .also a:hover{border-color:var(--brand)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* Task 6: touch, keyboard focus, reduced motion and responsive group controls */
+.modes{overflow-x:auto;overscroll-behavior-inline:contain}
+.modes [role="tab"]{min-height:44px;white-space:nowrap}
+button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-visible{outline:3px solid var(--brand);outline-offset:3px}
+#groupList [role="listitem"]{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#groupList [role="listitem"] input{flex:1 1 170px;min-width:0}
+#groupList [role="listitem"] .note{flex:1 0 100%;overflow-wrap:anywhere}
+#groupList [role="listitem"] button{min-height:44px}
+#groupCoverage{margin-top:8px}
+@media(max-width:650px){
+ .wrap{padding-inline:12px}
+ .modes{display:flex;flex-wrap:nowrap;max-width:100%;scroll-snap-type:x proximity}
+ .modes [role="tab"]{flex:0 0 auto;scroll-snap-align:start}
+ #selTools{flex-wrap:wrap}
+ #groupList [role="listitem"] button{flex:1 1 auto}
+ .action .inner{flex-wrap:wrap}
+ .action .inner .txt{min-width:0;flex:1 1 100%}
+ #splitBtn{width:100%;min-height:48px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -187,7 +208,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
     </div>
 
     <div class="card">
-      <div class="modes" role="tablist" aria-label="Split method">
+      <div class="modes" role="tablist" aria-label="Split method" aria-orientation="horizontal">
         <button role="tab" type="button" data-mode="extract" aria-selected="true">Extract pages</button>
         <button role="tab" type="button" data-mode="ranges" aria-selected="false">Custom ranges</button>
         <button role="tab" type="button" data-mode="every" aria-selected="false">Every N pages</button>
@@ -237,7 +258,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 <p>Select pages in the thumbnail grid, then add them to a named output group. Repeat for each output. Pages not assigned to a group are excluded.</p>
 <div class="row"><label class="f">Group name <input id="groupName" type="text" placeholder="Section 1" maxlength="90"></label><button class="btn sm" id="addGroup" type="button">Create group from selection</button><button class="btn sm" id="clearGroupSelection" type="button">Clear selection</button></div>
 <div id="groupList" role="list" aria-label="Output groups"></div>
-<div class="note" id="groupCoverage"></div>
+<div class="note" id="groupCoverage" role="status" aria-live="polite"></div>
 </div>
 <div class="common">
           <label class="f" for="outName">Output name</label>
@@ -264,7 +285,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
         <div class="txt">
           <strong id="summary">—</strong>
           <span class="note" id="planNote"></span>
-          <div id="progWrap" hidden><progress id="prog" max="1" value="0"></progress><span class="note" id="progLabel"></span></div>
+          <div id="progWrap" hidden><progress id="prog" max="1" value="0"></progress><span class="note" id="progLabel" role="status" aria-live="polite"></span></div>
         </div>
         <button class="btn primary" type="button" id="splitBtn" disabled>Split PDF</button>
       </div>
@@ -636,9 +657,17 @@ $('#zoomRange').addEventListener('input', e => document.documentElement.style.se
 
 /* ---------- modes ---------- */
 $$('.modes [role=tab]').forEach(b => b.addEventListener('click', () => !b.disabled && setMode(b.dataset.mode)));
+// Arrow keys navigate the mode tabs without requiring a mouse.
+const modeTabs=()=>$$('.modes [role=tab]');
+modeTabs().forEach(tab=>tab.addEventListener('keydown',event=>{
+ if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+ const tabs=modeTabs(),i=tabs.indexOf(tab);
+ const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(i+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+ event.preventDefault();tabs[next].focus();tabs[next].click();
+}));
 function setMode(m) {
   state.mode = m;
-  $$('.modes [role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.mode === m));
+  $('.modes [role=tab]').forEach(b => {const on=b.dataset.mode===m;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});
   $$('.panel').forEach(p => p.hidden = p.dataset.panel !== m);
   const g = $('#grid'); g.dataset.mode = m; g.classList.toggle('readonly', !selectable());
   $('#selTools').querySelectorAll('[data-sel]').forEach(b => b.hidden = !selectable());
