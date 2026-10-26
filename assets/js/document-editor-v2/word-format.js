@@ -2,6 +2,10 @@ const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A='http://schemas.openxmlformats.org/drawingml/2006/main';
 const child=(node,name)=>[...(node?.children||[])].find(n=>n.namespaceURI===W&&n.localName===name);
 const attr=(node,name='val')=>node?.getAttributeNS(W,name)||'';
+export function hasWordPageBreakBefore(paragraph){
+  const setting=child(child(paragraph,'pPr'),'pageBreakBefore');
+  return !!setting&&!['0','false','off'].includes(attr(setting).toLowerCase());
+}
 function props(node,theme){
   const out={},fonts=child(node,'rFonts'),size=Number(attr(child(node,'sz')));
   const face=attr(fonts,'ascii')||attr(fonts,'hAnsi');

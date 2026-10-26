@@ -94,3 +94,18 @@ test('real generated DOCX round trips text growth and shortening with headers an
   assert.match(await reopened.zip.file('word/footer1.xml').async('string'), /Footer stays/);
   assert.match(await reopened.zip.file('word/document.xml').async('string'), /Table value/);
 });
+
+test('disabled Word page breaks allow upward flow and boundary merges; active breaks remain', async () => {
+  const {mergeSourceParagraph}=await import('../assets/js/document-editor-v2/word-structure.js');
+  for(const value of [null,'0','false','off','1','true','on','']){
+    const active=value!==null&&!['0','false','off'].includes(value);
+    const zip=new JSZip();zip.file('[Content_Types].xml','<Types/>');
+    zip.file('word/document.xml',`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First.</w:t></w:r></w:p><w:p><w:pPr>${value===null?'':`<w:pageBreakBefore${value?` w:val="${value}"`:''}/>`}</w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Bottom.</w:t></w:r></w:p></w:body></w:document>`);
+    const model=await readDocx(await zip.generateAsync({type:'blob'}),JSZip,DOMParser);
+    assert.equal(documentBlocks(model)[1].paragraph.pageBreak,active,`break value ${value}`);
+    assert.equal(!!mergeSourceParagraph(model,1,-1),!active,`merge value ${value}`);
+    const reopened=await readDocx(await writeDocx(model,JSZip,DOMParser,XMLSerializer),JSZip,DOMParser);
+    assert.deepEqual(reopened.text,active?['First.','Bottom.']:['First.Bottom.']);
+    assert.equal(reopened.xml.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','b').length,1);
+  }
+});

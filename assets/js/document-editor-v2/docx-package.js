@@ -1,5 +1,5 @@
 import {restoreStructures,writeStructures,structureParts,structureText} from './word-structure.js';
-import {readWordFormatting,validateWordFormat,writeWordFormat} from './word-format.js';
+import {readWordFormatting,validateWordFormat,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const XML = 'http://www.w3.org/XML/1998/namespace';
 
@@ -97,7 +97,7 @@ export function documentBlocks(model) {
   const indexes = new Map(all.map((paragraph, index) => [paragraph, index]));
   const item = paragraph => ({
     index:indexes.get(paragraph),
-    pageBreak:paragraph.getElementsByTagNameNS(W, 'pageBreakBefore').length > 0 ||
+    pageBreak:hasWordPageBreakBefore(paragraph) ||
       [...paragraph.getElementsByTagNameNS(W, 'br')].some(br => br.getAttributeNS(W, 'type') === 'page'),
     hasDrawing:paragraph.getElementsByTagNameNS(W, 'drawing').length > 0,
     protected:protectedParagraph(paragraph),

@@ -1,4 +1,4 @@
-import {validateWordFormat,styleWordNode,writeWordFormat} from './word-format.js';
+import {validateWordFormat,styleWordNode,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',XML='http://www.w3.org/XML/1998/namespace';
 const nodes=model=>[...model.xml.getElementsByTagNameNS(W,'p')];
 export function canStructure(model,index){
@@ -96,7 +96,7 @@ export function mergeSourceParagraph(model,index,direction){
   while(sibling && sibling.localName==='p' && model.structures[all.indexOf(sibling)]?.length===0)sibling=direction<0?sibling.previousElementSibling:sibling.nextElementSibling;
   const other=all.indexOf(sibling);if(other<0||!canStructure(model,other))return null;
   const left=direction<0?other:index,right=direction<0?index:other;
-  if(all[right].getElementsByTagNameNS(W,'pageBreakBefore').length)return null;
+  if(hasWordPageBreakBefore(all[right]))return null;
   const a=structuredClone(structureParts(model,left)),b=structuredClone(structureParts(model,right));if(!a.length||!b.length)return null;
   const part=a.length-1,offset=textOf(a[part]).length;
   for(const p of b)for(const run of p.runs){run.origin??=right;run.format??=model.formatting.formats[run.origin].runs[run.source]||model.formatting.formats[run.origin].base;}
