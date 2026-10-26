@@ -347,12 +347,25 @@ const fmtBytes = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) 
 const tick = () => new Promise(r => setTimeout(r, 0));
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-function downloadBlob(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+const downloadUrls=new Set();
+function downloadBlob(blob,name){
+ if(!(blob instanceof Blob)||!blob.size)throw Error('The requested download is empty.');
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ downloadUrls.add(url);a.href=url;a.download=safeDownloadName(name);document.body.appendChild(a);
+ try{a.click();}finally{
+  a.remove();
+  // Allow browsers to start the download before revoking its object URL.
+  setTimeout(()=>{URL.revokeObjectURL(url);downloadUrls.delete(url);},60000);
+ }
 }
+function safeDownloadName(value){
+ const clean=sanitize(String(value||'document')).replace(/\.{2,}/g,'.').slice(0,120);
+ return clean||'document.pdf';
+}
+window.addEventListener('pagehide',()=>{
+ for(const url of downloadUrls)URL.revokeObjectURL(url);
+ downloadUrls.clear();
+});
 
 async function initWorker() {
   try {
@@ -809,7 +822,7 @@ async function runSplit() {
   const plan = structuredClone(state.plan), n = state.pageCount, tk = state.token;
   const outputs = [], names = new Set();
   const unique = name => {
-    let u = name, c = 2; while (names.has(u.toLowerCase())) u = `${name}_${c++}`;
+    let u = (sanitize(name)||'document').slice(0,105), c = 2; while (names.has(u.toLowerCase())) u = (sanitize(name)||'document').slice(0,95)+`_${c++}`;
     names.add(u.toLowerCase()); return u + '.pdf';
   };
   try {
@@ -867,16 +880,29 @@ function showResults() {
   box.hidden = false; box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-$('#zipBtn').addEventListener('click', async () => {
-  const btn = $('#zipBtn'); btn.disabled = true; const old = btn.textContent;
-  try {
-    const zip = new JSZip();
-    state.outputs.forEach(o => zip.file(o.name, o.blob));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' },
-      m => btn.textContent = `Zipping… ${Math.round(m.percent)}%`);
-    downloadBlob(blob, `${sanitize($('#outName').value) || state.baseName}_split.zip`);
-  } catch (e) { showMsg('Could not create ZIP: ' + e.message, true); }
-  finally { btn.textContent = old; btn.disabled = false; }
+let zipActive=false;
+$('#zipBtn').addEventListener('click',async()=>{
+ if(zipActive||state.busy||state.outputs.length<2)return;
+ zipActive=true;
+ const btn=$('#zipBtn'),label=btn.textContent;btn.disabled=true;
+ const expected=state.outputs.slice(),token=state.token;
+ try{
+   const zip=new JSZip(),seen=new Set();
+   for(const output of expected){
+     if(!(output.blob instanceof Blob)||!output.blob.size)throw Error('An output PDF is unavailable.');
+     const name=safeDownloadName(output.name);
+     if(seen.has(name.toLowerCase()))throw Error('Duplicate filename in output ZIP.');
+     seen.add(name.toLowerCase());zip.file(name,output.blob);
+   }
+   const archive=await zip.generateAsync({type:'blob',compression:'STORE'},progress=>{
+     btn.textContent='Zipping… '+Math.round(progress.percent)+'%';
+   });
+   if(token!==state.token||expected.length!==state.outputs.length)return;
+   if(!archive.size)throw Error('Archive generation returned an empty file.');
+   downloadBlob(archive,(sanitize($('#outName').value)||state.baseName)+'_split.zip');
+ }catch(e){
+   showMsg('ZIP creation failed. Your verified PDFs remain available for individual download. '+(e.message||''),true);
+ }finally{btn.textContent=label;btn.disabled=false;zipActive=false;}
 });
 
 /* ---------- preview dialog ---------- */
