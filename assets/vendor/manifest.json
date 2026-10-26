@@ -36,5 +36,9 @@
   },
   "background": {
     "module": "assets/vendor/background.mjs"
+  },
+  "zip": {
+    "script": "assets/vendor/zip.js",
+    "global": "JSZip"
   }
 }

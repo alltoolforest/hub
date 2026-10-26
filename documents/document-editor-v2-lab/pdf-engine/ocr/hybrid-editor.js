@@ -1,0 +1,544 @@
+import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
+import {validateScanDraft} from './scan-draft.js';
+import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
+import { withPdfDocument } from '../fortress/src/rendering/with-document.js';
+import { createAdvancedPdfTextEngine } from '../fortress/src/main.js';
+import { createPdfPageClassifier } from './classifier.js';
+import { createScannedPdfEditor } from './scan-editor.js?v=20261004-scan-geometry';
+import { DEFAULT_LIMITS } from '../fortress/src/core/pdf-loader.js';
+
+const OCR_PAGE_CONFIDENCE_MIN=.85;
+const NATIVE_BUSY_RE=/Reading document|Finding editable text|Applying edit|Adding text|Updating added text|Validating edited PDF/i;
+
+function button(label,className=''){
+  const b=document.createElement('button');
+  b.type='button';b.textContent=label;if(className)b.className=className;
+  return b;
+}
+function copyBytes(bytes){return bytes instanceof Uint8Array?new Uint8Array(bytes):new Uint8Array(bytes||0);}
+function safeName(name){return `${String(name||'document.pdf').replace(/\.pdf$/i,'')}-edited.pdf`;}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function makePdfFile(bytes,name){
+  try{return new File([bytes],name,{type:'application/pdf'});}catch{
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    try{Object.defineProperty(blob,'name',{value:name});}catch{}
+    return blob;
+  }
+}
+function pageRoute(classification){
+  return classification?.kind==='scanned'&&Number(classification?.confidence)>=OCR_PAGE_CONFIDENCE_MIN?'ocr':'native';
+}
+
+async function extractSinglePage(sourceBytes,pageIndex){
+  const source=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+  if(pageIndex<0||pageIndex>=source.getPageCount())throw new RangeError('Source PDF page is unavailable.');
+  const out=await PDFDocument.create();
+  const [page]=await out.copyPages(source,[pageIndex]);
+  out.addPage(page);
+  return new Uint8Array(await out.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
+}
+
+async function replacePageFromSinglePagePdf(doc,pageIndex,pageBytes){
+  const one=await PDFDocument.load(pageBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+  if(one.getPageCount()!==1)throw Object.assign(new Error('OCR page snapshot is not a single-page PDF.'),{code:'HYBRID_OCR_PAGE_INVALID'});
+  if(pageIndex<0||pageIndex>=doc.getPageCount())throw Object.assign(new Error('OCR target page no longer exists in the final document.'),{code:'HYBRID_PAGE_INDEX_CHANGED'});
+  const [replacement]=await doc.copyPages(one,[0]);
+  doc.insertPage(pageIndex,replacement);
+  doc.removePage(pageIndex+1);
+}
+
+async function verifyHybridPdf(bytes,{expectedPages,touchedPages=[]}={}){
+  const structural=await PDFDocument.load(bytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+  if(structural.getPageCount()!==expectedPages){
+    throw Object.assign(new Error('Hybrid export page-count validation failed.'),{code:'HYBRID_PAGE_COUNT_MISMATCH',expectedPages,actualPages:structural.getPageCount()});
+  }
+  await withPdfDocument(bytes,async pdf=>{
+    if(pdf.numPages!==expectedPages)throw Object.assign(new Error('Hybrid render validation page count differs.'),{code:'HYBRID_RENDER_PAGE_COUNT_MISMATCH'});
+    const checks=new Set([0,Math.max(0,expectedPages-1),...touchedPages].filter(i=>Number.isInteger(i)&&i>=0&&i<expectedPages));
+    for(const pageIndex of checks){
+      const page=await pdf.getPage(pageIndex+1);
+      try{await page.getOperatorList();}finally{page.cleanup();}
+    }
+  });
+}
+
+function hideNativeManagedControls(host){
+  for(const label of ['Close document','Save a copy','Previous page','Next page']){
+    const control=host.querySelector(`button[aria-label="${label}"]`);
+    if(control)control.hidden=true;
+  }
+}
+function hideOcrManagedControls(host){
+  const label=host.querySelector('.ocr-page-label');if(label)label.hidden=true;
+  for(const control of host.querySelectorAll('.ocr-toolbar button')){
+    if(['Previous','Next','Save a copy','Close'].includes(control.textContent?.trim()))control.hidden=true;
+  }
+}
+
+export function createHybridPdfEditor({
+  container,
+  onStatus=()=>{},
+  onWarning=()=>{},
+  onError=()=>{},
+  onExport=()=>{},
+  onClose=()=>{},
+  onChange=()=>{},
+  prepareNativeDocument=null,
+}={}){
+  if(!container)throw new Error('Hybrid Edit PDF container is required.');
+  const emitChange=onChange;let notificationsPaused=false;
+  onChange=()=>{if(!notificationsPaused)emitChange();};
+
+  let draftSource=null,activeOcrSource=null;
+  let sourceFile=null,sourceBytes=null,sourceName='document.pdf',pageCount=0,pages=[];
+  let activePageIndex=0,nativeEngine=null,activeOcrEditor=null,activeOcrPageIndex=null;
+  let classifier=null,nativeExportCapture=null,destroyed=false,busy=false,nativePrepared=false;
+
+  const root=document.createElement('div');root.className='hybrid-pdf-editor';
+  const toolbar=document.createElement('div');toolbar.className='ocr-toolbar hybrid-toolbar';
+  const close=button('Close'),prev=button('Previous'),pageLabel=document.createElement('span'),next=button('Next'),save=button('Save a copy','primary');
+  pageLabel.className='ocr-page-label hybrid-page-label';
+  toolbar.append(close,prev,pageLabel,next,save);
+  const nativeHost=document.createElement('div');nativeHost.className='hybrid-native-host';
+  const ocrHost=document.createElement('div');ocrHost.className='hybrid-ocr-host';
+  root.append(toolbar,nativeHost,ocrHost);container.replaceChildren(root);
+
+  function activePage(){return pages[activePageIndex]||null;}
+  function setStatus(message=''){const scanStatus=ocrHost.querySelector('.ocr-status');if(scanStatus)scanStatus.textContent=message;onStatus(message);}
+  function updateToolbar(){
+    const page=activePage();
+    const mode=page?.route==='ocr'?'OCR scan':'Native';
+    pageLabel.textContent=pageCount?`Page ${activePageIndex+1} of ${pageCount} · ${mode}`:'Preparing PDF…';
+    prev.disabled=busy||activePageIndex<=0;
+    next.disabled=busy||activePageIndex>=pageCount-1;
+    save.disabled=busy||!pageCount;
+    close.disabled=busy;
+  }
+  function setBusy(value){busy=!!value;updateToolbar();}
+  function requireFinishedEdit(){
+    const native=nativeEngine?.getState?.();
+    const scan=activeOcrEditor?.getState?.();
+    if(native?.hasPendingEdit||scan?.hasPendingEdit){
+      const message=scan?.hasPendingEdit?'Apply or cancel the scanned-text edit first.':'Press Done to finish this text edit before saving or changing pages.';
+      onWarning({code:'HYBRID_PENDING_EDIT',message});setStatus(message);return false;
+    }
+    if(native?.viewBusy||scan?.busy||NATIVE_BUSY_RE.test(nativeHost.querySelector('.pdf-fortress-status')?.textContent||'')){
+      setStatus('Please wait for the current PDF operation to finish.');return false;
+    }
+    return true;
+  }
+  function markNativeDirty(transactions=[]){
+    for(const page of pages)page.nativeDirty=false;
+    for(const tx of transactions){const page=pages[Number(tx?.pageIndex)];if(page)page.nativeDirty=true;}
+  }
+
+  async function ensureNativeEngine(){
+    if(nativeEngine)return nativeEngine;
+    if(!nativePrepared&&typeof prepareNativeDocument==='function'){
+      setStatus('Preparing native PDF editing…');
+      await prepareNativeDocument(sourceFile||sourceBytes);
+      nativePrepared=true;
+    }
+    nativeEngine=createAdvancedPdfTextEngine({
+      container:nativeHost,
+      onStatus:message=>{if(activePage()?.route==='native')setStatus(message||'');},
+      onWarning:warning=>onWarning(warning),
+      onError:error=>onError(error),
+      onChange:transactions=>{markNativeDirty(transactions);onChange();},
+      onExport:result=>{nativeExportCapture=result;},
+    });
+    await nativeEngine.open(sourceFile||sourceBytes);
+    hideNativeManagedControls(nativeHost);
+    return nativeEngine;
+  }
+
+  function nativeSettledFor(targetIndex){
+    const state=nativeEngine?.getState?.();
+    if(!state||state.pageIndex!==targetIndex||state.analysis?.pageIndex!==targetIndex)return false;
+    const status=nativeHost.querySelector('.pdf-fortress-status')?.textContent||'';
+    return !NATIVE_BUSY_RE.test(status);
+  }
+
+  async function navigateNativeTo(targetIndex){
+    const engine=await ensureNativeEngine();
+    let current=Number(engine.getState?.().pageIndex)||0;
+    let guard=0;
+    while(current!==targetIndex){
+      if(++guard>pageCount+2)throw new Error('Native page navigation did not converge.');
+      const direction=targetIndex>current?'Next page':'Previous page';
+      const control=nativeHost.querySelector(`button[aria-label="${direction}"]`);
+      if(!control)throw new Error(`Native ${direction.toLowerCase()} control is unavailable.`);
+      const expected=current+(targetIndex>current?1:-1);
+      control.click();
+      const started=performance.now();
+      while(!nativeSettledFor(expected)){
+        if(performance.now()-started>15000)throw new Error(`Timed out opening native page ${expected+1}.`);
+        await sleep(35);
+      }
+      current=expected;
+    }
+    hideNativeManagedControls(nativeHost);
+  }
+
+  async function destroyActiveOcr({persist=true}={}){
+    const editor=activeOcrEditor;
+    const pageIndex=activeOcrPageIndex;
+    if(!editor){activeOcrPageIndex=null;ocrHost.replaceChildren();return;}
+    const scanDraft=persist?await editor.snapshot():null;
+    if(persist&&Number(editor.getState?.().editCount)>0){
+      let captured=null;
+      const previousCapture=pages[pageIndex]?.ocrCapture;
+      pages[pageIndex].ocrCapture=result=>{captured=result;};
+      try{
+        await editor.save();
+        if(!captured?.bytes)throw Object.assign(new Error('OCR page changes could not be serialized safely.'),{code:'HYBRID_OCR_FLUSH_FAILED'});
+        pages[pageIndex].ocrBytes=copyBytes(captured.bytes);
+        pages[pageIndex].ocrDirty=true;
+        pages[pageIndex].ocrEditCount=Number(captured.edits)||Number(editor.getState?.().editCount)||0;
+      }finally{
+        pages[pageIndex].ocrCapture=previousCapture||null;
+      }
+    }
+    if(persist&&Number(editor.getState?.().editCount)===0){pages[pageIndex].ocrBytes=null;pages[pageIndex].ocrDirty=false;pages[pageIndex].ocrEditCount=0;}
+    if(persist){pages[pageIndex].ocrBaseBytes=copyBytes(activeOcrSource);pages[pageIndex].ocrDraft=scanDraft;}
+    activeOcrEditor=null;activeOcrPageIndex=null;
+    try{await editor.destroy?.();}catch(error){console.warn('Hybrid OCR cleanup failed:',error);}
+    ocrHost.replaceChildren();
+  }
+
+  async function openOcrPage(pageIndex){
+    const page=pages[pageIndex];
+    if(!page||page.route!=='ocr')throw new Error('Requested page is not routed to OCR.');
+    const pageBytes=page.ocrBaseBytes||page.ocrBytes||await extractSinglePage(sourceBytes,pageIndex);
+    const pageFile=makePdfFile(pageBytes,`${sourceName.replace(/\.pdf$/i,'')}-page-${pageIndex+1}.pdf`);
+    activeOcrPageIndex=pageIndex;activeOcrSource=copyBytes(pageBytes);
+    const openingEditor=createScannedPdfEditor({
+      container:ocrHost,
+      allowGroupedEditing:false,
+      onChange:()=>onChange(),
+      onStatus:message=>{if(activeOcrPageIndex===pageIndex)setStatus(message||'');},
+      onWarning:warning=>onWarning(warning),
+      onError:error=>onError(error),
+      onExport:result=>{
+        const capture=pages[pageIndex]?.ocrCapture;
+        if(typeof capture==='function')capture(result);
+      },
+      onClose:()=>{},
+    });
+    activeOcrEditor=openingEditor;
+    try{
+      await openingEditor.open(pageFile);
+      if(page.ocrDraft)await openingEditor.restore(page.ocrDraft);
+      if(activeOcrEditor!==openingEditor)throw new Error('OCR page session was replaced while opening.');
+      hideOcrManagedControls(ocrHost);
+    }catch(error){
+      if(activeOcrEditor===openingEditor){activeOcrEditor=null;activeOcrPageIndex=null;}
+      try{await openingEditor.destroy?.();}catch(cleanupError){console.warn('Failed OCR page cleanup:',cleanupError);}
+      ocrHost.replaceChildren();
+      throw error;
+    }
+  }
+
+  async function activatePage(pageIndex,{skipOcrFlush=false}={}){
+    if(destroyed)return;
+    if(!Number.isInteger(pageIndex)||pageIndex<0||pageIndex>=pageCount)return;
+    if(!skipOcrFlush&&activeOcrEditor)await destroyActiveOcr({persist:true});
+    activePageIndex=pageIndex;updateToolbar();
+    const page=activePage();
+    if(page.route==='ocr'){
+      nativeHost.hidden=true;ocrHost.hidden=false;
+      await openOcrPage(pageIndex);
+      setStatus(`Page ${pageIndex+1} is image-only and is using safe OCR editing. Run OCR, then click a recognized word.`);
+    }else{
+      ocrHost.hidden=true;nativeHost.hidden=false;
+      await navigateNativeTo(pageIndex);
+      const kind=page.classification?.kind;
+      if(kind==='mixed'||kind==='unknown')setStatus(`Page ${pageIndex+1} is ${kind}. Using the native safety path because OCR ownership is not certain.`);
+    }
+    updateToolbar();
+  }
+
+  function assertNativeOwnership(nativeResult,transactions){
+    for(const tx of transactions){
+      if(pages[Number(tx?.pageIndex)]?.route==='ocr'){
+        throw Object.assign(new Error('A native edit targeted an OCR-owned page. Save was stopped to prevent a partial document.'),{code:'HYBRID_PAGE_OWNERSHIP_CONFLICT'});
+      }
+    }
+    for(const metric of nativeResult?.reflowMetrics||[]){
+      const count=Math.max(0,Number(metric?.cascadedPageCount)||0);
+      if(!count)continue;
+      const tx=transactions.find(item=>item.id===metric.transactionId);
+      const targets=(tx?.reflowPlan?.cascadePages||[]).slice(0,count).map(item=>Number(item?.pageIndex)).filter(Number.isInteger);
+      for(const target of targets){
+        if(pages[target]?.route==='ocr'){
+          throw Object.assign(new Error(`Native page flow would move content through OCR page ${target+1}. This mixed-layout save is refused until cross-engine cascade ownership can be proven safe.`),{code:'HYBRID_CASCADE_CROSSES_OCR_PAGE',pageIndex:target});
+        }
+      }
+    }
+  }
+
+  async function buildHybridExport(){
+    const transactions=nativeEngine?.getState?.().transactions||[];
+    const ocrDirty=pages.map((page,pageIndex)=>({page,pageIndex})).filter(({page})=>page.ocrDirty&&page.ocrBytes);
+    if(!transactions.length&&!ocrDirty.length){
+      onWarning({code:'HYBRID_NO_EDITS',message:'No PDF changes have been made yet.'});
+      return null;
+    }
+
+    let baseBytes=sourceBytes,nativeResult=null;
+    if(transactions.length){
+      nativeExportCapture=null;
+      nativeResult=await nativeEngine.save();
+      const nativeBytes=nativeResult?.bytes||nativeExportCapture?.bytes;
+      if(!nativeBytes)throw Object.assign(new Error('Native edits could not be serialized safely.'),{code:'HYBRID_NATIVE_EXPORT_MISSING'});
+      assertNativeOwnership(nativeResult||nativeExportCapture,transactions);
+      baseBytes=copyBytes(nativeBytes);
+    }
+
+    const doc=await PDFDocument.load(baseBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+    const expectedPages=doc.getPageCount();
+    if(expectedPages<pageCount)throw Object.assign(new Error('Native export removed an original PDF page.'),{code:'HYBRID_NATIVE_PAGE_LOSS'});
+    for(const {page,pageIndex} of ocrDirty)await replacePageFromSinglePagePdf(doc,pageIndex,page.ocrBytes);
+
+    const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
+    const touchedPages=[...new Set([
+      ...transactions.map(tx=>Number(tx?.pageIndex)),
+      ...ocrDirty.map(item=>item.pageIndex),
+    ])].filter(Number.isInteger);
+    await verifyHybridPdf(bytes,{expectedPages,touchedPages});
+    return {
+      bytes,
+      blob:new Blob([bytes],{type:'application/pdf'}),
+      filename:safeName(sourceName),
+      mode:'hybrid',
+      nativeEditCount:transactions.length,
+      ocrEditCount:ocrDirty.reduce((sum,{page})=>sum+(page.ocrEditCount||0),0),
+      ocrEditedPages:ocrDirty.map(item=>item.pageIndex),
+      nativeResult,
+      expectedPages,
+    };
+  }
+
+  async function saveCopy({allowUnchanged=false}={}){
+    if(!sourceBytes)throw new Error('No PDF open.');
+    if(busy||!requireFinishedEdit())return null;
+    const reopenOcr=activePage()?.route==='ocr';
+    setBusy(true);
+    try{
+      if(activeOcrEditor)await destroyActiveOcr({persist:true});
+      setStatus('Validating native and OCR changes together…');
+      let result=await buildHybridExport();
+      if(!result&&allowUnchanged){const bytes=copyBytes(sourceBytes);result={bytes,blob:new Blob([bytes],{type:'application/pdf'}),filename:safeName(sourceName),nativeEditCount:0,ocrEditCount:0,expectedPages:pageCount};}
+      if(!result){if(reopenOcr&&!destroyed)await openOcrPage(activePageIndex);return null;}
+      onExport(result);
+      if(reopenOcr&&!destroyed)await openOcrPage(activePageIndex);
+      setStatus(`Hybrid PDF validated — ${result.nativeEditCount} native change${result.nativeEditCount===1?'':'s'}, ${result.ocrEditCount} OCR change${result.ocrEditCount===1?'':'s'} — download ready.`);
+      return result;
+    }catch(error){
+      if(reopenOcr&&!destroyed&&!activeOcrEditor){try{await openOcrPage(activePageIndex);}catch{} }
+      onError(error);setStatus(error?.message||'Hybrid PDF could not be saved safely.');throw error;
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function open(file,draft=null){
+    if(destroyed)throw new Error('Hybrid editor has been destroyed.');
+    if((file?.byteLength??file?.size??0)>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
+    sourceFile=file instanceof Uint8Array?null:file;
+    sourceName=file?.name||'document.pdf';
+    sourceBytes=file instanceof Uint8Array?copyBytes(file):new Uint8Array(await file.arrayBuffer());
+    if(sourceBytes.byteLength>DEFAULT_LIMITS.maxBytes)throw new Error('PDF exceeds 60 MB limit.');
+    setBusy(true);
+    try{
+      draftSource=await sourceDigest(sourceBytes);
+      const securityCheck=await PDFDocument.load(sourceBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
+      if(securityCheck.isEncrypted)throw Object.assign(new Error('Encrypted PDFs are not supported yet. Open an unlocked copy.'),{code:'PDF_ENCRYPTED_UNSUPPORTED'});
+      setStatus('Analyzing every PDF page for native or OCR editing…');
+      classifier=await createPdfPageClassifier(sourceBytes);
+      pageCount=classifier.pageCount;
+      if(!pageCount)throw new Error('This PDF has no pages.');
+      if(pageCount>DEFAULT_LIMITS.maxPages)throw new Error(`PDF exceeds ${DEFAULT_LIMITS.maxPages}-page limit.`);
+      const classifications=await classifier.classifyAll({onProgress:({pageIndex,pageCount})=>setStatus(`Checking page ${pageIndex+1} of ${pageCount}…`)});
+      pages=classifications.map(classification=>({classification,route:pageRoute(classification),nativeDirty:false,ocrDirty:false,ocrBytes:null,ocrEditCount:0,ocrCapture:null}));
+      await classifier.destroy();classifier=null;
+      const nativeCount=pages.filter(page=>page.route==='native').length;
+      const ocrCount=pageCount-nativeCount;
+      setStatus(`Hybrid routing ready — ${nativeCount} native page${nativeCount===1?'':'s'}, ${ocrCount} OCR page${ocrCount===1?'':'s'}.`);
+      if(draft){
+        if(draft.version!==1||draft.source!==draftSource||!Number.isInteger(draft.pageIndex)||draft.pageIndex<0||draft.pageIndex>=pageCount||!Array.isArray(draft.ocrPages))
+          throw new Error('The hybrid PDF draft does not match this document.');
+        const seen=new Set();let total=0;
+        for(const saved of draft.ocrPages){
+          if(!saved||!Number.isInteger(saved.index)||seen.has(saved.index)||pages[saved.index]?.route!=='ocr'||!(saved.bytes instanceof Uint8Array)||!Number.isInteger(saved.editCount)||saved.editCount<0)
+            throw new Error('Invalid recovered OCR page.');
+          seen.add(saved.index);total+=saved.bytes.byteLength;
+          if(total>128*1024*1024)throw new Error('OCR recovery exceeds the memory budget.');
+          const check=await PDFDocument.load(saved.bytes.slice(),{ignoreEncryption:false,updateMetadata:false});
+          if(check.getPageCount()!==1)throw new Error('Recovered OCR page must contain one PDF page.');
+          const original=securityCheck.getPage(saved.index),replacement=check.getPage(0);
+          if(JSON.stringify(original.getMediaBox())!==JSON.stringify(replacement.getMediaBox())||JSON.stringify(original.getCropBox())!==JSON.stringify(replacement.getCropBox())||original.getRotation().angle!==replacement.getRotation().angle)
+            throw new Error('Recovered OCR page geometry differs from the original.');
+          const recovered=saved.draft?await validateScanDraft(saved.draft,await sourceDigest(saved.bytes),1):null;
+          let exported=saved.exportBytes||(!recovered?saved.bytes:null);
+          if(exported){
+            if(!(exported instanceof Uint8Array))throw new Error('Invalid recovered OCR export.');
+            total+=exported.byteLength;if(total>128*1024*1024)throw new Error('OCR recovery exceeds the memory budget.');
+            const exportedDoc=await PDFDocument.load(exported.slice(),{ignoreEncryption:false,updateMetadata:false});
+            if(exportedDoc.getPageCount()!==1)throw new Error('Recovered OCR export must contain one page.');
+            const exportedPage=exportedDoc.getPage(0);
+            if(JSON.stringify(original.getMediaBox())!==JSON.stringify(exportedPage.getMediaBox())||JSON.stringify(original.getCropBox())!==JSON.stringify(exportedPage.getCropBox())||original.getRotation().angle!==exportedPage.getRotation().angle)
+              throw new Error('Recovered OCR export geometry differs from the original.');
+          }
+          if(saved.dirty&&!exported&&saved.index!==draft.pageIndex)throw new Error('Inactive OCR draft is missing its validated export.');
+          Object.assign(pages[saved.index],{ocrBytes:exported?copyBytes(exported):null,ocrBaseBytes:copyBytes(saved.bytes),ocrDirty:!!saved.dirty,ocrEditCount:saved.editCount,ocrDraft:recovered});
+        }
+        if(draft.native){const engine=await ensureNativeEngine();await engine.restore(draft.native);}
+      }
+      await activatePage(draft?.pageIndex??0,{skipOcrFlush:true});
+      setBusy(false);
+      return getState();
+    }catch(error){
+      try{await classifier?.destroy();}catch{}classifier=null;
+      setBusy(false);onError(error);throw error;
+    }
+  }
+
+  async function nativeTextAction(action){
+    if(busy||!requireFinishedEdit())throw new Error('Finish the current PDF operation first.');
+    setBusy(true);root.inert=true;
+    try{return await action(await ensureNativeEngine());}finally{root.inert=false;setBusy(false);}
+  }
+  const textEntries=()=>nativeTextAction(engine=>engine.textEntries());
+  const replaceTextRanges=(matches,replacement)=>nativeTextAction(engine=>engine.replaceTextRanges(matches,replacement));
+  const revealText=(id,index)=>nativeTextAction(async engine=>{
+    await activatePage(index);await engine.revealText(id,index);
+  });
+
+  async function ocrTextEntries({recognizeMissing=false,signal,onProgress=()=>{}}={}){
+    if(busy||destroyed||!requireFinishedEdit())throw new Error('Finish the current PDF operation first.');
+    const originalPage=activePageIndex,entries=[];let completed=0;
+    const targets=pages.map((page,index)=>page.route==='ocr'?index:null).filter(Number.isInteger);
+    setBusy(true);root.inert=true;notificationsPaused=true;
+    try{
+      for(const index of targets){
+        if(signal?.aborted)break;
+        const saved=pages[index].ocrDraft?.pages?.[0];
+        if(index!==activeOcrPageIndex&&Array.isArray(saved?.words)){
+          entries.push(...saved.words.map(word=>({id:JSON.stringify(word.bbox),text:word.text,pageIndex:index,protected:false})));
+          completed++;onProgress({completed,total:targets.length,pageIndex:index});continue;
+        }
+        if(index!==activeOcrPageIndex&&!recognizeMissing)continue;
+        if(index!==activeOcrPageIndex)await activatePage(index);
+        if(!activeOcrEditor.hasOcr()&&recognizeMissing){
+          onProgress({completed,total:targets.length,pageIndex:index});
+          await activeOcrEditor.runOcr({throwOnError:true});
+        }
+        if(activeOcrEditor.hasOcr()){
+          entries.push(...activeOcrEditor.textEntries().map(entry=>({...entry,pageIndex:index})));completed++;
+        }
+        onProgress({completed,total:targets.length,pageIndex:index});
+      }
+      return {entries,completed,total:targets.length,cancelled:!!signal?.aborted};
+    }finally{
+      try{if(!destroyed&&activePageIndex!==originalPage)await activatePage(originalPage);}
+      finally{notificationsPaused=false;root.inert=false;setBusy(false);if(!destroyed)emitChange();}
+    }
+  }
+  async function revealOcrText(match){
+    if(busy||!requireFinishedEdit())throw new Error('Finish the current PDF operation first.');
+    if(pages[match.pageIndex]?.route!=='ocr')throw new Error('OCR search page is unavailable.');
+    setBusy(true);root.inert=true;
+    try{if(activeOcrPageIndex!==match.pageIndex)await activatePage(match.pageIndex);activeOcrEditor.revealText(match.id,match.text);}
+    finally{root.inert=false;setBusy(false);}
+  }
+  async function replaceOcrTextRanges(matches,replacement){
+    if(busy||destroyed||!requireFinishedEdit())throw new Error('Finish the current PDF operation first.');
+    if(!Array.isArray(matches)||!matches.length)return 0;
+    const grouped=new Map();
+    for(const match of matches){
+      if(pages[match.pageIndex]?.route!=='ocr')throw new Error('OCR search page is unavailable.');
+      const group=grouped.get(match.pageIndex)||[];group.push(match);grouped.set(match.pageIndex,group);
+    }
+    const originalPage=activePageIndex;let checkpoint=null,count=0;
+    setBusy(true);root.inert=true;notificationsPaused=true;
+    try{
+      await destroyActiveOcr({persist:true});
+      checkpoint=pages.map(page=>({...page}));
+      for(const [index,ranges] of grouped){
+        await activatePage(index);count+=await activeOcrEditor.replaceTextRanges(ranges,replacement);
+      }
+      await destroyActiveOcr({persist:true});await activatePage(originalPage,{skipOcrFlush:true});
+      return count;
+    }catch(error){
+      if(checkpoint){
+        await destroyActiveOcr({persist:false});pages=checkpoint;
+        await activatePage(originalPage,{skipOcrFlush:true});
+      }
+      throw error;
+    }finally{notificationsPaused=false;root.inert=false;setBusy(false);if(!destroyed)emitChange();}
+  }
+
+  async function snapshot(){
+    if(busy||destroyed||!sourceBytes||!requireFinishedEdit())throw new Error('Finish the current PDF operation before saving a draft.');
+    setBusy(true);root.inert=true;
+    try{
+      const ocrPages=[];
+      for(let index=0;index<pages.length;index++){
+        const page=pages[index];
+        if(activeOcrEditor&&activeOcrPageIndex===index){
+          ocrPages.push({index,bytes:copyBytes(activeOcrSource),exportBytes:page.ocrBytes?copyBytes(page.ocrBytes):null,dirty:page.ocrDirty,editCount:page.ocrEditCount,
+            draft:await activeOcrEditor.snapshot()});
+        }else if(page.ocrBaseBytes||page.ocrBytes)ocrPages.push({index,bytes:copyBytes(page.ocrBaseBytes||page.ocrBytes),exportBytes:page.ocrBytes?copyBytes(page.ocrBytes):null,dirty:page.ocrDirty,editCount:page.ocrEditCount,draft:page.ocrDraft||null});
+      }
+      return {version:1,source:draftSource,pageIndex:activePageIndex,native:nativeEngine?.snapshot()||null,ocrPages};
+    }finally{root.inert=false;setBusy(false);}
+  }
+
+  function getState(){
+    const nativeState=nativeEngine?.getState?.()||{};
+    return {
+      ...nativeState,
+      mode:'hybrid',
+      activeRoute:activePage()?.route||null,
+      pageIndex:activePageIndex,
+      pageCount,
+      transactions:nativeState.transactions||[],
+      pageRoutes:pages.map((page,index)=>({pageIndex:index,route:page.route,classification:page.classification,dirty:!!(page.nativeDirty||page.ocrDirty)})),
+      ocrEditedPages:pages.map((page,index)=>page.ocrDirty?index:null).filter(Number.isInteger),
+    };
+  }
+
+  function setMode(mode){
+    if(activePage()?.route!=='native'||!nativeEngine){onWarning({code:'HYBRID_MODE_NOT_NATIVE',message:'Add Text and native formatting are available on native PDF pages.'});return;}
+    return nativeEngine.setMode?.(mode);
+  }
+  async function undo(){if(activePage()?.route==='native')return nativeEngine?.undo?.();}
+  async function redo(){if(activePage()?.route==='native')return nativeEngine?.redo?.();}
+  async function moveInsertTransaction(request){
+    if(activePage()?.route!=='native')throw Object.assign(new Error('Added native text can only be moved on a native PDF page.'),{code:'HYBRID_MOVE_NOT_NATIVE'});
+    if(busy)throw Object.assign(new Error('The PDF editor is busy.'),{code:'HYBRID_EDITOR_BUSY'});
+    const engine=await ensureNativeEngine();
+    if(typeof engine?.moveInsertTransaction!=='function')throw Object.assign(new Error('Dependent text movement is unavailable in this editor session.'),{code:'MOVE_DEPENDENCY_UNAVAILABLE'});
+    setBusy(true);
+    try{return await engine.moveInsertTransaction(request);}
+    finally{setBusy(false);}
+  }
+
+  async function destroy(){
+    if(destroyed)return;destroyed=true;
+    try{await destroyActiveOcr({persist:false});}catch{}
+    try{nativeEngine?.destroy?.();}catch{}
+    nativeEngine=null;
+    try{await classifier?.destroy?.();}catch{}
+    classifier=null;pages=[];sourceBytes=null;sourceFile=null;container.replaceChildren();
+  }
+
+  prev.addEventListener('click',()=>{if(!busy&&activePageIndex>0&&requireFinishedEdit()){setBusy(true);activatePage(activePageIndex-1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the previous page.');}).finally(()=>setBusy(false));}});
+  next.addEventListener('click',()=>{if(!busy&&activePageIndex<pageCount-1&&requireFinishedEdit()){setBusy(true);activatePage(activePageIndex+1).catch(error=>{onError(error);setStatus(error?.message||'Could not open the next page.');}).finally(()=>setBusy(false));}});
+  save.addEventListener('click',()=>{saveCopy().catch(()=>{});});
+  close.addEventListener('click',()=>{destroy().then(()=>onClose()).catch(onError);});
+  updateToolbar();
+
+  return {open,snapshot,textEntries,replaceTextRanges,revealText,ocrTextEntries,revealOcrText,replaceOcrTextRanges,destroy,getState,setMode,undo,redo,moveInsertTransaction,save:saveCopy};
+}

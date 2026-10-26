@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Document Editor V2 Lab | AllToolForest</title>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <link rel="stylesheet" href="../../assets/css/document-editor-v2.css">
+  <script type="module" src="../../assets/js/document-editor-v2/workspace.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a href="../../documents/">Documents</a></nav></div></header>
+  <main class="container" id="main"><div class="breadcrumb"><a href="../../documents/">Documents</a><span>/</span>Document Editor V2 Lab</div>
+    <p><a href="./pdf-engine/">Open the isolated PDF engine development preview</a></p>
+    <section class="page-intro"><h1>Document Editor V2 Lab</h1><p>Experimental workspace for TXT, DOCX, XLSX, CSV and native/OCR PDF editing. Format support is incomplete; review exported copies before use.</p></section>
+    <section id="document-v2" class="workspace document-v2" aria-label="Document editor development workspace">
+      <div class="document-v2-top"><label class="button primary" for="document-v2-file">Open file</label><input id="document-v2-file" type="file" accept=".doc,.docx,.pdf,.xls,.xlsx,.csv,.txt" aria-label="Choose a document"><strong id="document-v2-title">No file open</strong></div>
+      <div id="document-v2-recovery" class="notice" hidden><p>There is a local draft from a previous session: <span id="document-v2-recovery-name"></span></p><button id="document-v2-restore" type="button">Restore draft</button><button id="document-v2-discard" type="button">Discard draft</button></div>
+      <div id="document-v2-actions" class="document-v2-actions" hidden role="toolbar" aria-label="Editor actions"><button type="button" data-action="undo">Undo</button><button type="button" data-action="redo">Redo</button><button type="button" data-action="export" class="primary">Export copy</button><button type="button" data-action="new">Clear workspace</button></div>
+      <p id="document-v2-status" class="status" role="status" aria-live="polite">Choose a file to begin. Files remain on this device.</p>
+      <div id="document-v2-stage" class="document-v2-stage"></div>
+    </section>
+  </main>
+</body>
+</html>
