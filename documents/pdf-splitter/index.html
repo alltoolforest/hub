@@ -546,32 +546,39 @@ function releaseDistantCanvases(){
    remaining--;
  }
 }
-function buildGrid() {
-  const grid = $('#grid'); grid.innerHTML = '';visibleThumbnails.clear();queuedPages.clear();
-  const frag = document.createDocumentFragment();
-  for (let i = 0; i < state.pageCount; i++) {
-    const el = document.createElement('div');
-    el.className = 'thumb'; el.dataset.i = i;
-    el.innerHTML =
-      `<button type="button" class="thumb-btn" role="checkbox" aria-checked="false" aria-label="Page ${i + 1}">` +
-      `<span class="pagebox"><canvas width="1" height="1"></canvas></span>` +
-      `<span class="num">${i + 1}</span><span class="check" aria-hidden="true">✓</span><span class="badge" aria-hidden="true"></span></button>` +
-      `<div class="tools"><button type="button" data-act="rl" title="Rotate left" aria-label="Rotate page ${i + 1} left">↺</button>` +
-      `<button type="button" data-act="rr" title="Rotate right" aria-label="Rotate page ${i + 1} right">↻</button>` +
-      `<button type="button" data-act="zoom" title="Preview" aria-label="Preview page ${i + 1}">🔍</button></div>`;
-    frag.appendChild(el);
+const GRID_BATCH=80;
+let visiblePageStart=0;
+function buildGrid(start=0){
+ const grid=$('#grid');if(observer)observer.disconnect();
+ visibleThumbnails.clear();queuedPages.clear();queue.length=0;
+ visiblePageStart=Math.max(0,Math.min(Math.floor(start/GRID_BATCH)*GRID_BATCH,Math.max(0,state.pageCount-1)));
+ grid.replaceChildren();
+ const controls=document.createElement('div');controls.className='row';controls.style.cssText='grid-column:1/-1;align-items:center;justify-content:center;gap:10px;';
+ const label=document.createElement('span');label.className='note';
+ const last=Math.min(state.pageCount,visiblePageStart+GRID_BATCH);
+ label.textContent='Showing pages '+(visiblePageStart+1)+'–'+last+' of '+state.pageCount;
+ const nav=(txt,dest)=>{const btn=document.createElement('button');btn.type='button';btn.className='btn sm';btn.textContent=txt;btn.disabled=dest<0||dest>=state.pageCount;btn.addEventListener('click',()=>{buildGrid(dest);grid.scrollIntoView({block:'start',behavior:'instant'});});return btn;};
+ const picker=document.createElement('input');picker.type='number';picker.min=1;picker.max=state.pageCount;picker.value=visiblePageStart+1;picker.style.width='90px';picker.setAttribute('aria-label','Jump to PDF page');
+ const jump=document.createElement('button');jump.type='button';jump.className='btn sm';jump.textContent='Go';
+ jump.addEventListener('click',()=>{const page=Number(picker.value);if(Number.isInteger(page)&&page>=1&&page<=state.pageCount)buildGrid(page-1);});
+ controls.append(nav('Previous 80',visiblePageStart-GRID_BATCH),label,picker,jump,nav('Next 80',visiblePageStart+GRID_BATCH));
+ grid.append(controls);
+ const frag=document.createDocumentFragment();
+ for(let i=visiblePageStart;i<last;i++){
+  const el=document.createElement('div');el.className='thumb';el.dataset.i=i;
+  el.innerHTML=`<button type="button" class="thumb-btn" role="checkbox" aria-checked="false" aria-label="Page ${i+1}"><span class="pagebox"><canvas width="1" height="1"></canvas></span><span class="num">${i+1}</span><span class="check" aria-hidden="true">✓</span><span class="badge" aria-hidden="true"></span></button><div class="tools"><button type="button" data-act="rl" title="Rotate left" aria-label="Rotate page ${i+1} left">↺</button><button type="button" data-act="rr" title="Rotate right" aria-label="Rotate page ${i+1} right">↻</button><button type="button" data-act="zoom" title="Preview" aria-label="Preview page ${i+1}">🔍</button></div>`;
+  frag.appendChild(el);
+ }
+ grid.appendChild(frag);
+ observer=new IntersectionObserver(entries=>{
+  for(const en of entries){
+   if(en.isIntersecting){visibleThumbnails.add(en.target);observer.unobserve(en.target);const i=+en.target.dataset.i,tk=state.token;enqueue(()=>renderThumb(i,tk),i);}
+   else visibleThumbnails.delete(en.target);
   }
-  grid.appendChild(frag);
-  observer = new IntersectionObserver(entries => {
-    for (const en of entries){
-      if(en.isIntersecting){visibleThumbnails.add(en.target);observer.unobserve(en.target);const i=+en.target.dataset.i,tk=state.token;enqueue(()=>renderThumb(i,tk),i);}
-      else visibleThumbnails.delete(en.target);
-    }
-    releaseDistantCanvases();
-  }, { rootMargin: '500px' });
-  $$('.thumb', grid).forEach(t => observer.observe(t));
+  releaseDistantCanvases();
+ },{rootMargin:'320px'});
+ $$('.thumb',grid).forEach(t=>{syncThumb(+t.dataset.i);observer.observe(t);});
 }
-
 async function renderThumb(i, tk) {
   if (tk !== state.token) return;
   const page = await state.doc.getPage(i + 1);
@@ -596,7 +603,7 @@ function syncThumb(i) {
   const r = state.rotations[i];
   $('.num', t).textContent = r ? `${i + 1} · ${r}°` : String(i + 1);
 }
-const syncAll = () => { for (let i = 0; i < state.pageCount; i++) syncThumb(i); };
+const syncAll = () => { $('#grid .thumb').forEach(t=>syncThumb(+t.dataset.i)); };
 
 /* ---------- grid interaction ---------- */
 const selectable = () => state.mode === 'extract' || state.mode === 'remove' || state.mode === 'groups';
@@ -915,6 +922,9 @@ $('#zipBtn').addEventListener('click',async()=>{
  zipActive=true;
  const btn=$('#zipBtn'),label=btn.textContent;btn.disabled=true;
  const expected=state.outputs.slice(),token=state.token;
+ const totalBytes=expected.reduce((n,o)=>n+o.blob.size,0);
+ // JSZip generates its final Blob in memory; refuse unsafe-size requests rather than crash.
+ if(totalBytes>96*1024*1024){showMsg('ZIP exceeds the safe in-memory packaging budget (96 MB). Download PDFs individually instead.',true);btn.disabled=false;zipActive=false;return;}
  try{
    const zip=new JSZip(),seen=new Set();
    for(const output of expected){
