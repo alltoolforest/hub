@@ -9,6 +9,7 @@
 <meta property="og:description" content="Split, extract and remove PDF pages in your browser. No upload, no account.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#145940">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <style>
 :root{
   --bg:#f8faf9;--surface:#ffffff;--text:#192e28;--muted:#61746c;--border:#dce6e0;
@@ -360,8 +361,8 @@ footer{font-size:.8125rem;padding:8px 0 28px}
 </footer>
 
 <!-- Pinned library versions -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" integrity="sha512-z8IYLHO8bTgFqj+yrPyIJnzBDf7DDhWwiEsk4sY+Oe6J2M+WQequeGS7qioI5vT6rXgVRb4K1UVQC5ER7MKzKQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="vendor/jszip-3.10.1.min.js"></script>
 <script src="engine-core.js"></script>
 <script>
@@ -424,13 +425,17 @@ window.addEventListener('pagehide',()=>{
  downloadUrls.clear();
 });
 
+const PDFJS_WORKER_SHA512='BbrZ76UNZq5BhH7LL7pn9A4TKQpQeNCHOo65/akfelcIBbcVvYWOFQKPXIrykE3qZxYjmDX573oa4Ywsc7rpTw==';
 async function initWorker() {
-  try {
-    const t = await (await fetch(PDFJS_WORKER)).text();   // same-origin blob avoids cross-origin worker errors
-    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([t], { type: 'text/javascript' }));
-  } catch { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; }
+  const response=await fetch(PDFJS_WORKER,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
+  if(!response.ok)throw Error('Could not load the PDF worker.');
+  const bytes=await response.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-512',bytes);
+  const actual=btoa(String.fromCharCode(...new Uint8Array(digest)));
+  if(actual!==PDFJS_WORKER_SHA512)throw Error('PDF worker integrity verification failed.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([bytes],{type:'text/javascript'}));
 }
-const workerReady = initWorker();
+const workerReady=initWorker();
 
 /* ---------- range parsing ---------- */
 const parseRanges = (str,n) => Core.parseRanges(str,n,{allowDup:true}).map(r=>({...r,a:r.pages[0]+1,b:r.pages[r.pages.length-1]+1}));
@@ -499,7 +504,7 @@ async function loadFile(file) {
  try {lib=await PDFDocument.load(bytes,{updateMetadata:false});}
  catch(e){throw Error(/encrypt/i.test(e.message)?'Encrypted PDFs are not supported by this engine.':(lacksEOF?'The file may be truncated or damaged.':'Cannot open the PDF structure.'));}
  if(lib.getPageCount()<1)throw Error('This PDF contains no pages.');
- candidate=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
+ candidate=await pdfjsLib.getDocument({data:bytes.slice(),isEvalSupported:false}).promise;
  if(candidate.numPages!==lib.getPageCount())throw Error('PDF parsing engines disagree about the page count.');
  const warnings=await inspectComplex(lib);
  resetAll(true);
