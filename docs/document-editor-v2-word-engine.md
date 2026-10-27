@@ -110,3 +110,16 @@ The six failures from the five-file complex DOCX suite have been addressed in th
 Retest: 60 complex/targeted cases, 10 Word workspace integration cases and 10 existing DOCX/search/workspace regressions passed (80 total). The complex suite now returns a failing process status when assertions fail. The table-block regression assertion was updated to the recursive cell schema without removing its content check.
 
 Coverage limits: Node/JSDOM UI simulation, controlled font metrics, and storage doubles do not validate browser layout, actual installed fonts, native IME, mobile interaction, or persistence across browser restarts. No real-browser/device retest or new LibreOffice visual comparison was performed in this remediation. No deployment or frozen tool changes.
+
+## 27 October 2026 — Selection across ordinary source paragraphs
+
+Adjacent ordinary source paragraphs now support shared mouse/keyboard selection,
+atomic deletion/replacement/cut/paste and multi-paragraph range formatting. The
+changes preserve surviving run formatting, support workspace history and reload
+recovery, and export real DOCX paragraph changes. This supersedes the earlier
+cross-field selection gap for this supported subset. Protected content, explicit
+page breaks and cross-cell/section boundaries remain guarded; original-to-appended
+paragraph selection and other advanced Word features remain open.
+
+See `document-editor-v2-word-range-2026-10-27.md` for scope, regression results and
+reproduction. No PDF or other-tool changes are included in this checkpoint.

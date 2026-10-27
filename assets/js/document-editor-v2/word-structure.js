@@ -9,8 +9,8 @@ export function structureParts(model,index){
   return model.structures?.[index]||[{runs:model.runs[index].map((text,source)=>({text,source,format:model.overrides[index]||null}))}];
 }
 const textOf=part=>part.runs.map(run=>run.text).join('');
-function sliceRuns(runs,start,end){let at=0;const result=[];for(const run of runs){const from=at;at+=run.text.length;const text=run.text.slice(Math.max(0,start-from),Math.max(0,Math.min(run.text.length,end-from)));if(text)result.push({...run,text});}return result;}
-function formatAt(model,index,runs,offset){let at=0;const run=runs.find(r=>(at+=r.text.length)>=offset)||runs.at(-1);return run?.format||model.formatting.formats[run?.origin??index].runs[run?.source]||model.formatting.formats[index].base;}
+export function sliceRuns(runs,start,end){let at=0;const result=[];for(const run of runs){const from=at;at+=run.text.length;const text=run.text.slice(Math.max(0,start-from),Math.max(0,Math.min(run.text.length,end-from)));if(text)result.push({...run,text});}return result;}
+export function formatAt(model,index,runs,offset){let at=0;const run=runs.find(r=>(at+=r.text.length)>=offset)||runs.at(-1);return run?.format||model.formatting.formats[run?.origin??index].runs[run?.source]||model.formatting.formats[index].base;}
 export function replaceStructure(model,index,partIndex,start,end,value){
   const parts=structuredClone(structureParts(model,index)),part=parts[partIndex],length=part&&textOf(part).length;
   if(!part||!Number.isInteger(start)||!Number.isInteger(end)||start<0||end<start||end>length)throw new Error('Invalid paragraph selection.');
@@ -56,8 +56,12 @@ export function mountStructure({model,index,container,formatting,onChange,regist
     container.replaceChildren();fields.length=0;
     structureParts(model,index).forEach((part,partIndex)=>{
       const field=document.createElement('div');field.className='document-v2-paragraph';field.contentEditable='true';field.setAttribute('role','textbox');field.setAttribute('aria-multiline','true');field.setAttribute('aria-label',`Paragraph ${index+1}, part ${partIndex+1}`);
+      field.dataset.wordSource=String(index);field.dataset.wordPart=String(partIndex);field.tabIndex=0;
       const paint=()=>{field.replaceChildren();const current=structureParts(model,index)[partIndex];if(!current)return;styleWordNode(field,formatAt(model,index,current.runs,0));for(const run of current.runs){const span=document.createElement('span');span.textContent=run.text;styleWordNode(span,run.format||model.formatting.formats[run.origin??index].runs[run.source]||model.formatting.formats[index].base);field.append(span);}};paint();
-      function activate(){const range=selection(field)||{start:0,end:0};const current=structureParts(model,index)[partIndex];formatting.activate({apply:format=>{
+      function activate(){
+        const selected=window.getSelection();
+        if(selected?.rangeCount&&!selected.isCollapsed){const range=selected.getRangeAt(0);if(!field.contains(range.startContainer)||!field.contains(range.endContainer))return;}
+        const range=selection(field)||{start:0,end:0};const current=structureParts(model,index)[partIndex];formatting.activate({apply:format=>{
         const parts=structuredClone(structureParts(model,index)),p=parts[partIndex],length=textOf(p).length;
         const start=range.start===range.end?0:range.start,end=range.start===range.end?length:range.end;
         p.runs=[...sliceRuns(p.runs,0,start),...sliceRuns(p.runs,start,end).map(run=>({...run,format})),...sliceRuns(p.runs,end,length)];if(!p.runs.length)p.runs=[{text:'',source:0,format}];model.structures[index]=parts;paint();
@@ -81,7 +85,16 @@ export function mountStructure({model,index,container,formatting,onChange,regist
       });
       field.addEventListener('paste',event=>{event.preventDefault();const range=selection(field);if(!range)return;const text=event.clipboardData.getData('text/plain').replace(/\r\n?/g,'\n'),lines=text.split('\n');
         if(lines.length===1){replaceStructure(model,index,partIndex,range.start,range.end,text);render();onChange();focus(partIndex,range.start+text.length);}
-        else{const parts=structuredClone(structureParts(model,index)),current=parts[partIndex],format=formatAt(model,index,current.runs,range.start),prefix=sliceRuns(current.runs,0,range.start),suffix=sliceRuns(current.runs,range.end,textOf(current).length);const inserted=lines.map(line=>({runs:[{text:line,source:0,format}]}));inserted[0].runs.unshift(...prefix);inserted.at(-1).runs.push(...suffix);parts.splice(partIndex,1,...inserted);save(parts,partIndex+lines.length-1,lines.at(-1).length);}});field.addEventListener('drop',event=>event.preventDefault());field.addEventListener('blur',paint);
+        else{const parts=structuredClone(structureParts(model,index)),current=parts[partIndex],format=formatAt(model,index,current.runs,range.start),prefix=sliceRuns(current.runs,0,range.start),suffix=sliceRuns(current.runs,range.end,textOf(current).length);const inserted=lines.map(line=>({runs:[{text:line,source:0,format}]}));inserted[0].runs.unshift(...prefix);inserted.at(-1).runs.push(...suffix);parts.splice(partIndex,1,...inserted);save(parts,partIndex+lines.length-1,lines.at(-1).length);}});field.addEventListener('drop',event=>event.preventDefault());field.addEventListener('blur',()=>{
+        const selection=window.getSelection();
+        // Focusing the shared host during typing must not replace caret nodes.
+        if(selection?.rangeCount){
+          if(field.closest('[contenteditable=""]')&&(field.contains(selection.anchorNode)||field.contains(selection.focusNode)))return;
+          const range=selection.getRangeAt(0);
+          if(!selection.isCollapsed&&(!field.contains(range.startContainer)||!field.contains(range.endContainer)))return;
+        }
+        paint();
+      });
       fields.push(field);container.append(field);register(`${index}:${partIndex}`,field);
     });
   }

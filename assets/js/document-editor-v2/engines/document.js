@@ -2,6 +2,7 @@ import {openText} from './text.js';
 import {readPreviewImages,showFontAvailability} from '../word-preview.js';
 import {mergeSourceParagraph,canStructure,mountStructure,structureParts,structureText,replaceStructure} from '../word-structure.js';
 import {paginateWord} from '../word-pagination.js';
+import {wordFlowGroup} from '../word-flow-selection.js';
 import {wordToolbar} from '../word-toolbar.js';
 import {styleWordNode} from '../word-format.js';
 import {mountFindReplace} from '../find-replace.js';
@@ -83,8 +84,16 @@ export async function open(file, format) {
           return wrap;
         }
         function renderBlocks(blocks,parent){
+          let flow=null;
           for(const block of blocks){
-            if(block.kind==='paragraph'){parent.append(editable(block.paragraph));continue;}
+            if(block.kind==='paragraph'){
+              if(canStructure(model,block.paragraph.index)){
+                if(!flow||block.paragraph.pageBreak){flow=wordFlowGroup({model,views:structured,onChange:()=>{onChange();refreshSearch();},onStatus:message=>{note.textContent=message;},formatting,onHistory:action=>host.closest('#document-v2')?.querySelector(`[data-action=${action}]`)?.click()});parent.append(flow);}
+                flow.append(editable(block.paragraph));
+              }else{flow=null;parent.append(editable(block.paragraph));}
+              continue;
+            }
+            flow=null;
             const table=document.createElement('table');table.className='document-v2-doc-table';
             for(const cells of block.rows){const tr=document.createElement('tr');
               for(const cell of cells){if(cell.hidden)continue;const td=document.createElement('td');td.colSpan=cell.colspan;td.rowSpan=cell.rowspan;renderBlocks(cell.blocks,td);tr.append(td);}
