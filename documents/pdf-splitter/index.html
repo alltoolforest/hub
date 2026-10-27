@@ -166,27 +166,52 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
 .simple-tools{margin:12px 0}
 .simple-tools[open]{padding-bottom:4px}
 @media(max-width:650px){.modes{grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.modes [role="tab"]{white-space:normal}.simple-tool-row{gap:8px}.simple-tool-row .btn{flex:1 1 30%}}
+
+/* Align page shell with the current AllToolForest document tools. Engine/workspace logic unchanged. */
+.atf-site-header{display:block;background:#fff;border-bottom:1px solid #dce6e0;padding:0 max(24px,env(safe-area-inset-right)) 0 max(24px,env(safe-area-inset-left));margin:0}
+.atf-header-inner{max-width:1180px;margin:auto;min-height:82px;display:flex;align-items:center;gap:42px}
+.atf-brand{display:flex;align-items:center;gap:11px;font-size:21px;font-weight:740;letter-spacing:-.8px;white-space:nowrap;color:#192e28;text-decoration:none}
+.atf-brand-mark{width:38px;height:40px;background:#145940;border-radius:10px;color:#fff;display:grid;place-items:center;font-size:16px;font-weight:750;letter-spacing:-1px}
+.atf-nav{display:flex;gap:27px;align-items:center;flex:1;flex-wrap:wrap}
+.atf-nav a{display:flex;align-items:center;min-height:44px;border-bottom:2px solid transparent;font-size:14px;font-weight:600;text-decoration:none;color:#192e28}
+.atf-nav a:hover,.atf-brand:hover{color:#145940}
+.atf-nav a.active{color:#145940;border-bottom-color:#145940}
+.atf-header-note{font-size:13px;color:#61746c;white-space:nowrap}
+#main.wrap{max-width:1100px}
+.crumbs{font-size:13px;color:#61746c;margin:30px 0 23px;display:flex;gap:10px;flex-wrap:wrap}
+.crumbs a{text-decoration:none;color:inherit}
+.crumbs a:hover{color:#145940}
+#main h1{font-size:clamp(28px,3.3vw,40px);letter-spacing:-1.3px;line-height:1.2;margin:0 0 10px;font-weight:650}
+.lead{font-size:16px;line-height:1.55;color:#61746c;margin:0 0 20px;max-width:60ch}
+#drop{padding:44px 20px}
+#drop .big{font-size:1.35rem;font-weight:650;margin-bottom:4px}
+#drop .sub{font-size:1rem;line-height:1.5}
+.drop-choose{display:inline-block;margin-top:20px;background:#145940;color:#fff;border-radius:9px;padding:10px 22px;font-weight:600}
+.privacy{margin-top:14px}
+.also{margin:18px 0 8px}
+footer{font-size:.8125rem;padding:8px 0 28px}
+@media(max-width:800px){.atf-header-inner{gap:16px;flex-wrap:wrap;padding:14px 0}.atf-nav{gap:18px;order:3;flex-basis:100%}.atf-header-note{margin-left:auto}}
+@media(max-width:470px){.atf-site-header{padding:0 18px}.atf-brand{font-size:19px}.atf-header-note{display:none}.atf-nav{gap:15px}.crumbs{margin:20px 0 15px}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- Replace this header with your shared hub header if you have one -->
-<header class="site">
-  <div class="wrap bar">
-    <a class="brand" href="https://alltoolforest.github.io/hub/"><span class="logo">AF</span>AllToolForest</a>
-    <nav aria-label="Primary">
-      <a href="https://alltoolforest.github.io/hub/work/">Work</a>
-      <a href="https://alltoolforest.github.io/hub/documents/">Documents</a>
-      <a href="https://alltoolforest.github.io/hub/images/">Images</a>
-      <a href="https://alltoolforest.github.io/hub/calculators/">Calculators</a>
+<header class="atf-site-header">
+  <div class="atf-header-inner">
+    <a class="atf-brand" href="../../"><span class="atf-brand-mark">AF</span>AllToolForest</a>
+    <nav class="atf-nav" aria-label="Main navigation">
+      <a href="../../work/">Work</a>
+      <a class="active" href="../../documents/" aria-current="page">Documents</a>
+      <a href="../../images/">Images</a>
+      <a href="../../calculators/">Calculators</a>
     </nav>
-    <span class="pill">No account needed</span>
+    <span class="atf-header-note">◇ No account needed</span>
   </div>
 </header>
 
 <main id="main" class="wrap">
-  <div class="crumbs"><a href="https://alltoolforest.github.io/hub/">Home</a> / <a href="https://alltoolforest.github.io/hub/documents/">Documents</a> / PDF Splitter</div>
+  <div class="crumbs"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>PDF Splitter</div>
   <h1>PDF Splitter</h1>
   <p class="lead">Extract, remove or split pages by range, size, count or bookmarks. Your file never leaves your device.</p>
 
@@ -198,8 +223,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
   <section id="uploadSection" aria-label="Upload PDF"><p id="uploadError" class="note err" role="alert" hidden></p>
     <label id="drop" for="fileInput">
       <input id="fileInput" type="file" accept="application/pdf,.pdf">
-      <div class="big">Drop a PDF here, or click to choose</div>
+      <div class="big">Drop a PDF here</div>
       <div class="sub">Works offline once loaded · no upload · no page or size limits (your device's memory is the limit)</div>
+      <span class="drop-choose">Choose PDF</span>
     </label>
     <p class="privacy">🔒 File processing happens in your browser. <a href="https://alltoolforest.github.io/hub/privacy/">How your data is handled ↗</a></p>
   </section>
@@ -312,10 +338,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
   </section>
 
   <div class="also" aria-label="Also useful">
-    <a href="https://alltoolforest.github.io/hub/documents/edit-pdf/">Edit PDF</a>
-    <a href="https://alltoolforest.github.io/hub/documents/pdf-merger/">PDF Merger</a>
-    <a href="https://alltoolforest.github.io/hub/documents/pdf-organizer/">Organize PDF Pages</a>
-    <a href="https://alltoolforest.github.io/hub/request/">Suggest an improvement ↗</a>
+    <a href="../../documents/">← All document tools</a>
+    <a href="../../privacy/">Privacy</a>
   </div>
 </main>
 
