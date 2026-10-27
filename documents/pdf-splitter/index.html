@@ -603,7 +603,7 @@ function syncThumb(i) {
   const r = state.rotations[i];
   $('.num', t).textContent = r ? `${i + 1} · ${r}°` : String(i + 1);
 }
-const syncAll = () => { $('#grid .thumb').forEach(t=>syncThumb(+t.dataset.i)); };
+const syncAll = () => { $$('#grid .thumb').forEach(t=>syncThumb(+t.dataset.i)); };
 
 /* ---------- grid interaction ---------- */
 const selectable = () => state.mode === 'extract' || state.mode === 'remove' || state.mode === 'groups';
@@ -674,7 +674,7 @@ modeTabs().forEach(tab=>tab.addEventListener('keydown',event=>{
 }));
 function setMode(m) {
   state.mode = m;
-  $('.modes [role=tab]').forEach(b => {const on=b.dataset.mode===m;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});
+  $$('.modes [role=tab]').forEach(b => {const on=b.dataset.mode===m;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});
   $$('.panel').forEach(p => p.hidden = p.dataset.panel !== m);
   const g = $('#grid'); g.dataset.mode = m; g.classList.toggle('readonly', !selectable());
   $('#selTools').querySelectorAll('[data-sel]').forEach(b => b.hidden = !selectable());
