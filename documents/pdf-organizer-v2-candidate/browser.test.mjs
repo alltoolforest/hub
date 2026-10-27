@@ -47,7 +47,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#create').click();await page.locator('#cancel').click();
    await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
    assert.match(await page.locator('#status').textContent(),/cancelled/i);
-   await page.unroute('**/export-worker.js');
+   await page.unrouteAll({behavior:'wait'});
    // Combining changes the old filename into a displayed multi-source title.
    await page.locator('#file').setInputFiles({name:'second.pdf',mimeType:'application/pdf',buffer});
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===14);
