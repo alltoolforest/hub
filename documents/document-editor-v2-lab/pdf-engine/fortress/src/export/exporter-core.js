@@ -5,6 +5,12 @@ import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
 import { applyVerticalRegionReflow } from './page-reflow.js';
+import {detectDocumentFlags} from '../core/document-model.js';
+import {formRegionSafe} from '../core/form-protection.js';
+
+function guardFormRegion(doc,pageIndex,bounds){
+  if(!formRegionSafe(detectDocumentFlags(doc),pageIndex,bounds))throw Object.assign(new Error('This edit overlaps a protected PDF form field or an unverified form area.'),{code:'PDF_FORM_REGION_PROTECTED'});
+}
 
 function sourceBucket(map,pageIndex,run){
   const sourceKind=run?.sourceKind==='form'?'form':'page';
@@ -113,6 +119,7 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
 
     const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
     const angle=line.runs?.[0]?.angle||0;
+    guardFormRegion(doc,tx.pageIndex,{x:minX,y:y-size*.3,width,height:size*1.3});
     page.drawText(text,{x:minX,y,size,font,rotate:degrees(angle*180/Math.PI),color:insertionColor(tx.textColor)});
   }
   warnings.push({code:tx.styleChanged?'STYLE_APPLIED':'STYLE_APPROXIMATED',pageIndex:tx.pageIndex,blockId:block.id,message:tx.styleChanged?'Selected font formatting was written into the PDF.':'Replacement was reconstructed with a safe standard PDF font.'});
@@ -257,6 +264,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     }
 
     const block=tx.block;
+    guardFormRegion(doc,tx.pageIndex,block?.bounds);
     if(!block||(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION'))throw new Error(`Block ${block?.id||tx.blockId||'unknown'} is not safely editable: ${block?.reason||block?.tier||'UNKNOWN'}`);
     const sourceLines=block.sourceLines||[];
     const usesFormXObject=sourceLines.some(seq=>(seq||[]).some(run=>run?.sourceKind==='form'));
@@ -272,7 +280,12 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       const direct=planDirectReplacement(block,tx.replacementUnicode);
       tx.layoutValidation=direct.layout||null;
       if(direct.success){
-        for(const r of direct.replacements){
+        for(const [index,r] of direct.replacements.entries()){
+          const line=block.lines?.[index],bounds=block.bounds;
+          const originalAdvance=Math.abs(Number(r.originalAdvance)),newAdvance=Math.abs(Number(r.newAdvance));
+          const scale=Number.isFinite(newAdvance)&&originalAdvance>.01?newAdvance/originalAdvance:1.45;
+          const size=Number(line?.fontSize)||Number(block.fontSize)||12;
+          guardFormRegion(doc,tx.pageIndex,{x:line?.minX??bounds.x,y:Number.isFinite(line?.y)?line.y-size*.3:bounds.y,width:Math.max(0,((line?.maxX-line?.minX)||bounds.width)*scale),height:Math.max(bounds.height,size*1.3)});
           sourceBucket(byStream,tx.pageIndex,r.sourceRun).edits.push({start:r.start,end:r.end,replacement:r.replacement});
         }
         usedDirect=true;
@@ -322,6 +335,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     const items=insertionsByPage.get(sourcePageIndex)||[];
     for(const {tx,sequenceIndex} of items){
       const layout=await prepareInsertedText(doc,tx,fontCache);
+      guardFormRegion(doc,sourcePageIndex,{x:Number(tx.x),y:layout.bottomY,width:Math.max(...layout.lines.map(text=>layout.font.widthOfTextAtSize(text,layout.size)),0),height:Number(tx.y)+layout.size-layout.bottomY});
       let reflow=null;
       if(tx.reflowPlan?.enabled){
         reflow=await applyVerticalRegionReflow(doc,tx,layout,{preview,sequenceIndex});

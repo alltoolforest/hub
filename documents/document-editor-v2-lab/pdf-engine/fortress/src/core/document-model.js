@@ -1,5 +1,6 @@
 import { PDFName, PDFArray, PDFDict, PDFRawStream, PDFRef, decodePDFRawStream } from './pdf-lib.js';
 import { inspectFontResource } from '../fonts/font-inspector.js';
+import {inspectFormWidgets} from './form-protection.js';
 
 function key(ref){return ref?.toString?.() ?? String(ref);}
 function contentsRefs(page){
@@ -120,7 +121,7 @@ export function detectDocumentFlags(pdfDoc){
     const fields=acroForm.lookup(PDFName.of('Fields'));
     if(fields instanceof PDFArray) for(const f of fields.asArray()) visit(f);
   }
-  return {encrypted,hasAcroForm,signed};
+  return {encrypted,hasAcroForm,signed,...inspectFormWidgets(pdfDoc)};
 }
 
 export class DocumentModel{

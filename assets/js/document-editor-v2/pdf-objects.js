@@ -3,6 +3,8 @@ import {imagesIn,applyImageChanges} from './pdf-image-objects.js';
 import {PDFDocument,PDFName,PDFArray,PDFDict,PDFString} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/core/pdf-lib.js';
 import {PdfRenderer} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/rendering/renderer.js';
 import {sourceDigest} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/workspace/native-draft.js';
+import {detectDocumentFlags} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/core/document-model.js';
+import {formRegionSafe,verifyFormPreservation} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/core/form-protection.js';
 
 const clone=value=>structuredClone(value);
 function safeUrl(value){
@@ -107,6 +109,9 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
     const state=exportState||getEditorState();
     const doc=await PDFDocument.load(bytes.slice(),{updateMetadata:false});
     assertObjectLayout(changes,state,boxes.length,doc.getPageCount());
+    const flags=detectDocumentFlags(source);
+    if(flags.signed)throw new Error('Signed PDFs are protected from image and hyperlink edits.');
+    for(const item of changes)if(!formRegionSafe(flags,item.pageIndex,item))throw new Error('This object edit overlaps a protected PDF form field.');
     const currentLinks=linksIn(doc),deletions=new Map();
     await applyImageChanges(doc,changes);
     for(const item of changes){
@@ -133,6 +138,7 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
     }
     for(const [index,indices] of deletions){const page=doc.getPage(index),annots=page.node.lookup(PDFName.of('Annots'),PDFArray).clone(doc.context);for(const position of indices.sort((a,b)=>b-a))annots.remove(position);page.node.set(PDFName.of('Annots'),annots);}
     const out=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false}));
+    await verifyFormPreservation(original,out);
     const check=await PDFDocument.load(out.slice(),{updateMetadata:false});if(check.getPageCount()!==boxes.length)throw new Error('Object export lost a page.');
     return out;
   }

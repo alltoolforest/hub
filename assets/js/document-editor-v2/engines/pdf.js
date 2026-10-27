@@ -3,6 +3,8 @@ import {pdfSearch} from '../pdf-search.js';
 import {pdfOcrSearch} from '../pdf-ocr-search.js';
 import {createPdfObjectTools} from '../pdf-objects.js';
 import {pdfConversionPanel} from '../pdf-conversion.js';
+import {pdfOperationQueue} from '../pdf-operations.js';
+import {verifyFormPreservation} from '../../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/core/form-protection.js';
 // Adapter for the isolated native/OCR engine. The public Edit PDF is untouched.
 const base = new URL('../../../../documents/document-editor-v2-lab/pdf-engine/', import.meta.url);
 export async function open(file, format, recovery=null) {
@@ -21,6 +23,8 @@ export async function open(file, format, recovery=null) {
     }
   }
   let active=null,host=null,notify=()=>{},revision=0,disposed=false;
+  const operations=pdfOperationQueue(()=>disposed?null:active?.editor);
+  const sourceBytes=new Uint8Array(await file.arrayBuffer());
   async function candidate(draft){
     const shell=document.createElement('div'),app=document.createElement('div'),status=document.createElement('p');
     status.setAttribute('role','status');shell.append(status,app);
@@ -36,6 +40,11 @@ export async function open(file, format, recovery=null) {
       onError:error=>{status.textContent=error.message;}});
     try{
       await editor.open(file,draft?.state);
+      if(editor.getState().flags?.hasAcroForm){
+        const note=document.createElement('p');note.className='notice';
+        note.textContent='This PDF contains form fields. Their layout stays fixed. Existing text outside protected field areas can be edited when it fits; changes that would move form-page content are refused.';
+        shell.prepend(note);
+      }
       // The shared workspace owns these actions, including OCR history.
       for(const button of app.querySelectorAll('.hybrid-toolbar button'))if(['Close','Save a copy'].includes(button.textContent))button.hidden=true;
       for(const label of ['Undo','Redo'])for(const button of app.querySelectorAll(`button[aria-label="${label}"]`))button.hidden=true;
@@ -56,15 +65,15 @@ export async function open(file, format, recovery=null) {
   }
   active=await candidate(null);
   return {
-    format,asyncSnapshots:true,
+    format,asyncSnapshots:true,ready:operations.ready,
     render(target,onChange){host=target;notify=onChange;host.replaceChildren(active.shell);},
-    async snapshot(){
+    snapshot(){return operations.run(async()=>{
       if(disposed)throw new Error('PDF session is closed.');
       const session=active,startRevision=revision,objects=session.objects.snapshot();
       const state=await session.editor.snapshot();
       if(active!==session||revision!==startRevision)throw new Error('PDF changed while saving its draft. Retry after the current edit finishes.');
       return {revision:startRevision,state,objects,...(prepared.unlocked?{unlocked:prepared.unlocked}:{})};
-    },
+    });},
     async restore(draft){
       if(disposed)throw new Error('PDF session is closed.');
       if(!draft||!Number.isInteger(draft.revision)||!draft.state)throw new Error('Invalid PDF workspace draft.');
@@ -73,15 +82,16 @@ export async function open(file, format, recovery=null) {
       active=next;revision=draft.revision;host?.replaceChildren(next.shell);
       await previous.close();
     },
-    async export(){
+    export(){return operations.run(async()=>{
       if(disposed)throw new Error('PDF session is closed.');
       const session=active,startRevision=revision;session.objects.snapshot();
       const result=await session.editor.save({allowUnchanged:true});
       if(!result?.bytes)throw new Error('Finish the current PDF edit before exporting.');
       const bytes=await session.objects.apply(result.bytes,{reflowMetrics:result.nativeResult?.reflowMetrics??result.reflowMetrics??session.editor.getState().reflowMetrics??[],ocrEditedPages:result.ocrEditedPages??session.editor.getState().ocrEditedPages??[]});
       if(active!==session||revision!==startRevision)throw new Error('PDF changed during export. Export again after the current edit finishes.');
+      await verifyFormPreservation(sourceBytes,bytes);
       return new Blob([bytes],{type:'application/pdf'});
-    },
+    });},
     async dispose(){disposed=true;await active?.close();active=null;}
   };
 }

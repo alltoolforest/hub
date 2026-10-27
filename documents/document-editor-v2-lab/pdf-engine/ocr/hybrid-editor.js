@@ -122,7 +122,7 @@ export function createHybridPdfEditor({
       const message=scan?.hasPendingEdit?'Apply or cancel the scanned-text edit first.':'Press Done to finish this text edit before saving or changing pages.';
       onWarning({code:'HYBRID_PENDING_EDIT',message});setStatus(message);return false;
     }
-    if(native?.viewBusy||scan?.busy||NATIVE_BUSY_RE.test(nativeHost.querySelector('.pdf-fortress-status')?.textContent||'')){
+    if(native?.commitPending||native?.viewBusy||scan?.busy||NATIVE_BUSY_RE.test(nativeHost.querySelector('.pdf-fortress-status')?.textContent||'')){
       setStatus('Please wait for the current PDF operation to finish.');return false;
     }
     return true;
@@ -497,8 +497,11 @@ export function createHybridPdfEditor({
 
   function getState(){
     const nativeState=nativeEngine?.getState?.()||{};
+    const scanState=activeOcrEditor?.getState?.()||{};
     return {
       ...nativeState,
+      busy:busy||!!scanState.busy,
+      hasPendingEdit:!!nativeState.hasPendingEdit||!!scanState.hasPendingEdit,
       mode:'hybrid',
       activeRoute:activePage()?.route||null,
       pageIndex:activePageIndex,

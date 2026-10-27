@@ -242,7 +242,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const blocks=buildLogicalBlocks(visual.items,{pageIndex:index,pageRotation:model.page(index).rotation});
     const streams=getPageContentStreams(pdfDoc,index);
     const mapped=mapBlocksToSources(pdfDoc,index,streams,blocks);
-    const safe=applyDocumentSafety(mapped.blocks,model.flags);
+    const safe=applyDocumentSafety(mapped.blocks,model.flags,{pageIndex:index});
     analysis={pageIndex:index,blocks:safe,sourceRuns:mapped.sourceRuns,streams};
     const editable=safe.filter(isEditable).length;
     if(announce)setStatus(editable?`${editable} editable text region${editable===1?'':'s'} — click text to edit and format`:'No safely editable existing text detected — Add text is still available');
@@ -377,9 +377,12 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     Object.assign(done.style,{left:`${doneLeft}px`,top:`${doneTop}px`,right:'auto'});
     done.addEventListener('click',async()=>{
       done.disabled=true;
+      commitDepth++;
+      try{
       const result=await inline.commit();
       if(result?.blocked){done.disabled=false;if(result.error)setStatus(result.error.message||result.error.code,'error');return;}
       viewportCtl.stop();activeTextInput=null;done.remove();hideFormatToolsIfIdle();
+      }finally{commitDepth--;}
     });
     layer.append(done);
     setStatus('Edit the text and use the formatting controls above, then press Done.');
@@ -432,6 +435,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       const text=input.value;
       if(!text.trim()){setStatus('Type some text before pressing Done.','warning');input.focus();return;}
       done.disabled=true;cancel.disabled=true;input.disabled=true;
+      commitDepth++;
       try{
         const activeStyle=currentFormatStyle();
         let tx;
@@ -463,7 +467,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         const metric=preview?.reflowMetrics?.find(m=>m.transactionId===tx.id&&Number(m.delta)>0);
         if(existingTx)setStatus(metric?.overflowPageCount?'Added text updated — lower content reflowed and overflow will continue on a new page when saved.':(metric?'Added text updated — lower content moved down automatically.':'Added text updated — continue editing or Save a copy.'));
         else setStatus(metric?.overflowPageCount?'New text added — lower content reflowed and overflow will continue on a new page when saved.':(metric?'New text added — lower content moved down automatically.':'New text added — existing spacing was sufficient.'));
-      }catch(error){done.disabled=false;cancel.disabled=false;input.disabled=false;input.focus();setStatus(error.code||error.message,'error');onError(error);}
+      }catch(error){done.disabled=false;cancel.disabled=false;input.disabled=false;input.focus();setStatus(error.code||error.message,'error');onError(error);}finally{commitDepth--;}
     });
   }
 
@@ -854,7 +858,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   undo.addEventListener('click',()=>undoAction().catch(()=>{}));
   redo.addEventListener('click',()=>redoAction().catch(()=>{}));
   save.addEventListener('click',()=>saveCopy().catch(()=>{}));
-  let viewBusy=false;
+  let viewBusy=false,commitDepth=0;
   async function changeView(change){
     if(viewBusy||!requireFinishedEdit())return;
     viewBusy=true;
@@ -867,5 +871,5 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   zoomIn.addEventListener('click',()=>changeView(()=>{zoom=Math.min(2,zoom+.15);}));
   updateHistory();updatePageLabel();
 
-  return {open,snapshot,restore,textEntries,replaceTextRanges,revealText,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
+  return {open,snapshot,restore,textEntries,replaceTextRanges,revealText,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),commitPending:commitDepth>0||!!inline?.busy||!!activeTextInput?.disabled,viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
 }

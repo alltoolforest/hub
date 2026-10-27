@@ -40,13 +40,14 @@ async function persist(allowStorageFailure = false) {
   const draft = {file:current.file, format:current.format, snapshot,
     history:current.history, cursor:current.cursor, modified:Date.now()};
   pendingSave = pendingSave.catch(() => {}).then(() => token === generation ? writeDraft(draft) : undefined);
-  try { await pendingSave; } catch(error) { if(!allowStorageFailure)throw error; return; }
-  if (current === session) say('Draft saved on this device. Export to save a document file.');
+  try { await pendingSave; } catch(error) { if(!allowStorageFailure)throw Object.assign(new Error('Local draft storage is unavailable.'),{cause:error,localDraftStorageFailure:true}); return; }
+  if (current === session&&!actionBusy) say('Draft saved on this device. Export to save a document file.');
 }
 function changed() {
   if (!session) return;
   if(session.engine.asyncSnapshots){
     session.dirty=true;
+    if(actionBusy)return;
     say('Unsaved PDF changes. Finish the edit to save a local draft.');
     clearTimeout(timer);timer=setTimeout(()=>persist().catch(error=>say(error.message||'Local autosave failed. Export your work.',true)),700);
     return;
@@ -122,8 +123,12 @@ actions.addEventListener('click', async event => {
       session.dirty = true;
       await display();
       await persist();
+      say(`${action==='undo'?'Change undone.':'Change redone.'} Draft saved on this device. Export to save a document file.`);
     } else if (action === 'export') {
-      await persist().catch(() => say('Local autosave is unavailable. Preparing your export directly.', true));
+      clearTimeout(timer);
+      say('Preparing export. Waiting for applied edits to finish…');
+      await session.engine.ready?.();
+      await persist().catch(error => {if(!error.localDraftStorageFailure)throw error;say('Local autosave is unavailable. Preparing your export directly.', true);});
       const blob = await session.engine.export();
       if (!(blob instanceof Blob) || (!blob.size && session.format !== 'txt')) throw new Error('Export did not produce a valid file. Your draft is retained.');
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);

@@ -18,6 +18,7 @@ test('workspace routes native PDF through copied engine with async history and v
   const {extractPageText}=await import(base+'export/extraction-validator.js');
   const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);
   pdf.addPage([612,792]).drawText('Original sample text',{x:60,y:700,size:12,font});
+  const formField=pdf.getForm().createTextField('Customer');formField.setText('Preserved customer');formField.addToPage(pdf.getPage(0),{x:50,y:100,width:180,height:30});
   const file=new Blob([await pdf.save({useObjectStreams:false})]);Object.defineProperty(file,'name',{value:'sample.pdf'});
   let storedDraft=null;
   globalThis.indexedDB={open(){
@@ -42,6 +43,18 @@ test('workspace routes native PDF through copied engine with async history and v
   document.querySelector('[aria-label="Edit text: Original sample text"]').click();
   const input=document.querySelector('[aria-label="Edit PDF text"]');input.value='Updated sample text';input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
   document.querySelector('.pdf-done').click();
+  // Export in the same turn as Done, before validation/preview commit finishes.
+  let immediateDownload;const createURL=URL.createObjectURL;
+  URL.createObjectURL=blob=>{immediateDownload=blob;return 'blob:immediate-pdf-test';};
+  dom.window.HTMLAnchorElement.prototype.click=function(){};
+  document.querySelector('[data-action=export]').click();
+  await wait(()=>!!immediateDownload);await wait(()=>!picker.disabled);
+  assert.match(await extractPageText(new Uint8Array(await immediateDownload.arrayBuffer()),0),/Updated sample text/);
+  const formExport=await PDFDocument.load(await immediateDownload.arrayBuffer());
+  assert.equal(formExport.getForm().getTextField('Customer').getText(),'Preserved customer');
+  assert.match(status(),/Export prepared/);
+  await new Promise(resolve=>setTimeout(resolve,750));assert.match(status(),/Export prepared/,'autosave must not obscure export outcome');
+  URL.createObjectURL=createURL;
   await wait(()=>!document.querySelector('[aria-label="Edit PDF text"]'));
   const undo=document.querySelector('[data-action=undo]'),redo=document.querySelector('[data-action=redo]');
   await wait(()=>!undo.disabled);
