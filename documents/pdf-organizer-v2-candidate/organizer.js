@@ -1,4 +1,5 @@
-import {safeFilename,inspectSecurity} from './engine.js';
+import {verifyExport} from './verify.js';
+import {safeFilename} from './engine.js';
 
 import * as pdfjsLib from '../../assets/vendor/pdf.mjs';
 import {ensurePdfPreviewCompatibility} from '../../assets/js/pdf-organizer-compat.js';
@@ -29,7 +30,7 @@ const el = {
   zoom: $('zoom'), range: $('range'), outName: $('outName'), create: $('create'), blankSize: $('blankSize'),
   undo: $('undo'), redo: $('redo'), pv: $('pv'), pvCanvas: $('pvCanvas'), pvTitle: $('pvTitle')
 };
-let busy=false, cancelled=false, exportWorker=null, rejectExport=null, downloadURL=null;
+let busy=false, cancelled=false, exportWorker=null, rejectExport=null, downloadURL=null, inspectWorker=null, rejectInspect=null, verifyTask=null;
 function setBusy(value){
   busy=value; el.root.setAttribute('aria-busy',String(value));
   el.root.querySelectorAll('button,input,select').forEach(b=>{if(!['cancel','clearSession'].includes(b.id))b.disabled=value;});
@@ -38,6 +39,8 @@ function setBusy(value){
 }
 $('cancel').addEventListener('click',()=>{
   cancelled=true;
+  if(inspectWorker){inspectWorker.terminate();inspectWorker=null;rejectInspect?.(new DOMException('Cancelled','AbortError'));}
+  verifyTask?.destroy();
   if(exportWorker){exportWorker.terminate();exportWorker=null;rejectExport?.(new DOMException('Cancelled','AbortError'));}
   status('Cancellation requested.');
 });
@@ -75,8 +78,14 @@ function redo() { if (busy || !S.redo.length) return; invalidateDownload(); S.un
 const fmtSize = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
 /* ---------- Loading files ---------- */
-function detectRisks(lib) {
-  return ['AcroForm','Outlines','StructTreeRoot','PageLabels','Names','Metadata'].filter(k=>lib.catalog.has(PDFName.of(k)));
+async function inspectFile(bytes){
+  try{return await new Promise((resolve,reject)=>{
+    rejectInspect=reject;
+    inspectWorker=new Worker(new URL('./inspect-worker.js',import.meta.url),{type:'module'});
+    inspectWorker.onmessage=({data})=>data.error?reject(Error(data.error)):resolve(data);
+    inspectWorker.onerror=()=>reject(Error('Source inspection stopped. The current session is unchanged.'));
+    inspectWorker.postMessage({bytes});
+  });}finally{inspectWorker?.terminate();inspectWorker=null;rejectInspect=null;}
 }
 async function addFiles(fileList) {
   if(busy)return;
@@ -93,17 +102,18 @@ async function addFiles(fileList) {
       status('Reading '+f.name+'…');let doc;
       try {
         const bytes=new Uint8Array(await f.arrayBuffer());
-        const lib=await PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
-        inspectSecurity(lib,window.PDFLib);
+        const inspected=await inspectFile(bytes);
+        if(cancelled)throw new DOMException('Cancelled','AbortError');
         const task=pdfjsLib.getDocument({data:bytes.slice(),isEvalSupported:false,
           cMapUrl:new URL('../../assets/vendor/cmaps/',import.meta.url).href,cMapPacked:true,
           standardFontDataUrl:new URL('../../assets/vendor/standard_fonts/',import.meta.url).href,
           wasmUrl:new URL('../../assets/vendor/wasm/',import.meta.url).href});
-        try{doc=await task.promise;}catch(e){await task.destroy();throw e;}
+        verifyTask=task;
+        try{doc=await task.promise;}catch(e){await task.destroy();throw e;}finally{verifyTask=null;}
         if(cancelled)throw new DOMException('Cancelled','AbortError');
-        if(doc.numPages!==lib.getPageCount())throw Error('PDF parsers disagree about page count.');
+        if(doc.numPages!==inspected.pages)throw Error('PDF parsers disagree about page count.');
         if(S.items.length+added.length+doc.numPages>2000)throw Error('This candidate supports 2,000 pages per session.');
-        const src={id:S.nextSrc++,name:f.name,size:f.size,bytes,pdfjs:doc,pages:doc.numPages,sizes:lib.getPages().map(p=>[p.getWidth(),p.getHeight()]),warnings:detectRisks(lib)};
+        const src={id:S.nextSrc++,name:f.name,size:f.size,bytes,pdfjs:doc,pages:doc.numPages,sizes:inspected.sizes,warnings:inspected.warnings};
         src.color=COLORS[(src.id-1)%COLORS.length];staged.push(src);doc=null;
         for(let p=0;p<src.pages;p++)added.push(newItem(src.id,p));
       }catch(e){if(doc)await doc.destroy();throw e;}
@@ -112,7 +122,7 @@ async function addFiles(fileList) {
     S.sources.push(...staged);setBusy(false);
     mutate(()=>S.items.push(...added),added.length+' pages added');
     if(!el.outName.value)el.outName.value=safeFilename(srcById(added[0].src).name.replace(/\.pdf$/i,'')+'-organized');
-  }catch(e){for(const src of staged)await src.pdfjs.destroy();toast(e.name==='AbortError'?'Loading cancelled.':e.message);}
+  }catch(e){for(const src of staged)await src.pdfjs.destroy();toast(cancelled||e.name==='AbortError'?'Loading cancelled.':e.message);}
   finally{setBusy(false);}
 }
 
@@ -471,13 +481,15 @@ async function exportPdf(list,name) {
       exportWorker.postMessage({sources,items:plan,blankSize:el.blankSize.value});
     });
     if(cancelled)throw new DOMException('Cancelled','AbortError');
+    await verifyExport({pdfjs:pdfjsLib,bytes,items:plan,sources:S.sources,cancelled:()=>cancelled,onTask:t=>{verifyTask=t;},onProgress:(v,m)=>{status(m);$('progress').value=v;}});
+    if(cancelled)throw new DOMException('Cancelled','AbortError');
     if(downloadURL)URL.revokeObjectURL(downloadURL);
     downloadURL=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
     const a=document.createElement('a');a.href=downloadURL;a.download=filename;
     a.textContent='Download verified PDF';a.className='btn';a.id='verifiedDownload';
     $('verifiedDownload')?.remove();el.status.after(a);a.click();
     status('Verified '+plan.length+' pages. Use Download verified PDF if your browser did not start the download.');
-  }catch(err){toast(err.name==='AbortError'?'Export cancelled. No output was created.':'Export stopped: '+err.message);}
+  }catch(err){toast(cancelled||err.name==='AbortError'?'Export cancelled. No output was created.':'Export stopped: '+err.message);}
   finally{exportWorker?.terminate();exportWorker=null;rejectExport=null;setBusy(false);}
 }
 

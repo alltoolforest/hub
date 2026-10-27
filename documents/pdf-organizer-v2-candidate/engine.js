@@ -51,6 +51,28 @@ export function fingerprint(doc,object,P,topPage=false) {
   return visit(object,topPage);
 }
 
+// Same-document exports retain object numbers. For page deletion, reject if
+// a removed content stream or image/form resource remains reachable in output.
+// Fonts are not page content and are excluded from this conservative check.
+function verifyRemovedStreams(source,output,kept,P){
+  const N=P.PDFName.of,removed=source.getPages().filter((_,i)=>!kept.has(i));
+  const refs=new Set(),visited=new Set();
+  function collect(value){
+    if(!value)return;
+    if(value instanceof P.PDFRef){const object=source.context.lookup(value);if(object instanceof P.PDFStream)refs.add(value.toString());if(visited.has(object))return;visited.add(object);collect(object);return;}
+    if(value instanceof P.PDFArray){for(const child of value.asArray())collect(child);}
+    else if(value instanceof P.PDFStream){const resources=source.context.lookup(value.dict.get(N('Resources')));collect(resources?.get?.(N('XObject')));}
+    else if(value instanceof P.PDFDict){for(const key of value.keys())collect(value.get(key));}
+  }
+  for(const page of removed){
+    collect(page.node.get(N('Contents')));
+    const resources=source.context.lookup(page.node.getInheritableAttribute(N('Resources')));
+    collect(resources?.get?.(N('XObject')));
+  }
+  const live=new Set(output.context.enumerateIndirectObjects().map(([ref])=>ref.toString()));
+  if([...refs].some(ref=>live.has(ref)))throw Error('Removed-page content is still referenced by retained pages or document structures. Export blocked; use a dedicated redaction workflow.');
+}
+
 function verifyNoHiddenPages(doc,P){
   const visible=new Set(doc.getPages().map(p=>p.ref.toString()));
   for(const [ref,obj] of doc.context.enumerateIndirectObjects())if(obj instanceof P.PDFDict&&obj.get(P.PDFName.of('Type'))?.toString()==='/Page'&&!visible.has(ref.toString()))throw Error('Export verification found a hidden page object. Download blocked.');
@@ -95,6 +117,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
     const bytes=await buildOrganizedPdf(sources.find(s=>s.id===id).bytes,plan,P,{signal,onProgress});
     const output=await P.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
     inspectSecurity(output,P);verifyNoHiddenPages(output,P);
+    if(used.size<doc.getPageCount())verifyRemovedStreams(doc,output,used,P);
     // Content, resource and bounding-box verification independent of page refs.
     for(let i=0;i<items.length;i++) {
       const before=doc.getPage(items[i].page),after=output.getPage(i);

@@ -19,7 +19,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
  if(process.env.BROWSER&&process.env.BROWSER!==name)continue;
  let browser;
  try {
-  browser=await type.launch({headless:true,timeout:30000});
+  browser=await type.launch({headless:true,timeout:30000,executablePath:process.env.ORGANIZER_BROWSER_EXECUTABLE||undefined});
   for(const mobile of [false,true]) {
    const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1366,height:900},hasTouch:mobile,acceptDownloads:true});
    const page=await context.newPage(),errors=[],remote=[];
@@ -47,7 +47,19 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#create').click();await page.locator('#cancel').click();
    await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
    assert.match(await page.locator('#status').textContent(),/cancelled/i);
-   console.log(JSON.stringify({browser:name,mobile,result:'PASS',pages:output.getPageCount(),remoteRequests:remote.length}));
+   await page.unroute('**/export-worker.js');
+   // Combining changes the old filename into a displayed multi-source title.
+   await page.locator('#file').setInputFiles({name:'second.pdf',mimeType:'application/pdf',buffer});
+   await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===14);
+   assert.equal(await page.evaluate(()=>document.querySelector('[onmouseover]')),null);
+   await page.locator('#range').fill('2, 4');
+   const extraction=page.waitForEvent('download');await page.locator('[data-bulk=extract]').click();
+   const extracted=await extraction;const extractedPdf=await P.PDFDocument.load(await readFile(await extracted.path()));assert.equal(extractedPdf.getPageCount(),2);
+   await page.locator('#range').fill('');
+   const combinedPromise=page.waitForEvent('download');await page.locator('#create').click();
+   const combined=await combinedPromise;assert.equal((await P.PDFDocument.load(await readFile(await combined.path()))).getPageCount(),14);
+   assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
+   console.log(JSON.stringify({browser:name,mobile,result:'PASS',pages:output.getPageCount(),combinedPages:14,extractedPages:2,remoteRequests:remote.length}));
    await context.close();
   }
  }catch(e){failed++;console.error(name,e.stack);}

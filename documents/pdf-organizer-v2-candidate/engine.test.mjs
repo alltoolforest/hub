@@ -16,3 +16,12 @@ test('corrupt input and invalid plans fail without returning bytes',async()=>{aw
 test('pre-cancelled export and in-progress cancellation return no bytes',async()=>{const s=await fixture(40);const c=new AbortController();c.abort();await assert.rejects(buildCandidate([s],[item(0)],P,{signal:c.signal}),{name:'AbortError'});const c2=new AbortController();await assert.rejects(buildCandidate([s],Array.from({length:40},(_,i)=>item(i)),P,{signal:c2.signal,onProgress:()=>c2.abort()}),{name:'AbortError'});});
 test('filenames cannot contain path, HTML, control or bidi characters',()=>{const f=safeFilename('../a\u202e<img onerror="x">\u0000.pdf');assert(!/[<>/"\u202e\u0000]/.test(f));assert.equal(safeFilename('CON.pdf'),'organized.pdf');assert(safeFilename('a'.repeat(300)).length<=124);});
 test('200 page benchmark',async()=>{const s=await fixture(200),start=performance.now();const bytes=await buildCandidate([s],Array.from({length:200},(_,i)=>item(199-i)),P);console.log(JSON.stringify({benchmark:'200 text pages reorder',input:s.bytes.length,output:bytes.length,ms:Math.round(performance.now()-start)}));assert.equal((await P.PDFDocument.load(bytes)).getPageCount(),200);});
+
+test('deletion refuses a removed content stream retained by another structure',async()=>{
+ const s=await fixture(2,d=>{const content=d.getPage(1).node.Contents();d.catalog.set(P.PDFName.of('PieceInfo'),d.context.obj({Hidden:content}));});
+ await assert.rejects(buildCandidate([s],[item(0)],P),/still referenced/);
+});
+test('deletion refuses image resource still shared with retained pages',async()=>{
+ const s=await fixture(2,async d=>{const image=await d.embedPng(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0KkAAAAASUVORK5CYII=','base64'));for(const page of d.getPages())page.drawImage(image,{x:0,y:0,width:10,height:10});});
+ await assert.rejects(buildCandidate([s],[item(0)],P),/still referenced/);
+});

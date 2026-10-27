@@ -13,6 +13,9 @@ Only this new candidate directory and its dedicated CI workflow are changed. Exi
 - Safe preservation path for single-source nonduplicated pages: original PDF objects, supported forms, bookmarks, metadata and tagged removal remain handled by the existing integrity engine. No automatic tag/bookmark discard permission is supplied.
 - Tagged reordering is blocked rather than silently preserving a misleading reading order.
 - Extended page copying fails closed for complex catalogs, annotations, unknown page structures and multiple-source metadata. These capabilities work on the supported simple-PDF subset; general complex-PDF merge/duplicate support is not claimed.
+- Export now additionally runs PDF.js text-position and 320px pixel comparisons against each source page before publishing a download. This bounded visual check is complementary, not full-resolution proof.
+- Source parsing/security inspection now runs in a cancellable Worker.
+- Removed content/image/Form XObject stream references are checked against same-document output; retained references stop deletion conservatively. Shared legitimate images can therefore block removal.
 - Export reparses output and checks page count, sequence/dimensions/rotation, content/resource fingerprints and metadata where applicable; rejects hidden page objects. Fingerprints use two noncryptographic checksums for stream bytes, not a security proof or independent rendering verification.
 - Browser-local export in a dedicated module Worker; terminating it cancels export. Concurrent exports blocked. Explicit verified download link supports browsers that decline delayed automatic downloads. Stale links revoked on edits, history and blank-size changes.
 - Rejects active content, unsupported URI protocols, signatures and XFA; filename controls/bidi/path/HTML characters sanitized. Escaped filename HTML attribute fixes confirmed injection point.
@@ -24,25 +27,25 @@ Only this new candidate directory and its dedicated CI workflow are changed. Exi
 ## Tests actually run
 
 - Existing organizer Node regression: **125/125 passed**, covering original integrity, forms, bookmarks, tags, removal, lifecycle, thumbnails and compatibility.
-- Candidate Node engine suite: **11/11 passed**, covering reorder/remove, duplicate/rotation independence, blank sizes, simple merge, form preservation, metadata, dangerous content, tagged/label guards, invalid input, cancellation, filenames and 200-page benchmark.
+- Candidate Node engine suite: **13/13 passed**, covering reorder/remove, duplicate/rotation independence, blank sizes, simple merge, form preservation, metadata, dangerous content, tagged/label guards, invalid input, cancellation, filenames 200-page benchmark, hidden content-stream retention and shared-image rejection.
 - 200-page synthetic text PDF, local Node: 108,709 input bytes -> 44,623 output bytes, approximately 0.39–0.45 s. This is neither a scan-heavy stress benchmark nor a phone result.
 - Chromium 141 / Playwright 1.56.1: desktop 1366x900 and touch-enabled 390x844 workflows passed. Load, selection, duplication, undo/redo, blank, preview, verified 8-page download, cancellation. Zero external network requests observed.
 - axe-core 4.14.0: **zero detected violations** in the tested desktop and narrow loaded states, after fixing the main landmark. Automated scanning does not establish full accessibility or screen-reader compatibility.
 - Browser test found and fixed mobile Cancel being covered by the fixed export bar.
 - Browser screenshots inspected internally; not published as user deliverables.
-- Firefox runtime was downloaded, but local execution did not produce a completed verification result. WebKit could not launch due missing system libraries; dependency installation was unavailable. Dedicated CI matrix is provided; its results must be checked separately.
+- Initial checkpoint a845788: CI Chromium and Firefox passed. WebKit was still installing dependencies when last checked. Latest source-inspection worker and independent visual/text verification changes require a fresh CI run; do not transfer older browser results to this new code. Local browser execution after the session resumed is blocked by runtime socket restrictions.
 
 ## Critical remaining release gates
 
 1. **Confidential-content guarantee:** ordinary page deletion is not redaction. The inherited engine prunes unreachable objects, and the candidate rejects hidden page objects, but shared resources, retained pages, metadata, annotations or attachments may contain copies of removed information. Do not claim complete confidential-content removal. A specified sanitization policy plus adversarial corpus and independent decoded-object verification is required before that requirement can pass.
-2. **Whole-process memory/performance:** source-byte/page limits and bounded thumbnails do not bound PDF decompression, parsing, encoding or object-graph allocations. Admission parsing still runs partly on the UI thread. Move it into cancellable workers and test image bombs, pathological graphs, large scanned PDFs, rapid scroll/preview changes, and low-memory phones.
-3. **Independent fidelity/structure verification:** add a second-parser/renderer comparison for supported complex exports, expanded real-world fixtures for fonts/images/transparency/annotations/links/labels/XMP/tags, and test every supported transformed structure. Current checks are useful but do not prove all possible PDFs correct.
+2. **Whole-process memory/performance:** source-byte/page limits and bounded thumbnails do not bound PDF decompression, parsing, encoding or object-graph allocations. Admission parsing has been moved into a cancellable worker. Still test image bombs, pathological graphs, large scanned PDFs, rapid scroll/preview changes, and low-memory phones.
+3. **Independent fidelity/structure verification:** validate the newly added second-parser/renderer comparison across supported complex exports; add expanded real-world fixtures for fonts/images/transparency/annotations/links/labels/XMP/tags, and test every supported transformed structure. Current checks are useful but do not prove all possible PDFs correct.
 4. **Cross-platform:** complete Firefox/WebKit CI, Android/iOS touch/download behavior, Windows/macOS browsers, keyboard-only navigation, dialog focus, screen-reader announcements and high zoom. Desktop narrow-viewport Chromium is not real Android/iOS verification.
 5. **Full candidate regression:** supplied features remain but not every interaction has been exercised (touch drag/autoscroll, rapid preview replacement, all selection-range errors, source removal/history, repeated failures and very large document cases). Source and dependency security review is partial, not a completed independent audit.
 
 ## Next checkpoint
 
-Run candidate CI; fix any browser failures. Build the adversarial resource/confidentiality corpus and implement a fail-closed sanitization policy without removing retained content silently. Complete admission-worker and memory work, then independent fidelity and remaining UI regression. Only after critical gates pass: present exact candidate commit, report and limitations for explicit deployment approval. Deployment, production audit, user verification and freeze are separate later steps.
+Run candidate CI; fix any browser failures. Build the adversarial resource/confidentiality corpus and implement a fail-closed sanitization policy without removing retained content silently. Complete memory work and validate the new admission-worker/independent-fidelity pipeline, then remaining fidelity and remaining UI regression. Only after critical gates pass: present exact candidate commit, report and limitations for explicit deployment approval. Deployment, production audit, user verification and freeze are separate later steps.
 
 ## Local reproduction
 
