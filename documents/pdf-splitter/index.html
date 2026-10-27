@@ -138,6 +138,27 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 .also a{text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:99px;background:var(--surface);font-size:.9rem}
 .also a:hover{border-color:var(--brand)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* Task 6: touch, keyboard focus, reduced motion and responsive group controls */
+.modes{overflow-x:auto;overscroll-behavior-inline:contain}
+.modes [role="tab"]{min-height:44px;white-space:nowrap}
+button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-visible{outline:3px solid var(--brand);outline-offset:3px}
+#groupList [role="listitem"]{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#groupList [role="listitem"] input{flex:1 1 170px;min-width:0}
+#groupList [role="listitem"] .note{flex:1 0 100%;overflow-wrap:anywhere}
+#groupList [role="listitem"] button{min-height:44px}
+#groupCoverage{margin-top:8px}
+@media(max-width:650px){
+ .wrap{padding-inline:12px}
+ .modes{display:flex;flex-wrap:nowrap;max-width:100%;scroll-snap-type:x proximity}
+ .modes [role="tab"]{flex:0 0 auto;scroll-snap-align:start}
+ #selTools{flex-wrap:wrap}
+ #groupList [role="listitem"] button{flex:1 1 auto}
+ .action .inner{flex-wrap:wrap}
+ .action .inner .txt{min-width:0;flex:1 1 100%}
+ #splitBtn{width:100%;min-height:48px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -187,7 +208,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
     </div>
 
     <div class="card">
-      <div class="modes" role="tablist" aria-label="Split method">
+      <div class="modes" role="tablist" aria-label="Split method" aria-orientation="horizontal">
         <button role="tab" type="button" data-mode="extract" aria-selected="true">Extract pages</button>
         <button role="tab" type="button" data-mode="ranges" aria-selected="false">Custom ranges</button>
         <button role="tab" type="button" data-mode="every" aria-selected="false">Every N pages</button>
@@ -195,6 +216,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 <button role="tab" type="button" data-mode="size" aria-selected="false">By file size</button>
         <button role="tab" type="button" data-mode="bookmarks" aria-selected="false">By bookmarks</button>
         <button role="tab" type="button" data-mode="remove" aria-selected="false">Remove pages</button>
+<button role="tab" type="button" data-mode="groups" aria-selected="false">Visual groups</button>
       </div>
       <div class="panels">
         <div class="panel" data-panel="extract">
@@ -232,6 +254,12 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
           <div class="row"><input type="text" id="quickSelRemove" placeholder="Quick select, e.g. 2, 4-6" aria-label="Quick select pages to remove"><button class="btn sm" type="button" id="quickBtnRemove">Select</button></div>
         </div>
         <div id="featureWarning" class="note" hidden role="alert"><strong>Complex PDF features may not survive page extraction.</strong><ul id="featureWarningItems"></ul><label><input id="featureAcknowledgment" type="checkbox"> I understand and accept the listed changes.</label></div>
+<div class="panel" data-panel="groups" hidden>
+<p>Select pages in the thumbnail grid, then add them to a named output group. Repeat for each output. Pages not assigned to a group are excluded.</p>
+<div class="row"><label class="f">Group name <input id="groupName" type="text" placeholder="Section 1" maxlength="90"></label><button class="btn sm" id="addGroup" type="button">Create group from selection</button><button class="btn sm" id="clearGroupSelection" type="button">Clear selection</button></div>
+<div id="groupList" role="list" aria-label="Output groups"></div>
+<div class="note" id="groupCoverage" role="status" aria-live="polite"></div>
+</div>
 <div class="common">
           <label class="f" for="outName">Output name</label>
           <input type="text" id="outName" aria-label="Output file name prefix">
@@ -257,7 +285,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
         <div class="txt">
           <strong id="summary">—</strong>
           <span class="note" id="planNote"></span>
-          <div id="progWrap" hidden><progress id="prog" max="1" value="0"></progress><span class="note" id="progLabel"></span></div>
+          <div id="progWrap" hidden><progress id="prog" max="1" value="0"></progress><span class="note" id="progLabel" role="status" aria-live="polite"></span></div>
         </div>
         <button class="btn primary" type="button" id="splitBtn" disabled>Split PDF</button>
       </div>
@@ -298,7 +326,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 <!-- Pinned library versions -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="vendor/jszip-3.10.1.min.js"></script>
 <script src="engine-core.js"></script>
 <script>
 (() => {
@@ -306,7 +334,7 @@ footer .links{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const THUMB_W = 240;           // px width used to render thumbnails
-const CONCURRENCY = 3;         // simultaneous thumbnail renders
+const CONCURRENCY = 2; // base cap; adaptive concurrency is applied by pump()
 const SOFT_LIMIT_MB = 150;     // show a memory warning above this
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -322,12 +350,13 @@ const { PDFDocument, degrees } = PDFLib;
 const Core = window.SplitterCore;
 if (!Core) { $('#libError').hidden=false; return; }
 const jobController = new Core.JobController();
+const thumbnailConcurrency = Core.concurrencyFor(navigator.deviceMemory, navigator.hardwareConcurrency);
 
 /* ---------- state ---------- */
 const state = {
   file: null, baseName: 'document', lib: null, doc: null,
   pageCount: 0, selected: new Set(), rotations: [], outline: [],
-  mode: 'extract', lastClicked: null, token: 0, outputs: [], plan: null,
+  mode: 'extract', lastClicked: null, token: 0, outputs: [], plan: null, groups: [],
   rendered: new Set(), previewIdx: 0, busy: false
 };
 
@@ -339,12 +368,25 @@ const fmtBytes = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) 
 const tick = () => new Promise(r => setTimeout(r, 0));
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-function downloadBlob(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+const downloadUrls=new Set();
+function downloadBlob(blob,name){
+ if(!(blob instanceof Blob)||!blob.size)throw Error('The requested download is empty.');
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ downloadUrls.add(url);a.href=url;a.download=safeDownloadName(name);document.body.appendChild(a);
+ try{a.click();}finally{
+  a.remove();
+  // Allow browsers to start the download before revoking its object URL.
+  setTimeout(()=>{URL.revokeObjectURL(url);downloadUrls.delete(url);},60000);
+ }
 }
+function safeDownloadName(value){
+ const clean=sanitize(String(value||'document')).replace(/\.{2,}/g,'.').slice(0,120);
+ return clean||'document.pdf';
+}
+window.addEventListener('pagehide',()=>{
+ for(const url of downloadUrls)URL.revokeObjectURL(url);
+ downloadUrls.clear();
+});
 
 async function initWorker() {
   try {
@@ -435,7 +477,7 @@ async function loadFile(file) {
  $('#featureWarning').hidden=warnings.length===0;$('#featureAcknowledgment').checked=false;
  const bm=$('[data-mode="bookmarks"]');bm.disabled=!state.outline.length;
  $('#uploadSection').hidden=true;$('#work').hidden=false;
- buildGrid();setMode('extract');
+ buildGrid();renderGroups();setMode('extract');
  } catch(e){uploadError(e.message||'Could not load this PDF.');if(candidate)try{await candidate.destroy()}catch{};}
  fileInput.value='';
 }
@@ -459,10 +501,10 @@ async function loadOutline(doc) {
 }
 
 function resetAll(keepUpload) {
-  state.token++; queue.length = 0;
+  state.token++; queue.length = 0;queuedPages.clear();visibleThumbnails.clear();
   if (observer) observer.disconnect();
   try { state.doc && state.doc.destroy(); } catch {}
-  Object.assign(state, { file: null, lib: null, doc: null, pageCount: 0, selected: new Set(), rotations: [], outline: [], outputs: [], plan: null, rendered: new Set() });
+  Object.assign(state, { file: null, lib: null, doc: null, pageCount: 0, selected: new Set(), rotations: [], outline: [], outputs: [], plan: null, groups: [], rendered: new Set() });
   $('#grid').innerHTML = ''; $('#results').hidden = true; $('#resList').innerHTML = '';
   $('#progWrap').hidden = true; showMsg('');
   $('#work').hidden = true; $('#uploadSection').hidden = false;
@@ -471,41 +513,72 @@ function resetAll(keepUpload) {
 }
 
 /* ---------- thumbnails ---------- */
-const queue = []; let active = 0, observer = null;
-function enqueue(job) { queue.push(job); pump(); }
-function pump() {
-  while (active < CONCURRENCY && queue.length) {
-    const j = queue.shift(); active++;
-    j().catch(() => {}).finally(() => { active--; pump(); });
-  }
+const queue=[];let active=0,observer=null;
+const queuedPages=new Set();
+const MAX_RENDERED_THUMBNAILS=72;
+let visibleThumbnails=new Set();
+function enqueue(job, pageIndex=null){
+ if(pageIndex!==null){if(queuedPages.has(pageIndex))return;queuedPages.add(pageIndex);}
+ queue.push({job,pageIndex});pump();
 }
-
-function buildGrid() {
-  const grid = $('#grid'); grid.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  for (let i = 0; i < state.pageCount; i++) {
-    const el = document.createElement('div');
-    el.className = 'thumb'; el.dataset.i = i;
-    el.innerHTML =
-      `<button type="button" class="thumb-btn" role="checkbox" aria-checked="false" aria-label="Page ${i + 1}">` +
-      `<span class="pagebox"><canvas width="1" height="1"></canvas></span>` +
-      `<span class="num">${i + 1}</span><span class="check" aria-hidden="true">✓</span><span class="badge" aria-hidden="true"></span></button>` +
-      `<div class="tools"><button type="button" data-act="rl" title="Rotate left" aria-label="Rotate page ${i + 1} left">↺</button>` +
-      `<button type="button" data-act="rr" title="Rotate right" aria-label="Rotate page ${i + 1} right">↻</button>` +
-      `<button type="button" data-act="zoom" title="Preview" aria-label="Preview page ${i + 1}">🔍</button></div>`;
-    frag.appendChild(el);
-  }
-  grid.appendChild(frag);
-  observer = new IntersectionObserver(entries => {
-    for (const en of entries) if (en.isIntersecting) {
-      observer.unobserve(en.target);
-      const i = +en.target.dataset.i, tk = state.token;
-      enqueue(() => renderThumb(i, tk));
-    }
-  }, { rootMargin: '500px' });
-  $$('.thumb', grid).forEach(t => observer.observe(t));
+function pump(){
+ while(active<Math.min(CONCURRENCY,thumbnailConcurrency)&&queue.length){
+   const {job,pageIndex}=queue.shift();active++;
+   Promise.resolve().then(job).catch(()=>{}).finally(()=>{
+     if(pageIndex!==null)queuedPages.delete(pageIndex);
+     active--;pump();
+   });
+ }
 }
-
+function releaseDistantCanvases(){
+ const ready=$$('#grid .pagebox.ready');
+ let remaining=ready.length;
+ if(remaining<=MAX_RENDERED_THUMBNAILS)return;
+ for(const el of ready){
+   if(remaining<=MAX_RENDERED_THUMBNAILS)break;
+   const thumb=el.closest('.thumb');
+   if(visibleThumbnails.has(thumb))continue;
+   const canvas=el.querySelector('canvas');
+   if(!canvas||canvas.dataset.rendering==='1')continue;
+   canvas.width=1;canvas.height=1;
+   el.classList.remove('ready');
+   observer?.observe(thumb);
+   remaining--;
+ }
+}
+const GRID_BATCH=80;
+let visiblePageStart=0;
+function buildGrid(start=0){
+ const grid=$('#grid');if(observer)observer.disconnect();
+ visibleThumbnails.clear();queuedPages.clear();queue.length=0;
+ visiblePageStart=Math.max(0,Math.min(Math.floor(start/GRID_BATCH)*GRID_BATCH,Math.max(0,state.pageCount-1)));
+ grid.replaceChildren();
+ const controls=document.createElement('div');controls.className='row';controls.style.cssText='grid-column:1/-1;align-items:center;justify-content:center;gap:10px;';
+ const label=document.createElement('span');label.className='note';
+ const last=Math.min(state.pageCount,visiblePageStart+GRID_BATCH);
+ label.textContent='Showing pages '+(visiblePageStart+1)+'–'+last+' of '+state.pageCount;
+ const nav=(txt,dest)=>{const btn=document.createElement('button');btn.type='button';btn.className='btn sm';btn.textContent=txt;btn.disabled=dest<0||dest>=state.pageCount;btn.addEventListener('click',()=>{buildGrid(dest);grid.scrollIntoView({block:'start',behavior:'instant'});});return btn;};
+ const picker=document.createElement('input');picker.type='number';picker.min=1;picker.max=state.pageCount;picker.value=visiblePageStart+1;picker.style.width='90px';picker.setAttribute('aria-label','Jump to PDF page');
+ const jump=document.createElement('button');jump.type='button';jump.className='btn sm';jump.textContent='Go';
+ jump.addEventListener('click',()=>{const page=Number(picker.value);if(Number.isInteger(page)&&page>=1&&page<=state.pageCount)buildGrid(page-1);});
+ controls.append(nav('Previous 80',visiblePageStart-GRID_BATCH),label,picker,jump,nav('Next 80',visiblePageStart+GRID_BATCH));
+ grid.append(controls);
+ const frag=document.createDocumentFragment();
+ for(let i=visiblePageStart;i<last;i++){
+  const el=document.createElement('div');el.className='thumb';el.dataset.i=i;
+  el.innerHTML=`<button type="button" class="thumb-btn" role="checkbox" aria-checked="false" aria-label="Page ${i+1}"><span class="pagebox"><canvas width="1" height="1"></canvas></span><span class="num">${i+1}</span><span class="check" aria-hidden="true">✓</span><span class="badge" aria-hidden="true"></span></button><div class="tools"><button type="button" data-act="rl" title="Rotate left" aria-label="Rotate page ${i+1} left">↺</button><button type="button" data-act="rr" title="Rotate right" aria-label="Rotate page ${i+1} right">↻</button><button type="button" data-act="zoom" title="Preview" aria-label="Preview page ${i+1}">🔍</button></div>`;
+  frag.appendChild(el);
+ }
+ grid.appendChild(frag);
+ observer=new IntersectionObserver(entries=>{
+  for(const en of entries){
+   if(en.isIntersecting){visibleThumbnails.add(en.target);observer.unobserve(en.target);const i=+en.target.dataset.i,tk=state.token;enqueue(()=>renderThumb(i,tk),i);}
+   else visibleThumbnails.delete(en.target);
+  }
+  releaseDistantCanvases();
+ },{rootMargin:'320px'});
+ $$('.thumb',grid).forEach(t=>{syncThumb(+t.dataset.i);observer.observe(t);});
+}
 async function renderThumb(i, tk) {
   if (tk !== state.token) return;
   const page = await state.doc.getPage(i + 1);
@@ -515,11 +588,13 @@ async function renderThumb(i, tk) {
   const vp = page.getViewport({ scale: THUMB_W / base.width, rotation });
   const thumb = $(`.thumb[data-i="${i}"]`); if (!thumb) return;
   const canvas = $('canvas', thumb);
+  if(!canvas || canvas.dataset.rendering==='1')return;
+  canvas.dataset.rendering='1';
   canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-  if (tk !== state.token) return;
+  try {await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  if (tk !== state.token)return;
   $('.pagebox', thumb).classList.add('ready');
-  page.cleanup();
+  }finally {delete canvas.dataset.rendering;try{page.cleanup()}catch{}}
 }
 
 function syncThumb(i) {
@@ -528,23 +603,24 @@ function syncThumb(i) {
   const r = state.rotations[i];
   $('.num', t).textContent = r ? `${i + 1} · ${r}°` : String(i + 1);
 }
-const syncAll = () => { for (let i = 0; i < state.pageCount; i++) syncThumb(i); };
+const syncAll = () => { $('#grid .thumb').forEach(t=>syncThumb(+t.dataset.i)); };
 
 /* ---------- grid interaction ---------- */
-const selectable = () => state.mode === 'extract' || state.mode === 'remove';
+const selectable = () => state.mode === 'extract' || state.mode === 'remove' || state.mode === 'groups';
 
 $('#grid').addEventListener('click', e => {
   const thumb = e.target.closest('.thumb'); if (!thumb) return;
   const i = +thumb.dataset.i;
   const act = e.target.closest('[data-act]');
   if (act) {
+    if(state.busy)return;
     const a = act.dataset.act;
     if (a === 'zoom') return openPreview(i);
     state.rotations[i] = (state.rotations[i] + (a === 'rr' ? 90 : 270)) % 360;
     syncThumb(i); const tk = state.token; enqueue(() => renderThumb(i, tk));
     return;
   }
-  if (!e.target.closest('.thumb-btn') || !selectable()) return;
+  if (state.busy || !e.target.closest('.thumb-btn') || !selectable()) return;
   if (e.shiftKey && state.lastClicked !== null) {
     const val = !state.selected.has(i);
     range(Math.min(state.lastClicked, i), Math.max(state.lastClicked, i)).forEach(p => {
@@ -563,7 +639,7 @@ $('#grid').addEventListener('dblclick', e => {
 });
 
 $('#selTools').addEventListener('click', e => {
-  const b = e.target.closest('[data-sel]'); if (!b) return;
+  const b = e.target.closest('[data-sel]'); if (!b || state.busy) return;
   const n = state.pageCount, k = b.dataset.sel, s = state.selected;
   if (k === 'all') for (let i = 0; i < n; i++) s.add(i);
   if (k === 'none') s.clear();
@@ -588,9 +664,17 @@ $('#zoomRange').addEventListener('input', e => document.documentElement.style.se
 
 /* ---------- modes ---------- */
 $$('.modes [role=tab]').forEach(b => b.addEventListener('click', () => !b.disabled && setMode(b.dataset.mode)));
+// Arrow keys navigate the mode tabs without requiring a mouse.
+const modeTabs=()=>$$('.modes [role=tab]');
+modeTabs().forEach(tab=>tab.addEventListener('keydown',event=>{
+ if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+ const tabs=modeTabs(),i=tabs.indexOf(tab);
+ const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(i+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+ event.preventDefault();tabs[next].focus();tabs[next].click();
+}));
 function setMode(m) {
   state.mode = m;
-  $$('.modes [role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.mode === m));
+  $('.modes [role=tab]').forEach(b => {const on=b.dataset.mode===m;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});
   $$('.panel').forEach(p => p.hidden = p.dataset.panel !== m);
   const g = $('#grid'); g.dataset.mode = m; g.classList.toggle('readonly', !selectable());
   $('#selTools').querySelectorAll('[data-sel]').forEach(b => b.hidden = !selectable());
@@ -601,12 +685,55 @@ function setMode(m) {
 
 const isAcknowledged = () => $('#featureWarning').hidden || $('#featureAcknowledgment').checked;
 $('#featureAcknowledgment').addEventListener('change',updateSummary);
+
+/* Visual-group management: page indices are always zero-based; selection is never mutated by group edits. */
+function normalizeGroupPages(pages){
+ const seen=new Set();const out=[];
+ for(const p of pages){if(!Number.isSafeInteger(p)||p<0||p>=state.pageCount)throw Error('Invalid group page.');if(!seen.has(p)){seen.add(p);out.push(p);}}
+ if(!out.length)throw Error('Select at least one page.');
+ return out;
+}
+function renderGroups(){
+ const list=$('#groupList');list.replaceChildren();
+ const all=new Set();
+ state.groups.forEach((g,i)=>{
+   g.pages.forEach(p=>all.add(p));
+   const row=document.createElement('div');row.className='row';row.setAttribute('role','listitem');row.style.cssText='padding:10px 0;border-bottom:1px solid var(--border)';
+   const name=document.createElement('input');name.type='text';name.value=g.name;name.maxLength=90;name.setAttribute('aria-label','Group '+(i+1)+' name');
+   name.addEventListener('change',()=>{if(state.busy)return;g.name=sanitize(name.value)||('Group '+(i+1));name.value=g.name;updateSummary();});
+   const info=document.createElement('span');info.className='note';info.textContent=g.pages.map(p=>p+1).join(', ')+' ('+plural(g.pages.length,'page')+')';
+   const make=(label,fn)=>{const b=document.createElement('button');b.type='button';b.className='btn sm';b.textContent=label;b.addEventListener('click',()=>{if(state.busy)return;fn();renderGroups();updateSummary();});return b;};
+   row.append(name,info,
+     make('Select pages',()=>{state.selected=new Set(g.pages);syncAll();}),
+     make('Replace with selection',()=>{g.pages=normalizeGroupPages([...state.selected].sort((a,b)=>a-b));}),
+     make('Move up',()=>{if(i){[state.groups[i-1],state.groups[i]]=[state.groups[i],state.groups[i-1]];}}),
+     make('Move down',()=>{if(i<state.groups.length-1){[state.groups[i+1],state.groups[i]]=[state.groups[i],state.groups[i+1]];}}),
+     make('Remove group',()=>state.groups.splice(i,1)));
+   list.append(row);
+ });
+ $('#groupCoverage').textContent=state.groups.length?all.size+' of '+state.pageCount+' unique pages assigned. '+(state.pageCount-all.size)+' unassigned.':'No groups yet.';
+}
+$('#addGroup').addEventListener('click',()=>{
+ if(state.busy)return;
+ try{
+  const pages=normalizeGroupPages([...state.selected].sort((a,b)=>a-b));
+  state.groups.push({name:sanitize($('#groupName').value)||'Group '+(state.groups.length+1),pages});
+  state.selected.clear();syncAll();$('#groupName').value='';renderGroups();updateSummary();
+ }catch(e){showMsg(e.message,true);}
+});
+$('#clearGroupSelection').addEventListener('click',()=>{if(state.busy)return;state.selected.clear();syncAll();updateSummary();});
+
 /* ---------- planning ---------- */
 function computePlan() {
   const n = state.pageCount;
   const base = sanitize($('#outName').value) || state.baseName;
   const sel = [...state.selected].sort((a, b) => a - b);
   switch (state.mode) {
+    case 'groups': {
+      if(!state.groups.length)return {error:'Create at least one output group.',soft:true};
+      try{return {files:state.groups.map((g,i)=>({name:base+'_group_'+(i+1)+'_'+(sanitize(g.name)||'section'),pages:normalizeGroupPages(g.pages)}))};}
+      catch(e){return {error:e.message};}
+    }
     case 'extract':
       if (!sel.length) return { error: 'Select at least one page to keep.', soft: true };
       if ($('#sepEach').checked) return { files: sel.map(p => ({ name: `${base}_page_${pad(p + 1, n)}`, pages: [p] })) };
@@ -731,7 +858,7 @@ async function runSplit() {
   const plan = structuredClone(state.plan), n = state.pageCount, tk = state.token;
   const outputs = [], names = new Set();
   const unique = name => {
-    let u = name, c = 2; while (names.has(u.toLowerCase())) u = `${name}_${c++}`;
+    let u = (sanitize(name)||'document').slice(0,105), c = 2; while (names.has(u.toLowerCase())) u = (sanitize(name)||'document').slice(0,95)+`_${c++}`;
     names.add(u.toLowerCase()); return u + '.pdf';
   };
   try {
@@ -744,7 +871,7 @@ async function runSplit() {
         if (r.oversize) oversize++;
         await verifyPdf(r.bytes,range(i,i+r.count-1),state.rotations);
         const pages = range(i, i + r.count - 1); k++;
-        outputs.push({ name: unique(`${plan.base}_part_${pad(k, n)}`), pages, bytes: r.bytes });
+        outputs.push({ name: unique(`${plan.base}_part_${pad(k, n)}`), pages, blob:new Blob([r.bytes],{type:'application/pdf'}) });
         i += r.count;
       }
       if (oversize) showMsg(`${plural(oversize, 'page')} alone exceeded the limit and got their own file.`);
@@ -756,13 +883,13 @@ async function runSplit() {
         const bytes = await buildPdf(f.pages);
         await verifyPdf(bytes,f.pages,state.rotations);
         if (tk !== state.token) return;
-        outputs.push({ name: unique(f.name), pages: f.pages, bytes });
+        outputs.push({ name: unique(f.name), pages: f.pages, blob:new Blob([bytes],{type:'application/pdf'}) });
       }
     }
     setProgress(1, 'Finished');
-    outputs.forEach(o => o.blob = new Blob([o.bytes], { type: 'application/pdf' }));
     state.outputs = outputs; showResults();
   } catch (err) {
+    outputs.length=0;
     console.error(err); showMsg('Something went wrong while splitting: ' + (err.message || err), true);
   } finally {
     state.busy = false; $('#splitBtn').disabled = false; setTimeout(() => $('#progWrap').hidden = true, 800);
@@ -789,16 +916,32 @@ function showResults() {
   box.hidden = false; box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-$('#zipBtn').addEventListener('click', async () => {
-  const btn = $('#zipBtn'); btn.disabled = true; const old = btn.textContent;
-  try {
-    const zip = new JSZip();
-    state.outputs.forEach(o => zip.file(o.name, o.blob));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' },
-      m => btn.textContent = `Zipping… ${Math.round(m.percent)}%`);
-    downloadBlob(blob, `${sanitize($('#outName').value) || state.baseName}_split.zip`);
-  } catch (e) { showMsg('Could not create ZIP: ' + e.message, true); }
-  finally { btn.textContent = old; btn.disabled = false; }
+let zipActive=false;
+$('#zipBtn').addEventListener('click',async()=>{
+ if(zipActive||state.busy||state.outputs.length<2)return;
+ zipActive=true;
+ const btn=$('#zipBtn'),label=btn.textContent;btn.disabled=true;
+ const expected=state.outputs.slice(),token=state.token;
+ const totalBytes=expected.reduce((n,o)=>n+o.blob.size,0);
+ // JSZip generates its final Blob in memory; refuse unsafe-size requests rather than crash.
+ if(totalBytes>96*1024*1024){showMsg('ZIP exceeds the safe in-memory packaging budget (96 MB). Download PDFs individually instead.',true);btn.disabled=false;zipActive=false;return;}
+ try{
+   const zip=new JSZip(),seen=new Set();
+   for(const output of expected){
+     if(!(output.blob instanceof Blob)||!output.blob.size)throw Error('An output PDF is unavailable.');
+     const name=safeDownloadName(output.name);
+     if(seen.has(name.toLowerCase()))throw Error('Duplicate filename in output ZIP.');
+     seen.add(name.toLowerCase());zip.file(name,output.blob);
+   }
+   const archive=await zip.generateAsync({type:'blob',compression:'STORE'},progress=>{
+     btn.textContent='Zipping… '+Math.round(progress.percent)+'%';
+   });
+   if(token!==state.token||expected.length!==state.outputs.length)return;
+   if(!archive.size)throw Error('Archive generation returned an empty file.');
+   downloadBlob(archive,(sanitize($('#outName').value)||state.baseName)+'_split.zip');
+ }catch(e){
+   showMsg('ZIP creation failed. Your verified PDFs remain available for individual download. '+(e.message||''),true);
+ }finally{btn.textContent=label;btn.disabled=false;zipActive=false;}
 });
 
 /* ---------- preview dialog ---------- */
