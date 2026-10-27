@@ -159,6 +159,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
  #splitBtn{width:100%;min-height:48px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Simplified interface: presentation only; processing engine unchanged */
+.modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;overflow:visible}
+.modes [role="tab"]{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:10px 8px;font-weight:600;min-height:44px}
+.modes [role="tab"][aria-selected="true"]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.panels{margin-top:12px}
+.panel>p{margin:0 0 10px;color:var(--muted)}
+.simple-details{margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+.simple-details summary,.simple-tools summary{cursor:pointer;font-weight:600}
+.simple-detail-body,.simple-tool-row{margin-top:10px}
+.simple-tools{margin:12px 0}
+.simple-tools[open]{padding-bottom:4px}
+@media(max-width:650px){.modes{grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.modes [role="tab"]{white-space:normal}.simple-tool-row{gap:8px}.simple-tool-row .btn{flex:1 1 30%}}
 </style>
 </head>
 <body>
@@ -209,18 +222,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
 
     <div class="card">
       <div class="modes" role="tablist" aria-label="Split method" aria-orientation="horizontal">
-        <button role="tab" type="button" data-mode="extract" aria-selected="true">Extract pages</button>
-        <button role="tab" type="button" data-mode="ranges" aria-selected="false">Custom ranges</button>
-        <button role="tab" type="button" data-mode="every" aria-selected="false">Every N pages</button>
+        <button role="tab" type="button" data-mode="extract" aria-selected="true">Extract</button>
+        <button role="tab" type="button" data-mode="ranges" aria-selected="false">Ranges</button>
+        <button role="tab" type="button" data-mode="every" aria-selected="false">Every N</button>
         <button role="tab" type="button" data-mode="parts" aria-selected="false">Equal parts</button>
-<button role="tab" type="button" data-mode="size" aria-selected="false">By file size</button>
-        <button role="tab" type="button" data-mode="bookmarks" aria-selected="false">By bookmarks</button>
-        <button role="tab" type="button" data-mode="remove" aria-selected="false">Remove pages</button>
-<button role="tab" type="button" data-mode="groups" aria-selected="false">Visual groups</button>
+<button role="tab" type="button" data-mode="size" aria-selected="false">File size</button>
+        <button role="tab" type="button" data-mode="bookmarks" aria-selected="false">Bookmarks</button>
+        <button role="tab" type="button" data-mode="remove" aria-selected="false">Remove</button>
+<button role="tab" type="button" data-mode="groups" aria-selected="false">Groups</button>
       </div>
       <div class="panels">
         <div class="panel" data-panel="extract">
-          <p>Click pages below to keep them (Shift-click selects a range). Selected pages are saved in a new PDF.</p>
+          <p>Select the pages you want to keep.</p>
           <div class="row">
             <input type="text" id="quickSel" placeholder="Quick select, e.g. 1-3, 7, 10-" aria-label="Quick select pages">
             <button class="btn sm" type="button" id="quickBtn">Select</button>
@@ -228,26 +241,26 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
           </div>
         </div>
         <div class="panel" data-panel="ranges" hidden>
-          <p>Each range becomes its own PDF. Use commas to add more: <code>1-3, 5, 8-</code>. Keywords: <code>last</code>; open ends like <code>8-</code> run to the final page; <code>5-1</code> reverses.</p>
+          <p>Enter page ranges, for example <code>1-3, 5, 8-</code>.</p>
           <div class="row">
             <input type="text" id="rangesInput" placeholder="1-3, 5, 8-" aria-label="Page ranges">
             <label class="f"><input type="checkbox" id="mergeRanges"> Merge all ranges into one PDF</label>
           </div>
         </div>
         <div class="panel" data-panel="every" hidden>
-          <p>Cut the document into equal parts. Use 1 to save every page as a separate PDF.</p>
+          <p>Choose how many pages should go into each PDF.</p>
           <div class="row"><label class="f">Pages per file <input type="number" id="everyN" min="1" value="1"></label></div>
         </div>
         <div class="panel" data-panel="parts" hidden><p>Split into approximately equal parts.</p><div class="row"><label class="f">Number of parts <input type="number" id="partsN" min="2" value="2"></label></div></div>
 <div class="panel" data-panel="size" hidden>
-          <p>Fill each file with as many pages as fit under the limit. A single page larger than the limit gets its own file. Large documents take longer.</p>
+          <p>Choose the maximum size for each output PDF.</p>
           <div class="row">
             <label class="f">Max size <input type="number" id="sizeVal" min="1" value="5"></label>
             <select id="sizeUnit" aria-label="Unit"><option value="1024">KB</option><option value="1048576" selected>MB</option></select>
           </div>
         </div>
         <div class="panel" data-panel="bookmarks" hidden>
-          <p id="bmInfo">Split at every top-level bookmark. Pages before the first bookmark go into a "front matter" file.</p>
+          <p id="bmInfo">Split the PDF using its top-level bookmarks.</p>
         </div>
         <div class="panel" data-panel="remove" hidden>
           <p>Click the pages you want to delete. Everything else is saved in a new PDF.</p>
@@ -255,20 +268,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
         </div>
         <div id="featureWarning" class="note" hidden role="alert"><strong>Complex PDF features may not survive page extraction.</strong><ul id="featureWarningItems"></ul><label><input id="featureAcknowledgment" type="checkbox"> I understand and accept the listed changes.</label></div>
 <div class="panel" data-panel="groups" hidden>
-<p>Select pages in the thumbnail grid, then add them to a named output group. Repeat for each output. Pages not assigned to a group are excluded.</p>
+<p>Select pages, create a group, and repeat as needed.</p>
 <div class="row"><label class="f">Group name <input id="groupName" type="text" placeholder="Section 1" maxlength="90"></label><button class="btn sm" id="addGroup" type="button">Create group from selection</button><button class="btn sm" id="clearGroupSelection" type="button">Clear selection</button></div>
 <div id="groupList" role="list" aria-label="Output groups"></div>
 <div class="note" id="groupCoverage" role="status" aria-live="polite"></div>
 </div>
-<div class="common">
-          <label class="f" for="outName">Output name</label>
-          <input type="text" id="outName" aria-label="Output file name prefix">
-          <span class="note">.pdf is added automatically</span>
-        </div>
+<details class="common simple-details">
+          <summary>Output name <span class="note">(optional)</span></summary>
+          <div class="row simple-detail-body">
+            <input type="text" id="outName" aria-label="Output file name prefix" placeholder="Use original filename">
+            <span class="note">.pdf is added automatically</span>
+          </div>
+        </details>
       </div>
     </div>
 
-    <div class="toolbar" id="selTools">
+    <details class="toolbar simple-tools" id="selTools">
+      <summary>Page selection tools</summary>
+      <div class="row simple-tool-row">
       <button class="btn sm" type="button" data-sel="all">Select all</button>
       <button class="btn sm" type="button" data-sel="none">Clear</button>
       <button class="btn sm" type="button" data-sel="invert">Invert</button>
@@ -276,7 +293,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,.thumb-btn:focus-v
       <button class="btn sm" type="button" data-sel="even">Even</button>
       <span class="grow"></span>
       <label>Thumbnail size <input type="range" id="zoomRange" min="110" max="320" value="170" aria-label="Thumbnail size"></label>
-    </div>
+      </div>
+    </details>
 
     <div class="grid" id="grid" data-mode="extract"></div>
 
