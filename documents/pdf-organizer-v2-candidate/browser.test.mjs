@@ -33,7 +33,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#redo').click();assert.equal(await page.locator('#grid .card').count(),7);
    await page.locator('[data-bulk=blank]').click();assert.equal(await page.locator('#grid .card').count(),8);
    await page.locator('#grid .card').first().locator('[data-act=open]').last().click();
-   await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.locator('#pvClose').click();
+   await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#pvNext').click();});await page.locator('#pvClose').click();
    const downloadPromise=page.waitForEvent('download');await page.locator('#create').click();
    const download=await downloadPromise;assert.equal(await download.failure(),null);
    const output=await P.PDFDocument.load(await (await import('node:fs/promises')).readFile(await download.path()));assert.equal(output.getPageCount(),8);

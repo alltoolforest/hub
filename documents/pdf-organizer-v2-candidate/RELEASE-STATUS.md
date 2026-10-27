@@ -21,6 +21,7 @@ Only this new candidate directory and its dedicated CI workflow are changed. Exi
 - Rejects active content, unsupported URI protocols, signatures and XFA; filename controls/bidi/path/HTML characters sanitized. Escaped filename HTML attribute fixes confirmed injection point.
 - Existing self-hosted PDF.js 6.3.289 and pdf-lib reused; SortableJS 1.15.6 self-hosted with MIT license. CSP restricts scripts, workers and network to local resources; no embedded PDF viewer execution.
 - Keyed page cards preserve focus/DOM rather than replacing the entire grid. Lazy thumbnails, concurrency 2, 24-entry cache, bounded thumbnail dimensions and offscreen canvas release. Clear-session releases sources/previews/history/download URLs.
+- Rapid preview navigation cancels superseded renders and releases temporary canvases; card reconciliation restores focus after DOM movement.
 - Visible progress/cancel, 44px controls, responsive phone export area, a main landmark, live status, and native modal dialog.
 - Candidate admission budgets: 64 MiB total source files and 2,000 pages. These are not a proven whole-parser memory bound.
 
@@ -33,7 +34,7 @@ Only this new candidate directory and its dedicated CI workflow are changed. Exi
 - axe-core 4.14.0: **zero detected violations** in the tested desktop and narrow loaded states, after fixing the main landmark. Automated scanning does not establish full accessibility or screen-reader compatibility.
 - Browser test found and fixed mobile Cancel being covered by the fixed export bar.
 - Browser screenshots inspected internally; not published as user deliverables.
-- Initial checkpoint a845788: CI Chromium and Firefox passed. WebKit was still installing dependencies when last checked. Latest source-inspection worker and independent visual/text verification changes require a fresh CI run; do not transfer older browser results to this new code. Local browser execution after the session resumed is blocked by runtime socket restrictions.
+- Initial checkpoint a845788: CI Chromium and Firefox passed. WebKit was still installing dependencies when last checked. Checkpoint 3b8619d passed Chromium CI including source-inspection worker, independent visual/text verification, 14-page combining, 2-page extraction, cancellation and zero axe findings at both tested widths. Its Firefox/WebKit jobs were still running when recorded. The subsequent rapid-preview cancellation/focus patch needs final CI confirmation; read PR checks for the latest exact commit. Local browser execution after the session resumed is blocked by runtime socket restrictions.
 
 ## Critical remaining release gates
 
