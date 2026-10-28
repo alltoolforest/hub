@@ -1,3 +1,4 @@
+import {readLayout} from './word-layout.js';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A='http://schemas.openxmlformats.org/drawingml/2006/main';
 const child=(node,name)=>[...(node?.children||[])].find(n=>n.namespaceURI===W&&n.localName===name);
@@ -27,12 +28,13 @@ export async function readWordFormatting(zip,xml,Parser){
     if(!id||seen.has(id)||seen.size>32)return {};seen.add(id);const style=byId.get(id);if(!style)return {};
     return {...resolve(attr(child(style,'basedOn')),seen),...props(child(style,'rPr'),theme)};
   }
+  function resolveLayout(id,seen=new Set()){if(!id||seen.has(id)||seen.size>32)return readLayout(styles?.getElementsByTagNameNS(W,'pPrDefault')[0]?.getElementsByTagNameNS(W,'pPr')[0]);seen.add(id);const style=byId.get(id);return readLayout(child(style,'pPr'),resolveLayout(attr(child(style,'basedOn')),seen));}
   const paragraphs=[...xml.getElementsByTagNameNS(W,'p')];
   const formats=paragraphs.map(p=>{
     const pPr=child(p,'pPr'),base={font:'Calibri',size:11,color:'#000000',bold:false,italic:false,...defaults,...resolve(attr(child(pPr,'pStyle'))||attr(defaultParagraph,'styleId'))};
     const runs=[...p.getElementsByTagNameNS(W,'t')].map(t=>{const rPr=child(t.parentNode,'rPr');return {...base,...resolve(attr(child(rPr,'rStyle'))),...props(rPr,theme)};});
     const spacing=child(pPr,'spacing'),alignment=attr(child(pPr,'jc'));
-    return {base,runs,alignment:['left','right','center','both'].includes(alignment)?alignment:'left',before:Number(attr(spacing,'before'))/20||0,after:Number(attr(spacing,'after'))/20||0};
+    return {base,runs,layout:readLayout(pPr,resolveLayout(attr(child(pPr,'pStyle'))||attr(defaultParagraph,'styleId'))),alignment:['left','right','center','both'].includes(alignment)?alignment:'left',before:Number(attr(spacing,'before'))/20||0,after:Number(attr(spacing,'after'))/20||0};
   });
   const section=xml.getElementsByTagNameNS(W,'sectPr')[0],page=child(section,'pgSz'),margins=child(section,'pgMar');
   return {formats,page:{width:Number(attr(page,'w'))/20||612,height:Number(attr(page,'h'))/20||792,top:Number(attr(margins,'top'))/20||72,bottom:Number(attr(margins,'bottom'))/20||72,left:Number(attr(margins,'left'))/20||72,right:Number(attr(margins,'right'))/20||72}};

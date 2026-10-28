@@ -39,7 +39,7 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
   const boxes=source.getPages().map(page=>page.getCropBox()),sourceLinks=linksIn(source),sourceImages=imagesIn(source).map(({streamIndex,start,end,...item})=>item),sourceItems=[...sourceLinks,...sourceImages];
   let changes=[],busy=false,disposed=false,renderer=null;
   const panel=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Images, hyperlinks and page previews';panel.className='document-v2-search';
-  const note=document.createElement('p');note.textContent='Add PNG/JPEG images or edit URL link rectangles. Position and size use PDF points from the bottom-left of the page. Supported original images can also be moved, resized, replaced or deleted. Clipped, rotated, nested-form and inline images, and internal destination links, remain protected. Object edits can be exported alongside text flow on other pages; the same page and changed page counts require resolving those edits first.';
+  const note=document.createElement('p');note.textContent='Add PNG/JPEG images or edit URL link rectangles. Position and size use original-page PDF points from the bottom-left; supported upward flow is applied at preview/export. Supported original images can also be moved, resized, replaced or deleted. Clipped, rotated, nested-form and inline images, and internal destination links, remain protected. Object edits can be exported alongside text flow on other pages; added objects can follow verified same-page upward text movement. Objects crossing a moving boundary or affected by a page cascade remain protected.';
   const fields=document.createElement('div');fields.className='document-v2-actions';
   function field(label,type='number'){
     const wrap=document.createElement('label'),input=document.createElement('input');input.type=type;if(type==='number')input.step='0.1';wrap.append(label+' ',input);fields.append(wrap);return input;
@@ -108,13 +108,13 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
     if(!changes.length)return bytes;
     const state=exportState||getEditorState();
     const doc=await PDFDocument.load(bytes.slice(),{updateMetadata:false});
-    assertObjectLayout(changes,state,boxes.length,doc.getPageCount());
+    const exportChanges=assertObjectLayout(changes,state,boxes.length,doc.getPageCount());
     const flags=detectDocumentFlags(source);
     if(flags.signed)throw new Error('Signed PDFs are protected from image and hyperlink edits.');
-    for(const item of changes)if(!formRegionSafe(flags,item.pageIndex,item))throw new Error('This object edit overlaps a protected PDF form field.');
+    for(const item of exportChanges)if(!formRegionSafe(flags,item.pageIndex,item))throw new Error('This object edit overlaps a protected PDF form field.');
     const currentLinks=linksIn(doc),deletions=new Map();
-    await applyImageChanges(doc,changes);
-    for(const item of changes){
+    await applyImageChanges(doc,exportChanges);
+    for(const item of exportChanges){
       const page=doc.getPage(item.pageIndex);
       if(item.kind==='image'){
         if(item.source)continue;
@@ -139,7 +139,7 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
     for(const [index,indices] of deletions){const page=doc.getPage(index),annots=page.node.lookup(PDFName.of('Annots'),PDFArray).clone(doc.context);for(const position of indices.sort((a,b)=>b-a))annots.remove(position);page.node.set(PDFName.of('Annots'),annots);}
     const out=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false}));
     await verifyFormPreservation(original,out);
-    const check=await PDFDocument.load(out.slice(),{updateMetadata:false});if(check.getPageCount()!==boxes.length)throw new Error('Object export lost a page.');
+    const check=await PDFDocument.load(out.slice(),{updateMetadata:false});if(check.getPageCount()!==doc.getPageCount())throw new Error('Object export lost a page.');
     return out;
   }
   button('Discard image and link edits',()=>{

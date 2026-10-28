@@ -1,3 +1,4 @@
+import {paintLayout} from './word-layout.js';
 import {styleWordNode,validateWordFormat} from './word-format.js';
 export function wordToolbar(host,model,onChange){
   const toolbar=document.createElement('div');toolbar.className='document-v2-actions';toolbar.setAttribute('aria-label','Word paragraph formatting');
@@ -16,7 +17,7 @@ export function wordToolbar(host,model,onChange){
     activate(target,format){active=target;fill(format);status.textContent=guidance;},
     paint(field,index){
       const info=model.formatting.formats[index],override=model.overrides[index];field.replaceChildren();
-      styleWordNode(field,override||info.base);field.style.textAlign=info.alignment==='both'?'justify':info.alignment;field.style.marginTop=info.before+'pt';field.style.marginBottom=info.after+'pt';
+      styleWordNode(field,override||info.base);paintLayout(field,model.layouts[index]||info.layout);
       model.runs[index].forEach((text,i)=>{const span=document.createElement('span');span.textContent=text;styleWordNode(span,override||info.runs[i]||info.base);field.append(span);});
     }
   };

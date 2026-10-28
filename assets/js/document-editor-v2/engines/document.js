@@ -1,3 +1,4 @@
+import {mountLayoutControls} from '../word-layout.js';
 import {openText} from './text.js';
 import {readPreviewImages,showFontAvailability} from '../word-preview.js';
 import {mergeSourceParagraph,canStructure,mountStructure,structureParts,structureText,replaceStructure} from '../word-structure.js';
@@ -26,6 +27,7 @@ export async function open(file, format) {
         note.textContent = 'Fonts and sizes are read from the document. Text flows between preview pages as you edit; browser pagination can differ from Word, especially when fonts are unavailable. New text inherits its surrounding run. Select text to format a range in ordinary paragraphs; with no selection, formatting applies to the paragraph. Complex content is preserved in export and may not be fully shown in this preview.';
         host.append(note);showFontAvailability(host,model);
         const formatting=wordToolbar(host,model,onChange);
+        mountLayoutControls(host,model,onChange);
         let refreshSearch = () => {};
         const fields = new Map(),structured=new Map(),additionFields=new Map();
         const page = document.createElement('div'); page.className = 'document-v2-page';
@@ -42,6 +44,7 @@ export async function open(file, format) {
           const field = document.createElement('div');
           field.className = 'document-v2-paragraph';
           fields.set(paragraph.index, field);
+          if(!paragraph.protected)field.dataset.wordSource=String(paragraph.index);
           field.contentEditable = paragraph.protected ? 'false' : 'true';
           field.setAttribute('role', 'textbox');
           field.setAttribute('aria-label', `Paragraph ${paragraph.index + 1}`);

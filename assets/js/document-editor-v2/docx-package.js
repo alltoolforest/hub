@@ -1,3 +1,4 @@
+import {restoreLayouts,writeLayout} from './word-layout.js';
 import {restoreStructures,writeStructures,structureParts,structureText} from './word-structure.js';
 import {readWordFormatting,validateWordFormat,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -59,7 +60,7 @@ export async function readDocx(file, Zip, Parser) {
   if (source.length > 20_000_000) throw new Error('Document XML is too large to edit safely on this device.');
   const xml = parse(source, Parser);
   const original = paragraphs(xml).map(plainText);
-  return {zip, xml, original, formatting:await readWordFormatting(zip,xml,Parser), overrides:{}, structures:{}, additions:[], text:[...original], runs:paragraphs(xml).map(p => protectedParagraph(p) ? [plainText(p)] : textRuns(p)),
+  return {zip, xml, original, formatting:await readWordFormatting(zip,xml,Parser), layouts:{}, overrides:{}, structures:{}, additions:[], text:[...original], runs:paragraphs(xml).map(p => protectedParagraph(p) ? [plainText(p)] : textRuns(p)),
     protected:paragraphs(xml).map(protectedParagraph)};
 }
 
@@ -71,7 +72,7 @@ export function updateDocxText(model, index, value) {
   model.text[index] = value;
 }
 
-export function snapshotDocx(model) { return {structures:structuredClone(model.structures),overrides:structuredClone(model.overrides),additions:structuredClone(model.additions),text:[...model.text], runs:model.runs.map(runs => [...runs])}; }
+export function snapshotDocx(model) { return {layouts:structuredClone(model.layouts),structures:structuredClone(model.structures),overrides:structuredClone(model.overrides),additions:structuredClone(model.additions),text:[...model.text], runs:model.runs.map(runs => [...runs])}; }
 export function restoreDocx(model, snapshot) {
   if (!snapshot || !Array.isArray(snapshot.text) || !Array.isArray(snapshot.runs) || snapshot.text.length !== model.text.length || snapshot.runs.length !== model.text.length)
     throw new Error('Draft no longer matches this document.');
@@ -87,7 +88,8 @@ export function restoreDocx(model, snapshot) {
   if(snapshot.additions!==undefined&&!Array.isArray(snapshot.additions))throw new Error('Invalid new paragraphs.');
   for(const item of snapshot.additions||[]){if(typeof item?.text!=='string'||item.text.length>1_000_000||additions.length>=10000)throw new Error('Invalid new paragraph.');additions.push({text:item.text,format:validateWordFormat(item.format)});}
   const structures=restoreStructures(model,snapshot.structures||{});
-  model.structures=structures;model.overrides=overrides;model.additions=additions;
+  const layouts=restoreLayouts(model,snapshot.layouts);
+  model.layouts=layouts;model.structures=structures;model.overrides=overrides;model.additions=additions;
   model.text = [...snapshot.text]; model.runs = snapshot.runs.map(runs => [...runs]);
 }
 
@@ -133,6 +135,7 @@ export async function writeDocx(model, Zip, Parser, Serializer) {
   const all = paragraphs(xml);
   if (all.length !== model.text.length) throw new Error('The document structure changed unexpectedly.');
   for (let i = 0; i < all.length; i++) {
+    if(model.layouts[i])writeLayout(xml,all[i],model.layouts[i]);
     if(model.structures[i])continue;
     if(model.overrides[i])for(const run of all[i].getElementsByTagNameNS(W,'r'))writeWordFormat(xml,run,model.overrides[i]);
     if (model.text[i] === model.original[i]) continue;

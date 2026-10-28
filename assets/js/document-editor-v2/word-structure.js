@@ -1,3 +1,4 @@
+import {paintLayout} from './word-layout.js';
 import {validateWordFormat,styleWordNode,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',XML='http://www.w3.org/XML/1998/namespace';
 const nodes=model=>[...model.xml.getElementsByTagNameNS(W,'p')];
@@ -57,7 +58,7 @@ export function mountStructure({model,index,container,formatting,onChange,regist
     structureParts(model,index).forEach((part,partIndex)=>{
       const field=document.createElement('div');field.className='document-v2-paragraph';field.contentEditable='true';field.setAttribute('role','textbox');field.setAttribute('aria-multiline','true');field.setAttribute('aria-label',`Paragraph ${index+1}, part ${partIndex+1}`);
       field.dataset.wordSource=String(index);field.dataset.wordPart=String(partIndex);field.tabIndex=0;
-      const paint=()=>{field.replaceChildren();const current=structureParts(model,index)[partIndex];if(!current)return;styleWordNode(field,formatAt(model,index,current.runs,0));for(const run of current.runs){const span=document.createElement('span');span.textContent=run.text;styleWordNode(span,run.format||model.formatting.formats[run.origin??index].runs[run.source]||model.formatting.formats[index].base);field.append(span);}};paint();
+      const paint=()=>{field.replaceChildren();const current=structureParts(model,index)[partIndex];if(!current)return;styleWordNode(field,formatAt(model,index,current.runs,0));paintLayout(field,model.layouts[index]||model.formatting.formats[index].layout);for(const run of current.runs){const span=document.createElement('span');span.textContent=run.text;styleWordNode(span,run.format||model.formatting.formats[run.origin??index].runs[run.source]||model.formatting.formats[index].base);field.append(span);}};paint();
       function activate(){
         const selected=window.getSelection();
         if(selected?.rangeCount&&!selected.isCollapsed){const range=selected.getRangeAt(0);if(!field.contains(range.startContainer)||!field.contains(range.endContainer))return;}
