@@ -36,3 +36,16 @@ test('page deletion refuses embedded-file name trees without silent removal',asy
   const s=await fixture(2,d=>d.catalog.set(P.PDFName.of('Names'),d.context.obj({EmbeddedFiles:{Names:[]}})));
   await assert.rejects(buildCandidate([s],[item(0)],P),/attachments.*could retain/);
 });
+
+test('resource admission rejects extreme page geometry without exporting',async()=>{
+  const s=await fixture(1,d=>d.getPage(0).setSize(100001,440));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/page dimensions/);
+});
+test('resource admission rejects massive embedded image dimensions',async()=>{
+  const s=await fixture(1,d=>{
+    const dict={Type:'XObject',Subtype:'Image',Width:500000,Height:500000,BitsPerComponent:8,ColorSpace:'DeviceRGB'};
+    const ref=d.context.register(d.context.stream(new Uint8Array([0]),dict));
+    d.getPage(0).node.set(P.PDFName.of('Resources'),d.context.obj({XObject:{Giant:ref}}));
+  });
+  await assert.rejects(buildCandidate([s],[item(0)],P),/embedded image/);
+});
