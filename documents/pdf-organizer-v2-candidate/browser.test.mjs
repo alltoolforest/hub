@@ -38,7 +38,14 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    const activate=locator=>mobile?locator.tap():locator.click();
    async function downloadAfter(action){
     let saved=null;const onDownload=d=>{saved=d;};page.on('download',onDownload);
-    try{await action();await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
+    try{
+      await action();
+      // A very fast export may already be finished before observing busy.
+      // A missed mobile tap must not be mistaken for a successful idle state.
+      await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='true' ||
+        !!document.querySelector('#verifiedDownload') ||
+        /^Export (stopped|cancelled)/.test(document.querySelector('#status').textContent),null,{timeout:15000});
+      await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
       if(!saved&&await page.locator('#verifiedDownload').count())await activate(page.locator('#verifiedDownload'));
       for(let i=0;i<50&&!saved;i++)await new Promise(r=>setTimeout(r,100));
       assert(saved,'No download: '+await page.locator('#status').textContent());return saved;
@@ -48,11 +55,11 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#file').setInputFiles({name:'file\" onmouseover=\"window.INJECTED=1.pdf',mimeType:'application/pdf',buffer});
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===6);
    await page.locator('#grid .card').first().locator('[data-act=sel]').check();
-   await page.locator('[data-bulk=dup]').click();assert.equal(await page.locator('#grid .card').count(),7);
-   await page.locator('#undo').click();assert.equal(await page.locator('#grid .card').count(),6);
-   await page.locator('#redo').click();assert.equal(await page.locator('#grid .card').count(),7);
-   await page.locator('[data-bulk=blank]').click();assert.equal(await page.locator('#grid .card').count(),8);
-   await page.locator('#grid .card').first().locator('[data-act=open]').last().click();
+   await activate(page.locator('[data-bulk=dup]'));assert.equal(await page.locator('#grid .card').count(),7);
+   await activate(page.locator('#undo'));assert.equal(await page.locator('#grid .card').count(),6);
+   await activate(page.locator('#redo'));assert.equal(await page.locator('#grid .card').count(),7);
+   await activate(page.locator('[data-bulk=blank]'));assert.equal(await page.locator('#grid .card').count(),8);
+   await activate(page.locator('#grid .card').first().locator('[data-act=open]').last());
    await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#pvNext').click();});await activate(page.locator('#pvClose'));await page.locator('#pv').waitFor({state:'hidden'});
    const download=await downloadAfter(()=>activate(page.locator('#create')));assert.equal(await download.failure(),null);
    const output=await P.PDFDocument.load(await (await import('node:fs/promises')).readFile(await download.path()));assert.equal(output.getPageCount(),8);
@@ -63,7 +70,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.screenshot({path:'/tmp/organizer-'+name+(mobile?'-mobile':'-desktop')+'.png',fullPage:true});
    // Export cancellation prevents publication, and the following export recovers.
    await page.route('**/export-worker.js',async route=>{await new Promise(r=>setTimeout(r,500));await route.continue();});
-   await page.locator('#create').click();await page.locator('#cancel').click();
+   await activate(page.locator('#create'));await activate(page.locator('#cancel'));
    await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
    assert.match(await page.locator('#status').textContent(),/cancelled/i);
    await page.unrouteAll({behavior:'wait'});
@@ -85,13 +92,13 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#range').fill('');
    const combined=await downloadAfter(()=>activate(page.locator('#create')));assert.equal((await P.PDFDocument.load(await readFile(await combined.path()))).getPageCount(),14);
    // Source removal must stay reversible, without losing the associated PDF.
-   await page.locator('#files [data-rmsrc]').last().click();
+   await activate(page.locator('#files [data-rmsrc]').last());
    assert.equal(await page.locator('#grid .card').count(),8);
-   await page.locator('#undo').click();
+   await activate(page.locator('#undo'));
    assert.equal(await page.locator('#grid .card').count(),14);
-   await page.locator('#redo').click();
+   await activate(page.locator('#redo'));
    assert.equal(await page.locator('#grid .card').count(),8);
-   await page.locator('#undo').click();
+   await activate(page.locator('#undo'));
    assert.equal(await page.locator('#grid .card').count(),14);
    assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
    console.log(JSON.stringify({browser:name,mobile,result:'PASS',pages:output.getPageCount(),combinedPages:14,extractedPages:2,remoteRequests:remote.length}));
