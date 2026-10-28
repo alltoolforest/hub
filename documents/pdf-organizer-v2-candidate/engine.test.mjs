@@ -25,3 +25,14 @@ test('deletion refuses image resource still shared with retained pages',async()=
  const s=await fixture(2,async d=>{const image=await d.embedPng(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0KkAAAAASUVORK5CYII=','base64'));for(const page of d.getPages())page.drawImage(image,{x:0,y:0,width:10,height:10});});
  await assert.rejects(buildCandidate([s],[item(0)],P),/still referenced/);
 });
+
+test('page deletion refuses document-level attachments; reorder without deletion is permitted',async()=>{
+  const s=await fixture(2,d=>d.catalog.set(P.PDFName.of('AF'),d.context.obj([])));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/attachments.*could retain/);
+  const bytes=await buildCandidate([s],[item(1),item(0)],P);
+  assert.equal((await P.PDFDocument.load(bytes)).getPageCount(),2);
+});
+test('page deletion refuses embedded-file name trees without silent removal',async()=>{
+  const s=await fixture(2,d=>d.catalog.set(P.PDFName.of('Names'),d.context.obj({EmbeddedFiles:{Names:[]}})));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/attachments.*could retain/);
+});
