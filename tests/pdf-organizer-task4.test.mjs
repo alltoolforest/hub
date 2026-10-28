@@ -237,7 +237,7 @@ test('organizer uses no remote PDF-processing services or HTML injection sinks',
 
 test('static HTML contains accurate instructions, limitations and privacy information', () => {
   const html = read('documents/pdf-organizer/index.html');
-  assert.equal((html.match(/<h1>/g) || []).length, 1);
+  assert.equal((html.match(/<h1(?:\s[^>]*)?>/g) || []).length, 1);
   assert.match(html, /name="description" content="Organize PDF pages online/);
   assert.match(html, /id="pdf-organizer-guide"/);
   for (const phrase of ['Move earlier', 'Move later', 'Rotate', 'Privacy',
@@ -245,7 +245,10 @@ test('static HTML contains accurate instructions, limitations and privacy inform
     assert.ok(html.toLowerCase().includes(phrase.toLowerCase()), 'Missing: ' + phrase);
   }
   assert.doesNotMatch(html, /https:\/\/FINAL-DOMAIN/);
-  assert.match(html, /assets\/css\/pdf-organizer\.css/);
+  assert.match(html, /href="\.\/organizer\.css"/);
+  assert.match(html, /href="\.\.\/\.\.\/assets\/css\/main\.css"/);
+  assert.match(html, /src="\.\/organizer\.js"/);
+  assert.doesNotMatch(html, /data-tool="pdf-organizer"|noindex,nofollow/);
 });
 
 test('site-wide SEO and security configuration remain untouched during organizer hardening', () => {
