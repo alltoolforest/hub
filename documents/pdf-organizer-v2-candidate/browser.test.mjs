@@ -23,6 +23,13 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
   for(const mobile of [false,true]) {
    const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1366,height:900},hasTouch:mobile,acceptDownloads:true});
    const page=lastPage=await context.newPage(),errors=[],remote=[];
+   await page.addInitScript(()=>{
+     window.__organizerTestClicks=[];
+     document.addEventListener('click',event=>{
+       const target=event.target?.closest?.('#create,#verifiedDownload');
+       if(target)window.__organizerTestClicks.push(target.id);
+     },true);
+   });
    page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:8765/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
    async function downloadAfter(action){
     let saved=null;const onDownload=d=>{saved=d;};page.on('download',onDownload);
@@ -85,7 +92,19 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    console.log(JSON.stringify({browser:name,mobile,result:'PASS',pages:output.getPageCount(),combinedPages:14,extractedPages:2,remoteRequests:remote.length}));
    await context.close();
   }
- }catch(e){failed++;console.error(name,e.stack);try{console.error('UI status:',await lastPage.locator('#status').textContent());}catch{}}
+ }catch(e){
+  failed++;console.error(name,e.stack);
+  try {
+    console.error('UI status:',await lastPage.locator('#status').textContent());
+    console.error('Export control diagnostics:',await lastPage.evaluate(()=>({
+      clicks:window.__organizerTestClicks,
+      disabled:document.querySelector('#create')?.disabled,
+      barHidden:document.querySelector('#bar')?.hidden,
+      busy:document.querySelector('#pdf-organizer')?.getAttribute('aria-busy'),
+      downloadLink:!!document.querySelector('#verifiedDownload')
+    })));
+  }catch{}
+ }
  finally{await browser?.close();}
 }
 server.close();if(failed)process.exitCode=1;
