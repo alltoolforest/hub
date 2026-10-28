@@ -1,3 +1,4 @@
+import {validateGraphicsFlow} from './graphics-flow-guard.js';
 import { PDFName } from '../core/pdf-lib.js';
 import { cascadeOverflowIntoExistingPages } from './cascade-page-flow.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
@@ -266,6 +267,8 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   if(!linkSafety.ok)return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
 
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
+  const graphicsSafety=await validateGraphicsFlow(donorBytes,pageIndex,{bandLeft,bandRight,boundaries:[cutY,overflowBoundary,footerGuardTop]});
+  if(!graphicsSafety.ok)return {applied:false,reason:graphicsSafety.reason,overflowPageCount:0};
   const vectorSafety=await validateVectorReflow(donorBytes,pageIndex,{cutY,overflowBoundary,bandLeft,bandRight});
   if(!vectorSafety.ok)return {applied:false,reason:vectorSafety.reason,overflowPageCount:0,vectorSafety};
   // Keep the donor page inside the same PDF context. Serializing and loading a

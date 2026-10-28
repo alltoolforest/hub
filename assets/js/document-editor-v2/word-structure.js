@@ -50,7 +50,7 @@ export function writeStructures(model,xml,all){
     original.remove();
   }
 }
-export function mountStructure({model,index,container,formatting,onChange,register,onBoundary=()=>{}}){
+export function mountStructure({model,index,container,formatting,onChange,register,onBoundary=()=>{},onStatus=()=>{}}){
   const fields=[];
   function selection(field){const s=window.getSelection();if(!s?.rangeCount)return null;const r=s.getRangeAt(0);if(!field.contains(r.startContainer)||!field.contains(r.endContainer))return null;const prefix=r.cloneRange();prefix.selectNodeContents(field);prefix.setEnd(r.startContainer,r.startOffset);return {start:prefix.toString().length,end:prefix.toString().length+r.toString().length};}
   function focus(part,offset){const field=fields[part];if(!field)return;field.focus();const walker=document.createTreeWalker(field,4),range=document.createRange();let node;while((node=walker.nextNode())){if(offset<=node.length){range.setStart(node,offset);break;}offset-=node.length;}if(!node){range.selectNodeContents(field);range.collapse(false);}else range.collapse(true);const s=window.getSelection();s.removeAllRanges();s.addRange(range);}
@@ -86,7 +86,7 @@ export function mountStructure({model,index,container,formatting,onChange,regist
         const old=textOf(structureParts(model,index)[partIndex]),next=field.textContent;let start=0,end=old.length,nextEnd=next.length;while(start<end&&start<nextEnd&&old[start]===next[start])start++;while(end>start&&nextEnd>start&&old[end-1]===next[nextEnd-1]){end--;nextEnd--;}
         replaceStructure(model,index,partIndex,start,end,next.slice(start,nextEnd));onChange();
       });
-      field.addEventListener('paste',event=>{event.preventDefault();const range=selection(field);if(!range)return;const rich=readWordClipboard(event.clipboardData.getData('text/html')||'',event.clipboardData.getData('text/plain'),formatAt(model,index,structureParts(model,index)[partIndex].runs,range.start));
+      field.addEventListener('paste',event=>{event.preventDefault();const range=selection(field);if(!range)return;let rich;try{rich=readWordClipboard(event.clipboardData.getData('text/html')||'',event.clipboardData.getData('text/plain'),formatAt(model,index,structureParts(model,index)[partIndex].runs,range.start));}catch(error){onStatus(error.message);return;}
         if(rich){const text=rich.map(p=>p.runs.map(r=>r.text).join('')).join('\n');const result=replaceWordRange(model,{index,part:partIndex,offset:range.start},{index,part:partIndex,offset:range.end},text,{richParts:rich});render();onChange();focus(result.part,result.offset);return;}
         const text=event.clipboardData.getData('text/plain').replace(/\r\n?/g,'\n'),lines=text.split('\n');
         if(lines.length===1){replaceStructure(model,index,partIndex,range.start,range.end,text);render();onChange();focus(partIndex,range.start+text.length);}

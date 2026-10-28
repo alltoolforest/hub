@@ -17,13 +17,14 @@ export async function open(file, format) {
     let model = await readDocx(file, zip, DOMParser);
     let images=await readPreviewImages(model,DOMParser);
     let disposeLayout=()=>{};
-    let operations=[],closed=false,advancedBusy=false;
+    let operations=[],closed=false,advancedBusy=false,revision=0;
     const encode=bytes=>{let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(text);};
     const decode=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
     const api={
       format,
       snapshot() { return {...snapshotDocx(model),wordOperations:structuredClone(operations)}; },
       async restore(snapshot) {
+        revision++;
         const next=snapshot.wordOperations||[];if(!Array.isArray(next)||next.length>30||JSON.stringify(next).length>30_000_000)throw new Error('Invalid advanced Word recovery.');
         if(JSON.stringify(next)!==JSON.stringify(operations)){
           let candidate=await readDocx(file,zip,DOMParser);
@@ -41,9 +42,9 @@ export async function open(file, format) {
         const disposeParagraphLayout=mountLayoutControls(host,model,onChange);
         const commitAdvanced=async command=>{
           if(advancedBusy||closed)throw new Error('Word operation is unavailable.');if(operations.length>=30)throw new Error('This session has reached 30 advanced changes. Export and reopen to continue.');
-          advancedBusy=true;const before=snapshotDocx(model),signature=JSON.stringify(before);
+          advancedBusy=true;const startedRevision=revision;const before=snapshotDocx(model),signature=JSON.stringify(before);
           try{const bytes=await editWordPackage(model,zip,DOMParser,XMLSerializer,command),candidate=await readDocx(bytes,zip,DOMParser),nextImages=await readPreviewImages(candidate,DOMParser);
-            if(closed||JSON.stringify(snapshotDocx(model))!==signature)throw new Error('Document changed while applying this operation. Retry with the current text.');
+            if(closed||revision!==startedRevision||JSON.stringify(snapshotDocx(model))!==signature)throw new Error('Document changed while applying this operation. Retry with the current text.');
             const saved={...command};if(saved.bytes)saved.bytes=encode(saved.bytes);const next=[...operations,{snapshot:before,command:saved}];if(JSON.stringify(next).length>30_000_000)throw new Error('Advanced recovery budget reached. Export and reopen to continue.');
             model=candidate;images=nextImages;operations=next;api.render(host,onChange);onChange();
           }finally{advancedBusy=false;}
@@ -60,7 +61,7 @@ export async function open(file, format) {
           }
           if(canStructure(model,paragraph.index)){
             if(paragraph.pageBreak)wrap.style.breakBefore='column';
-            const view=mountStructure({model,index:paragraph.index,container:wrap,formatting,onChange:()=>{onChange();refreshSearch();},onBoundary:(index,direction)=>{const merged=mergeSourceParagraph(model,index,direction);if(!merged)return;structured.get(merged.left).refresh();structured.get(merged.right).refresh();onChange();refreshSearch();structured.get(merged.left).focus(merged.part,merged.offset);},register:(id,field)=>fields.set(id,field)});structured.set(paragraph.index,view);return wrap;
+            const view=mountStructure({model,index:paragraph.index,container:wrap,formatting,onStatus:message=>{note.textContent=message;},onChange:()=>{onChange();refreshSearch();},onBoundary:(index,direction)=>{const merged=mergeSourceParagraph(model,index,direction);if(!merged)return;structured.get(merged.left).refresh();structured.get(merged.right).refresh();onChange();refreshSearch();structured.get(merged.left).focus(merged.part,merged.offset);},register:(id,field)=>fields.set(id,field)});structured.set(paragraph.index,view);return wrap;
           }
           const field = document.createElement('div');
           field.className = 'document-v2-paragraph';
@@ -105,7 +106,7 @@ export async function open(file, format) {
           if(paragraph.pageBreak)wrap.style.breakBefore='column';
           if(model.numbering[paragraph.index]){const marker=document.createElement('span');marker.textContent=model.numbering[paragraph.index];marker.setAttribute('aria-label','List marker');marker.style.marginRight='8pt';wrap.style.display='flex';field.style.flex='1';wrap.append(marker);}
           wrap.append(field);
-          for(const image of images.get(paragraph.index)||[]){const img=document.createElement('img');img.src=image.src;img.alt=image.alt;img.style.width=image.width+'px';img.style.maxWidth='100%';img.style.height='auto';wrap.append(img);}
+          for(const image of images.get(paragraph.index)||[]){const img=document.createElement('img');img.src=image.src;img.alt=image.alt;img.style.width=image.width+'px';img.style.maxWidth='100%';img.style.height='auto';if(image.height)img.style.aspectRatio=image.width+' / '+image.height;wrap.append(img);}
           return wrap;
         }
         function renderBlocks(blocks,parent){
@@ -154,7 +155,7 @@ export async function open(file, format) {
         }
         function addParagraph(format){const item={text:'',format:{...format}};model.additions.push(item);const field=renderAddition(item,model.additions.length-1);onChange();refreshSearch();field.focus();}
         model.additions.forEach(renderAddition);
-        const add=document.createElement('button');add.type='button';add.textContent='Add paragraph at document end';add.addEventListener('click',async()=>{try{await commitAdvanced({type:'paragraph',format:formatting.values()});host.querySelector('[data-word-source]:last-of-type')?.focus();}catch(error){note.textContent=error.message;}});formatting.toolbar.append(add);if(model.additions.length){const integrate=document.createElement('button');integrate.type='button';integrate.textContent='Integrate recovered end paragraphs';integrate.addEventListener('click',()=>commitAdvanced({type:'integrate'}).catch(error=>{note.textContent=error.message;}));formatting.toolbar.append(integrate);}
+        const add=document.createElement('button');add.type='button';add.textContent='Add paragraph at document end';add.addEventListener('click',async()=>{try{await commitAdvanced({type:'paragraph',format:formatting.values()});[...host.querySelectorAll('[data-word-source]')].at(-1)?.focus();}catch(error){note.textContent=error.message;}});formatting.toolbar.append(add);if(model.additions.length){const integrate=document.createElement('button');integrate.type='button';integrate.textContent='Integrate recovered end paragraphs';integrate.addEventListener('click',()=>commitAdvanced({type:'integrate'}).catch(error=>{note.textContent=error.message;}));formatting.toolbar.append(integrate);}
         const disposePagination=paginateWord(host,page,model.formatting.page);disposeLayout=()=>{disposePagination();disposeParagraphLayout();};
         refreshSearch = mountFindReplace(host, {
           entries: () => [...model.text.flatMap((text,id)=>structured.has(id)?structureParts(model,id).map((part,i)=>({id:`${id}:${i}`,text:structureText(part),protected:false})):[{id,text,protected:model.protected[id]||!fields.has(id)}]),...model.additions.map((item,i)=>({id:`new:${i}`,text:item.text,protected:false}))],

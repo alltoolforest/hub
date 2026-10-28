@@ -25,7 +25,8 @@ export async function readPreviewImages(model,Parser){
       }
       let drawing=blip;while(drawing&&drawing.localName!=='drawing')drawing=drawing.parentElement;
       const extent=drawing?.getElementsByTagNameNS('*','extent')[0],description=drawing?.getElementsByTagNameNS('*','docPr')[0];
-      images.push({src:cache.get(path),width:Math.min(2000,Number(extent?.getAttribute('cx'))/9525)||300,alt:description?.getAttribute('descr')||'Embedded document image'});
+      const rawWidth=Number(extent?.getAttribute('cx'))/9525,rawHeight=Number(extent?.getAttribute('cy'))/9525,width=Number.isFinite(rawWidth)&&rawWidth>0?Math.min(2000,rawWidth):300,height=Number.isFinite(rawHeight)&&rawHeight>0&&rawWidth>0?width*rawHeight/rawWidth:null;
+      images.push({src:cache.get(path),width,height,alt:description?.getAttribute('descr')||'Embedded document image'});
     }
     if(images.length)result.set(index,images);
   }

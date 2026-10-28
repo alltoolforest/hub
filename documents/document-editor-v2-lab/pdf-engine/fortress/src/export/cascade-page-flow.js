@@ -1,3 +1,4 @@
+import {validateGraphicsFlow} from './graphics-flow-guard.js';
 import {loadPdfjs} from '../rendering/pdfjs.js';
 import { PDFName } from '../core/pdf-lib.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
@@ -161,8 +162,8 @@ export function snapCascadeTextBoundary(boundary,rects,{floor,ceiling}){
  for(let attempt=0;attempt<64;attempt++){const crossing=rects.filter(r=>r.bottom<cut+.25&&r.top>cut-.25);if(!crossing.length)return cut;const next=Math.max(...crossing.map(r=>r.top))+1.5;if(next>=ceiling-.5||next<=cut+.01)throw new Error('No safe text boundary for page cascade.');cut=Math.max(floor,next);}
  throw new Error('Page cascade text boundary exceeds the safe limit.');
 }
-async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right}){
- const lib=await loadPdfjs(),bytes=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false})),task=lib.getDocument({data:bytes,isEvalSupported:false,useWorkerFetch:false});
+async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right,inspectionBytes}){
+ const lib=await loadPdfjs(),bytes=inspectionBytes||new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false})),task=lib.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false});
  try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
 }
 
@@ -172,7 +173,12 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemant
   if(!check.ok)return check;
   const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight});
   const linkInfo=inspectLinks(doc,live);
+  if(!linkInfo.ok)return linkInfo;
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
+  if(!classified.ok)return classified;
+  const inspectionBytes=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false}));
+  const graphicsSafety=await validateGraphicsFlow(inspectionBytes,pageIndex,{bandLeft:g.bandLeft,bandRight:g.bandRight,boundaries:[g.bodyTopY,outgoingBoundary,g.footerTop]});
+  if(!graphicsSafety.ok)return graphicsSafety;
 
   const {donorDoc,donorPage}=await snapshotPage(doc,pageIndex);
   const topSlice=await embedSlice(doc,donorPage,{left:0,bottom:g.bodyTopY,right:g.width,top:g.height});
@@ -201,7 +207,7 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemant
     try{await donorDoc.destroy?.();}catch{}
     return {ok:true,done:true,shift,overflow:false,semanticSnap};
   }
-  const outgoing={donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc,keepGroups:partitioned.outgoing};
+  const outgoing={inspectionBytes,inspectionPageIndex:pageIndex,donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc,keepGroups:partitioned.outgoing};
   return {ok:true,done:false,shift,overflow:true,outgoing,semanticSnap};
 }
 
@@ -209,7 +215,10 @@ async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargi
   const usable=Math.max(40,height-topMargin-bottomMargin);
   let bottom=incoming.bottom,top=incoming.top,count=0;
   while(top>bottom+.5){
-    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right});}
+    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right,inspectionBytes:incoming.inspectionBytes});}
+    const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page graphics geometry is unavailable.');
+    const graphicsBytes=incoming.inspectionBytes||new Uint8Array(await owner.save({useObjectStreams:false,updateFieldAppearances:false}));
+    const graphicsSafety=await validateGraphicsFlow(graphicsBytes,index,{bandLeft:incoming.left,bandRight:incoming.right,boundaries:[sliceBottom,top]});if(!graphicsSafety.ok)throw new Error(graphicsSafety.reason);
     const embedded=await embedSlice(doc,incoming.donorPage,{left:incoming.left,bottom:sliceBottom,right:incoming.right,top});
     const page=doc.addPage([width,height]);
     const h=top-sliceBottom;

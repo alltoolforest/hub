@@ -1,3 +1,4 @@
+import {validateGraphicsFlow} from './graphics-flow-guard.js';
 import { PDFDocument, PDFName } from '../core/pdf-lib.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
@@ -192,6 +193,7 @@ async function compactOne(doc,tx,sequenceIndex,candidates){
   const donorBytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false})),lines=await pageLines(donorBytes,pageIndex,Math.max(6,Number(tx.block?.fontSize)||12)),preferredPitch=originalTransactionPitch(tx,candidates,width),g=inferGeometry(lines,tx,{width,height,preferredPitch});if(!g.ok)return {applied:false,reason:g.reason};
   const vectors=await vectorSafety(donorBytes,pageIndex,g);if(!vectors.ok)return {applied:false,reason:vectors.reason,vectorSafety:vectors};
   if(Number.isFinite(vectors.snappedCutY))g.cutY=vectors.snappedCutY;
+  const graphics=await validateGraphicsFlow(donorBytes,pageIndex,{bandLeft:g.bandLeft,bandRight:g.bandRight,boundaries:[g.footerGuardTop,g.cutY]});if(!graphics.ok)return {applied:false,reason:graphics.reason};
   const links=validateLinks(annotations,g,height);if(!links.ok)return {applied:false,reason:links.reason};
   const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false}),donor=donorDoc.getPage(pageIndex);
   const top=await embed(doc,donor,{left:0,bottom:g.cutY,right:width,top:height}),footer=g.footerGuardTop>.5?await embed(doc,donor,{left:0,bottom:0,right:width,top:g.footerGuardTop}):null,moving=await embed(doc,donor,{left:g.bandLeft,bottom:g.footerGuardTop,right:g.bandRight,top:g.cutY}),left=g.bandLeft>1?await embed(doc,donor,{left:0,bottom:g.footerGuardTop,right:g.bandLeft,top:g.cutY}):null,right=g.bandRight<width-1?await embed(doc,donor,{left:g.bandRight,bottom:g.footerGuardTop,right:width,top:g.cutY}):null;
