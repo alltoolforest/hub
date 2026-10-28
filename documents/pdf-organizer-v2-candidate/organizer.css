@@ -66,3 +66,11 @@ body{margin:0}
 .po .btn,.po .acts button,.po .chip button{min-height:44px;min-width:44px}.po .chip{max-width:100%;overflow-wrap:anywhere}.po #status{margin:12px 0}.po .card{content-visibility:auto;contain-intrinsic-size:auto 380px}.po dialog canvas{max-width:100%;height:auto}.po .toolbar{position:relative}.po .nm{overflow-wrap:anywhere}
 
 @media(max-width:640px){.po .bar{position:static;margin-top:16px}.po{padding-bottom:24px}.po .bar .in{padding:12px 0}.po #cancel{position:fixed;right:12px;top:12px;z-index:100;background:#fff;color:#14201b;border:2px solid #145940}}
+
+/* Mobile WebKit: content-visibility:auto can replace intrinsic card heights
+   while scrolling to the export bar, shifting the button DURING a tap.
+   Keep mobile card layout measured/stable; preview canvases remain lazy and
+   bounded. Desktop retains content-visibility:auto. */
+@media(max-width:640px){
+  .po .card{content-visibility:visible;contain-intrinsic-size:none}
+}
