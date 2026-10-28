@@ -12,8 +12,8 @@ const doc=await P.PDFDocument.create({updateMetadata:false});
 for(let i=0;i<6;i++)doc.addPage([300+i*10,440]).drawText('PAGE '+i);
 const buffer=Buffer.from(await doc.save());
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!path.startsWith(root))throw Error();const file=extname(path)?path:path+'/index.html';const bytes=await readFile(file);res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.wasm':'application/wasm'})[extname(file)]||'application/octet-stream');res.end(bytes);}catch{res.statusCode=404;res.end();}});
-await new Promise(r=>server.listen(8765,'127.0.0.1',r));
+const server=process.env.PDF_ORGANIZER_BASE_URL?null:createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!path.startsWith(root))throw Error();const file=extname(path)?path:path+'/index.html';const bytes=await readFile(file);res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.wasm':'application/wasm'})[extname(file)]||'application/octet-stream');res.end(bytes);}catch{res.statusCode=404;res.end();}});
+if(server)await new Promise(r=>server.listen(8765,'127.0.0.1',r));
 let failed=0;
 for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
  if(process.env.BROWSER&&process.env.BROWSER!==name)continue;
@@ -57,7 +57,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
       assert(saved,'No download: '+await page.locator('#status').textContent());return saved;
     }finally{page.off('download',onDownload);}
    }
-   await page.goto('http://127.0.0.1:8765/documents/pdf-organizer/');
+   await page.goto(new URL('documents/pdf-organizer/',process.env.PDF_ORGANIZER_BASE_URL||'http://127.0.0.1:8765/').href);
    await page.locator('#file').setInputFiles({name:'file\" onmouseover=\"window.INJECTED=1.pdf',mimeType:'application/pdf',buffer});
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===6);
    await page.locator('#grid .card').first().locator('[data-act=sel]').check();
@@ -130,4 +130,4 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
  }
  finally{await browser?.close();}
 }
-server.close();if(failed)process.exitCode=1;
+server?.close();if(failed)process.exitCode=1;
