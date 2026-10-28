@@ -501,6 +501,7 @@ async function exportPdf(list,name) {
   if(!list.length)return toast('Nothing to export.');
   const plan=list.map(i=>({...i})),filename=safeFilename(name);
   cancelled=false;setBusy(true);$('progress').value=0;
+  let exportStage='PDF construction';
   try {
     status('Verifying source documents…');
     const ids=new Set(plan.filter(i=>!i.blank).map(i=>i.src));
@@ -517,6 +518,7 @@ async function exportPdf(list,name) {
       exportWorker.postMessage({sources,items:plan,blankSize:el.blankSize.value});
     });
     if(cancelled)throw new DOMException('Cancelled','AbortError');
+    exportStage='independent PDF.js verification';
     await verifyExport({pdfjs:pdfjsLib,bytes,items:plan,sources:S.sources,cancelled:()=>cancelled,onTask:t=>{verifyTask=t;},onProgress:(v,m)=>{status(m);$('progress').value=v;}});
     if(cancelled)throw new DOMException('Cancelled','AbortError');
     if(downloadURL)URL.revokeObjectURL(downloadURL);
@@ -525,7 +527,7 @@ async function exportPdf(list,name) {
     a.textContent='Download verified PDF';a.className='btn';a.id='verifiedDownload';
     $('verifiedDownload')?.remove();el.status.after(a);a.click();
     status('Verified '+plan.length+' pages. Use Download verified PDF if your browser did not start the download.');
-  }catch(err){toast(cancelled||err.name==='AbortError'?'Export cancelled. No output was created.':'Export stopped: '+err.message);}
+  }catch(err){toast(cancelled||err.name==='AbortError'?'Export cancelled. No output was created.':'Export stopped during '+exportStage+': '+err.message);}
   finally{exportWorker?.terminate();exportWorker=null;rejectExport=null;setBusy(false);}
 }
 
