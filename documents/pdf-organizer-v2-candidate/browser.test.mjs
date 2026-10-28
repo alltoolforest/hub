@@ -26,8 +26,12 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.addInitScript(()=>{
      window.__organizerTestClicks=[];
      document.addEventListener('click',event=>{
-       const target=event.target?.closest?.('#create,#verifiedDownload');
-       if(target)window.__organizerTestClicks.push(target.id);
+       const target=event.target;
+       window.__organizerTestClicks.push({
+         tag:target?.tagName,id:target?.id||'',act:target?.dataset?.act||'',
+         trusted:event.isTrusted
+       });
+       if(window.__organizerTestClicks.length>24)window.__organizerTestClicks.shift();
      },true);
    });
    page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:8765/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
@@ -101,7 +105,12 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
       disabled:document.querySelector('#create')?.disabled,
       barHidden:document.querySelector('#bar')?.hidden,
       busy:document.querySelector('#pdf-organizer')?.getAttribute('aria-busy'),
-      downloadLink:!!document.querySelector('#verifiedDownload')
+      downloadLink:!!document.querySelector('#verifiedDownload'),
+      createRect:(()=>{const r=document.querySelector('#create')?.getBoundingClientRect();
+        return r?{x:r.x,y:r.y,width:r.width,height:r.height}:null;})(),
+      hit:(()=>{const r=document.querySelector('#create')?.getBoundingClientRect();
+        if(!r)return null;const e=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+        return e?{id:e.id,tag:e.tagName,className:String(e.className).slice(0,100)}:null;})()
     })));
   }catch{}
  }
