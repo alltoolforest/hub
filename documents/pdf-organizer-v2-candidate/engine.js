@@ -26,6 +26,36 @@ export function inspectSecurity(doc,P) {
   }
 }
 
+// Conservative resource-admission guard used by both the inspection worker
+// and the export worker. This catches plainly pathological page geometry and
+// image dictionaries before PDF.js is asked to render them. It does NOT bound
+// decompression, object-stream expansion or total browser memory.
+export function assertResourceAdmission(doc,P) {
+  const N=P.PDFName.of, lookup=v=>doc.context.lookup(v);
+  for (const page of doc.getPages()) {
+    const width=page.getWidth(),height=page.getHeight();
+    if(!Number.isFinite(width)||!Number.isFinite(height)||
+       width<=0||height<=0||width>100000||height>100000) {
+      throw Error('This PDF contains unsupported or excessive page dimensions.');
+    }
+  }
+  let imageCount=0;
+  for(const [,object] of doc.context.enumerateIndirectObjects()) {
+    if(!(object instanceof P.PDFStream)||
+       object.dict.get(N('Subtype'))?.toString()!=='/Image')continue;
+    imageCount++;
+    if(imageCount>20000)throw Error('This PDF contains too many embedded images to inspect safely.');
+    const width=lookup(object.dict.get(N('Width')));
+    const height=lookup(object.dict.get(N('Height')));
+    const w=width instanceof P.PDFNumber?width.asNumber():NaN;
+    const h=height instanceof P.PDFNumber?height.asNumber():NaN;
+    if(!Number.isSafeInteger(w)||!Number.isSafeInteger(h)||
+       w<1||h<1||w*h>250000000) {
+      throw Error('This PDF contains an unsupported or excessively large embedded image.');
+    }
+  }
+}
+
 // Reference-number independent graph fingerprint, including original compressed
 // stream bytes. Parent links are excluded only for the top-level page node.
 export function fingerprint(doc,object,P,topPage=false) {
@@ -114,7 +144,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
   for(const id of ids){
     const s=sources.find(x=>x.id===id);if(!s)throw Error('Source PDF is missing.');
     const doc=await P.PDFDocument.load(s.bytes,{updateMetadata:false,throwOnInvalidObject:true});
-    inspectSecurity(doc,P);docs.set(id,doc);check();
+    inspectSecurity(doc,P);assertResourceAdmission(doc,P);docs.set(id,doc);check();
   }
   for(const it of items) {
     if(!Number.isInteger(it.rot)||it.rot<0||it.rot>=360||it.rot%90)throw Error('Invalid page rotation.');
