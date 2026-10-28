@@ -21,16 +21,17 @@ function rangeTargets(model,start,end){
   }
   return indexes;
 }
-export function replaceWordRange(model,start,end,replacement,{splitLines=true}={}){
+export function replaceWordRange(model,start,end,replacement,{splitLines=true,richParts=null}={}){
   if(typeof replacement!=='string'||replacement.length>1_000_000)throw new Error('The replacement is too large.');
   const indexes=rangeTargets(model,start,end);
   const left=structuredClone(structureParts(model,start.index)),right=structuredClone(structureParts(model,end.index));
   const prefix=sliceRuns(left[start.part].runs,0,start.offset),suffix=sliceRuns(right[end.part].runs,end.offset,structureText(right[end.part]).length);
   const format=formatAt(model,start.index,left[start.part].runs,start.offset);
   const moved=run=>({...run,origin:run.origin??end.index,format:run.format||model.formatting.formats[run.origin??end.index].runs[run.source]||model.formatting.formats[run.origin??end.index].base});
-  const lines=splitLines?replacement.replace(/\r\n?/g,'\n').split('\n'):[replacement];
+  const lines=richParts?richParts.map(part=>part.runs.map(run=>run.text).join('')):splitLines?replacement.replace(/\r\n?/g,'\n').split('\n'):[replacement];
   if(lines.length>10000)throw new Error('The replacement contains too many paragraphs.');
-  const inserted=lines.map(text=>({runs:[{text,source:0,format}]}));
+  const inserted=richParts?richParts.map(part=>({runs:part.runs.map(run=>({text:run.text,source:0,format:validateWordFormat(run.format)}))})):lines.map(text=>({runs:[{text,source:0,format}]}));
+  if(inserted.length!==lines.length||inserted.some((part,i)=>part.runs.map(run=>run.text).join('')!==lines[i]))throw new Error('Invalid rich clipboard paragraphs.');
   inserted[0].runs.unshift(...prefix);inserted.at(-1).runs.push(...suffix.map(moved));
   const remaining=right.slice(end.part+1).map(part=>({runs:part.runs.map(moved)}));
   const next=[...left.slice(0,start.part),...inserted,...remaining];

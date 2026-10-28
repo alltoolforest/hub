@@ -105,13 +105,13 @@ function inspectAnnotations(doc,page){
     const dict=arrayItem(doc,array,i);
     if(!dict||typeof dict.get!=='function'||typeof dict.set!=='function')return {ok:false,reason:'ANNOTATION_DICTIONARY_UNREADABLE'};
     const subtype=String(dict.get(SUBTYPE)||'');
-    if(subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'COMPLEX_ANNOTATION_REFLOW_UNSAFE'};
-    if(dict.get(AP)||dict.get(QUAD_POINTS))return {ok:false,reason:'COMPLEX_LINK_GEOMETRY_REFLOW_UNSAFE'};
+    const protectedWidget=subtype==='/Widget';if(!protectedWidget&&subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'COMPLEX_ANNOTATION_REFLOW_UNSAFE'};
+    if(!protectedWidget&&(dict.get(AP)||dict.get(QUAD_POINTS)))return {ok:false,reason:'COMPLEX_LINK_GEOMETRY_REFLOW_UNSAFE'};
     const rectArray=lookup(doc,dict.get(RECT));
     if(!rectArray||typeof rectArray.size!=='function'||rectArray.size()<4)return {ok:false,reason:'LINK_RECTANGLE_MISSING'};
     const rect=[];
     for(let j=0;j<4;j++){const value=numberValue(doc,rectArray.get(j));if(!Number.isFinite(value))return {ok:false,reason:'LINK_RECTANGLE_INVALID'};rect.push(value);}
-    links.push({dict,rect,bounds:rectBounds(rect)});
+    links.push({dict,rect,bounds:rectBounds(rect),protectedWidget});
   }
   return {ok:true,raw,links};
 }
@@ -136,6 +136,7 @@ function classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop}){
 function validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,movableFloor,bandLeft,bandRight,footerGuardTop}){
   const classified=[];
   for(const link of annotationInfo.links){
+    if(link.protectedWidget){const b=link.bounds;if(overflowNeeded||b.left<bandRight+3&&b.right>bandLeft-3&&b.bottom<cutY+3&&b.top>footerGuardTop-delta-3)return {ok:false,reason:'FORM_WIDGET_REFLOW_PROTECTED'};classified.push({...link,zone:'STATIC'});continue;}
     const zone=classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop});
     if(zone==='CROSSES_FOOTER')return {ok:false,reason:'LINK_CROSSES_FOOTER_GUARD'};
     if(zone==='CROSSES_BAND')return {ok:false,reason:'LINK_CROSSES_CONTENT_BAND'};

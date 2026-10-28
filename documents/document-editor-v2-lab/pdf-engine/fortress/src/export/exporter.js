@@ -15,12 +15,14 @@ export async function exportEditedPdf(originalBytes,transactions,options={}){
   const structuredTransactions=await prepareStructuredVectorTransactions(originalBytes,preparedTransactions);
   const styledTransactions=await expandStyleAwareInsertTransactions(originalBytes,structuredTransactions);
   const result=await exportEditedPdfCore(originalBytes,styledTransactions,options);
-  // Keep form pages and widget coordinates stable. Native text edits that fit
-  // their existing regions remain available; form-aware reflow is not implied.
-  if(flags.hasAcroForm||flags.formWidgets.length){
-    if(result.reflowMetrics?.some(m=>Number(m.delta)||Number(m.shiftY)||m.overflowPageCount))throw Object.assign(new Error('This edit would move content in a PDF containing form fields. Shorten the text or use a smaller font.'),{code:'PDF_FORM_REFLOW_PROTECTED'});
-    await verifyFormPreservation(originalBytes,result.bytes);
-    return result;
+  const hasForms=flags.hasAcroForm||flags.formWidgets.length;
+  if(hasForms){
+    const moved=(result.reflowMetrics||[]).filter(m=>Number(m.delta)||Number(m.shiftY)||Number(m.cascadedPageCount)||Number(m.appendedPageCount)||Number(m.overflowPageCount));
+    if(moved.some(m=>!flags.formSafetyKnown||Number(m.cascadedPageCount)||Number(m.appendedPageCount)||Number(m.overflowPageCount)))throw Object.assign(new Error('Page cascades in PDFs with form fields remain protected.'),{code:'PDF_FORM_REFLOW_PROTECTED'});
+    // Unknown/XFA form geometry cannot establish a safe moving band.
+    if(!flags.formSafetyKnown&&styledTransactions.some(tx=>tx.kind==='REPLACE_TEXT'&&!String(tx.replacementUnicode||'').trim())){await verifyFormPreservation(originalBytes,result.bytes);return result;}
   }
-  return applyUpwardCompaction(result,styledTransactions,{preview:!!options.preview});
+  const final=await applyUpwardCompaction(result,styledTransactions,{preview:!!options.preview});
+  if(hasForms)await verifyFormPreservation(originalBytes,final.bytes);
+  return final;
 }

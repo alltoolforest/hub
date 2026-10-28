@@ -1,3 +1,4 @@
+import {editWordPackage,mountWordAdvanced} from '../word-advanced.js';
 import {mountLayoutControls} from '../word-layout.js';
 import {openText} from './text.js';
 import {readPreviewImages,showFontAvailability} from '../word-preview.js';
@@ -13,21 +14,41 @@ import {readDocx, writeDocx, updateDocxText, documentBlocks, snapshotDocx, resto
 export async function open(file, format) {
   if (format === 'docx') {
     const zip = await load('zip');
-    const model = await readDocx(file, zip, DOMParser);
-    const images=await readPreviewImages(model,DOMParser);
+    let model = await readDocx(file, zip, DOMParser);
+    let images=await readPreviewImages(model,DOMParser);
     let disposeLayout=()=>{};
-    return {
+    let operations=[],closed=false,advancedBusy=false;
+    const encode=bytes=>{let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(text);};
+    const decode=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
+    const api={
       format,
-      snapshot() { return snapshotDocx(model); },
-      restore(snapshot) { restoreDocx(model, snapshot); },
+      snapshot() { return {...snapshotDocx(model),wordOperations:structuredClone(operations)}; },
+      async restore(snapshot) {
+        const next=snapshot.wordOperations||[];if(!Array.isArray(next)||next.length>30||JSON.stringify(next).length>30_000_000)throw new Error('Invalid advanced Word recovery.');
+        if(JSON.stringify(next)!==JSON.stringify(operations)){
+          let candidate=await readDocx(file,zip,DOMParser);
+          for(const entry of next){restoreDocx(candidate,entry.snapshot);const command={...entry.command};if(command.bytes)command.bytes=decode(command.bytes);const bytes=await editWordPackage(candidate,zip,DOMParser,XMLSerializer,command);candidate=await readDocx(bytes,zip,DOMParser);}
+          restoreDocx(candidate,snapshot);const nextImages=await readPreviewImages(candidate,DOMParser);model=candidate;images=nextImages;operations=structuredClone(next);
+        }else restoreDocx(model,snapshot);
+      },
       render(host, onChange) {
-        disposeLayout();host.replaceChildren();
+        disposeLayout();const advancedPanel=host.querySelector('[data-word-advanced]');if(advancedPanel)host.dataset.wordAdvancedOpen=String(advancedPanel.open);host.replaceChildren();host.dataset.wordRevision=String(operations.length);
         const note = document.createElement('p');
         note.className = 'notice';
         note.textContent = 'Fonts and sizes are read from the document. Text flows between preview pages as you edit; browser pagination can differ from Word, especially when fonts are unavailable. New text inherits its surrounding run. Select text to format a range in ordinary paragraphs; with no selection, formatting applies to the paragraph. Complex content is preserved in export and may not be fully shown in this preview.';
         host.append(note);showFontAvailability(host,model);
         const formatting=wordToolbar(host,model,onChange);
-        mountLayoutControls(host,model,onChange);
+        const disposeParagraphLayout=mountLayoutControls(host,model,onChange);
+        const commitAdvanced=async command=>{
+          if(advancedBusy||closed)throw new Error('Word operation is unavailable.');if(operations.length>=30)throw new Error('This session has reached 30 advanced changes. Export and reopen to continue.');
+          advancedBusy=true;const before=snapshotDocx(model),signature=JSON.stringify(before);
+          try{const bytes=await editWordPackage(model,zip,DOMParser,XMLSerializer,command),candidate=await readDocx(bytes,zip,DOMParser),nextImages=await readPreviewImages(candidate,DOMParser);
+            if(closed||JSON.stringify(snapshotDocx(model))!==signature)throw new Error('Document changed while applying this operation. Retry with the current text.');
+            const saved={...command};if(saved.bytes)saved.bytes=encode(saved.bytes);const next=[...operations,{snapshot:before,command:saved}];if(JSON.stringify(next).length>30_000_000)throw new Error('Advanced recovery budget reached. Export and reopen to continue.');
+            model=candidate;images=nextImages;operations=next;api.render(host,onChange);onChange();
+          }finally{advancedBusy=false;}
+        };
+        mountWordAdvanced(host,model,commitAdvanced,DOMParser).catch(error=>{note.textContent=error.message;});
         let refreshSearch = () => {};
         const fields = new Map(),structured=new Map(),additionFields=new Map();
         const page = document.createElement('div'); page.className = 'document-v2-page';
@@ -82,6 +103,7 @@ export async function open(file, format) {
             field.addEventListener('input', () => { updateDocxText(model, paragraph.index, field.textContent); onChange(); refreshSearch(); });
           } else { field.setAttribute('aria-readonly','true'); field.textContent += ' [Protected content retained in export]'; }
           if(paragraph.pageBreak)wrap.style.breakBefore='column';
+          if(model.numbering[paragraph.index]){const marker=document.createElement('span');marker.textContent=model.numbering[paragraph.index];marker.setAttribute('aria-label','List marker');marker.style.marginRight='8pt';wrap.style.display='flex';field.style.flex='1';wrap.append(marker);}
           wrap.append(field);
           for(const image of images.get(paragraph.index)||[]){const img=document.createElement('img');img.src=image.src;img.alt=image.alt;img.style.width=image.width+'px';img.style.maxWidth='100%';img.style.height='auto';wrap.append(img);}
           return wrap;
@@ -132,8 +154,8 @@ export async function open(file, format) {
         }
         function addParagraph(format){const item={text:'',format:{...format}};model.additions.push(item);const field=renderAddition(item,model.additions.length-1);onChange();refreshSearch();field.focus();}
         model.additions.forEach(renderAddition);
-        const add=document.createElement('button');add.type='button';add.textContent='Add paragraph at document end';add.addEventListener('click',()=>{try{addParagraph(formatting.values());}catch(error){note.textContent=error.message;}});formatting.toolbar.append(add);
-        disposeLayout=paginateWord(host,page,model.formatting.page);
+        const add=document.createElement('button');add.type='button';add.textContent='Add paragraph at document end';add.addEventListener('click',async()=>{try{await commitAdvanced({type:'paragraph',format:formatting.values()});host.querySelector('[data-word-source]:last-of-type')?.focus();}catch(error){note.textContent=error.message;}});formatting.toolbar.append(add);if(model.additions.length){const integrate=document.createElement('button');integrate.type='button';integrate.textContent='Integrate recovered end paragraphs';integrate.addEventListener('click',()=>commitAdvanced({type:'integrate'}).catch(error=>{note.textContent=error.message;}));formatting.toolbar.append(integrate);}
+        const disposePagination=paginateWord(host,page,model.formatting.page);disposeLayout=()=>{disposePagination();disposeParagraphLayout();};
         refreshSearch = mountFindReplace(host, {
           entries: () => [...model.text.flatMap((text,id)=>structured.has(id)?structureParts(model,id).map((part,i)=>({id:`${id}:${i}`,text:structureText(part),protected:false})):[{id,text,protected:model.protected[id]||!fields.has(id)}]),...model.additions.map((item,i)=>({id:`new:${i}`,text:item.text,protected:false}))],
           replace: ({id, start, end}, value) => {
@@ -159,9 +181,10 @@ export async function open(file, format) {
           }
         }, onChange);
       },
-      dispose(){disposeLayout();},
-      export() { return writeDocx(model, zip, DOMParser, XMLSerializer); }
+      dispose(){closed=true;disposeLayout();},
+      export() { if(advancedBusy)throw new Error('Wait for the current Word operation to finish.');return writeDocx(model, zip, DOMParser, XMLSerializer); }
     };
+    return api;
   }
   if (format !== 'txt') throw new Error(`${format.toUpperCase()} editing is still under construction in this isolated workstream.`);
   return openText(file);

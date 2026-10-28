@@ -15,7 +15,7 @@ function overlap(a1,a2,b1,b2){return Math.max(0,Math.min(a2,b2)-Math.max(a1,b1))
 function copyBytes(bytes){return bytes instanceof Uint8Array?new Uint8Array(bytes):new Uint8Array(bytes||0);}
 function blockRect(block){const b=block?.bounds;if(!b)return null;const left=Number(b.x),bottom=Number(b.y),width=Number(b.width),height=Number(b.height);if(![left,bottom,width,height].every(Number.isFinite)||width<=0||height<=0)return null;return {left,right:left+width,bottom,top:bottom+height,width,height};}
 function blockBaseline(block){const y=Number(block?.lines?.[0]?.y);if(Number.isFinite(y))return y;const r=blockRect(block);return r?r.bottom+Math.max(1,Number(block?.fontSize)||12)*.24:null;}
-function needsCompaction(tx){return tx?.kind==='REPLACE_TEXT'&&!!tx?.block&&String(tx?.originalUnicode??tx?.block?.text??'').trim().length>0&&String(tx?.replacementUnicode??'').trim().length===0;}
+function needsCompaction(tx){return tx?.kind==='REPLACE_TEXT'&&!tx.expandedInsertId&&!!tx?.block&&String(tx?.originalUnicode??tx?.block?.text??'').trim().length>0&&String(tx?.replacementUnicode??'').trim().length===0;}
 
 function textRect(item){
   const tr=item?.transform||[],left=Number(tr[4]),baseline=Number(tr[5]);
@@ -121,15 +121,15 @@ function inspectAnnotations(doc,page){
   const links=[];
   for(let i=0;i<array.size();i++){
     const dict=arrayItem(doc,array,i);if(!dict||typeof dict.get!=='function'||typeof dict.set!=='function')return {ok:false,reason:'ANNOTATION_DICTIONARY_UNREADABLE'};
-    const subtype=String(dict.get(SUBTYPE)||'');if(subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'COMPLEX_ANNOTATION_REFLOW_UNSAFE'};
-    if(dict.get(AP)||dict.get(QUAD_POINTS))return {ok:false,reason:'COMPLEX_LINK_GEOMETRY_REFLOW_UNSAFE'};
+    const subtype=String(dict.get(SUBTYPE)||'');const protectedWidget=subtype==='/Widget';if(!protectedWidget&&subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'COMPLEX_ANNOTATION_REFLOW_UNSAFE'};
+    if(!protectedWidget&&(dict.get(AP)||dict.get(QUAD_POINTS)))return {ok:false,reason:'COMPLEX_LINK_GEOMETRY_REFLOW_UNSAFE'};
     const arr=lookup(doc,dict.get(RECT));if(!arr||typeof arr.size!=='function'||arr.size()<4)return {ok:false,reason:'LINK_RECTANGLE_MISSING'};
-    const rect=[];for(let j=0;j<4;j++){const value=numberValue(doc,arr.get(j));if(!Number.isFinite(value))return {ok:false,reason:'LINK_RECTANGLE_INVALID'};rect.push(value);}links.push({dict,rect,bounds:rectBounds(rect)});
+    const rect=[];for(let j=0;j<4;j++){const value=numberValue(doc,arr.get(j));if(!Number.isFinite(value))return {ok:false,reason:'LINK_RECTANGLE_INVALID'};rect.push(value);}links.push({dict,rect,bounds:rectBounds(rect),protectedWidget});
   }
   return {ok:true,raw,links};
 }
 function classifyLink(link,g){const {left,right,bottom,top}=link.bounds;if(top<=g.footerGuardTop+.5)return 'STATIC_FOOTER';if(bottom<g.footerGuardTop-.5&&top>g.footerGuardTop+.5)return 'CROSSES_FOOTER';if(right<=g.bandLeft+.5||left>=g.bandRight-.5)return 'STATIC';if((left<g.bandLeft-.5&&right>g.bandLeft+.5)||(left<g.bandRight-.5&&right>g.bandRight+.5))return 'CROSSES_BAND';if(bottom<g.cutY-.5&&top>g.cutY+.5)return ((bottom+top)/2<=g.cutY?'MOVED':'STATIC');if(top<=g.cutY+.5)return 'MOVED';return 'STATIC';}
-function validateLinks(info,g,pageHeight){const links=[];for(const link of info.links){const zone=classifyLink(link,g);if(zone==='CROSSES_FOOTER')return {ok:false,reason:'LINK_CROSSES_FOOTER_GUARD'};if(zone==='CROSSES_BAND')return {ok:false,reason:'LINK_CROSSES_CONTENT_BAND'};if(zone==='MOVED'&&link.bounds.top+g.shiftY>pageHeight-1)return {ok:false,reason:'LINK_COMPACTION_OUT_OF_PAGE'};links.push({...link,zone});}return {ok:true,links};}
+function validateLinks(info,g,pageHeight){const links=[];for(const link of info.links){if(link.protectedWidget){const b=link.bounds;if(b.left<g.bandRight+3&&b.right>g.bandLeft-3&&b.bottom<g.cutY+g.shiftY+3&&b.top>g.footerGuardTop-3)return {ok:false,reason:'FORM_WIDGET_REFLOW_PROTECTED'};links.push({...link,zone:'STATIC'});continue;}const zone=classifyLink(link,g);if(zone==='CROSSES_FOOTER')return {ok:false,reason:'LINK_CROSSES_FOOTER_GUARD'};if(zone==='CROSSES_BAND')return {ok:false,reason:'LINK_CROSSES_CONTENT_BAND'};if(zone==='MOVED'&&link.bounds.top+g.shiftY>pageHeight-1)return {ok:false,reason:'LINK_COMPACTION_OUT_OF_PAGE'};links.push({...link,zone});}return {ok:true,links};}
 function preserveLinks(doc,replacement,info,links,shiftY){if(!info.raw)return;for(const link of links){if(link.zone==='MOVED')link.dict.set(RECT,doc.context.obj([link.rect[0],link.rect[1]+shiftY,link.rect[2],link.rect[3]+shiftY]));if(link.dict.get(PAGE)&&replacement.ref)link.dict.set(PAGE,replacement.ref);}replacement.node.set(ANN0TS,info.raw);}
 function crosses(bottom,top,y,tolerance=1){return Number.isFinite(y)&&bottom<y-tolerance&&top>y+tolerance;}
 async function vectorSafety(bytes,pageIndex,g){

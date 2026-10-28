@@ -1,3 +1,4 @@
+import {readWordClipboard,copyWordSelection} from './word-clipboard.js';
 import {replaceWordRange,formatWordRange} from './word-range.js';
 
 // Only adjacent ordinary paragraphs share an editing host. Complex paragraphs,
@@ -82,6 +83,7 @@ export function wordFlowGroup({model,views,onChange,onStatus,formatting,onHistor
     const field=inputField?.isConnected?inputField:selected()?.start.field;
     if(event.target===group&&field)forward(event,field);inputField=null;
   },true);
+  group.addEventListener('copy',copyWordSelection);
   for(const type of ['paste','cut'])group.addEventListener(type,event=>{
     if(forwarded.has(event))return;const selection=selected();if(!selection)return;
     if(selection.cross){
@@ -89,7 +91,7 @@ export function wordFlowGroup({model,views,onChange,onStatus,formatting,onHistor
       if(type==='cut'){
         if(!event.clipboardData){onStatus('Clipboard access is unavailable. Use Delete instead.');return;}
         event.clipboardData.setData('text/plain',window.getSelection().toString());replace(selection,'');
-      }else replace(selection,event.clipboardData?.getData('text/plain')??'');
+      }else{try{const richParts=readWordClipboard(event.clipboardData?.getData('text/html')||'',event.clipboardData?.getData('text/plain')||'',model.formatting.formats[selection.start.index].base);replace(selection,richParts?richParts.map(p=>p.runs.map(r=>r.text).join('')).join('\n'):event.clipboardData?.getData('text/plain')??'',{richParts});}catch(error){onStatus(error.message);}}
     }else if(event.target===group&&type==='paste')forward(event,selection.start.field);
   },true);
   for(const type of ['keyup','mouseup','focus'])group.addEventListener(type,event=>{

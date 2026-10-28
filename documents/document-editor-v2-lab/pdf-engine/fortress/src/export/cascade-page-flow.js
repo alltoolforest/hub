@@ -1,3 +1,4 @@
+import {loadPdfjs} from '../rendering/pdfjs.js';
 import { PDFName } from '../core/pdf-lib.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 import { normalizeKeepGroups, snapBoundaryToKeepGroup, partitionKeepGroups, placeIncomingKeepGroups } from '../layout/section-pagination.js';
@@ -155,11 +156,21 @@ function preflightCascade(doc,{sourcePageIndex,pages,incoming,allowSemantic=true
   return {ok:true,targets,absorbed:false,remaining:simulation,allowSemantic};
 }
 
+export function snapCascadeTextBoundary(boundary,rects,{floor,ceiling}){
+ let cut=boundary;
+ for(let attempt=0;attempt<64;attempt++){const crossing=rects.filter(r=>r.bottom<cut+.25&&r.top>cut-.25);if(!crossing.length)return cut;const next=Math.max(...crossing.map(r=>r.top))+1.5;if(next>=ceiling-.5||next<=cut+.01)throw new Error('No safe text boundary for page cascade.');cut=Math.max(floor,next);}
+ throw new Error('Page cascade text boundary exceeds the safe limit.');
+}
+async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right}){
+ const lib=await loadPdfjs(),bytes=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false})),task=lib.getDocument({data:bytes,isEvalSupported:false,useWorkerFetch:false});
+ try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
+}
+
 async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true}={}){
   const live=doc.getPage(pageIndex);
   const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right},{allowSemantic});
   if(!check.ok)return check;
-  const {g,shift,overflowNeeded,outgoingBoundary,semanticSnap}=check;
+  const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight});
   const linkInfo=inspectLinks(doc,live);
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
 
@@ -198,7 +209,7 @@ async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargi
   const usable=Math.max(40,height-topMargin-bottomMargin);
   let bottom=incoming.bottom,top=incoming.top,count=0;
   while(top>bottom+.5){
-    const sliceBottom=Math.max(bottom,top-usable);
+    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right});}
     const embedded=await embedSlice(doc,incoming.donorPage,{left:incoming.left,bottom:sliceBottom,right:incoming.right,top});
     const page=doc.addPage([width,height]);
     const h=top-sliceBottom;
@@ -235,7 +246,8 @@ export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan
 
   let incoming={donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
   let cascadedPageCount=0;
-  for(const target of preflight.targets){
+  for(const raw of pages){
+    const targetIndex=Number(raw.pageIndex);if(!Number.isInteger(targetIndex)||targetIndex<=sourcePageIndex||targetIndex>=doc.getPageCount())continue;const target={raw,targetIndex};
     const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming,{allowSemantic:preflight.allowSemantic!==false});
     if(!result.ok)return {applied:false,reason:result.reason,appendedPageCount:0,cascadedPageCount};
     cascadedPageCount++;

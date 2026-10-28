@@ -2,7 +2,7 @@
 // rebuilt against the original bytes, never serialized into browser storage.
 const fields = ['id','kind','pageIndex','blockId','originalUnicode','replacementUnicode',
   'displayUnicode','fontFamily','fontSize','bold','italic','textColor','styleChanged','x','y',
-  'lineHeight','maxWidth','reflowPlan','expandedFromBlockId','status'];
+  'lineHeight','maxWidth','reflowPlan','expandedFromBlockId','expandedInsertId','status'];
 export async function sourceDigest(bytes) {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2,'0')).join('');
@@ -11,6 +11,7 @@ export function nativeDraft(transactions, source, pageIndex, zoom) {
   return {version:1,source,pageIndex,zoom,transactions:transactions.map(tx => {
     const intent = {};
     for (const field of fields) if (tx[field] !== undefined) intent[field] = tx[field];
+    if(tx.kind==='REPLACE_TEXT'&&!intent.expandedInsertId){const companion=transactions.find(other=>other.kind==='INSERT_TEXT'&&other.expandedFromBlockId===tx.blockId&&other.pageIndex===tx.pageIndex);if(companion)intent.expandedInsertId=companion.id;}
     return JSON.parse(JSON.stringify(intent));
   })};
 }
@@ -33,5 +34,7 @@ export function validateNativeDraft(draft, source, pageCount) {
     keys.add(key); ids.add(tx.id);
   }
   // Copy only known fields; restored data must not carry parser internals.
-  return nativeDraft(draft.transactions,source,draft.pageIndex,draft.zoom);
+  const normalized=nativeDraft(draft.transactions,source,draft.pageIndex,draft.zoom);
+  for(const tx of normalized.transactions){if(tx.expandedInsertId){const companion=normalized.transactions.find(other=>other.id===tx.expandedInsertId);if(tx.kind!=='REPLACE_TEXT'||tx.replacementUnicode!==''||!companion||companion.kind!=='INSERT_TEXT'||companion.pageIndex!==tx.pageIndex||companion.expandedFromBlockId!==tx.blockId)throw new Error('Invalid expanded PDF paragraph pairing.');}if(tx.expandedFromBlockId&&!normalized.transactions.some(other=>other.kind==='REPLACE_TEXT'&&other.blockId===tx.expandedFromBlockId&&other.expandedInsertId===tx.id))throw new Error('Invalid expanded PDF paragraph source.');}
+  return normalized;
 }

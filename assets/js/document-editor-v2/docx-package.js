@@ -1,3 +1,4 @@
+import {readWordNumbering} from './word-numbering.js';
 import {restoreLayouts,writeLayout} from './word-layout.js';
 import {restoreStructures,writeStructures,structureParts,structureText} from './word-structure.js';
 import {readWordFormatting,validateWordFormat,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
@@ -60,7 +61,7 @@ export async function readDocx(file, Zip, Parser) {
   if (source.length > 20_000_000) throw new Error('Document XML is too large to edit safely on this device.');
   const xml = parse(source, Parser);
   const original = paragraphs(xml).map(plainText);
-  return {zip, xml, original, formatting:await readWordFormatting(zip,xml,Parser), layouts:{}, overrides:{}, structures:{}, additions:[], text:[...original], runs:paragraphs(xml).map(p => protectedParagraph(p) ? [plainText(p)] : textRuns(p)),
+  return {zip, xml, original, numbering:await readWordNumbering(zip,xml,Parser), formatting:await readWordFormatting(zip,xml,Parser), layouts:{}, overrides:{}, structures:{}, additions:[], text:[...original], runs:paragraphs(xml).map(p => protectedParagraph(p) ? [plainText(p)] : textRuns(p)),
     protected:paragraphs(xml).map(protectedParagraph)};
 }
 

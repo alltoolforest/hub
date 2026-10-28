@@ -1,3 +1,5 @@
+import {readWordClipboard} from './word-clipboard.js';
+import {replaceWordRange} from './word-range.js';
 import {paintLayout} from './word-layout.js';
 import {validateWordFormat,styleWordNode,writeWordFormat,hasWordPageBreakBefore} from './word-format.js';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',XML='http://www.w3.org/XML/1998/namespace';
@@ -84,7 +86,9 @@ export function mountStructure({model,index,container,formatting,onChange,regist
         const old=textOf(structureParts(model,index)[partIndex]),next=field.textContent;let start=0,end=old.length,nextEnd=next.length;while(start<end&&start<nextEnd&&old[start]===next[start])start++;while(end>start&&nextEnd>start&&old[end-1]===next[nextEnd-1]){end--;nextEnd--;}
         replaceStructure(model,index,partIndex,start,end,next.slice(start,nextEnd));onChange();
       });
-      field.addEventListener('paste',event=>{event.preventDefault();const range=selection(field);if(!range)return;const text=event.clipboardData.getData('text/plain').replace(/\r\n?/g,'\n'),lines=text.split('\n');
+      field.addEventListener('paste',event=>{event.preventDefault();const range=selection(field);if(!range)return;const rich=readWordClipboard(event.clipboardData.getData('text/html')||'',event.clipboardData.getData('text/plain'),formatAt(model,index,structureParts(model,index)[partIndex].runs,range.start));
+        if(rich){const text=rich.map(p=>p.runs.map(r=>r.text).join('')).join('\n');const result=replaceWordRange(model,{index,part:partIndex,offset:range.start},{index,part:partIndex,offset:range.end},text,{richParts:rich});render();onChange();focus(result.part,result.offset);return;}
+        const text=event.clipboardData.getData('text/plain').replace(/\r\n?/g,'\n'),lines=text.split('\n');
         if(lines.length===1){replaceStructure(model,index,partIndex,range.start,range.end,text);render();onChange();focus(partIndex,range.start+text.length);}
         else{const parts=structuredClone(structureParts(model,index)),current=parts[partIndex],format=formatAt(model,index,current.runs,range.start),prefix=sliceRuns(current.runs,0,range.start),suffix=sliceRuns(current.runs,range.end,textOf(current).length);const inserted=lines.map(line=>({runs:[{text:line,source:0,format}]}));inserted[0].runs.unshift(...prefix);inserted.at(-1).runs.push(...suffix);parts.splice(partIndex,1,...inserted);save(parts,partIndex+lines.length-1,lines.at(-1).length);}});field.addEventListener('drop',event=>event.preventDefault());field.addEventListener('blur',()=>{
         const selection=window.getSelection();

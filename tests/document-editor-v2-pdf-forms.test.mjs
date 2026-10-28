@@ -40,3 +40,10 @@ test('export independently rejects new text over a form widget',async()=>{
  const tx={id:'overlay',kind:'INSERT_TEXT',pageIndex:0,replacementUnicode:'Overlay',x:50,y:118,fontSize:12,maxWidth:150};
  await assert.rejects(exportEditedPdf(source,[tx],{preview:true}),error=>error.code==='PDF_FORM_REGION_PROTECTED');
 });
+
+test('same-page compaction preserves stationary form widgets and refuses moving through them',async()=>{
+ const{applyUpwardCompaction}=await import(base+'export/upward-compaction-v3.js');
+ for(const y of [245,100]){const doc=await PDFDocument.create(),page=doc.addPage([300,300]);for(const[text,baseline]of [['Header',280],['Following first line',160],['Following second line',140],['Following third line',120]])page.drawText(text,{x:40,y:baseline,size:12});const field=doc.getForm().createTextField('Keep');field.setText('Value');field.addToPage(page,{x:40,y,width:180,height:20});const original=new Uint8Array(await doc.save({updateFieldAppearances:false})),tx={id:'delete',kind:'REPLACE_TEXT',pageIndex:0,originalUnicode:'Deleted line',replacementUnicode:'',block:{text:'Deleted line',bounds:{x:40,y:177,width:110,height:13},fontSize:12,lines:[{y:180,fontSize:12}]}};
+ if(y===245){const result=await applyUpwardCompaction({bytes:original,reflowMetrics:[]},[tx]);assert.equal(result.upwardCompactionCount,1);await verifyFormPreservation(original,result.bytes);const output=await PDFDocument.load(result.bytes);assert.equal(output.getForm().getTextField('Keep').getText(),'Value');assert.equal(output.getForm().getTextField('Keep').acroField.getWidgets()[0].getRectangle().y,244.5);}else await assert.rejects(applyUpwardCompaction({bytes:original,reflowMetrics:[]},[tx]),e=>e.code==='FORM_WIDGET_REFLOW_PROTECTED');
+ }
+});

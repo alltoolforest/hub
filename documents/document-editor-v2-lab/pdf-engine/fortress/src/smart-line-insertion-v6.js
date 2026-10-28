@@ -26,7 +26,7 @@ function geometryFromTextItems(pageIndex,width,height,rotation,items){
     const size=Math.max(1,Math.hypot(Number(t[0])||0,Number(t[1])||0));
     const w=Math.max(1,Number(item.width)||Array.from(String(item.str)).length*size*.5);
     if(![x,y,size,w].every(Number.isFinite))continue;
-    rects.push({left:x,right:x+w,bottom:y-size*.30,top:y+size*.90});
+    rects.push({left:x,right:x+w,bottom:y-size*.30,top:y+size*.90,text:String(item.str)});
     sizes.push(size);
   }
   if(!rects.length){
@@ -35,7 +35,7 @@ function geometryFromTextItems(pageIndex,width,height,rotation,items){
 
   const size=clamp(median(sizes,12),6,72);
   const textTopY=Math.max(...rects.map(r=>r.top));
-  const textBottomY=Math.min(...rects.map(r=>r.bottom));
+  let textBottomY=Math.min(...rects.map(r=>r.bottom));
   const minX=Math.min(...rects.map(r=>r.left));
   const maxX=Math.max(...rects.map(r=>r.right));
   const padding=Math.max(12,size);
@@ -51,9 +51,12 @@ function geometryFromTextItems(pageIndex,width,height,rotation,items){
   const clearance=Math.max(6,size*.60);
   const maxGuardHeight=Math.max(36,Math.min(72,height*.085));
   const candidate=Math.min(maxGuardHeight,textBottomY-clearance);
-  const footerGuardTop=Number.isFinite(candidate)&&candidate>bottomMargin+2
+  let footerGuardTop=Number.isFinite(candidate)&&candidate>bottomMargin+2
     ?clamp(candidate,bottomMargin,Math.min(height*.18,textBottomY-clearance))
     :bottomMargin;
+  const namedFooter=rects.filter(r=>r.top<height*.12&&/\b(footer|page)\b/i.test(r.text)).sort((a,b)=>b.top-a.top)[0];
+  if(namedFooter){const above=rects.filter(r=>r.bottom>namedFooter.top+.5),next=Math.min(...above.map(r=>r.bottom));if(next-namedFooter.top>Math.max(12,size*1.5))footerGuardTop=Math.max(footerGuardTop,namedFooter.top+clearance);}
+  const bodyRects=rects.filter(r=>r.top>footerGuardTop+.25);if(bodyRects.length)textBottomY=Math.min(...bodyRects.map(r=>r.bottom));
   const bodyTopY=clamp(textTopY+safetyGap,footerGuardTop+40,height-topMargin);
 
   const keepGroups=detectSectionKeepGroups(items,{pageHeight:height});
