@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {buildCandidate,safeFilename,inspectSecurity} from './engine.js';
+const P=createRequire(import.meta.url)('../../assets/vendor/pdf-lib.js');
+async function fixture(n=3,edit=()=>{}){const d=await P.PDFDocument.create({updateMetadata:false});for(let i=0;i<n;i++)d.addPage([300+i*10,440]).drawText('PAGE_'+i+'_SECRET');await edit(d);return{id:1,bytes:await d.save({useObjectStreams:false})};}
+const item=(page,extra={})=>({src:1,page,rot:0,blank:false,...extra});
+test('reorder, rotate, remove verifies count, content and source immutability',async()=>{const s=await fixture();const before=Buffer.from(s.bytes);const b=await buildCandidate([s],[item(2,{rot:90}),item(0)],P);const d=await P.PDFDocument.load(b);assert.equal(d.getPageCount(),2);assert.equal(d.getPage(0).getWidth(),320);assert.equal(d.getPage(0).getRotation().angle,90);assert.deepEqual(Buffer.from(s.bytes),before);const streams=d.context.enumerateIndirectObjects().filter(([,o])=>o instanceof P.PDFRawStream).map(([,o])=>Buffer.from(P.decodePDFRawStream(o).decode()).toString()).join('');assert(!streams.includes(Buffer.from('PAGE_1_SECRET').toString('hex').toUpperCase()));});
+test('duplicate rotations are independent and blanks have selected size',async()=>{const s=await fixture();const b=await buildCandidate([s],[item(0),item(0,{rot:90}),item(0,{blank:true})],P,{blankSize:'letter'});const d=await P.PDFDocument.load(b);assert.equal(d.getPageCount(),3);assert.deepEqual(d.getPages().map(p=>p.getRotation().angle),[0,90,0]);assert.equal(d.getPage(2).getWidth(),612);});
+test('combine metadata-free sources and extract',async()=>{const a=await fixture(2),b=await fixture(1);b.id=2;const bytes=await buildCandidate([a,b],[item(1),item(0,{src:2})],P);const d=await P.PDFDocument.load(bytes);assert.equal(d.getPage(0).getWidth(),310);assert.equal(d.getPage(1).getWidth(),300);});
+test('form values survive supported reorder; duplication fails closed',async()=>{const s=await fixture(2,d=>{const f=d.getForm().createTextField('name');f.setText('Kept value');f.addToPage(d.getPage(0));});const bytes=await buildCandidate([s],[item(1),item(0)],P);const d=await P.PDFDocument.load(bytes);assert.equal(d.getForm().getTextField('name').getText(),'Kept value');await assert.rejects(buildCandidate([s],[item(0),item(0)],P),/structures/);});
+test('metadata survives same-source duplicate',async()=>{const s=await fixture(1,d=>d.setTitle('Original title'));const b=await buildCandidate([s],[item(0),item(0)],P);assert.equal((await P.PDFDocument.load(b)).getTitle(),'Original title');});
+test('active content, unsafe protocols and signatures stop before export',async()=>{for(const change of [d=>d.catalog.set(P.PDFName.of('OpenAction'),d.context.obj({S:'JavaScript',JS:P.PDFString.of('alert(1)')})),d=>d.catalog.set(P.PDFName.of('Test'),d.context.obj({URI:P.PDFString.of('javascript:alert(1)')})),d=>d.catalog.set(P.PDFName.of('Test'),d.context.obj({FT:'Sig'}))]){const s=await fixture(1,change);await assert.rejects(buildCandidate([s],[item(0)],P));}});
+test('tagged reorder, custom labels reorder and unsupported copy stop safely',async()=>{for(const feature of ['StructTreeRoot','PageLabels']){const s=await fixture(2,d=>d.catalog.set(P.PDFName.of(feature),d.context.obj({})));await assert.rejects(buildCandidate([s],[item(1),item(0)],P));}});
+test('corrupt input and invalid plans fail without returning bytes',async()=>{await assert.rejects(buildCandidate([{id:1,bytes:new Uint8Array([1,2])}],[item(0)],P));const s=await fixture();await assert.rejects(buildCandidate([s],[item(7)],P));await assert.rejects(buildCandidate([s],[item(0,{rot:45})],P));await assert.rejects(buildCandidate([s],[],P));});
+test('pre-cancelled export and in-progress cancellation return no bytes',async()=>{const s=await fixture(40);const c=new AbortController();c.abort();await assert.rejects(buildCandidate([s],[item(0)],P,{signal:c.signal}),{name:'AbortError'});const c2=new AbortController();await assert.rejects(buildCandidate([s],Array.from({length:40},(_,i)=>item(i)),P,{signal:c2.signal,onProgress:()=>c2.abort()}),{name:'AbortError'});});
+test('filenames cannot contain path, HTML, control or bidi characters',()=>{const f=safeFilename('../a\u202e<img onerror="x">\u0000.pdf');assert(!/[<>/"\u202e\u0000]/.test(f));assert.equal(safeFilename('CON.pdf'),'organized.pdf');assert(safeFilename('a'.repeat(300)).length<=124);});
+test('200 page benchmark',async()=>{const s=await fixture(200),start=performance.now();const bytes=await buildCandidate([s],Array.from({length:200},(_,i)=>item(199-i)),P);console.log(JSON.stringify({benchmark:'200 text pages reorder',input:s.bytes.length,output:bytes.length,ms:Math.round(performance.now()-start)}));assert.equal((await P.PDFDocument.load(bytes)).getPageCount(),200);});
+
+test('deletion refuses a removed content stream retained by another structure',async()=>{
+ const s=await fixture(2,d=>{const content=d.getPage(1).node.Contents();d.catalog.set(P.PDFName.of('PieceInfo'),d.context.obj({Hidden:content}));});
+ await assert.rejects(buildCandidate([s],[item(0)],P),/still referenced/);
+});
+test('deletion refuses image resource still shared with retained pages',async()=>{
+ const s=await fixture(2,async d=>{const image=await d.embedPng(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0KkAAAAASUVORK5CYII=','base64'));for(const page of d.getPages())page.drawImage(image,{x:0,y:0,width:10,height:10});});
+ await assert.rejects(buildCandidate([s],[item(0)],P),/still referenced/);
+});
+
+test('page deletion refuses document-level attachments; reorder without deletion is permitted',async()=>{
+  const s=await fixture(2,d=>d.catalog.set(P.PDFName.of('AF'),d.context.obj([])));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/attachments.*could retain/);
+  const bytes=await buildCandidate([s],[item(1),item(0)],P);
+  assert.equal((await P.PDFDocument.load(bytes)).getPageCount(),2);
+});
+test('page deletion refuses embedded-file name trees without silent removal',async()=>{
+  const s=await fixture(2,d=>d.catalog.set(P.PDFName.of('Names'),d.context.obj({EmbeddedFiles:{Names:[]}})));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/attachments.*could retain/);
+});
+
+test('resource admission rejects extreme page geometry without exporting',async()=>{
+  const s=await fixture(1,d=>d.getPage(0).setSize(100001,440));
+  await assert.rejects(buildCandidate([s],[item(0)],P),/page dimensions/);
+});
+test('resource admission rejects massive embedded image dimensions',async()=>{
+  const s=await fixture(1,d=>{
+    const dict={Type:'XObject',Subtype:'Image',Width:500000,Height:500000,BitsPerComponent:8,ColorSpace:'DeviceRGB'};
+    const ref=d.context.register(d.context.stream(new Uint8Array([0]),dict));
+    d.getPage(0).node.set(P.PDFName.of('Resources'),d.context.obj({XObject:{Giant:ref}}));
+  });
+  await assert.rejects(buildCandidate([s],[item(0)],P),/embedded image/);
+});
