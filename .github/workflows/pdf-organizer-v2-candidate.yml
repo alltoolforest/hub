@@ -1,0 +1,35 @@
+name: Organizer V2 isolated candidate checks
+on:
+  pull_request:
+    paths:
+      - 'documents/pdf-organizer-v2-candidate/**'
+      - '.github/workflows/pdf-organizer-v2-candidate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/pdf-organizer*.test.mjs documents/pdf-organizer-v2-candidate/engine.test.mjs documents/pdf-organizer-v2-candidate/complex-corpus.test.mjs
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.14.0
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: node documents/pdf-organizer-v2-candidate/browser.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          ORGANIZER_AXE_PATH: node_modules/axe-core/axe.min.js
+      - name: Audit published GitHub Pages organizer route
+        run: node documents/pdf-organizer-v2-candidate/browser.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          PDF_ORGANIZER_BASE_URL: https://alltoolforest.github.io/hub/
+          ORGANIZER_AXE_PATH: node_modules/axe-core/axe.min.js
