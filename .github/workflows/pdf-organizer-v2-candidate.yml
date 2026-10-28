@@ -27,3 +27,9 @@ jobs:
         env:
           BROWSER: ${{ matrix.browser }}
           ORGANIZER_AXE_PATH: node_modules/axe-core/axe.min.js
+      - name: Audit published GitHub Pages organizer route
+        run: node documents/pdf-organizer-v2-candidate/browser.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          PDF_ORGANIZER_BASE_URL: https://alltoolforest.github.io/hub/
+          ORGANIZER_AXE_PATH: node_modules/axe-core/axe.min.js
