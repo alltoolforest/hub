@@ -18,6 +18,30 @@ export async function verifyExport({pdfjs,bytes,items,sources,cancelled,onTask,o
     await page.render({canvasContext:context,viewport}).promise;check();
     return {width:canvas.width,height:canvas.height,data:context.getImageData(0,0,canvas.width,canvas.height).data};
   }
+  // PDF.js 6 getTextContent() uses `for await` on ReadableStream.
+  // Shipping Safari/WebKit versions may lack the stream async iterator and
+  // throw "undefined is not a function" even though getReader() works.
+  // Consume the exact same text chunks via the standards-based reader API;
+  // do not patch shared PDF.js or global browser prototypes.
+  async function pageText(page) {
+    const reader=page.streamTextContent().getReader();
+    const result={items:[],styles:Object.create(null),lang:null};
+    let finished=false;
+    try {
+      for(;;) {
+        check();
+        const {value,done}=await reader.read();
+        if(done){finished=true;break;}
+        result.lang??=value.lang;
+        Object.assign(result.styles,value.styles);
+        result.items.push(...value.items);
+      }
+      return result;
+    }finally{
+      if(!finished)try{await reader.cancel();}catch{}
+      reader.releaseLock();
+    }
+  }
   const textShape=t=>JSON.stringify(t.items.map(i=>({str:i.str,dir:i.dir,transform:i.transform,width:i.width,height:i.height,hasEOL:i.hasEOL})));
   try {
     out=await task.promise;check();
@@ -25,10 +49,10 @@ export async function verifyExport({pdfjs,bytes,items,sources,cancelled,onTask,o
     for(let i=0;i<items.length;i++) {
       const item=items[i],page=await out.getPage(i+1);check();
       onProgress(99,'Independent visual/text check '+(i+1)+'/'+items.length);
-      if(item.blank){const text=await page.getTextContent();if(text.items.some(x=>x.str?.trim()))throw Error('A blank page unexpectedly contains text.');}
+      if(item.blank){const text=await pageText(page);if(text.items.some(x=>x.str?.trim()))throw Error('A blank page unexpectedly contains text.');}
       else {
         const src=sources.find(s=>s.id===item.src),original=await src.pdfjs.getPage(item.page+1);
-        const originalText=await original.getTextContent(),outputText=await page.getTextContent();
+        const originalText=await pageText(original),outputText=await pageText(page);
         if(textShape(originalText)!==textShape(outputText))throw Error('Independent verification: text or positioning changed on output page '+(i+1)+'.');
         const expected=await pixels(original,(original.rotate+item.rot)%360),actual=await pixels(page,page.rotate);
         if(expected.width!==actual.width||expected.height!==actual.height||expected.data.length!==actual.data.length)throw Error('Independent verification: page geometry changed.');
