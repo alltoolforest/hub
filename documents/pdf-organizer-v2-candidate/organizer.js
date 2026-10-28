@@ -69,9 +69,22 @@ function invalidateDownload(){
 }
 function mutate(fn, msg) {
   if(busy)return;
-  $('verifiedDownload')?.remove();if(downloadURL){URL.revokeObjectURL(downloadURL);downloadURL=null;}
-  S.undo.push(snap()); if (S.undo.length > UNDO_LIMIT) S.undo.shift();
-  S.redo = []; fn(); if(S.items.length>2000){S.items=S.undo.pop();toast('This candidate supports at most 2,000 pages.');} render(); if (msg) status(msg);
+  const previous=snap(),beforeUid=S.nextUid;
+  // Invalid operations must not consume history, clear redo, or invalidate
+  // the last verified download. Roll back all page edits atomically.
+  try {fn();} catch(error) {
+    S.items=previous;S.nextUid=beforeUid;
+    render();toast(error?.message||'This operation could not be completed.');
+    return;
+  }
+  if(S.items.length>2000) {
+    S.items=previous;S.nextUid=beforeUid;
+    render();toast('This candidate supports at most 2,000 pages.');
+    return;
+  }
+  invalidateDownload();
+  S.undo.push(previous);if(S.undo.length>UNDO_LIMIT)S.undo.shift();
+  S.redo=[];render();if(msg)status(msg);
 }
 function undo() { if (busy || !S.undo.length) return; invalidateDownload(); S.redo.push(snap()); S.items = S.undo.pop(); render(); status('Undone'); }
 function redo() { if (busy || !S.redo.length) return; invalidateDownload(); S.undo.push(snap()); S.items = S.redo.pop(); render(); status('Redone'); }
@@ -299,15 +312,19 @@ function blankAfter(list) {
   list.forEach((it) => { const i = idxOf(it.uid); S.items.splice(i + 1, 0, newItem(null, 0, { blank: true })); });
 }
 function parseRange(text, max) {
-  const set = new Set();
-  text.split(/[,\s]+/).filter(Boolean).forEach((tok) => {
-    const m = tok.match(/^(\d*)(?:-(\d*))?$/); if (!m) return;
-    let a = m[1] === '' ? null : +m[1];
-    let b = m[2] === undefined ? a : (m[2] === '' ? max : +m[2]);
-    if (a === null) a = 1;
-    if (a > b) [a, b] = [b, a];
-    for (let n = Math.max(1, a); n <= Math.min(max, b); n++) set.add(n);
-  });
+  const set=new Set();
+  for(const token of text.split(/[,\s]+/).filter(Boolean)) {
+    const match=token.match(/^(\d*)(?:-(\d*))?$/);
+    if(!match)throw Error('Use ranges such as 1-3, 7, or 10-.');
+    let start=match[1]===''?1:Number(match[1]);
+    let end=match[2]===undefined?start:match[2]===''?max:Number(match[2]);
+    if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||
+       start<1||start>max||end<1||end>max) {
+      throw Error('Choose pages between 1 and '+max+'.');
+    }
+    if(start>end)[start,end]=[end,start];
+    for(let n=start;n<=end;n++)set.add(n);
+  }
   return set;
 }
 function resetAll() {
@@ -349,9 +366,18 @@ el.create.addEventListener('click', () => exportPdf(S.items.filter((i) => !i.rem
 el.blankSize.addEventListener('change',()=>{invalidateDownload();for(const it of S.items)if(it.blank){const card=cards.get(it.uid);if(card?.dataset.visible==='1')paintThumb(card,it);}});
 el.zoom.addEventListener('input', () => el.root.style.setProperty('--card-w', el.zoom.value + 'px'));
 el.range.addEventListener('input', () => {
-  const set = parseRange(el.range.value, S.items.length);
-  S.items.forEach((it, k) => (it.selected = set.has(k + 1)));
-  render();
+  try {
+    const set=parseRange(el.range.value,S.items.length);
+    el.range.setCustomValidity('');
+    el.range.removeAttribute('aria-invalid');
+    S.items.forEach((it,k)=>it.selected=set.has(k+1));
+    render();
+  } catch(error) {
+    // Keep the existing selection unchanged until the range is valid.
+    el.range.setCustomValidity(error.message);
+    el.range.setAttribute('aria-invalid','true');
+    status('Invalid page selection: '+error.message);
+  }
 });
 el.root.querySelector('.toolbar').addEventListener('click', (e) => { const b = e.target.closest('[data-bulk]'); if (b) bulk(b.dataset.bulk); });
 el.files.addEventListener('click', (e) => {
