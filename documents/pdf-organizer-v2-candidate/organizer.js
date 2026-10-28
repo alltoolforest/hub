@@ -295,10 +295,13 @@ const idxOf = (uid) => S.items.findIndex((i) => i.uid === uid);
 const selected = () => S.items.filter((i) => i.selected);
 function rotate(list, d) { list.forEach((i) => (i.rot = (i.rot + d + 360) % 360)); }
 function moveTo(uid, n) {
-  const i = idxOf(uid); if (i < 0) return;
-  const [m] = S.items.splice(i, 1);
-  const kept = S.items.filter((x) => !x.removed);
-  n = Math.max(1, Math.floor(n));
+  const i=idxOf(uid);if(i<0)throw Error('Page is no longer available.');
+  const validPositions=S.items.filter(x=>!x.removed).length;
+  if(!Number.isSafeInteger(n)||n<1||n>validPositions) {
+    throw Error('Choose a destination between 1 and '+validPositions+'.');
+  }
+  const [m]=S.items.splice(i,1);
+  const kept=S.items.filter(x=>!x.removed);
   if (n > kept.length) {
     const last = kept.length ? S.items.indexOf(kept[kept.length - 1]) + 1 : S.items.length;
     S.items.splice(last, 0, m);
