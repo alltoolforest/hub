@@ -78,6 +78,20 @@ function verifyNoHiddenPages(doc,P){
   for(const [ref,obj] of doc.context.enumerateIndirectObjects())if(obj instanceof P.PDFDict&&obj.get(P.PDFName.of('Type'))?.toString()==='/Page'&&!visible.has(ref.toString()))throw Error('Export verification found a hidden page object. Download blocked.');
 }
 
+// Removing a page is not a redaction operation. Document-level attachments
+// can retain complete copies of deleted pages, independently of page-tree
+// reachability. Refuse deletion rather than presenting a misleading safe export.
+// Other metadata and retained-page content are explicitly outside any claim of
+// confidential-data sanitization.
+export function assertNoDetachedAttachmentsOnRemoval(doc,P) {
+  const N=P.PDFName.of, catalog=doc.catalog;
+  const names=doc.context.lookup(catalog.get(N('Names')));
+  if (catalog.has(N('AF')) || catalog.has(N('Collection')) ||
+      names instanceof P.PDFDict && names.has(N('EmbeddedFiles'))) {
+    throw Error('This PDF contains document attachments that could retain removed-page information. Page removal is blocked; use a dedicated secure PDF sanitization workflow.');
+  }
+}
+
 function assertCopySafe(doc,P) {
   const N=P.PDFName.of;
   const allowed=new Set(['/Type','/Pages']);
@@ -113,6 +127,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
     const reordered=items.some((it,i)=>i>0&&it.page<items[i-1].page);
     if(reordered && doc.catalog.has(P.PDFName.of('StructTreeRoot')))throw Error('Reordering this tagged PDF could invalidate its reading order. Export blocked to preserve accessibility.');
     const used=new Set(items.map(i=>i.page));
+    if (used.size<doc.getPageCount()) assertNoDetachedAttachmentsOnRemoval(doc,P);
     const plan=items.map(it=>({...original[it.page],rotation:(original[it.page].rotation+it.rot)%360})).concat(original.filter(i=>!used.has(i.index)).map(i=>({...i,keep:false})));
     const bytes=await buildOrganizedPdf(sources.find(s=>s.id===id).bytes,plan,P,{signal,onProgress});
     const output=await P.PDFDocument.load(bytes,{updateMetadata:false,throwOnInvalidObject:true});
