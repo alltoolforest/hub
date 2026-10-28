@@ -25,14 +25,20 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    const page=lastPage=await context.newPage(),errors=[],remote=[];
    await page.addInitScript(()=>{
      window.__organizerTestClicks=[];
-     document.addEventListener('click',event=>{
-       const target=event.target;
-       window.__organizerTestClicks.push({
-         tag:target?.tagName,id:target?.id||'',act:target?.dataset?.act||'',
-         trusted:event.isTrusted
-       });
-       if(window.__organizerTestClicks.length>24)window.__organizerTestClicks.shift();
-     },true);
+     for(const type of ['touchstart','touchend','pointerdown','pointerup','click']) {
+       document.addEventListener(type,event=>{
+         const target=event.target;
+         const touch=event.changedTouches?.[0];
+         const x=touch?.clientX??event.clientX,y=touch?.clientY??event.clientY;
+         const hit=Number.isFinite(x)&&Number.isFinite(y)?document.elementFromPoint(x,y):null;
+         const row={type,tag:target?.tagName,id:target?.id||'',
+           hit:hit?.id||hit?.tagName||'',
+           x,y,scrollY:window.scrollY,visualOffset:window.visualViewport?.offsetTop,
+           trusted:event.isTrusted};
+         window.__organizerTestClicks.push(row);
+         if(window.__organizerTestClicks.length>35)window.__organizerTestClicks.shift();
+       },true);
+     }
    });
    page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:8765/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
    const activate=locator=>mobile?locator.tap():locator.click();
