@@ -59,10 +59,28 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#file').setInputFiles({name:'second.pdf',mimeType:'application/pdf',buffer});
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===14);
    assert.equal(await page.evaluate(()=>document.querySelector('[onmouseover]')),null);
+   const selectedBefore=await page.locator('#grid [data-act=sel]:checked').count();
+   await page.locator('#range').fill('2, not-a-range');
+   assert.equal(await page.locator('#range').getAttribute('aria-invalid'),'true');
+   assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),selectedBefore);
+   const destination=page.locator('#grid .card').first().locator('[data-act=goto]');
+   await destination.fill('9999');await destination.press('Enter');
+   assert.match(await page.locator('#status').textContent(),/destination between/);
+   assert.equal(await page.locator('#grid .card').count(),14);
    await page.locator('#range').fill('2, 4');
+   assert.equal(await page.locator('#range').getAttribute('aria-invalid'),null);
    const extracted=await downloadAfter(()=>page.locator('[data-bulk=extract]').click());const extractedPdf=await P.PDFDocument.load(await readFile(await extracted.path()));assert.equal(extractedPdf.getPageCount(),2);
    await page.locator('#range').fill('');
    const combined=await downloadAfter(()=>page.locator('#create').click());assert.equal((await P.PDFDocument.load(await readFile(await combined.path()))).getPageCount(),14);
+   // Source removal must stay reversible, without losing the associated PDF.
+   await page.locator('#files [data-rmsrc]').last().click();
+   assert.equal(await page.locator('#grid .card').count(),8);
+   await page.locator('#undo').click();
+   assert.equal(await page.locator('#grid .card').count(),14);
+   await page.locator('#redo').click();
+   assert.equal(await page.locator('#grid .card').count(),8);
+   await page.locator('#undo').click();
+   assert.equal(await page.locator('#grid .card').count(),14);
    assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
    console.log(JSON.stringify({browser:name,mobile,result:'PASS',pages:output.getPageCount(),combinedPages:14,extractedPages:2,remoteRequests:remote.length}));
    await context.close();
