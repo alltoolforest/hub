@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/pdf-organizer*.test.mjs documents/pdf-organizer-v2-candidate/engine.test.mjs
+      - run: node --test tests/pdf-organizer*.test.mjs documents/pdf-organizer-v2-candidate/engine.test.mjs documents/pdf-organizer-v2-candidate/complex-corpus.test.mjs
       - run: npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.14.0
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: node documents/pdf-organizer-v2-candidate/browser.test.mjs
