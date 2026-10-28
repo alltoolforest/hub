@@ -35,10 +35,11 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
      },true);
    });
    page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:8765/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
+   const activate=locator=>mobile?locator.tap():locator.click();
    async function downloadAfter(action){
     let saved=null;const onDownload=d=>{saved=d;};page.on('download',onDownload);
     try{await action();await page.waitForFunction(()=>document.querySelector('#pdf-organizer').getAttribute('aria-busy')==='false');
-      if(!saved&&await page.locator('#verifiedDownload').count())await page.locator('#verifiedDownload').click();
+      if(!saved&&await page.locator('#verifiedDownload').count())await activate(page.locator('#verifiedDownload'));
       for(let i=0;i<50&&!saved;i++)await new Promise(r=>setTimeout(r,100));
       assert(saved,'No download: '+await page.locator('#status').textContent());return saved;
     }finally{page.off('download',onDownload);}
@@ -52,8 +53,8 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#redo').click();assert.equal(await page.locator('#grid .card').count(),7);
    await page.locator('[data-bulk=blank]').click();assert.equal(await page.locator('#grid .card').count(),8);
    await page.locator('#grid .card').first().locator('[data-act=open]').last().click();
-   await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#pvNext').click();});await page.locator('#pvClose').click();
-   const download=await downloadAfter(()=>page.locator('#create').click());assert.equal(await download.failure(),null);
+   await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#pvNext').click();});await activate(page.locator('#pvClose'));await page.locator('#pv').waitFor({state:'hidden'});
+   const download=await downloadAfter(()=>activate(page.locator('#create')));assert.equal(await download.failure(),null);
    const output=await P.PDFDocument.load(await (await import('node:fs/promises')).readFile(await download.path()));assert.equal(output.getPageCount(),8);
    assert.equal(await page.evaluate(()=>window.INJECTED),undefined);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
@@ -80,9 +81,9 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    assert.equal(await page.locator('#grid .card').count(),14);
    await page.locator('#range').fill('2, 4');
    assert.equal(await page.locator('#range').getAttribute('aria-invalid'),null);
-   const extracted=await downloadAfter(()=>page.locator('[data-bulk=extract]').click());const extractedPdf=await P.PDFDocument.load(await readFile(await extracted.path()));assert.equal(extractedPdf.getPageCount(),2);
+   const extracted=await downloadAfter(()=>activate(page.locator('[data-bulk=extract]')));const extractedPdf=await P.PDFDocument.load(await readFile(await extracted.path()));assert.equal(extractedPdf.getPageCount(),2);
    await page.locator('#range').fill('');
-   const combined=await downloadAfter(()=>page.locator('#create').click());assert.equal((await P.PDFDocument.load(await readFile(await combined.path()))).getPageCount(),14);
+   const combined=await downloadAfter(()=>activate(page.locator('#create')));assert.equal((await P.PDFDocument.load(await readFile(await combined.path()))).getPageCount(),14);
    // Source removal must stay reversible, without losing the associated PDF.
    await page.locator('#files [data-rmsrc]').last().click();
    assert.equal(await page.locator('#grid .card').count(),8);
