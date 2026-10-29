@@ -56,6 +56,72 @@ export function assertResourceAdmission(doc,P) {
   }
 }
 
+// Streamed expansion admission: an on-disk PDF can be a few kilobytes but
+// contain tens of megabytes of Flate content. This guard runs in the source
+// inspection worker BEFORE PDF.js preview and again in the export worker.
+// It intentionally fails closed on unknown stacked Flate filters and missing
+// browser decompression support. It is not a whole-process memory guarantee.
+export async function assertExpandedStreamBudget(doc,P,{
+  perStreamLimit=24*1024*1024,totalLimit=128*1024*1024
+}={}) {
+  const N=P.PDFName.of,ctx=doc.context;
+  const streams=ctx.enumerateIndirectObjects();
+  let total=0,checked=0;
+  const threshold=(bytes,label)=>{
+    if(!Number.isSafeInteger(bytes)||bytes<0||bytes>perStreamLimit ||
+       total+bytes>totalLimit) {
+      throw Error('PDF decompression memory budget exceeded ('+label+'). A safer, smaller PDF is required.');
+    }
+    total+=bytes;
+  };
+  for(const [,object] of streams) {
+    if(!(object instanceof P.PDFStream))continue;
+    const encoded=object.getContents();
+    threshold(encoded.length,'encoded streams');
+    const filters=ctx.lookup(object.dict.get(N('Filter')));
+    const list=filters instanceof P.PDFArray?filters.asArray().map(v=>ctx.lookup(v)?.toString()):
+      filters?[filters.toString()]:[];
+    if(!list.some(x=>x==='/FlateDecode'||x==='/Fl'))continue;
+    if(list.length!==1) {
+      // Reject rather than underestimate expansion behind ASCII85/LZW
+      // and other layered decoders which cannot be streamed here.
+      throw Error('Layered PDF Flate streams require a trusted PDF converter before organizing.');
+    }
+    if(typeof DecompressionStream!=='function') {
+      throw Error('This browser cannot safely inspect compressed PDF streams.');
+    }
+    let offset=0,expanded=0;
+    const input=new ReadableStream({pull(controller){
+      if(offset>=encoded.length){controller.close();return;}
+      const next=Math.min(offset+65536,encoded.length);
+      controller.enqueue(encoded.subarray(offset,next));
+      offset=next;
+    }});
+    const reader=input.pipeThrough(new DecompressionStream('deflate')).getReader();
+    try {
+      for(;;) {
+        const {value,done}=await reader.read();
+        if(done)break;
+        expanded+=value.byteLength;
+        if(expanded>perStreamLimit||total+expanded>totalLimit)
+          throw Error('PDF decompression memory budget exceeded (expanded stream). Reduce or convert this PDF before organizing.');
+      }
+    }catch(error){
+      // A malformed compressed stream must never reach the preview renderer.
+      if(/budget exceeded/i.test(error.message))throw error;
+      throw Error('Cannot safely decode a PDF compressed stream: '+error.message);
+    }finally{
+      try{await reader.cancel();}catch{}
+      try{reader.releaseLock();}catch{}
+    }
+    // Count expanded bytes, not encoded bytes, against the total budget.
+    total-=encoded.length;
+    threshold(expanded,'expanded streams');
+    checked++;
+  }
+  return {bytes:total,flateStreams:checked};
+}
+
 // Reference-number independent graph fingerprint, including original compressed
 // stream bytes. Parent links are excluded only for the top-level page node.
 export function fingerprint(doc,object,P,topPage=false) {
@@ -144,7 +210,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
   for(const id of ids){
     const s=sources.find(x=>x.id===id);if(!s)throw Error('Source PDF is missing.');
     const doc=await P.PDFDocument.load(s.bytes,{updateMetadata:false,throwOnInvalidObject:true});
-    inspectSecurity(doc,P);assertResourceAdmission(doc,P);docs.set(id,doc);check();
+    inspectSecurity(doc,P);assertResourceAdmission(doc,P);await assertExpandedStreamBudget(doc,P);docs.set(id,doc);check();
   }
   for(const it of items) {
     if(!Number.isInteger(it.rot)||it.rot<0||it.rot>=360||it.rot%90)throw Error('Invalid page rotation.');
