@@ -56,6 +56,126 @@ export function assertResourceAdmission(doc,P) {
   }
 }
 
+// PDF decoding must not silently bypass size limits because a compressed
+// Flate stream is tiny on disk. This runs in the upload inspection worker
+// before PDF.js preview AND independently in the export worker.
+// This bounds decoded Flate streams, not all possible PDF memory allocations.
+export async function assertExpandedStreamBudget(doc,P,{
+  perStreamLimit=24*1024*1024,totalLimit=128*1024*1024,
+  encodedLimit=64*1024*1024
+}={}) {
+  const N=P.PDFName.of,ctx=doc.context;
+  let total=0,checked=0;
+  const limit=(size,cap,label)=>{
+    if(!Number.isSafeInteger(size)||size<0||size>cap)
+      throw Error('PDF decompression memory budget exceeded ('+label+'). Try a smaller PDF.');
+  };
+  // ASCII85 is common in valid ReportLab PDFs: /ASCII85Decode then /FlateDecode.
+  // Decode only the pre-Flate wrapper, with a hard output budget; support the
+  // PDF zero-tuple 'z' and final short group, plus optional <~ and ~> markers.
+  function decodeAscii85(bytes){
+    const chunks=[];let chunk=new Uint8Array(65536),pos=0,totalBytes=0;
+    const emit=n=>{
+      if(totalBytes>=perStreamLimit)
+        throw Error('PDF decompression memory budget exceeded (ASCII85 stream).');
+      chunk[pos++]=n;totalBytes++;
+      if(pos===chunk.length){chunks.push(chunk);chunk=new Uint8Array(65536);pos=0;}
+    };
+    let value=0,digits=0;
+    const tuple=(count)=>{
+      for(let shift=24,index=0;index<count;index++,shift-=8)
+        emit(Math.floor(value/Math.pow(2,shift))&255);
+      value=0;digits=0;
+    };
+    for(let i=0;i<bytes.length;i++){
+      const c=bytes[i];
+      if(c===9||c===10||c===12||c===13||c===32)continue;
+      if(c===60&&bytes[i+1]===126){i++;continue;} // <~
+      if(c===126&&bytes[i+1]===62)break; // ~>
+      if(c===122){if(digits)throw Error('Invalid ASCII85 stream');for(let j=0;j<4;j++)emit(0);continue;}
+      if(c<33||c>117)throw Error('Invalid ASCII85 character in PDF');
+      value=value*85+(c-33);digits++;
+      if(value>4294967295)throw Error('Invalid ASCII85 tuple in PDF');
+      if(digits===5)tuple(4);
+    }
+    if(digits===1)throw Error('Invalid truncated ASCII85 stream');
+    if(digits>1){
+      const count=digits-1;
+      for(let j=digits;j<5;j++)value=value*85+84;
+      if(value>4294967295)throw Error('Invalid ASCII85 tuple in PDF');
+      tuple(count);
+    }
+    const out=new Uint8Array(totalBytes);let off=0;
+    for(const part of chunks){out.set(part,off);off+=part.length;}
+    out.set(chunk.subarray(0,pos),off);
+    return out;
+  }
+  function decodeAsciiHex(bytes){
+    const output=new Uint8Array(Math.min(Math.ceil(bytes.length/2),perStreamLimit+1));
+    let high=-1,count=0;
+    for(const c of bytes){
+      if(c===9||c===10||c===12||c===13||c===32)continue;
+      if(c===62)break;
+      const n=c>=48&&c<=57?c-48:c>=65&&c<=70?c-55:c>=97&&c<=102?c-87:-1;
+      if(n<0)throw Error('Invalid ASCIIHex compressed PDF stream');
+      if(high<0)high=n;
+      else {if(count>=perStreamLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
+        output[count++]=(high<<4)|n;high=-1;}
+    }
+    if(high>=0){if(count>=perStreamLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
+      output[count++]=high<<4;}
+    return output.subarray(0,count);
+  }
+  for(const [,object] of ctx.enumerateIndirectObjects()){
+    if(!(object instanceof P.PDFStream))continue;
+    let encoded=object.getContents();
+    limit(encoded.length,encodedLimit,'encoded stream');
+    const filter=ctx.lookup(object.dict.get(N('Filter')));
+    const names=filter instanceof P.PDFArray?filter.asArray().map(v=>ctx.lookup(v)?.toString()):
+      filter?[filter.toString()]:[];
+    const flate=names.findIndex(n=>n==='/FlateDecode'||n==='/Fl');
+    if(flate<0) {
+      // Non-Flate image formats are bounded by encoded size and the image
+      // dimension checks; their decoded bitmap memory is NOT fully bounded.
+      total+=encoded.length;
+      limit(total,totalLimit,'total encoded streams');
+      continue;
+    }
+    if(flate===1&&names.length===2){
+      if(names[0]==='/ASCII85Decode'||names[0]==='/A85')encoded=decodeAscii85(encoded);
+      else if(names[0]==='/ASCIIHexDecode'||names[0]==='/AHx')encoded=decodeAsciiHex(encoded);
+      else throw Error('Unsupported layered PDF compression. Convert it with a trusted PDF editor.');
+    }else if(flate!==0||names.length!==1){
+      throw Error('Unsupported layered PDF compression. Convert it with a trusted PDF editor.');
+    }
+    if(typeof DecompressionStream!=='function'||typeof ReadableStream!=='function')
+      throw Error('This browser cannot safely inspect compressed PDF streams.');
+    let offset=0,expanded=0;
+    const input=new ReadableStream({pull(controller){
+      if(offset>=encoded.length){controller.close();return;}
+      const next=Math.min(offset+65536,encoded.length);
+      controller.enqueue(encoded.subarray(offset,next));offset=next;
+    }});
+    const reader=input.pipeThrough(new DecompressionStream('deflate')).getReader();
+    try{
+      for(;;){
+        const {value,done}=await reader.read();if(done)break;
+        expanded+=value.byteLength;
+        if(expanded>perStreamLimit||total+expanded>totalLimit)
+          throw Error('PDF decompression memory budget exceeded (expanded stream). Convert this PDF to a smaller, simpler copy.');
+      }
+    }catch(error){
+      if(/budget exceeded/i.test(error.message))throw error;
+      throw Error('Cannot safely decode a compressed PDF stream: '+error.message);
+    }finally{
+      try{await reader.cancel();}catch{}
+      try{reader.releaseLock();}catch{}
+    }
+    total+=expanded;checked++;
+  }
+  return {decodedOrEncodedBytes:total,flateStreams:checked};
+}
+
 // Reference-number independent graph fingerprint, including original compressed
 // stream bytes. Parent links are excluded only for the top-level page node.
 export function fingerprint(doc,object,P,topPage=false) {
@@ -144,7 +264,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
   for(const id of ids){
     const s=sources.find(x=>x.id===id);if(!s)throw Error('Source PDF is missing.');
     const doc=await P.PDFDocument.load(s.bytes,{updateMetadata:false,throwOnInvalidObject:true});
-    inspectSecurity(doc,P);assertResourceAdmission(doc,P);docs.set(id,doc);check();
+    inspectSecurity(doc,P);assertResourceAdmission(doc,P);await assertExpandedStreamBudget(doc,P);docs.set(id,doc);check();
   }
   for(const it of items) {
     if(!Number.isInteger(it.rot)||it.rot<0||it.rot>=360||it.rot%90)throw Error('Invalid page rotation.');

@@ -1,11 +1,12 @@
 import '../../assets/vendor/pdf-lib.js';
-import {inspectSecurity,assertResourceAdmission} from './engine.js';
+import {inspectSecurity,assertResourceAdmission,assertExpandedStreamBudget} from './engine.js';
 self.onmessage=async({data})=>{
   try {
     const P=self.PDFLib;
     const doc=await P.PDFDocument.load(data.bytes,{updateMetadata:false,throwOnInvalidObject:true});
     inspectSecurity(doc,P);
     assertResourceAdmission(doc,P);
+    await assertExpandedStreamBudget(doc,P);
     const pages=doc.getPages();
     if(!pages.length||pages.length>2000)throw Error('This candidate supports 1–2,000 pages.');
     const sizes=pages.map(p=>[p.getWidth(),p.getHeight()]);

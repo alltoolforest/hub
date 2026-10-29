@@ -48,7 +48,7 @@ $('clearSession').addEventListener('click',async()=>{
   if(busy){$('cancel').click();return;}
   if(S.items.length&&!confirm('Clear this session and its undo history?'))return;
   ++pvTok;el.pv.close();
-  for(const src of S.sources)await src.pdfjs.destroy();
+  for(const src of S.sources)await src.loadingTask.destroy();
   S.sources=[];S.items=[];S.undo=[];S.redo=[];S.anchor=null;
   for(const c of cache.values()){c.width=0;c.height=0;}cache.clear();
   if(downloadURL){URL.revokeObjectURL(downloadURL);downloadURL=null;}
@@ -112,30 +112,30 @@ async function addFiles(fileList) {
   try {
     for(const f of files){
       if(cancelled)throw new DOMException('Cancelled','AbortError');
-      status('Reading '+f.name+'…');let doc;
+      status('Reading '+f.name+'…');let doc,task;
       try {
         const bytes=new Uint8Array(await f.arrayBuffer());
         const inspected=await inspectFile(bytes);
         if(cancelled)throw new DOMException('Cancelled','AbortError');
-        const task=pdfjsLib.getDocument({data:bytes.slice(),isEvalSupported:false,
+        task=pdfjsLib.getDocument({data:bytes.slice(),isEvalSupported:false,
           cMapUrl:new URL('../../assets/vendor/cmaps/',import.meta.url).href,cMapPacked:true,
           standardFontDataUrl:new URL('../../assets/vendor/standard_fonts/',import.meta.url).href,
           wasmUrl:new URL('../../assets/vendor/wasm/',import.meta.url).href});
         verifyTask=task;
-        try{doc=await task.promise;}catch(e){await task.destroy();throw e;}finally{verifyTask=null;}
+        try{doc=await task.promise;}catch(e){await task.destroy();task=null;throw e;}finally{verifyTask=null;}
         if(cancelled)throw new DOMException('Cancelled','AbortError');
         if(doc.numPages!==inspected.pages)throw Error('PDF parsers disagree about page count.');
         if(S.items.length+added.length+doc.numPages>2000)throw Error('This candidate supports 2,000 pages per session.');
-        const src={id:S.nextSrc++,name:f.name,size:f.size,bytes,pdfjs:doc,pages:doc.numPages,sizes:inspected.sizes,warnings:inspected.warnings};
+        const src={id:S.nextSrc++,name:f.name,size:f.size,bytes,pdfjs:doc,loadingTask:task,pages:doc.numPages,sizes:inspected.sizes,warnings:inspected.warnings};
         src.color=COLORS[(src.id-1)%COLORS.length];staged.push(src);doc=null;
         for(let p=0;p<src.pages;p++)added.push(newItem(src.id,p));
-      }catch(e){if(doc)await doc.destroy();throw e;}
+      }catch(e){if(task)await task.destroy();throw e;}
     }
     if(cancelled)throw new DOMException('Cancelled','AbortError');
     S.sources.push(...staged);setBusy(false);
     mutate(()=>S.items.push(...added),added.length+' pages added');
     if(!el.outName.value)el.outName.value=safeFilename(srcById(added[0].src).name.replace(/\.pdf$/i,'')+'-organized');
-  }catch(e){for(const src of staged)await src.pdfjs.destroy();toast(cancelled||e.name==='AbortError'?'Loading cancelled.':e.message);}
+  }catch(e){for(const src of staged)await src.loadingTask.destroy();toast(cancelled||e.name==='AbortError'?'Loading cancelled.':e.message);}
   finally{setBusy(false);}
 }
 
