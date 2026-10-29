@@ -59,7 +59,19 @@ try {
       assert.equal(out.getPageCount(),3,'recovery export must contain 3 pages');
       page.on('dialog',d=>d.accept());
       await click(page.locator('#clearSession'));
-      await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:20000});
+      try{
+        await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:20000});
+      }catch(error){
+        console.error('Clear-session diagnostics',await page.evaluate(()=>({
+          status:document.querySelector('#status')?.textContent,
+          cards:document.querySelectorAll('#grid .card').length,
+          dropHidden:document.querySelector('#drop')?.hidden,
+          rootBusy:document.querySelector('#pdf-organizer')?.getAttribute('aria-busy'),
+          dialogOpen:document.querySelector('#pv')?.open,
+          clearButtonDisabled:document.querySelector('#clearSession')?.disabled
+        })),errors);
+        throw error;
+      }
       const started=Date.now();
       await page.locator('#file').setInputFiles({name:'LONG_480.pdf',mimeType:'application/pdf',buffer:long});
       await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===480,null,{timeout:60000});
