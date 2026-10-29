@@ -32,3 +32,6 @@ jobs:
         env:
           BROWSER: ${{ matrix.browser }}
           ORGANIZER_AXE_PATH: node_modules/axe-core/axe.min.js
+      - run: node documents/pdf-organizer/browser-stress.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
