@@ -37,6 +37,30 @@ test('P0: 40 MiB Flate content bomb rejected before PDF.js render/export',async(
  await assert.rejects(buildCandidate([src],[item(0)],P),/expanded|decompress|budget|stream|resource|large/i);
 });
 
+// ReportLab and many legacy producers encode PDF streams with ASCII85
+// followed by Flate. They must not be rejected by the memory guard.
+function ascii85Encode(bytes){
+  let out='';for(let i=0;i<bytes.length;i+=4){
+    const n=Math.min(4,bytes.length-i);
+    let value=0;for(let j=0;j<4;j++)value=value*256+(j<n?bytes[i+j]:0);
+    if(n===4&&value===0){out+='z';continue;}
+    const chars=new Array(5);
+    for(let j=4;j>=0;j--){chars[j]=String.fromCharCode(value%85+33);value=Math.floor(value/85);}
+    out+=chars.slice(0,n<4?n+1:5).join('');
+  }
+  return Buffer.from(out+'~>','ascii');
+}
+test('compatibility: ASCII85Decode + FlateDecode report-style streams are supported safely',async()=>{
+ const src=await document(1,d=>{
+   const raw=Buffer.from('q\\nQ\\n'.repeat(1000));
+   const encoded=ascii85Encode(deflateSync(raw,{level:9}));
+   const stream=d.context.stream(Uint8Array.from(encoded),{Filter:['ASCII85Decode','FlateDecode']});
+   d.getPage(0).node.set(P.PDFName.of('Contents'),d.context.register(stream));
+ });
+ const out=await buildCandidate([src],[item(0)],P);
+ assert.equal((await P.PDFDocument.load(out)).getPageCount(),1);
+});
+
 test('resource check: opaque huge image dimensions are rejected',async()=>{
  const src=await document(1,d=>{
    const ref=d.context.register(d.context.stream(new Uint8Array([0]),{
