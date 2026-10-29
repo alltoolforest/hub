@@ -19,7 +19,7 @@ async function fixture(pages=3,expandedMiB=0){
  }
  return Buffer.from(await doc.save({useObjectStreams:false}));
 }
-const bomb=await fixture(1,40),normal=await fixture(3),long=await fixture(480);
+const bomb=await fixture(1,40),normal=await fixture(3),long=await fixture(480),overLimit=await fixture(2001);
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const server=createServer(async(req,res)=>{
  try{
@@ -50,6 +50,9 @@ try {
       assert.equal(await page.locator('#grid .card').count(),0,'refused bomb must not create pages');
       assert.equal(await page.locator('#verifiedDownload').count(),0,'refused bomb must not publish download');
       const rejectedMs=Date.now()-t;
+      await page.locator('#file').setInputFiles({name:'PAGE_LIMIT_2001.pdf',mimeType:'application/pdf',buffer:overLimit});
+      await page.waitForFunction(()=>/2,000 pages|2000 pages|1.?2,000 pages/i.test(document.querySelector('#status')?.textContent||''),null,{timeout:30000});
+      assert.equal(await page.locator('#grid .card').count(),0,'refused over-limit PDF must not create pages');
       await page.locator('#file').setInputFiles({name:'RECOVERY_NORMAL.pdf',mimeType:'application/pdf',buffer:normal});
       await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===3,null,{timeout:30000});
       const downloadReady=page.waitForEvent('download',{timeout:45000});
@@ -79,9 +82,11 @@ try {
       assert.equal(await page.locator('#grid .card').count(),480);
       assert.equal(await page.locator('#verifiedDownload').count(),0);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+      await click(page.locator('#clearSession'));
+      await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:20000});
       assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
       console.log(JSON.stringify({browser:name,mobile,stress:'PASS',bombBytes:bomb.length,bombDecodedMiB:40,bombRejectMs:rejectedMs,
-        recoveryExportPages:out.getPageCount(),largeTextPages:480,largeUploadMs:loadedMs,
+        recoveryExportPages:out.getPageCount(),overLimitPages:2001,largeTextPages:480,largeUploadMs:loadedMs,cleared480Pages:true,
         pageErrors:errors.length,outsideRequests:outside.length}));
     }finally{await ctx.close();}
    }
