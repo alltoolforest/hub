@@ -72,7 +72,7 @@ export async function assertExpandedStreamBudget(doc,P,{
   encodedLimit=MAX_PDF_FILE_BYTES
 }={}) {
   const N=P.PDFName.of,ctx=doc.context;
-  let total=0,checked=0;
+  let total=0,checked=0,recoveredStreams=0;
   const limit=(size,cap,label)=>{
     if(!Number.isSafeInteger(size)||size<0||size>cap)
       throw Error('PDF decompression memory budget exceeded ('+label+'). Try a smaller PDF.');
@@ -157,38 +157,73 @@ export async function assertExpandedStreamBudget(doc,P,{
     }
     if(typeof DecompressionStream!=='function'||typeof ReadableStream!=='function')
       throw Error('This browser cannot safely inspect compressed PDF streams.');
-    let offset=0,expanded=0;
-    const input=new ReadableStream({pull(controller){
-      if(offset>=encoded.length){controller.close();return;}
-      const next=Math.min(offset+65536,encoded.length);
-      controller.enqueue(encoded.subarray(offset,next));offset=next;
-    }});
-    const reader=input.pipeThrough(new DecompressionStream('deflate')).getReader();
-    try{
-      for(;;){
-        const {value,done}=await reader.read();if(done)break;
-        expanded+=value.byteLength;
-        if(expanded>perStreamLimit)
-          throw Error('PDF decompression memory budget exceeded (single stream exceeds 256 MiB).');
-        // A tiny on-disk stream that expands hundreds of times is a distinct
-        // risk from normal Flate image/document compression. Reject only when
-        // BOTH the size and ratio are excessive; keep the 40 MiB/92 KB bomb
-        // safely blocked while allowing large conventional image streams.
-        if(expanded>ratioEnforcementThreshold&&expanded>encoded.length*maxExpansionRatio)
-          throw Error('PDF decompression memory budget exceeded (unsafe compression ratio).');
-        if(total+expanded>totalLimit)
-          throw Error('PDF decompression processing budget exceeded (aggregate decode work).');
+    // Strict browser zlib decoding rejects a subset of otherwise recoverable
+    // PDF Flate streams: some producers omit 1–4 trailing Adler-32 bytes.
+    // A completed DEFLATE payload with a SHORT checksum trailer can be
+    // inspected safely. Never tolerate a damaged DEFLATE payload or a present
+    // but incorrect four-byte checksum; the latter must remain an error.
+    async function measure(bytes,format){
+      let offset=0,expanded=0;
+      const input=new ReadableStream({pull(controller){
+        if(offset>=bytes.length){controller.close();return;}
+        const next=Math.min(offset+65536,bytes.length);
+        controller.enqueue(bytes.subarray(offset,next));offset=next;
+      }});
+      const reader=input.pipeThrough(new DecompressionStream(format)).getReader();
+      try{
+        for(;;){
+          const {value,done}=await reader.read();if(done)break;
+          expanded+=value.byteLength;
+          if(expanded>perStreamLimit)
+            throw Error('PDF decompression memory budget exceeded (single stream exceeds 256 MiB).');
+          if(expanded>ratioEnforcementThreshold&&expanded>encoded.length*maxExpansionRatio)
+            throw Error('PDF decompression memory budget exceeded (unsafe compression ratio).');
+          if(total+expanded>totalLimit)
+            throw Error('PDF decompression processing budget exceeded (aggregate decode work).');
+        }
+        return expanded;
+      }finally{
+        try{await reader.cancel();}catch{}
+        try{reader.releaseLock();}catch{}
       }
+    }
+    let expanded,recovered=false;
+    try{
+      expanded=await measure(encoded,'deflate');
     }catch(error){
-      if(/budget exceeded/i.test(error.message))throw error;
-      throw Error('Cannot safely decode a compressed PDF stream: '+error.message);
-    }finally{
-      try{await reader.cancel();}catch{}
-      try{reader.releaseLock();}catch{}
+      if(/budget exceeded/i.test(error?.message||''))throw error;
+      // Check the zlib CMF/FLG header before attempting a raw DEFLATE retry.
+      // FDICT streams cannot safely be retried without the preset dictionary.
+      const cmf=encoded[0],flg=encoded[1];
+      const isZlib=encoded.length>=4&&(cmf&15)===8&&(cmf>>4)<=7&&
+        ((cmf<<8)|flg)%31===0&&(flg&32)===0;
+      if(!isZlib)
+        throw Error('PDF compressed stream has an invalid zlib header or damaged payload; export blocked.');
+      let lastError=error,validFooter=false;
+      for(let trailer=4;trailer>=0;trailer--){
+        // Strip the two-byte zlib header and try removing 4..0 possible
+        // checksum bytes. Success after removing FOUR implies that the PDF
+        // contains a full checksum footer which strict decoding rejected:
+        // never silently accept a checksum mismatch.
+        if(encoded.length<=2+trailer)continue;
+        try{
+          const count=await measure(encoded.subarray(2,encoded.length-trailer),'deflate-raw');
+          if(trailer===4){validFooter=true;break;}
+          expanded=count;recovered=true;break;
+        }catch(rawError){
+          if(/budget exceeded/i.test(rawError?.message||''))throw rawError;
+          lastError=rawError;
+        }
+      }
+      if(validFooter)
+        throw Error('PDF Flate checksum is invalid; export blocked to prevent data corruption.');
+      if(!recovered)
+        throw Error('The PDF contains a damaged compressed stream that cannot be recovered without changing content. Export blocked.');
     }
     total+=expanded;checked++;
+    if(recovered)recoveredStreams++;
   }
-  return {decodedOrEncodedBytes:total,flateStreams:checked};
+  return {decodedOrEncodedBytes:total,flateStreams:checked,recoveredStreams};
 }
 
 // Reference-number independent graph fingerprint, including original compressed
