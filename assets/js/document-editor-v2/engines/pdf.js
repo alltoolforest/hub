@@ -34,7 +34,7 @@ export async function open(file, format, recovery=null) {
     const insertion=smart.attachSmartLineInsertion({app,getEditor:()=>editor});extensions.push(insertion);
     const close=async()=>{conversion?.dispose();ocrSearch?.dispose();await objects?.dispose();for(const extension of extensions)extension.destroy();await editor?.destroy();shell.remove();};
     editor=hybrid.createHybridPdfEditor({container:app,
-      prepareNativeDocument:value=>insertion.prepareDocument(value),
+      prepareNativeDocument:(value,options)=>insertion.prepareDocument(value,options),
       onChange:()=>{if(ready&&active?.editor===editor){revision++;notify();}},
       onStatus:message=>{status.textContent=message;},onWarning:warning=>{status.textContent=warning.message||warning.code;},
       onError:error=>{status.textContent=error.message;}});
@@ -42,7 +42,7 @@ export async function open(file, format, recovery=null) {
       await editor.open(file,draft?.state);
       if(editor.getState().flags?.hasAcroForm){
         const note=document.createElement('p');note.className='notice';
-        note.textContent='This PDF contains form fields. Their layout stays fixed. Existing text outside protected field areas can be edited when it fits; changes that would move form-page content are refused.';
+        note.textContent='This PDF contains form fields. Whole form widgets can follow verified text flow. Field values and appearances are checked before export; edits crossing a widget or uncertain form structures remain protected.';
         shell.prepend(note);
       }
       // The shared workspace owns these actions, including OCR history.
@@ -89,7 +89,7 @@ export async function open(file, format, recovery=null) {
       if(!result?.bytes)throw new Error('Finish the current PDF edit before exporting.');
       const bytes=await session.objects.apply(result.bytes,{reflowMetrics:result.nativeResult?.reflowMetrics??result.reflowMetrics??session.editor.getState().reflowMetrics??[],ocrEditedPages:result.ocrEditedPages??session.editor.getState().ocrEditedPages??[]});
       if(active!==session||revision!==startRevision)throw new Error('PDF changed during export. Export again after the current edit finishes.');
-      await verifyFormPreservation(sourceBytes,bytes);
+      await verifyFormPreservation(sourceBytes,bytes,{reflowMetrics:result.nativeResult?.reflowMetrics??result.reflowMetrics??session.editor.getState().reflowMetrics??[]});
       return new Blob([bytes],{type:'application/pdf'});
     });},
     async dispose(){disposed=true;await active?.close();active=null;}

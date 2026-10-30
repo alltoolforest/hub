@@ -128,8 +128,10 @@ export async function open(file, format) {
             parent.append(table);
           }
         }
-        renderBlocks(documentBlocks(model),page);
-        const additions=document.createElement('div');page.append(additions);
+        const sectionPages=[],blocks=documentBlocks(model),sections=model.formatting.sections||[];let remaining=[...blocks];
+        function lastIndex(block){return block.kind==='paragraph'?block.paragraph.index:Math.max(-1,...block.rows.flatMap(row=>row.flatMap(cell=>cell.blocks.map(lastIndex))));}
+        if(sections.length>1){for(const section of sections){const target=sectionPages.length?document.createElement('div'):page;target.className='document-v2-page';target.dataset.wordSection=String(section.index);const owned=[];while(remaining.length&&lastIndex(remaining[0])<=section.endParagraph)owned.push(remaining.shift());renderBlocks(owned,target);sectionPages.push({page:target,geometry:section});}if(remaining.length)renderBlocks(remaining,sectionPages.at(-1).page);}else{renderBlocks(blocks,page);sectionPages.push({page,geometry:sections[0]||model.formatting.page});}
+        const additions=document.createElement('div');sectionPages.at(-1).page.append(additions);
         function renderAddition(item,index){
           const field=document.createElement('div');field.className='document-v2-paragraph';field.contentEditable='true';field.setAttribute('role','textbox');field.setAttribute('aria-multiline','true');field.setAttribute('aria-label',`New paragraph ${index+1}`);field.textContent=item.text;styleWordNode(field,item.format);additionFields.set(index,field);
           field.addEventListener('focus',()=>formatting.activate({apply:format=>{item.format=format;styleWordNode(field,format);}},item.format));
@@ -156,7 +158,7 @@ export async function open(file, format) {
         function addParagraph(format){const item={text:'',format:{...format}};model.additions.push(item);const field=renderAddition(item,model.additions.length-1);onChange();refreshSearch();field.focus();}
         model.additions.forEach(renderAddition);
         const add=document.createElement('button');add.type='button';add.textContent='Add paragraph at document end';add.addEventListener('click',async()=>{try{await commitAdvanced({type:'paragraph',format:formatting.values()});[...host.querySelectorAll('[data-word-source]')].at(-1)?.focus();}catch(error){note.textContent=error.message;}});formatting.toolbar.append(add);if(model.additions.length){const integrate=document.createElement('button');integrate.type='button';integrate.textContent='Integrate recovered end paragraphs';integrate.addEventListener('click',()=>commitAdvanced({type:'integrate'}).catch(error=>{note.textContent=error.message;}));formatting.toolbar.append(integrate);}
-        const disposePagination=paginateWord(host,page,model.formatting.page);disposeLayout=()=>{disposePagination();disposeParagraphLayout();};
+        const pagination=sectionPages.map(({page,geometry})=>paginateWord(host,page,geometry));disposeLayout=()=>{for(const dispose of pagination)dispose();disposeParagraphLayout();};
         refreshSearch = mountFindReplace(host, {
           entries: () => [...model.text.flatMap((text,id)=>structured.has(id)?structureParts(model,id).map((part,i)=>({id:`${id}:${i}`,text:structureText(part),protected:false})):[{id,text,protected:model.protected[id]||!fields.has(id)}]),...model.additions.map((item,i)=>({id:`new:${i}`,text:item.text,protected:false}))],
           replace: ({id, start, end}, value) => {

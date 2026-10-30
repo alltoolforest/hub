@@ -1,3 +1,4 @@
+import {verifyRasterFlowCuts} from '../layout/raster-flow.js';
 import {loadPdfjs} from '../rendering/pdfjs.js';
 const identity=()=>[1,0,0,1,0,0];
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
@@ -13,6 +14,7 @@ export async function validateGraphicsFlow(bytes,pageIndex,geometry){
  let task;
  try{
   const pdfjs=await loadPdfjs();task=pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false});const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),ops=await page.getOperatorList({annotationMode:pdfjs.AnnotationMode.DISABLE}),O=pdfjs.OPS;
+  if(geometry.rasterFlow){if(!await verifyRasterFlowCuts(page,geometry))return {ok:false,reason:'SCAN_CUT_CROSSES_VISIBLE_CONTENT'};return {ok:true,rasterFlow:true};}
   let matrix=identity();const stack=[];
   const box=raw=>{const [x0,y0,x1,y1]=raw,points=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([x,y])=>[matrix[0]*x+matrix[2]*y+matrix[4],matrix[1]*x+matrix[3]*y+matrix[5]]);return [Math.min(...points.map(p=>p[0])),Math.min(...points.map(p=>p[1])),Math.max(...points.map(p=>p[0])),Math.max(...points.map(p=>p[1]))];};
   for(let i=0;i<ops.fnArray.length;i++){

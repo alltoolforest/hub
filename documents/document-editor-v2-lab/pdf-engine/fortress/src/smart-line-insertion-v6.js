@@ -1,3 +1,4 @@
+import {rasterFlowProfile,rasterPageGeometry} from './layout/raster-flow.js';
 import { loadPdfjs } from './rendering/pdfjs.js';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
 import { detectSectionKeepGroups } from './layout/section-pagination.js';
@@ -67,7 +68,7 @@ function geometryFromTextItems(pageIndex,width,height,rotation,items){
   };
 }
 
-async function measureDocument(fileOrBytes){
+async function measureDocument(fileOrBytes,{rasterPages=[]}={}){
   let bytes;
   if(fileOrBytes instanceof Uint8Array)bytes=fileOrBytes.slice();
   else if(fileOrBytes instanceof ArrayBuffer)bytes=new Uint8Array(fileOrBytes.slice(0));
@@ -81,7 +82,7 @@ async function measureDocument(fileOrBytes){
       const page=await pdf.getPage(index+1);
       const viewport=page.getViewport({scale:1});
       const content=await page.getTextContent({disableNormalization:false});
-      pages.push(geometryFromTextItems(index,viewport.width,viewport.height,viewport.rotation||0,content.items||[]));
+      let geometry=geometryFromTextItems(index,viewport.width,viewport.height,viewport.rotation||0,content.items||[]);if(geometry.confidence==='NO_TEXT'||rasterPages.includes(index)){try{geometry=rasterPageGeometry(index,await rasterFlowProfile(page));}catch{}}pages.push(geometry);
       page.cleanup?.();
     }
   }finally{
@@ -186,14 +187,13 @@ export function attachSmartLineInsertion(options){
   observer.observe(app,{subtree:true,childList:true});
 
   return {
-    async prepareDocument(fileOrBytes){
+    async prepareDocument(fileOrBytes,options={}){
       try{
-        preparedPages=await measureDocument(fileOrBytes);
-        configureCascadePageGeometry(preparedPages);
-        return preparedPages;
+        const measured=await measureDocument(fileOrBytes,options);
+        if(options.configure!==false){preparedPages=measured;configureCascadePageGeometry(preparedPages);}
+        return measured;
       }catch(error){
-        preparedPages=[];
-        configureCascadePageGeometry([]);
+        if(options.configure!==false){preparedPages=[];configureCascadePageGeometry([]);}
         console.warn('Cascade geometry unavailable; conservative page flow remains active.',error);
         return [];
       }

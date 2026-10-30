@@ -112,7 +112,7 @@ function inspectAnnotations(doc,page){
     if(!rectArray||typeof rectArray.size!=='function'||rectArray.size()<4)return {ok:false,reason:'LINK_RECTANGLE_MISSING'};
     const rect=[];
     for(let j=0;j<4;j++){const value=numberValue(doc,rectArray.get(j));if(!Number.isFinite(value))return {ok:false,reason:'LINK_RECTANGLE_INVALID'};rect.push(value);}
-    links.push({dict,rect,bounds:rectBounds(rect),protectedWidget});
+    links.push({ref:array.get(i),dict,rect,bounds:rectBounds(rect),protectedWidget});
   }
   return {ok:true,raw,links};
 }
@@ -137,13 +137,13 @@ function classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop}){
 function validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,movableFloor,bandLeft,bandRight,footerGuardTop}){
   const classified=[];
   for(const link of annotationInfo.links){
-    if(link.protectedWidget){const b=link.bounds;if(overflowNeeded||b.left<bandRight+3&&b.right>bandLeft-3&&b.bottom<cutY+3&&b.top>footerGuardTop-delta-3)return {ok:false,reason:'FORM_WIDGET_REFLOW_PROTECTED'};classified.push({...link,zone:'STATIC'});continue;}
+    if(link.protectedWidget){const b=link.bounds;if(b.bottom<cutY&&b.top>cutY||b.bottom<footerGuardTop&&b.top>footerGuardTop)return {ok:false,reason:'FORM_WIDGET_REFLOW_PROTECTED'};}
     const zone=classifyLink(link,{cutY,bandLeft,bandRight,footerGuardTop});
     if(zone==='CROSSES_FOOTER')return {ok:false,reason:'LINK_CROSSES_FOOTER_GUARD'};
     if(zone==='CROSSES_BAND')return {ok:false,reason:'LINK_CROSSES_CONTENT_BAND'};
     if(zone==='CROSSES_CUT')return {ok:false,reason:'LINK_CROSSES_REFLOW_BOUNDARY'};
     if(zone==='MOVED'){
-      if(overflowNeeded&&link.bounds.bottom<overflowBoundary+.5)return {ok:false,reason:'LINK_OVERFLOW_REFLOW_UNSAFE'};
+      if(overflowNeeded&&link.bounds.bottom<overflowBoundary+.5){if(link.bounds.top>overflowBoundary-.01)return {ok:false,reason:'ANNOTATION_CROSSES_OVERFLOW_BOUNDARY'};classified.push({...link,zone:'OUTGOING'});continue;}
       if(link.bounds.bottom-delta<movableFloor-1)return {ok:false,reason:'LINK_SHIFT_INTO_STATIC_FOOTER'};
     }
     classified.push({...link,zone});
@@ -154,10 +154,11 @@ function validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBo
 function preserveAndMoveLinks(doc,replacement,annotationInfo,classifiedLinks,delta){
   if(!annotationInfo.raw)return;
   for(const link of classifiedLinks){
+    if(link.zone==='OUTGOING')continue;
     if(link.zone==='MOVED')link.dict.set(RECT,doc.context.obj([link.rect[0],link.rect[1]-delta,link.rect[2],link.rect[3]-delta]));
     if(link.dict.get(PAGE)&&replacement.ref)link.dict.set(PAGE,replacement.ref);
   }
-  replacement.node.set(ANN0TS,annotationInfo.raw);
+  replacement.node.set(ANN0TS,doc.context.obj(classifiedLinks.filter(l=>l.zone!=='OUTGOING').map(l=>l.ref||l.dict)));
 }
 
 async function embedSlice(destDoc,donorPage,{left=0,bottom=0,right,top}){return embedExtractionCleanPageSlice(destDoc,donorPage,{left,bottom,right,top});}
@@ -281,7 +282,7 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     cascadeInfo=await cascadeOverflowIntoExistingPages(doc,{
       sourcePageIndex:pageIndex,plan,sourceDonorPage:donorPage,
       overflowBottom:footerGuardTop,overflowTop:overflowBoundary,
-      bandLeft,bandRight,width,height,preview,
+      bandLeft,bandRight,width,height,preview,incomingAnnotations:linkSafety.links.filter(l=>l.zone==='OUTGOING'),
     });
     if(!cascadeInfo.applied){
       return {applied:false,reason:cascadeInfo.reason||'CASCADE_REFLOW_UNSAFE',overflowPageCount:0};
@@ -311,6 +312,7 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
     overflowPageCount:0,
     metric:{
       transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta,flowTopY,contentBottomY,overflowBoundary,
+      flowSlices:[{sourcePageIndex:pageIndex,destinationPageIndex:pageIndex,left:bandLeft,right:bandRight,bottom:overflowBoundary,top:cutY,dy:-delta},...(cascadeInfo.flowSlices||[])],
       overflowPageCount:0,appendedPageCount,cascadedPageCount,overflowedBlockIds,overflowedLineIds,preservedLinkCount:annotationInfo.links.length,
       bandLeft,bandRight,bandWidth,footerGuardTop,footerGuardEnabled:footerGuard.enabled,
       mode:overflowNeeded?'CASCADE_EXISTING_PAGES':(plan.mode||'VERTICAL_CONTENT_BAND_REFLOW'),

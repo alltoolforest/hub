@@ -1,3 +1,4 @@
+import {mapFlowRectangle} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/export/flow-map.js';
 // Derive export coordinates from immutable source-page drafts on every save.
 export function assertObjectLayout(changes,state,originalPages,outputPages){
  const metrics=state.reflowMetrics||[];
@@ -10,7 +11,9 @@ export function assertObjectLayout(changes,state,originalPages,outputPages){
   for(const item of result){
    if(item.pageIndex<metric.pageIndex||item.pageIndex!==metric.pageIndex&&!cascade)continue;
    const conflict=()=>{throw new Error(`Image/link edits on page ${item.pageIndex+1} conflict with moved text. Undo those object edits or text flow before exporting.`);};
-   if(item.source&&item.kind==='image'||cascade)conflict();
+   if(item.source&&item.kind==='image')conflict();
+   if(cascade&&metric.flowSlices){const beforePage=item.pageIndex,mapped=mapFlowRectangle(item,beforePage,[metric]);item.pageIndex=mapped.pageIndex;item.x=mapped.x;item.y=mapped.y;if(item.source?.rect){const r=item.source.rect,original=mapFlowRectangle({x:r[0],y:r[1],width:r[2]-r[0],height:r[3]-r[1]},beforePage,[metric]);if(original.pageIndex!==item.pageIndex)conflict();item.source.rect=[original.x,original.y,original.x+original.width,original.y+original.height];}continue;}
+   if(cascade)conflict();
    const up=metric.mode==='SAME_PAGE_UPWARD_COMPACTION',down=metric.mode==='VERTICAL_CONTENT_BAND_REFLOW';
    if(!up&&!down||up&&Number(metric.delta)||down&&Number(metric.shiftY))conflict();
    const shift=up?metric.shiftY:-metric.delta,{cutY,footerGuardTop,bandLeft,bandRight}=metric;

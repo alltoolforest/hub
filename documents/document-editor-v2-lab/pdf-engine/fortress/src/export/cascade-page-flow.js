@@ -1,3 +1,5 @@
+import {rasterFlowProfile} from '../layout/raster-flow.js';
+import {attachFlowAnnotations} from './annotation-flow.js';
 import {validateGraphicsFlow} from './graphics-flow-guard.js';
 import {loadPdfjs} from '../rendering/pdfjs.js';
 import { PDFName } from '../core/pdf-lib.js';
@@ -42,13 +44,13 @@ function inspectLinks(doc,page){
     const dict=arrayItem(doc,array,i);
     if(!dict||typeof dict.get!=='function'||typeof dict.set!=='function')return {ok:false,reason:'CASCADE_ANNOTATION_UNREADABLE'};
     const subtype=String(dict.get(SUBTYPE)||'');
-    if(subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'CASCADE_COMPLEX_ANNOTATION_UNSAFE'};
-    if(dict.get(AP)||dict.get(QUAD_POINTS))return {ok:false,reason:'CASCADE_COMPLEX_LINK_UNSAFE'};
+    const protectedWidget=subtype==='/Widget';if(!protectedWidget&&subtype!=='/Link'&&subtype!=='Link')return {ok:false,reason:'CASCADE_COMPLEX_ANNOTATION_UNSAFE'};
+    if(!protectedWidget&&(dict.get(AP)||dict.get(QUAD_POINTS)))return {ok:false,reason:'CASCADE_COMPLEX_LINK_UNSAFE'};
     const rectArray=lookup(doc,dict.get(RECT));
     if(!rectArray||typeof rectArray.size!=='function'||rectArray.size()<4)return {ok:false,reason:'CASCADE_LINK_RECT_MISSING'};
     const rect=[];
     for(let j=0;j<4;j++){const n=numberValue(doc,rectArray.get(j));if(!Number.isFinite(n))return {ok:false,reason:'CASCADE_LINK_RECT_INVALID'};rect.push(n);}
-    links.push({dict,rect,bounds:rectBounds(rect)});
+    links.push({ref:array.get(i),dict,rect,bounds:rectBounds(rect),protectedWidget});
   }
   return {ok:true,raw,links};
 }
@@ -66,9 +68,10 @@ function classifyLinks(info,{bandLeft,bandRight,bodyTopY,footerTop,shift,outgoin
       // A simple link rectangle can extend a few points beyond its text glyphs.
       // The page body slice is text-snapped, so use the rectangle centre to
       // decide which side owns the annotation instead of failing the cascade.
+      if(link.protectedWidget)return {ok:false,reason:'FORM_WIDGET_CROSSES_BODY_BOUNDARY'};
       if((b.bottom+b.top)/2>=bodyTopY){out.push({...link,zone:'STATIC'});continue;}
     }
-    if(outgoingBoundary>footerTop+.5&&b.bottom<outgoingBoundary+.5)return {ok:false,reason:'CASCADE_LINK_WOULD_OVERFLOW'};
+    if(outgoingBoundary>footerTop+.5&&b.bottom<outgoingBoundary+.5){if(b.top>outgoingBoundary-.01)return {ok:false,reason:'ANNOTATION_CROSSES_OVERFLOW_BOUNDARY'};out.push({...link,zone:'OUTGOING'});continue;}
     if(b.bottom-shift<footerTop-1)return {ok:false,reason:'CASCADE_LINK_SHIFT_INTO_FOOTER'};
     out.push({...link,zone:'MOVED'});
   }
@@ -78,10 +81,11 @@ function classifyLinks(info,{bandLeft,bandRight,bodyTopY,footerTop,shift,outgoin
 function preserveLinks(doc,replacement,info,classified,shift){
   if(!info.raw)return;
   for(const link of classified){
+    if(link.zone==='OUTGOING')continue;
     if(link.zone==='MOVED')link.dict.set(RECT,doc.context.obj([link.rect[0],link.rect[1]-shift,link.rect[2],link.rect[3]-shift]));
     if(link.dict.get(PAGE)&&replacement.ref)link.dict.set(PAGE,replacement.ref);
   }
-  replacement.node.set(ANN0TS,info.raw);
+  replacement.node.set(ANN0TS,doc.context.obj(classified.filter(l=>l.zone!=='OUTGOING').map(l=>l.ref||l.dict)));
 }
 
 async function snapshotPage(doc,pageIndex){
@@ -97,16 +101,16 @@ function normalizedGeometry(raw,page){
   const band=raw.contentBand||{};
   const left=clamp(Number(band.left)||0,0,width),right=clamp(Number(band.right)||width,0,width);
   if(right-left<Math.max(100,width*.25))return null;
-  const topMargin=Math.max(16,Number(raw.topMargin)||28);
-  const bottomMargin=Math.max(8,Number(raw.bottomMargin)||12);
+  const topMargin=raw.rasterFlow?Math.max(0,Number(raw.topMargin)||0):Math.max(16,Number(raw.topMargin)||28);
+  const bottomMargin=raw.rasterFlow?Math.max(0,Number(raw.bottomMargin)||0):Math.max(8,Number(raw.bottomMargin)||12);
   const safetyGap=Math.max(3,Number(raw.safetyGap)||4);
-  const footerTop=clamp(Number(raw.footerGuardTop)||bottomMargin,bottomMargin,Math.min(height*.20,height-60));
+  const footerTop=clamp(Number(raw.footerGuardTop)||bottomMargin,raw.rasterFlow?0:bottomMargin,Math.min(height*.20,height-60));
   const textTopY=Number(raw.textTopY),textBottomY=Number(raw.textBottomY);
   if(!Number.isFinite(textTopY)||!Number.isFinite(textBottomY))return null;
   const bodyTopY=clamp(Number(raw.bodyTopY)||textTopY+safetyGap,footerTop+40,height-topMargin);
   if(!(bodyTopY>footerTop+40))return null;
   const keepGroups=normalizeKeepGroups(raw.keepGroups||[],{footerTop,bodyTop:bodyTopY});
-  return {width,height,bandLeft:left,bandRight:right,bandWidth:right-left,topMargin,bottomMargin,safetyGap,footerTop,textTopY,textBottomY,bodyTopY,keepGroups};
+  return {rasterFlow:!!raw.rasterFlow,width,height,bandLeft:left,bandRight:right,bandWidth:right-left,topMargin,bottomMargin,safetyGap,footerTop,textTopY,textBottomY,bodyTopY,keepGroups};
 }
 
 function validateIncomingRegion(incoming,g){
@@ -126,6 +130,10 @@ function preflightFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=t
   if(!g)return {ok:false,reason:'CASCADE_PAGE_GEOMETRY_UNSAFE'};
   g.textBottomY=runtimeBottom(doc,pageIndex,g.textBottomY);
   g.keepGroups=runtimeGroups(doc,pageIndex,g.keepGroups);
+  // A wider incoming scan requires the whole receiving body band to move,
+  // including its original margin objects. Final graphic/annotation cuts are
+  // still verified before reconstructing any page.
+  if(incoming.left>=0&&incoming.right<=g.width){g.bandLeft=Math.min(g.bandLeft,incoming.left);g.bandRight=Math.max(g.bandRight,incoming.right);g.bandWidth=g.bandRight-g.bandLeft;}
   const incomingSafety=validateIncomingRegion(incoming,g);
   if(!incomingSafety.ok)return incomingSafety;
   const shift=incoming.height+g.safetyGap;
@@ -162,22 +170,22 @@ export function snapCascadeTextBoundary(boundary,rects,{floor,ceiling}){
  for(let attempt=0;attempt<64;attempt++){const crossing=rects.filter(r=>r.bottom<cut+.25&&r.top>cut-.25);if(!crossing.length)return cut;const next=Math.max(...crossing.map(r=>r.top))+1.5;if(next>=ceiling-.5||next<=cut+.01)throw new Error('No safe text boundary for page cascade.');cut=Math.max(floor,next);}
  throw new Error('Page cascade text boundary exceeds the safe limit.');
 }
-async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right,inspectionBytes}){
+async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right,inspectionBytes,rasterFlow=false}){
  const lib=await loadPdfjs(),bytes=inspectionBytes||new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false})),task=lib.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false});
- try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
+ try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);if(rasterFlow)rects.push(...(await rasterFlowProfile(page)).rows);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
 }
 
-async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true}={}){
+async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true,flowSlices=[]}={}){
   const live=doc.getPage(pageIndex);
   const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right},{allowSemantic});
   if(!check.ok)return check;
-  const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight});
+  const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight,rasterFlow:g.rasterFlow});
   const linkInfo=inspectLinks(doc,live);
   if(!linkInfo.ok)return linkInfo;
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
   if(!classified.ok)return classified;
   const inspectionBytes=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false}));
-  const graphicsSafety=await validateGraphicsFlow(inspectionBytes,pageIndex,{bandLeft:g.bandLeft,bandRight:g.bandRight,boundaries:[g.bodyTopY,outgoingBoundary,g.footerTop]});
+  const graphicsSafety=await validateGraphicsFlow(inspectionBytes,pageIndex,{bandLeft:g.bandLeft,bandRight:g.bandRight,boundaries:[g.bodyTopY,outgoingBoundary,g.footerTop],rasterFlow:g.rasterFlow});
   if(!graphicsSafety.ok)return graphicsSafety;
 
   const {donorDoc,donorPage}=await snapshotPage(doc,pageIndex);
@@ -197,6 +205,8 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemant
   if(bodySlice)drawSlice(replacement,bodySlice,{x:g.bandLeft,y:outgoingBoundary-shift,width:g.bandWidth,height:g.bodyTopY-outgoingBoundary});
   if(incomingEmbedded)drawSlice(replacement,incomingEmbedded,{x:incoming.left,y:g.bodyTopY-incomingHeight,width:incoming.right-incoming.left,height:incomingHeight});
   preserveLinks(doc,replacement,linkInfo,classified.links,shift);
+  attachFlowAnnotations(doc,replacement,incoming.annotations,g.bodyTopY-incoming.top);
+  flowSlices.push({sourcePageIndex:pageIndex,destinationPageIndex:pageIndex,left:g.bandLeft,right:g.bandRight,bottom:outgoingBoundary,top:g.bodyTopY,dy:-shift,rasterFlow:g.rasterFlow},{sourcePageIndex:incoming.sourcePageIndex,destinationPageIndex:pageIndex,left:incoming.left,right:incoming.right,bottom:incoming.bottom,top:incoming.top,dy:g.bodyTopY-incoming.top,rasterFlow:!!incoming.rasterFlow});
   doc.removePage(pageIndex+1);
 
   const nextBottom=overflowNeeded?g.footerTop+g.safetyGap:Math.max(g.footerTop+g.safetyGap,g.textBottomY-shift);
@@ -207,20 +217,22 @@ async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemant
     try{await donorDoc.destroy?.();}catch{}
     return {ok:true,done:true,shift,overflow:false,semanticSnap};
   }
-  const outgoing={inspectionBytes,inspectionPageIndex:pageIndex,donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc,keepGroups:partitioned.outgoing};
+  const outgoing={annotations:classified.links.filter(l=>l.zone==='OUTGOING'),rasterFlow:g.rasterFlow,sourcePageIndex:pageIndex,inspectionBytes,inspectionPageIndex:pageIndex,donorPage,left:g.bandLeft,right:g.bandRight,bottom:g.footerTop,top:outgoingBoundary,width:g.bandWidth,height:g.height,owner:donorDoc,keepGroups:partitioned.outgoing};
   return {ok:true,done:false,shift,overflow:true,outgoing,semanticSnap};
 }
 
-async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargin}){
+async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargin,flowSlices=[]}){
   const usable=Math.max(40,height-topMargin-bottomMargin);
   let bottom=incoming.bottom,top=incoming.top,count=0;
   while(top>bottom+.5){
-    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right,inspectionBytes:incoming.inspectionBytes});}
+    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right,inspectionBytes:incoming.inspectionBytes,rasterFlow:incoming.rasterFlow});}
     const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page graphics geometry is unavailable.');
     const graphicsBytes=incoming.inspectionBytes||new Uint8Array(await owner.save({useObjectStreams:false,updateFieldAppearances:false}));
-    const graphicsSafety=await validateGraphicsFlow(graphicsBytes,index,{bandLeft:incoming.left,bandRight:incoming.right,boundaries:[sliceBottom,top]});if(!graphicsSafety.ok)throw new Error(graphicsSafety.reason);
+    const graphicsSafety=await validateGraphicsFlow(graphicsBytes,index,{bandLeft:incoming.left,bandRight:incoming.right,boundaries:[sliceBottom,top],rasterFlow:incoming.rasterFlow});if(!graphicsSafety.ok)throw new Error(graphicsSafety.reason);
     const embedded=await embedSlice(doc,incoming.donorPage,{left:incoming.left,bottom:sliceBottom,right:incoming.right,top});
-    const page=doc.addPage([width,height]);
+    const destinationPageIndex=doc.getPageCount(),page=doc.addPage([width,height]);
+    flowSlices.push({sourcePageIndex:incoming.sourcePageIndex,destinationPageIndex,left:incoming.left,right:incoming.right,bottom:sliceBottom,top,dy:height-topMargin-top,rasterFlow:!!incoming.rasterFlow});
+    const owned=(incoming.annotations||[]).filter(a=>a.bounds.bottom>=sliceBottom-.01&&a.bounds.top<=top+.01);if((incoming.annotations||[]).some(a=>a.bounds.bottom<sliceBottom&&a.bounds.top>sliceBottom))throw new Error('Annotation crosses a continuation-page cut.');attachFlowAnnotations(doc,page,owned,height-topMargin-top);
     const h=top-sliceBottom;
     drawSlice(page,embedded,{x:incoming.left,y:height-topMargin-h,width:incoming.right-incoming.left,height:h});
     count++;top=sliceBottom;
@@ -248,25 +260,26 @@ export function preflightCascadeOverflowIntoExistingPages(doc,args){
   return cascadePreflight(doc,args);
 }
 
-export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height}){
+export async function cascadeOverflowIntoExistingPages(doc,{sourcePageIndex,plan,sourceDonorPage,overflowBottom,overflowTop,bandLeft,bandRight,width,height,incomingAnnotations=[]}){
   const preflight=cascadePreflight(doc,{sourcePageIndex,plan,overflowBottom,overflowTop,bandLeft,bandRight});
   if(!preflight.ok)return {applied:false,reason:preflight.reason,appendedPageCount:0,cascadedPageCount:0};
   const pages=preflight.pages||[];
 
-  let incoming={donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
+  const flowSlices=[];
+  let incoming={annotations:incomingAnnotations,sourcePageIndex,donorPage:sourceDonorPage,left:bandLeft,right:bandRight,bottom:overflowBottom,top:overflowTop,width:bandRight-bandLeft,height};
   let cascadedPageCount=0;
   for(const raw of pages){
     const targetIndex=Number(raw.pageIndex);if(!Number.isInteger(targetIndex)||targetIndex<=sourcePageIndex||targetIndex>=doc.getPageCount())continue;const target={raw,targetIndex};
-    const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming,{allowSemantic:preflight.allowSemantic!==false});
+    const result=await rebuildFollowingPage(doc,target.targetIndex,target.raw,incoming,{allowSemantic:preflight.allowSemantic!==false,flowSlices});
     if(!result.ok)return {applied:false,reason:result.reason,appendedPageCount:0,cascadedPageCount};
     cascadedPageCount++;
-    if(result.done){if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount};}
+    if(result.done){if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}return {applied:true,reason:'CASCADE_ABSORBED_BY_EXISTING_PAGE',appendedPageCount:0,cascadedPageCount,flowSlices};}
     if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
     incoming=result.outgoing;
   }
 
   const lastGeometry=pages.at(-1)||{};
-  const appendedPageCount=await appendCarryPages(doc,incoming,{width,height,topMargin:Math.max(16,Number(lastGeometry.topMargin)||Number(plan?.topMargin)||28),bottomMargin:Math.max(8,Number(lastGeometry.bottomMargin)||Number(plan?.bottomMargin)||12)});
+  const appendedPageCount=await appendCarryPages(doc,incoming,{width,height,topMargin:Math.max(16,Number(lastGeometry.topMargin)||Number(plan?.topMargin)||28),bottomMargin:Math.max(8,Number(lastGeometry.bottomMargin)||Number(plan?.bottomMargin)||12),flowSlices});
   if(incoming.owner)try{await incoming.owner.destroy?.();}catch{}
-  return {applied:true,reason:'CASCADE_APPENDED_AFTER_EXISTING_PAGES',appendedPageCount,cascadedPageCount};
+  return {applied:true,reason:'CASCADE_APPENDED_AFTER_EXISTING_PAGES',appendedPageCount,cascadedPageCount,flowSlices};
 }

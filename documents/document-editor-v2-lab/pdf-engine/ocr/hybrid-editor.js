@@ -1,3 +1,4 @@
+import {composeMixedExport} from './mixed-export.js';
 import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
 import {validateScanDraft} from './scan-draft.js';
 import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
@@ -270,7 +271,7 @@ export function createHybridPdfEditor({
       const tx=transactions.find(item=>item.id===metric.transactionId);
       const targets=(tx?.reflowPlan?.cascadePages||[]).slice(0,count).map(item=>Number(item?.pageIndex)).filter(Number.isInteger);
       for(const target of targets){
-        if(pages[target]?.route==='ocr'){
+        if(pages[target]?.route==='ocr'&&!(metric.flowSlices||[]).some(slice=>slice.sourcePageIndex===target&&slice.rasterFlow)){
           throw Object.assign(new Error(`Native page flow would move content through OCR page ${target+1}. This mixed-layout save is refused until cross-engine cascade ownership can be proven safe.`),{code:'HYBRID_CASCADE_CROSSES_OCR_PAGE',pageIndex:target});
         }
       }
@@ -288,7 +289,9 @@ export function createHybridPdfEditor({
     let baseBytes=sourceBytes,nativeResult=null;
     if(transactions.length){
       nativeExportCapture=null;
-      nativeResult=await nativeEngine.save();
+      if(ocrDirty.length){
+        nativeResult=await composeMixedExport(sourceBytes,transactions,ocrDirty.map(({page,pageIndex})=>({pageIndex,bytes:page.ocrBytes})),prepareNativeDocument,pages.map((page,index)=>page.route==='ocr'?index:null).filter(Number.isInteger));
+      }else nativeResult=await nativeEngine.save();
       const nativeBytes=nativeResult?.bytes||nativeExportCapture?.bytes;
       if(!nativeBytes)throw Object.assign(new Error('Native edits could not be serialized safely.'),{code:'HYBRID_NATIVE_EXPORT_MISSING'});
       assertNativeOwnership(nativeResult||nativeExportCapture,transactions);
@@ -298,7 +301,7 @@ export function createHybridPdfEditor({
     const doc=await PDFDocument.load(baseBytes.slice(),{ignoreEncryption:true,updateMetadata:false});
     const expectedPages=doc.getPageCount();
     if(expectedPages<pageCount)throw Object.assign(new Error('Native export removed an original PDF page.'),{code:'HYBRID_NATIVE_PAGE_LOSS'});
-    for(const {page,pageIndex} of ocrDirty)await replacePageFromSinglePagePdf(doc,pageIndex,page.ocrBytes);
+    if(!transactions.length)for(const {page,pageIndex} of ocrDirty)await replacePageFromSinglePagePdf(doc,pageIndex,page.ocrBytes);
 
     const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));
     const touchedPages=[...new Set([

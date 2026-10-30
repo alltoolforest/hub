@@ -1,3 +1,4 @@
+import {mapFlowRectangle} from '../export/flow-map.js';
 import {PDFName,PDFArray,PDFDict,PDFRef,PDFRawStream,decodePDFRawStream,PDFDocument} from './pdf-lib.js';
 
 const name=key=>PDFName.of(key);
@@ -66,7 +67,7 @@ export function formFingerprint(doc){
   return JSON.stringify([form?encode(form):null,widgets]);
 }
 
-export async function verifyFormPreservation(originalBytes,editedBytes){
+export async function verifyFormPreservation(originalBytes,editedBytes,{reflowMetrics=[]}={}){
   const original=await PDFDocument.load(originalBytes.slice(),{updateMetadata:false});
   const signature=original.catalog.lookup(name('Perms'));
   const visited=new Set();
@@ -80,5 +81,12 @@ export async function verifyFormPreservation(originalBytes,editedBytes){
   if(protectedSignature&&(originalBytes.length!==editedBytes.length||originalBytes.some((b,i)=>b!==editedBytes[i])))throw Object.assign(new Error('Signed PDFs are protected. Exporting edits would invalidate the signature.'),{code:'PDF_SIGNATURE_PROTECTED'});
   if(!original.catalog.has(name('AcroForm'))&&!inspectFormWidgets(original).formWidgets.length)return;
   const edited=await PDFDocument.load(editedBytes.slice(),{updateMetadata:false});
+  if(reflowMetrics.length){
+    if(!inspectFormWidgets(original).formSafetyKnown)throw new Error('Unknown form geometry cannot be moved.');
+    const transfers=[];for(const [pageIndex,page]of original.getPages().entries()){const annotations=page.node.lookup(name('Annots'));if(!(annotations instanceof PDFArray))continue;for(let i=0;i<annotations.size();i++){const ref=annotations.get(i),dict=original.context.lookup(ref);if(dict?.lookup?.(name('Subtype'))?.toString()!=='/Widget')continue;const values=dict.lookup(name('Rect')).asArray().map(n=>n.asNumber()),[x1,y1,x2,y2]=values,moved=mapFlowRectangle({x:Math.min(x1,x2),y:Math.min(y1,y2),width:Math.abs(x2-x1),height:Math.abs(y2-y1)},pageIndex,reflowMetrics);if(moved.pageIndex>=edited.getPageCount())throw new Error('Invalid form destination page.');dict.set(name('Rect'),original.context.obj([x1+moved.x-Math.min(x1,x2),y1+moved.y-Math.min(y1,y2),x2+moved.x-Math.min(x1,x2),y2+moved.y-Math.min(y1,y2)]));if(moved.pageIndex!==pageIndex)transfers.push({pageIndex,index:i,ref,destination:moved.pageIndex});}}
+    while(original.getPageCount()<edited.getPageCount())original.addPage([edited.getPage(original.getPageCount()).getWidth(),edited.getPage(original.getPageCount()).getHeight()]);
+    for(const item of [...transfers].sort((a,b)=>b.pageIndex-a.pageIndex||b.index-a.index))original.getPage(item.pageIndex).node.lookup(name('Annots')).remove(item.index);
+    for(const item of transfers){const page=original.getPage(item.destination);let annotations=page.node.lookup(name('Annots'));if(!(annotations instanceof PDFArray)){annotations=original.context.obj([]);page.node.set(name('Annots'),annotations);}annotations.push(item.ref);}
+  }
   if(formFingerprint(original)!==formFingerprint(edited))throw Object.assign(new Error('Export would change PDF form fields or appearances. Your edit has not been exported.'),{code:'PDF_FORM_PRESERVATION_FAILED'});
 }

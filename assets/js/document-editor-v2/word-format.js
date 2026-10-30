@@ -1,3 +1,4 @@
+import {readWordSections} from './word-sections.js';
 import {readLayout} from './word-layout.js';
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A='http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -38,7 +39,7 @@ export async function readWordFormatting(zip,xml,Parser){
   });
   const section=xml.getElementsByTagNameNS(W,'sectPr')[0],page=child(section,'pgSz'),margins=child(section,'pgMar');
   const margin=key=>{const raw=attr(margins,key);return raw!==''&&Number.isFinite(Number(raw))?Number(raw)/20:72;};
-  return {formats,page:{width:Number(attr(page,'w'))/20||612,height:Number(attr(page,'h'))/20||792,top:margin('top'),bottom:margin('bottom'),left:margin('left'),right:margin('right')}};
+  return {formats,sections:readWordSections(xml),page:{width:Number(attr(page,'w'))/20||612,height:Number(attr(page,'h'))/20||792,top:margin('top'),bottom:margin('bottom'),left:margin('left'),right:margin('right')}};
 }
 export function validateWordFormat(value){
   if(!value||typeof value.font!=='string'||!value.font.trim()||value.font.length>120||/[\x00-\x1f]/.test(value.font)||!Number.isFinite(value.size)||value.size<1||value.size>1638||typeof value.bold!=='boolean'||typeof value.italic!=='boolean'||!/^#[\da-f]{6}$/i.test(value.color))throw new Error('Invalid Word font formatting.');

@@ -39,7 +39,7 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
   const boxes=source.getPages().map(page=>page.getCropBox()),sourceLinks=linksIn(source),sourceImages=imagesIn(source).map(({streamIndex,start,end,...item})=>item),sourceItems=[...sourceLinks,...sourceImages];
   let changes=[],busy=false,disposed=false,renderer=null;
   const panel=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Images, hyperlinks and page previews';panel.className='document-v2-search';
-  const note=document.createElement('p');note.textContent='Add PNG/JPEG images or edit URL link rectangles. Position and size use original-page PDF points from the bottom-left; supported upward flow is applied at preview/export. Supported original images can also be moved, resized, replaced or deleted. Clipped, rotated, nested-form and inline images, and internal destination links, remain protected. Object edits can be exported alongside text flow on other pages; added objects can follow verified same-page upward text movement. Objects crossing a moving boundary or affected by a page cascade remain protected.';
+  const note=document.createElement('p');note.textContent='Add PNG/JPEG images or edit URL link rectangles. Position and size use original-page PDF points from the bottom-left; verified flow is applied at preview/export. Supported original images can also be moved, resized, replaced or deleted. Clipped, rotated, nested-form and inline images, and internal destination links, remain protected. Object edits can be exported alongside text flow on other pages; added images and links can follow verified same-page and cross-page flow. Original hyperlinks retain their actions during supported cascades. Objects crossing a cut boundary and original-image edits inside reconstructed slices remain protected.';
   const fields=document.createElement('div');fields.className='document-v2-actions';
   function field(label,type='number'){
     const wrap=document.createElement('label'),input=document.createElement('input');input.type=type;if(type==='number')input.step='0.1';wrap.append(label+' ',input);fields.append(wrap);return input;
@@ -66,8 +66,8 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
   }
   function selected(){const item=currentItems().find(item=>item.id===selection.value);if(!item)throw new Error('Select an image or hyperlink first.');return item;}
   function geometry(){return {pageIndex:Number(pageField.value)-1,x:Number(x.value),y:Number(y.value),width:Number(width.value),height:Number(height.value)};}
-  function validate(item){
-    const box=boxes[item.pageIndex];
+  function validate(item,outputBoxes=boxes){
+    const box=outputBoxes[item.pageIndex];
     if(!box||!Number.isInteger(item.pageIndex)||!['x','y','width','height'].every(key=>Number.isFinite(item[key]))||item.width<=0||item.height<=0||item.x<box.x||item.y<box.y||item.x+item.width>box.x+box.width+.001||item.y+item.height>box.y+box.height+.001)throw new Error('The object rectangle must fit inside the selected page.');
     if(item.kind==='link')safeUrl(item.url);
     else if(item.kind!=='image'||(!item.source&&!item.bytes)||(item.bytes&&(!(item.bytes instanceof Uint8Array)||!['png','jpg'].includes(item.format))))throw new Error('Invalid image data.');
@@ -109,36 +109,36 @@ export async function createPdfObjectTools(file,{onChange,getBaseBytes,getEditor
     const state=exportState||getEditorState();
     const doc=await PDFDocument.load(bytes.slice(),{updateMetadata:false});
     const exportChanges=assertObjectLayout(changes,state,boxes.length,doc.getPageCount());
-    const flags=detectDocumentFlags(source);
-    if(flags.signed)throw new Error('Signed PDFs are protected from image and hyperlink edits.');
+    const flags=detectDocumentFlags(doc);
+    if(flags.signed||detectDocumentFlags(source).signed)throw new Error('Signed PDFs are protected from image and hyperlink edits.');
     for(const item of exportChanges)if(!formRegionSafe(flags,item.pageIndex,item))throw new Error('This object edit overlaps a protected PDF form field.');
-    const currentLinks=linksIn(doc),deletions=new Map();
+    const outputBoxes=doc.getPages().map(page=>page.getCropBox()),currentLinks=linksIn(doc),deletions=new Map();
     await applyImageChanges(doc,exportChanges);
     for(const item of exportChanges){
       const page=doc.getPage(item.pageIndex);
       if(item.kind==='image'){
         if(item.source)continue;
-        validate(item);const image=item.format==='png'?await doc.embedPng(item.bytes):await doc.embedJpg(item.bytes);
+        validate(item,outputBoxes);const image=item.format==='png'?await doc.embedPng(item.bytes):await doc.embedJpg(item.bytes);
         page.drawImage(image,{x:item.x,y:item.y,width:item.width,height:item.height});continue;
       }
       let annotations=page.node.lookupMaybe(PDFName.of('Annots'),PDFArray);
       if(item.source){
-        const match=currentLinks.find(link=>link.pageIndex===item.pageIndex&&link.source.url===item.source.url&&JSON.stringify(link.source.rect)===JSON.stringify(item.source.rect)&&link.source.index===item.source.index);
+        const matches=currentLinks.filter(link=>link.pageIndex===item.pageIndex&&link.source.url===item.source.url&&JSON.stringify(link.source.rect)===JSON.stringify(item.source.rect));const match=matches.length===1?matches[0]:null;
         if(!match)throw new Error('An original hyperlink changed during text/OCR export. Its edit was not applied.');
         // Clone the annotation, preserving unrelated fields and shared objects.
-        const annotation=doc.context.lookup(annotations.get(item.source.index)).clone(doc.context);
-        if(item.deleted){const list=deletions.get(item.pageIndex)||[];list.push(item.source.index);deletions.set(item.pageIndex,list);continue;}
-        else{validate(item);annotation.set(PDFName.of('Rect'),doc.context.obj([item.x,item.y,item.x+item.width,item.y+item.height]));annotation.set(PDFName.of('A'),doc.context.obj({S:'URI',URI:PDFString.of(safeUrl(item.url))}));annotation.delete(PDFName.of('Dest'));}
+        const annotation=doc.context.lookup(annotations.get(match.source.index)).clone(doc.context);
+        if(item.deleted){const list=deletions.get(item.pageIndex)||[];list.push(match.source.index);deletions.set(item.pageIndex,list);continue;}
+        else{validate(item,outputBoxes);annotation.set(PDFName.of('Rect'),doc.context.obj([item.x,item.y,item.x+item.width,item.y+item.height]));annotation.set(PDFName.of('A'),doc.context.obj({S:'URI',URI:PDFString.of(safeUrl(item.url))}));annotation.delete(PDFName.of('Dest'));}
         // Clone the array too, so an inherited/shared annotation array is not edited.
-        annotations=annotations.clone(doc.context);annotations.set(item.source.index,doc.context.register(annotation));page.node.set(PDFName.of('Annots'),annotations);
+        annotations=annotations.clone(doc.context);annotations.set(match.source.index,doc.context.register(annotation));page.node.set(PDFName.of('Annots'),annotations);
       }else{
-        validate(item);annotations=annotations?annotations.clone(doc.context):doc.context.obj([]);
+        validate(item,outputBoxes);annotations=annotations?annotations.clone(doc.context):doc.context.obj([]);
         annotations.push(doc.context.register(doc.context.obj({Type:'Annot',Subtype:'Link',Rect:[item.x,item.y,item.x+item.width,item.y+item.height],Border:[0,0,0],A:{S:'URI',URI:PDFString.of(safeUrl(item.url))}})));page.node.set(PDFName.of('Annots'),annotations);
       }
     }
     for(const [index,indices] of deletions){const page=doc.getPage(index),annots=page.node.lookup(PDFName.of('Annots'),PDFArray).clone(doc.context);for(const position of indices.sort((a,b)=>b-a))annots.remove(position);page.node.set(PDFName.of('Annots'),annots);}
     const out=new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false}));
-    await verifyFormPreservation(original,out);
+    await verifyFormPreservation(original,out,{reflowMetrics:state.reflowMetrics||[]});
     const check=await PDFDocument.load(out.slice(),{updateMetadata:false});if(check.getPageCount()!==doc.getPageCount())throw new Error('Object export lost a page.');
     return out;
   }
