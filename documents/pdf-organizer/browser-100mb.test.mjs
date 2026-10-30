@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
-import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {readFile,writeFile,mkdtemp,rm,open} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {resolve, extname, join} from 'node:path';
@@ -28,6 +28,14 @@ assert(input.length>99*1024*1024&&input.length<=MAX_PDF_FILE_BYTES,
 const testDir=await mkdtemp(join(tmpdir(),'organizer-100mb-'));
 const testFile=join(testDir,'synthetic-near-100mb.pdf');
 await writeFile(testFile,input);
+// Create sparse >100 MiB and 2 MiB files: the UI must reject these by
+// file/session byte counts without attempting PDF parsing.
+const overLimit=join(testDir,'above-100mb.pdf');
+const combinedExcess=join(testDir,'combined-excess.pdf');
+for(const [name,size] of [[overLimit,MAX_PDF_FILE_BYTES+1],[combinedExcess,2*1024*1024]]){
+  const fh=await open(name,'w');
+  try{await fh.truncate(size);}finally{await fh.close();}
+}
 const server=createServer(async(req,res)=>{
  try{
    const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
@@ -67,6 +75,18 @@ try{
     assert.equal(verified.getPageCount(),1);
     assert(verified.catalog.has(P.PDFName.of('SyntheticQAData')),
       'Document-level resource must survive same-source export');
+    // While the near-100 MB PDF is still loaded, another 2 MB would exceed
+    // the 100 MB session cap; this must not mutate the verified result.
+    await page.locator('#file').setInputFiles(combinedExcess);
+    await page.waitForFunction(()=>/combined PDF input limit is 100 MB/i.test(
+      document.querySelector('#status')?.textContent||''),null,{timeout:15000});
+    assert.equal(await page.locator('#grid .card').count(),1);
+    assert.equal(await page.locator('#verifiedDownload').count(),1);
+    await page.locator('#file').setInputFiles(overLimit);
+    await page.waitForFunction(()=>/PDF cannot exceed 100 MB/i.test(
+      document.querySelector('#status')?.textContent||''),null,{timeout:15000});
+    assert.equal(await page.locator('#grid .card').count(),1);
+    assert.equal(await page.locator('#verifiedDownload').count(),1);
     assert.deepEqual(errors,[],'No JavaScript errors expected');
     console.log(JSON.stringify({audit:'100mb-real-ui',browser:browserName,mobile,result:'PASS',
       inputBytes:input.length,outputBytes:output.length,uploadMs:uploadedMs,
