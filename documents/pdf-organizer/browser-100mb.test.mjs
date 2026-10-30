@@ -12,7 +12,10 @@ import {MAX_PDF_FILE_BYTES} from './limits.js';
 
 const P=createRequire(import.meta.url)('../../assets/vendor/pdf-lib.js');
 const moduleDir=process.env.ORGANIZER_TEST_MODULES||process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES;
-const {chromium}=await import(moduleDir?pathToFileURL(moduleDir+'/playwright/index.mjs').href:'playwright');
+const {chromium,firefox,webkit}=await import(moduleDir?pathToFileURL(moduleDir+'/playwright/index.mjs').href:'playwright');
+const browserName=process.env.BROWSER||'chromium';
+const browserType={chromium,firefox,webkit}[browserName];
+assert(browserType,'Unsupported browser: '+browserName);
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const doc=await P.PDFDocument.create({updateMetadata:false});
 doc.addPage([400,600]).drawText('100 MB UI Acceptance Test',{x:50,y:470});
@@ -40,7 +43,7 @@ const port=server.address().port;
 const base='http://127.0.0.1:'+port+'/';
 let browser;
 try{
- browser=await chromium.launch({headless:true,timeout:30000});
+ browser=await browserType.launch({headless:true,timeout:30000});
  for(const mobile of [false,true]){
    const ctx=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1366,height:900},
      hasTouch:mobile,acceptDownloads:true});
@@ -65,7 +68,7 @@ try{
     assert(verified.catalog.has(P.PDFName.of('SyntheticQAData')),
       'Document-level resource must survive same-source export');
     assert.deepEqual(errors,[],'No JavaScript errors expected');
-    console.log(JSON.stringify({audit:'100mb-real-ui',mobile,result:'PASS',
+    console.log(JSON.stringify({audit:'100mb-real-ui',browser:browserName,mobile,result:'PASS',
       inputBytes:input.length,outputBytes:output.length,uploadMs:uploadedMs,
       totalMs:Math.round(performance.now()-start),pageErrors:errors.length}));
    }finally{await ctx.close();}
