@@ -82,8 +82,32 @@ try {
       assert.equal(await page.locator('#grid .card').count(),480);
       assert.equal(await page.locator('#verifiedDownload').count(),0);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+      await page.evaluate(()=>{
+        window.__clearTrace=[];
+        for(const kind of ['pointerdown','pointerup','touchstart','touchend','click']){
+          document.addEventListener(kind,event=>{
+            const button=document.querySelector('#clearSession');
+            const r=button?.getBoundingClientRect();
+            window.__clearTrace.push({kind,target:event.target?.id||event.target?.tagName,
+              rect:r?{y:Math.round(r.y),height:Math.round(r.height)}:null,scrollY:window.scrollY});
+          },{capture:true,passive:true});
+        }
+      });
       await click(page.locator('#clearSession'));
-      await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:20000});
+      try{
+        await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:20000});
+      }catch(error){
+        const debug=await page.evaluate(()=>({
+          status:document.querySelector('#status')?.textContent,
+          cards:document.querySelectorAll('#grid .card').length,
+          dropHidden:document.querySelector('#drop')?.hidden,
+          buttonDisabled:document.querySelector('#clearSession')?.disabled,
+          rootBusy:document.querySelector('#pdf-organizer')?.getAttribute('aria-busy'),
+          scrollY:window.scrollY,trace:window.__clearTrace
+        }));
+        console.error('LARGE-CLEAR-SESSION-TRACE',JSON.stringify({browser:name,mobile,debug,errors}));
+        throw error;
+      }
       assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
       console.log(JSON.stringify({browser:name,mobile,stress:'PASS',bombBytes:bomb.length,bombDecodedMiB:40,bombRejectMs:rejectedMs,
         recoveryExportPages:out.getPageCount(),overLimitPages:2001,largeTextPages:480,largeUploadMs:loadedMs,cleared480Pages:true,
