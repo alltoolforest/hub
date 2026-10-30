@@ -57,12 +57,18 @@ export function assertResourceAdmission(doc,P) {
   }
 }
 
-// PDF decoding must not silently bypass size limits because a compressed
-// Flate stream is tiny on disk. This runs in the upload inspection worker
-// before PDF.js preview AND independently in the export worker.
-// This bounds decoded Flate streams, not all possible PDF memory allocations.
+// PDF decoding must not bypass safety checks because a Flate stream is tiny
+// on disk. Inspect compressed data incrementally, *without retaining* the
+// expanded bytes. Stream sizes across 56 or 2,000 different pages do not
+// represent simultaneously allocated browser memory: do not reject ordinary
+// multi-page documents using the old 128 MiB cumulative decoded-byte cap.
+// Instead bound any one stream, suspicious expansion ratios and total decoding
+// work. PDF.js rendering memory is controlled separately through lazy previews.
 export async function assertExpandedStreamBudget(doc,P,{
-  perStreamLimit=24*1024*1024,totalLimit=128*1024*1024,
+  perStreamLimit=256*1024*1024,
+  totalLimit=8*1024*1024*1024,
+  maxExpansionRatio=256,
+  ratioEnforcementThreshold=24*1024*1024,
   encodedLimit=MAX_PDF_FILE_BYTES
 }={}) {
   const N=P.PDFName.of,ctx=doc.context;
@@ -77,7 +83,7 @@ export async function assertExpandedStreamBudget(doc,P,{
   function decodeAscii85(bytes){
     const chunks=[];let chunk=new Uint8Array(65536),pos=0,totalBytes=0;
     const emit=n=>{
-      if(totalBytes>=perStreamLimit)
+      if(totalBytes>=encodedLimit)
         throw Error('PDF decompression memory budget exceeded (ASCII85 stream).');
       chunk[pos++]=n;totalBytes++;
       if(pos===chunk.length){chunks.push(chunk);chunk=new Uint8Array(65536);pos=0;}
@@ -112,7 +118,7 @@ export async function assertExpandedStreamBudget(doc,P,{
     return out;
   }
   function decodeAsciiHex(bytes){
-    const output=new Uint8Array(Math.min(Math.ceil(bytes.length/2),perStreamLimit+1));
+    const output=new Uint8Array(Math.min(Math.ceil(bytes.length/2),encodedLimit+1));
     let high=-1,count=0;
     for(const c of bytes){
       if(c===9||c===10||c===12||c===13||c===32)continue;
@@ -120,10 +126,10 @@ export async function assertExpandedStreamBudget(doc,P,{
       const n=c>=48&&c<=57?c-48:c>=65&&c<=70?c-55:c>=97&&c<=102?c-87:-1;
       if(n<0)throw Error('Invalid ASCIIHex compressed PDF stream');
       if(high<0)high=n;
-      else {if(count>=perStreamLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
+      else {if(count>=encodedLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
         output[count++]=(high<<4)|n;high=-1;}
     }
-    if(high>=0){if(count>=perStreamLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
+    if(high>=0){if(count>=encodedLimit)throw Error('PDF decompression memory budget exceeded (ASCIIHex).');
       output[count++]=high<<4;}
     return output.subarray(0,count);
   }
@@ -162,8 +168,16 @@ export async function assertExpandedStreamBudget(doc,P,{
       for(;;){
         const {value,done}=await reader.read();if(done)break;
         expanded+=value.byteLength;
-        if(expanded>perStreamLimit||total+expanded>totalLimit)
-          throw Error('PDF decompression memory budget exceeded (expanded stream). Convert this PDF to a smaller, simpler copy.');
+        if(expanded>perStreamLimit)
+          throw Error('PDF decompression memory budget exceeded (single stream exceeds 256 MiB).');
+        // A tiny on-disk stream that expands hundreds of times is a distinct
+        // risk from normal Flate image/document compression. Reject only when
+        // BOTH the size and ratio are excessive; keep the 40 MiB/92 KB bomb
+        // safely blocked while allowing large conventional image streams.
+        if(expanded>ratioEnforcementThreshold&&expanded>encoded.length*maxExpansionRatio)
+          throw Error('PDF decompression memory budget exceeded (unsafe compression ratio).');
+        if(total+expanded>totalLimit)
+          throw Error('PDF decompression processing budget exceeded (aggregate decode work).');
       }
     }catch(error){
       if(/budget exceeded/i.test(error.message))throw error;
