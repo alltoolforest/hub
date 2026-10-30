@@ -4,9 +4,10 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {resolve, extname} from 'node:path';
+import {resolve, extname, join} from 'node:path';
 import {MAX_PDF_FILE_BYTES} from './limits.js';
 
 const P=createRequire(import.meta.url)('../../assets/vendor/pdf-lib.js');
@@ -21,6 +22,9 @@ doc.catalog.set(P.PDFName.of('SyntheticQAData'),
 const input=Buffer.from(await doc.save({useObjectStreams:false}));
 assert(input.length>99*1024*1024&&input.length<=MAX_PDF_FILE_BYTES,
   'Synthetic PDF is not within the valid 99–100 MiB boundary');
+const testDir=await mkdtemp(join(tmpdir(),'organizer-100mb-'));
+const testFile=join(testDir,'synthetic-near-100mb.pdf');
+await writeFile(testFile,input);
 const server=createServer(async(req,res)=>{
  try{
    const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
@@ -46,8 +50,7 @@ try{
     await page.goto(base+'documents/pdf-organizer/',{waitUntil:'domcontentloaded'});
     assert.match(await page.locator('#pdf-organizer').innerText(),/100 MB/);
     const start=performance.now();
-    await page.locator('#file').setInputFiles({name:'100mb-valid-synthetic.pdf',
-      mimeType:'application/pdf',buffer:input});
+    await page.locator('#file').setInputFiles(testFile);
     await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===1,null,{timeout:120000});
     const uploadedMs=Math.round(performance.now()-start);
     const download=page.waitForEvent('download',{timeout:120000});
@@ -67,4 +70,4 @@ try{
       totalMs:Math.round(performance.now()-start),pageErrors:errors.length}));
    }finally{await ctx.close();}
  }
-}finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
+}finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));await rm(testDir,{recursive:true,force:true});}
