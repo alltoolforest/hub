@@ -1,5 +1,5 @@
 import {buildOrganizedPdf, initialPlan} from '../../assets/js/pdf-organizer-integrity.js';
-import {MAX_PDF_FILE_BYTES, MAX_PDF_PAGES} from './limits.js';
+import {MAX_PDF_FILE_BYTES, MAX_PDF_SESSION_BYTES, MAX_PDF_PAGES} from './limits.js';
 
 export function safeFilename(value) {
   let s=String(value||'organized').normalize('NFKC').replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069\\/:*?"<>|]/g,'_').replace(/[. ]+$/g,'').replace(/\.pdf$/i,'').slice(0,120);
@@ -262,8 +262,13 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
   if(!Array.isArray(items)||!items.length||items.length>MAX_PDF_PAGES)throw Error('Choose between 1 and 2,000 output pages for Organize PDF.');
   const ids=new Set(items.filter(i=>!i.blank).map(i=>i.src));
   const docs=new Map();
+  let totalInputBytes=0;
   for(const id of ids){
     const s=sources.find(x=>x.id===id);if(!s)throw Error('Source PDF is missing.');
+    if(!(s.bytes instanceof Uint8Array))throw Error('Invalid source PDF bytes.');
+    if(s.bytes.byteLength>MAX_PDF_FILE_BYTES)throw Error('Organize PDF accepts individual PDFs up to 100 MB.');
+    totalInputBytes+=s.bytes.byteLength;
+    if(totalInputBytes>MAX_PDF_SESSION_BYTES)throw Error('Organize PDF accepts up to 100 MB of combined source PDFs per session.');
     const doc=await P.PDFDocument.load(s.bytes,{updateMetadata:false,throwOnInvalidObject:true});
     inspectSecurity(doc,P);assertResourceAdmission(doc,P);await assertExpandedStreamBudget(doc,P);docs.set(id,doc);check();
   }
