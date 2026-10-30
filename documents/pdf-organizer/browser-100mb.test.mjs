@@ -3,6 +3,7 @@
 // it is not trailing non-PDF padding or a forged File.size field.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
 import {createServer} from 'node:http';
 import {readFile,writeFile,mkdtemp,rm,open} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -17,6 +18,7 @@ const browserName=process.env.BROWSER||'chromium';
 const browserType={chromium,firefox,webkit}[browserName];
 assert(browserType,'Unsupported browser: '+browserName);
 const root=fileURLToPath(new URL('../../',import.meta.url));
+const hosted=process.env.ORGANIZER_DEPLOYED_URL;
 const doc=await P.PDFDocument.create({updateMetadata:false});
 doc.addPage([400,600]).drawText('100 MB UI Acceptance Test',{x:50,y:470});
 const filler=MAX_PDF_FILE_BYTES-256*1024;
@@ -46,9 +48,24 @@ const server=createServer(async(req,res)=>{
    res.end(bytes);
  }catch{res.statusCode=404;res.end();}
 });
-await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const port=server.address().port;
-const base='http://127.0.0.1:'+port+'/';
+let base;
+if(hosted){
+  base=hosted;
+  const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+  for(const path of ['documents/pdf-organizer/index.html','documents/pdf-organizer/limits.js',
+    'documents/pdf-organizer/organizer.js','documents/pdf-organizer/engine.js',
+    'documents/pdf-organizer/inspect-worker.js','documents/pdf-organizer/verify.js']){
+    const url=new URL(path,base);url.searchParams.set('organizer_audit','100mb');
+    const response=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+    assert.equal(response.status,200,'Deployed asset missing: '+path);
+    const remote=Buffer.from(await response.arrayBuffer()), local=await readFile(resolve(root,path));
+    assert.equal(hash(remote),hash(local),'Deployed asset does not match main: '+path);
+    console.log(JSON.stringify({audit:'hosted-asset-match',path,bytes:remote.length,sha256:hash(remote)}));
+  }
+}else{
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  base='http://127.0.0.1:'+server.address().port+'/';
+}
 let browser;
 try{
  browser=await browserType.launch({headless:true,timeout:30000});
@@ -58,7 +75,7 @@ try{
    try{
     const page=await ctx.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(base+'documents/pdf-organizer/',{waitUntil:'domcontentloaded'});
+    await page.goto(new URL('documents/pdf-organizer/',base).href,{waitUntil:'domcontentloaded'});
     assert.match(await page.locator('#pdf-organizer').innerText(),/100 MB/);
     const start=performance.now();
     await page.locator('#file').setInputFiles(testFile);
@@ -93,4 +110,4 @@ try{
       totalMs:Math.round(performance.now()-start),pageErrors:errors.length}));
    }finally{await ctx.close();}
  }
-}finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));await rm(testDir,{recursive:true,force:true});}
+}finally{if(browser)await browser.close();if(server.listening)await new Promise(resolve=>server.close(resolve));await rm(testDir,{recursive:true,force:true});}
