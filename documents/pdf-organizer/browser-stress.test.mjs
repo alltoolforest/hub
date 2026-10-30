@@ -108,6 +108,9 @@ try {
         console.error('LARGE-CLEAR-SESSION-TRACE',JSON.stringify({browser:name,mobile,debug,errors}));
         throw error;
       }
+      const clickTrace=await page.evaluate(()=>window.__clearTrace||[]);
+      assert(clickTrace.some(e=>e.kind==='click'&&e.target==='clearSession'),
+        'Clear session must receive a real click after scrolling through 480 cards');
       assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
       console.log(JSON.stringify({browser:name,mobile,stress:'PASS',bombBytes:bomb.length,bombDecodedMiB:40,bombRejectMs:rejectedMs,
         recoveryExportPages:out.getPageCount(),overLimitPages:2001,largeTextPages:480,largeUploadMs:loadedMs,cleared480Pages:true,
