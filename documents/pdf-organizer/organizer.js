@@ -1,5 +1,6 @@
 import {verifyExport} from './verify.js';
 import {safeFilename} from './engine.js';
+import {MAX_PDF_FILE_BYTES, MAX_PDF_SESSION_BYTES, MAX_PDF_PAGES} from './limits.js';
 
 import * as pdfjsLib from '../../assets/vendor/pdf.mjs';
 import {ensurePdfPreviewCompatibility} from '../../assets/js/pdf-organizer-compat.js';
@@ -77,9 +78,9 @@ function mutate(fn, msg) {
     render();toast(error?.message||'This operation could not be completed.');
     return;
   }
-  if(S.items.length>2000) {
+  if(S.items.length>MAX_PDF_PAGES) {
     S.items=previous;S.nextUid=beforeUid;
-    render();toast('This candidate supports at most 2,000 pages.');
+    render();toast('Organize PDF supports at most 2,000 pages.');
     return;
   }
   invalidateDownload();
@@ -106,8 +107,10 @@ async function addFiles(fileList) {
   if(!files.length)return toast('Please choose PDF files.');
   // Candidate budgets limit admitted source bytes; PDF parser allocations are
   // not streaming and still require stress verification before production.
-  const limit=64*1024*1024;
-  if(files.reduce((n,f)=>n+f.size,0)+S.sources.reduce((n,f)=>n+f.size,0)>limit)return toast('This candidate supports 64 MB total input per session.');
+  const oversized=files.find(f=>f.size>MAX_PDF_FILE_BYTES);
+  if(oversized)return toast('A PDF cannot exceed 100 MB. Choose a smaller file.');
+  if(files.reduce((n,f)=>n+f.size,0)+S.sources.reduce((n,f)=>n+f.size,0)>MAX_PDF_SESSION_BYTES)
+    return toast('The combined PDF input limit is 100 MB per session. Clear the session before adding another large file.');
   cancelled=false;setBusy(true);const staged=[];const added=[];
   try {
     for(const f of files){
@@ -125,7 +128,7 @@ async function addFiles(fileList) {
         try{doc=await task.promise;}catch(e){await task.destroy();task=null;throw e;}finally{verifyTask=null;}
         if(cancelled)throw new DOMException('Cancelled','AbortError');
         if(doc.numPages!==inspected.pages)throw Error('PDF parsers disagree about page count.');
-        if(S.items.length+added.length+doc.numPages>2000)throw Error('This candidate supports 2,000 pages per session.');
+        if(S.items.length+added.length+doc.numPages>MAX_PDF_PAGES)throw Error('Organize PDF supports up to 2,000 pages per session.');
         const src={id:S.nextSrc++,name:f.name,size:f.size,bytes,pdfjs:doc,loadingTask:task,pages:doc.numPages,sizes:inspected.sizes,warnings:inspected.warnings};
         src.color=COLORS[(src.id-1)%COLORS.length];staged.push(src);doc=null;
         for(let p=0;p<src.pages;p++)added.push(newItem(src.id,p));
