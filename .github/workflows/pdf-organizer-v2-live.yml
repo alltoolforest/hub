@@ -35,3 +35,6 @@ jobs:
       - run: node documents/pdf-organizer/browser-stress.test.mjs
         env:
           BROWSER: ${{ matrix.browser }}
+      - name: Verify 100 MB PDF in desktop/mobile Chromium
+        if: matrix.browser == 'chromium'
+        run: node documents/pdf-organizer/browser-100mb.test.mjs
