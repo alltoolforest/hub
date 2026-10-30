@@ -1,4 +1,5 @@
 import {buildOrganizedPdf, initialPlan} from '../../assets/js/pdf-organizer-integrity.js';
+import {MAX_PDF_FILE_BYTES, MAX_PDF_PAGES} from './limits.js';
 
 export function safeFilename(value) {
   let s=String(value||'organized').normalize('NFKC').replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069\\/:*?"<>|]/g,'_').replace(/[. ]+$/g,'').replace(/\.pdf$/i,'').slice(0,120);
@@ -62,7 +63,7 @@ export function assertResourceAdmission(doc,P) {
 // This bounds decoded Flate streams, not all possible PDF memory allocations.
 export async function assertExpandedStreamBudget(doc,P,{
   perStreamLimit=24*1024*1024,totalLimit=128*1024*1024,
-  encodedLimit=64*1024*1024
+  encodedLimit=MAX_PDF_FILE_BYTES
 }={}) {
   const N=P.PDFName.of,ctx=doc.context;
   let total=0,checked=0;
@@ -258,7 +259,7 @@ export async function buildCandidate(sources,items,P,{blankSize='match',signal,o
   const check=()=>{if(signal?.aborted)throw new DOMException('Cancelled','AbortError');};
   const tick=async(p,m)=>{onProgress(p,m);await new Promise(r=>setTimeout(r,0));check();};
   check();
-  if(!Array.isArray(items)||!items.length||items.length>2000)throw Error('Choose between 1 and 2,000 output pages for this candidate.');
+  if(!Array.isArray(items)||!items.length||items.length>MAX_PDF_PAGES)throw Error('Choose between 1 and 2,000 output pages for Organize PDF.');
   const ids=new Set(items.filter(i=>!i.blank).map(i=>i.src));
   const docs=new Map();
   for(const id of ids){
