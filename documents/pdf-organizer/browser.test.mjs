@@ -116,7 +116,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    assert.equal(await page.locator('#grid .card').count(),8);
    await activate(page.locator('#undo'));
    assert.equal(await page.locator('#grid .card').count(),14);
-   await activate(page.locator('#redo'));
+   await activate(page.locator(mobile?'#redoMobile':'#redo'));
    assert.equal(await page.locator('#grid .card').count(),8);
    await activate(page.locator('#undo'));
    assert.equal(await page.locator('#grid .card').count(),14);
