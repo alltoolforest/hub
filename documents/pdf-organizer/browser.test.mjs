@@ -75,7 +75,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#grid .card').first().locator('[data-act=sel]').check();
    await activate(page.locator('[data-bulk=dup]'));assert.equal(await page.locator('#grid .card').count(),7);
    await activate(page.locator('#undo'));assert.equal(await page.locator('#grid .card').count(),6);
-   await activate(page.locator('#redo'));assert.equal(await page.locator('#grid .card').count(),7);
+   await activate(page.locator(mobile?'#redoMobile':'#redo'));assert.equal(await page.locator('#grid .card').count(),7);
    await activate(page.locator('[data-bulk=blank]'));assert.equal(await page.locator('#grid .card').count(),8);
    await activate(page.locator('#grid .card').first().locator('[data-act=open]').last());
    await page.waitForFunction(()=>document.querySelector('#pvCanvas').width>0);await page.evaluate(()=>{for(let i=0;i<5;i++)document.querySelector('#pvNext').click();});await activate(page.locator('#pvClose'));await page.locator('#pv').waitFor({state:'hidden'});
