@@ -31,7 +31,7 @@ const compactLayout=window.matchMedia('(max-width:700px)');
 function syncCompactLayout(){
   for(const id of ['advancedTools','exportOptions','safetyDetails']){
     const panel=$(id);
-    if(panel)panel.open=!compactLayout.matches;
+    if(panel)panel.open=false;
   }
 }
 syncCompactLayout();
