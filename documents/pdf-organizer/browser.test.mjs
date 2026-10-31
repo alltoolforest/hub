@@ -60,6 +60,18 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.goto(new URL('documents/pdf-organizer/',process.env.PDF_ORGANIZER_BASE_URL||'http://127.0.0.1:8765/').href);
    await page.locator('#file').setInputFiles({name:'file\" onmouseover=\"window.INJECTED=1.pdf',mimeType:'application/pdf',buffer});
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===6);
+   if(mobile){
+     assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),false);
+     assert.equal(await page.locator('#exportOptions').evaluate(el=>el.open),false);
+     assert.equal(await page.locator('#safetyDetails').evaluate(el=>el.open),false);
+     assert.equal(await page.locator('#bar').evaluate(el=>getComputedStyle(el).position),'fixed');
+     // Exercise the full tool regression via the intentionally collapsed
+     // advanced panel, without making its 15 actions always visible on phone.
+     await activate(page.locator('#advancedTools > summary'));
+     assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),true);
+   }else{
+     assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),true);
+   }
    await page.locator('#grid .card').first().locator('[data-act=sel]').check();
    await activate(page.locator('[data-bulk=dup]'));assert.equal(await page.locator('#grid .card').count(),7);
    await activate(page.locator('#undo'));assert.equal(await page.locator('#grid .card').count(),6);
