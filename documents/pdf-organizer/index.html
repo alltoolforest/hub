@@ -5,7 +5,7 @@
   </details>
   <p class="mobile-brief">Private in your browser · 100 MB limit · 2,000 pages</p>
 
-  <p class="lead">Reorder, rotate, delete, duplicate and insert pages, merge more PDFs, or extract just the pages you need. No account required.</p>
+  <p class="lead">Add a PDF, arrange its pages, then save your new file. No account needed.</p>
 
   <div id="drop" class="drop">
     <strong><span class="desktop-label">Drop PDF files here</span><span class="mobile-label">Choose PDF files to organize</span></strong>
@@ -13,7 +13,7 @@
     <p class="hint">You can add several PDFs. Their pages are combined into one grid.</p>
     <input id="file" type="file" accept="application/pdf,.pdf" multiple hidden>
   </div>
-  <p class="privacy">Your files are processed in your browser and are never uploaded.</p>
+  <p class="privacy">🔒 Your PDF stays on your device.</p>
 
   <div id="workspace" hidden>
     <div id="files" class="files" aria-label="Loaded files"></div>
@@ -24,14 +24,14 @@
         <button class="btn" id="addMore" type="button">+ Add PDF</button>
         <button class="btn" id="undo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
         <button class="btn desktop-quick" id="redo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
-        <button class="btn" data-bulk="selAll" type="button">Select all</button>
-        <button class="btn" data-bulk="selNone" type="button">Deselect</button>
-        <button class="btn mobile-quick" data-bulk="rotR" type="button" data-needsel>⟳ Rotate selected</button>
-        <button class="btn mobile-quick" data-bulk="del" type="button" data-needsel>Remove selected</button>
+        <button class="btn" data-bulk="rotR" type="button" data-needsel>⟳ Rotate</button>
+        <button class="btn" data-bulk="del" type="button" data-needsel>Remove</button>
       </div>
-      <details class="advanced-tools" id="advancedTools" open>
-        <summary>More page tools</summary>
+      <details class="advanced-tools" id="advancedTools">
+        <summary>More options · Selection, page order &amp; extras</summary>
         <div class="advanced-actions">
+          <button class="btn" data-bulk="selAll" type="button">Select all</button>
+          <button class="btn" data-bulk="selNone" type="button">Deselect</button>
           <button class="btn" data-bulk="selInv" type="button">Invert selection</button>
           <button class="btn" data-bulk="selOdd" type="button">Select odd</button>
           <button class="btn" data-bulk="selEven" type="button">Select even</button>
@@ -53,7 +53,7 @@
         </div>
       </details>
     </div>
-    <p class="mobile-guide">Select pages to edit together, or use each page’s buttons. Tap <strong>More</strong> for moving and extra actions.</p>
+    <p class="mobile-guide">Tap a page checkbox to select it. Drag to reorder, or use each page’s More button.</p>
 
     <ul id="grid" class="grid" aria-label="Pages"></ul>
   </div>
@@ -63,7 +63,7 @@
       <div class="stat" id="stat"></div>
       <div class="mobile-stat" id="mobileStat"></div>
       <div class="export-row">
-        <details class="export-options" id="exportOptions" open>
+        <details class="export-options" id="exportOptions">
           <summary>File options</summary>
           <div class="export-options-body">
             <label class="stat">Blank page size
@@ -72,7 +72,7 @@
             <label class="output-name-label">File name <input id="outName" type="text" aria-label="Output file name" placeholder="organized.pdf"></label>
           </div>
         </details>
-        <button class="btn primary" id="create" type="button"><span class="desktop-label">Create &amp; download PDF</span><span class="mobile-label">Save PDF</span></button>
+        <button class="btn primary" id="create" type="button"><span class="desktop-label">Save PDF</span><span class="mobile-label">Save PDF</span></button>
         <button id="cancel" class="btn" type="button" hidden>Cancel</button>
       </div>
       <div class="mobile-process" id="mobileProcess" hidden></div>

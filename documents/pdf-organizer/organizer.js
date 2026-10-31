@@ -31,7 +31,7 @@ const compactLayout=window.matchMedia('(max-width:700px)');
 function syncCompactLayout(){
   for(const id of ['advancedTools','exportOptions','safetyDetails']){
     const panel=$(id);
-    if(panel)panel.open=!compactLayout.matches;
+    if(panel)panel.open=false;
   }
 }
 syncCompactLayout();
@@ -302,6 +302,7 @@ function render() {
   const kept = S.items.filter((i) => !i.removed).length, sel = S.items.filter((i) => i.selected).length;
   el.stat.textContent = `${S.items.length} pages · ${S.items.length - kept} removed · ${sel} selected · output ${kept} page${kept === 1 ? '' : 's'}`;
   $('mobileStat').textContent = `${kept} page${kept===1?'':'s'} to save${sel?' · '+sel+' selected':''}`;
+  el.root.classList.toggle('has-selection', sel > 0);
   el.create.disabled = kept === 0;
   document.querySelectorAll('[data-needsel]').forEach((b) => (b.disabled = sel === 0));
   el.undo.disabled = !S.undo.length; el.redo.disabled = !S.redo.length;

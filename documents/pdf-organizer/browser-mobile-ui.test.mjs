@@ -63,12 +63,12 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
       await page.waitForFunction(()=>document.querySelector('#pv')?.open&&document.querySelector('#pvCanvas').width>0,null,{timeout:20000});
       await page.locator('#pvClose').tap();
       await page.locator('#pv').waitFor({state:'hidden'});
+      await page.locator('#advancedTools > summary').tap();
+      assert.equal(await advanced.evaluate(el=>el.open),true);
       await page.locator('[data-bulk=selAll]').tap();
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),6);
       await page.locator('.toolbar-primary [data-bulk=rotR]').tap();
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),6);
-      await page.locator('#advancedTools > summary').tap();
-      assert.equal(await advanced.evaluate(el=>el.open),true);
       await page.locator('#range').fill('1-2');
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),2);
       await page.locator('#range').fill('');
@@ -84,8 +84,11 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
       const clickPoint=await page.locator('#create').boundingBox();
       assert(clickPoint&&clickPoint.y>=0&&clickPoint.y+clickPoint.height<=844,'Save button must stay onscreen');
     }else{
+      assert.equal(await advanced.evaluate(el=>el.open),false);
+      assert.equal(await options.evaluate(el=>el.open),false);
+      await page.locator('#advancedTools > summary').click();
       assert.equal(await advanced.evaluate(el=>el.open),true);
-      assert.equal(await options.evaluate(el=>el.open),true);
+      await page.locator('#advancedTools > summary').click();
       assert.equal(await page.locator('#grid .card').first().locator('[data-act=more]').isVisible(),false);
     }
     const download=page.waitForEvent('download',{timeout:60000});
@@ -105,7 +108,7 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
     }
     assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
     console.log(JSON.stringify({audit:'organizer-simplified-ui',browser:name,width,mobile,result:'PASS',
-      exportPages:out.getPageCount(),advancedInitiallyCollapsed:mobile,
+      exportPages:out.getPageCount(),advancedInitiallyCollapsed:true,
       stickySave:mobile,pageErrors:errors.length,externalRequests:remote.length}));
    }catch(e){fail++;console.error('MOBILE_UI_FAIL',name,width,e.stack||e);
      try{console.error('STATUS',await page.locator('#status').innerText());}catch{}

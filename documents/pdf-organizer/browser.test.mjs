@@ -70,6 +70,8 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
      await activate(page.locator('#advancedTools > summary'));
      assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),true);
    }else{
+     assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),false);
+     await activate(page.locator('#advancedTools > summary'));
      assert.equal(await page.locator('#advancedTools').evaluate(el=>el.open),true);
    }
    await page.locator('#grid .card').first().locator('[data-act=sel]').check();
@@ -97,6 +99,7 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===14);
    assert.equal(await page.evaluate(()=>document.querySelector('[onmouseover]')),null);
    const selectedBefore=await page.locator('#grid [data-act=sel]:checked').count();
+   if(!(await page.locator('#advancedTools').evaluate(el=>el.open))) await activate(page.locator('#advancedTools > summary'));
    await page.locator('#range').fill('2, not-a-range');
    assert.equal(await page.locator('#range').getAttribute('aria-invalid'),'true');
    assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),selectedBefore);

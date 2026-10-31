@@ -59,7 +59,8 @@ try{
     const page=await ctx.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.goto(base+'documents/pdf-organizer/',{waitUntil:'domcontentloaded'});
-    assert.match(await page.locator('#pdf-organizer').innerText(),/100 MB/);
+    // Limits are intentionally behind a disclosure; verify the actual policy text.
+    assert.match(await page.locator('#safetyDetails').textContent(),/100 MB/);
     const start=performance.now();
     await page.locator('#file').setInputFiles(testFile);
     await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===1,null,{timeout:120000});

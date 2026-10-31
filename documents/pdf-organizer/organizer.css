@@ -281,3 +281,42 @@ body{margin:0}
   .po .acts button{font-size:.75rem}
   .po .toolbar-primary>.btn{font-size:.83rem}
 }
+
+/* Progressive-disclosure workspace: keep primary page tools concise on desktop and mobile.
+   Only layout/presentation is changed; existing action handlers and PDF engine are untouched. */
+.po .advanced-tools:not([open]) .advanced-actions{display:none}
+.po .export-options:not([open]) .export-options-body{display:none}
+.po .toolbar-primary{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.po .toolbar-primary>.btn{min-height:44px}
+.po .advanced-tools>summary{cursor:pointer;list-style-position:inside;padding:10px 12px;font-weight:650}
+.po .advanced-tools{min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;margin-top:8px}
+.po .advanced-actions{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.po .advanced-actions .btn{min-height:40px}
+.po .bar #create{min-height:48px}
+@media (max-width:700px){
+  .po .toolbar-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .po .toolbar-primary>.btn{min-width:0}
+  .po .advanced-actions>.btn{min-height:44px}
+}
+
+/* Simple visual organizer – contextual actions, all-screen progressive disclosure. */
+.po .toolbar{position:relative;top:auto;display:block;padding:10px;margin:10px 0 14px}
+.po .toolbar-primary{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.po .toolbar-primary>[data-needsel]{display:none}
+.po.has-selection .toolbar-primary>[data-needsel]{display:inline-flex;align-items:center}
+.po .toolbar .advanced-tools{display:block;margin-top:8px}
+.po .toolbar .advanced-tools>summary{min-height:44px;display:list-item}
+.po .safety-details{margin-bottom:10px}
+.po .safety-details>summary{cursor:pointer;font-size:.88rem;color:var(--brand)}
+.po .files{margin:8px 0}
+.po .grid{margin-top:12px}
+.po .lead{max-width:72ch}
+.po .bar .export-options:not([open]) .export-options-body{display:none}
+@media (max-width:700px){
+ .po .toolbar-primary{display:flex;flex-wrap:wrap}
+ .po .toolbar-primary>.btn{flex:1 1 auto;min-width:calc(50% - 8px);min-height:44px}
+ .po .toolbar .advanced-tools{margin-top:8px}
+ .po .toolbar .advanced-actions{gap:8px}
+ .po .toolbar .advanced-actions>.btn{min-height:44px}
+ .po .card .acts button{min-height:44px}
+}
