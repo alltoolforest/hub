@@ -76,3 +76,198 @@ body{margin:0}
 /* Organizer-only adaptation to the existing site page shell. */
 .workspace-organizer-v2{min-width:0;padding:12px}
 @media(max-width:700px){.workspace-organizer-v2{padding:10px}.workspace-organizer-v2 .po{padding:12px 8px 28px}}
+
+
+/* Organize PDF V2 adaptive interface. Shared PDF engine and page state remain
+   unchanged. Desktop retains the full workbench; mobile exposes primary
+   operations first and reveals advanced controls on request. */
+.po .mobile-label,.po .mobile-brief,.po .mobile-guide,
+.po .mobile-stat,.po .mobile-process,.po .mobile-more-toggle,
+.po .mobile-quick,.po .mobile-advanced-redo{display:none}
+.po .toolbar-primary,.po .advanced-tools,.po .advanced-actions{display:contents}
+.po .advanced-tools>summary,.po .export-options>summary,
+.po .safety-details>summary{display:none}
+.po .advanced-actions>label{display:inline-flex;align-items:center;gap:6px}
+.po .desktop-advanced-rotate,.po .desktop-advanced-remove{display:none}
+.po .export-row,.po .export-options-body{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.po .export-options{display:contents}
+.po .output-name-label{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;color:var(--muted)}
+.po .export-row #create{min-height:44px}
+.po .bar progress{width:100%;height:7px}
+.po .mobile-brief{color:var(--muted)}
+.po .mobile-guide{color:var(--muted)}
+.po .safety-details>.warn{margin:0 0 10px}
+.po .card .mobile-more-toggle{display:none}
+.po .export-row summary,.po .advanced-tools summary,.po .safety-details summary{
+  cursor:pointer;user-select:none;border-radius:9px
+}
+
+@media (max-width:700px){
+  .workspace-organizer-v2{padding:8px!important}
+  .workspace-organizer-v2 .po{
+    padding:8px 4px calc(158px + env(safe-area-inset-bottom,0px));
+    --card-w:100px
+  }
+  .po .desktop-label,.po .desktop-quick{display:none!important}
+  .po .mobile-label{display:inline}
+  .po .lead{display:none}
+  .po .mobile-brief{display:block;margin:0 0 10px;font-size:.84rem}
+  .po .drop{padding:24px 14px}
+  .po .drop .hint{font-size:.82rem;line-height:1.4}
+  .po .drop #pick{width:100%;max-width:320px;margin-top:8px;min-height:48px}
+  .po .privacy{font-size:.82rem}
+  .po .safety-details{margin:2px 0 8px}
+  .po .safety-details>summary{
+    display:list-item;font-size:.84rem;font-weight:600;color:var(--brand);
+    padding:8px 10px;background:var(--surface);border:1px solid var(--line)
+  }
+  .po .safety-details>.warn{font-size:.82rem;margin:8px 0 0;padding:10px}
+  .po .files{margin:10px 0 8px;gap:5px}
+  .po .chip{font-size:.82rem}
+  .po .chip button{min-width:44px;min-height:44px}
+  .po .toolbar{
+    display:block;position:relative;top:auto;z-index:6;
+    padding:10px;border-radius:12px;margin:10px 0 8px
+  }
+  .po .toolbar-primary{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px
+  }
+  .po .toolbar-primary>.btn{
+    min-width:0;min-height:44px;font-size:.89rem;
+    white-space:normal;line-height:1.2
+  }
+  .po .toolbar-primary>[data-bulk="selAll"],
+  .po .toolbar-primary>[data-bulk="selNone"]{background:var(--accent)}
+  .po .toolbar-primary>.mobile-quick{display:inline-flex;align-items:center;justify-content:center}
+  .po .advanced-tools{
+    display:block;margin-top:9px;border:1px solid var(--line);
+    background:var(--surface);border-radius:9px;min-width:0
+  }
+  .po .advanced-tools>summary{
+    display:list-item;padding:11px 12px;font-size:.93rem;
+    font-weight:650;color:var(--ink);min-height:44px
+  }
+  .po .advanced-actions{
+    display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+    padding:8px 10px 12px;border-top:1px solid var(--line)
+  }
+  .po .advanced-actions>.btn{flex:1 1 auto;min-height:44px}
+  .po .advanced-actions>label{width:100%;justify-content:space-between;font-size:.85rem}
+  .po .advanced-actions input[type=text]{width:65%;max-width:240px}
+  .po .advanced-actions input[type=range]{width:65%}
+  .po .advanced-actions>.mobile-advanced-redo{display:inline-block}
+  .po .mobile-guide{display:block;margin:8px 2px 12px;font-size:.8rem;line-height:1.4}
+  .po .grid{grid-template-columns:1fr;gap:9px;margin:8px 0 16px}
+  .po .card{
+    display:grid;grid-template-columns:96px minmax(0,1fr);
+    grid-template-rows:auto 1fr;column-gap:10px;row-gap:7px;
+    min-height:155px;padding:9px;align-items:start
+  }
+  .po .thumb{
+    grid-column:1;grid-row:1/span 2;
+    width:96px;max-width:100%;aspect-ratio:1/1.35;
+    cursor:pointer
+  }
+  .po .chk{top:16px;left:16px;z-index:3}
+  .po .chk input{width:24px;height:24px}
+  .po .meta{
+    grid-column:2;grid-row:1;display:block;
+    min-width:0;margin:0;font-size:.88rem
+  }
+  .po .meta .nm{
+    display:block;min-width:0;white-space:normal;
+    overflow-wrap:anywhere;line-height:1.35;
+    max-height:2.7em;overflow:hidden
+  }
+  .po .meta .out{display:block;margin-top:4px;font-size:.78rem}
+  .po .acts{
+    grid-column:2;grid-row:2;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;align-content:start;min-width:0
+  }
+  .po .acts button{
+    min-width:0;min-height:44px;font-size:.8rem;
+    padding:4px 3px;line-height:1.15;white-space:normal
+  }
+  .po .acts button[data-act=rotR]::after{content:" Rotate"}
+  .po .acts button[data-act=del]::after{content:" Remove"}
+  .po .acts button[data-act=res]::after{content:" Restore"}
+  .po .acts button[data-act=open]::after{content:" Preview"}
+  .po .acts button[data-act=rotL],
+  .po .acts button[data-act=dup],
+  .po .acts button[data-act=blank],
+  .po .acts button[data-act=prev],
+  .po .acts button[data-act=next]{display:none}
+  .po .card .mobile-more-toggle{
+    display:block;background:var(--surface);
+    color:var(--ink);border-color:var(--line);
+    font-weight:600
+  }
+  .po .card.mobile-open .acts button[data-act=rotL],
+  .po .card.mobile-open .acts button[data-act=dup],
+  .po .card.mobile-open .acts button[data-act=blank],
+  .po .card.mobile-open .acts button[data-act=prev],
+  .po .card.mobile-open .acts button[data-act=next]{display:inline-block}
+  .po .goto{grid-column:1/-1;grid-row:3;display:none;margin:0}
+  .po .card.mobile-open .goto{display:flex}
+  .po .goto input{min-height:44px}
+  .po .bar{
+    position:fixed;z-index:60;left:0;right:0;bottom:0;
+    margin:0;padding:8px max(12px,env(safe-area-inset-left,0px))
+      calc(10px + env(safe-area-inset-bottom,0px));
+    border-top:2px solid var(--brand);box-shadow:0 -5px 20px rgba(0,0,0,.13)
+  }
+  .po .bar .in{display:grid;grid-template-columns:1fr;gap:5px;max-width:700px}
+  .po .bar #stat{display:none}
+  .po .bar .mobile-stat{
+    display:block;text-align:left;font-size:.81rem;font-weight:650;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
+  .po .bar .export-row{
+    display:grid;grid-template-columns:minmax(82px,auto) minmax(0,1fr);
+    align-items:center;gap:8px
+  }
+  .po .export-options{
+    display:block;position:relative;min-width:0
+  }
+  .po .export-options>summary{
+    display:list-item;min-height:44px;padding:10px 6px;
+    border:1px solid var(--line);font-size:.82rem;
+    font-weight:600;text-align:center;white-space:nowrap
+  }
+  .po .export-options-body{
+    position:absolute;bottom:calc(100% + 8px);left:0;
+    width:min(86vw,340px);padding:12px;
+    border:1px solid var(--line);border-radius:12px;
+    background:var(--card);box-shadow:0 -4px 20px rgba(0,0,0,.17);
+    display:flex;flex-direction:column;align-items:stretch;gap:12px
+  }
+  .po .export-options:not([open]) .export-options-body{display:none}
+  .po .export-options-body label{display:flex;flex-direction:column;gap:5px}
+  .po .export-options-body input,.po .export-options-body select{
+    width:100%;max-width:100%;min-height:44px
+  }
+  .po .bar #create{
+    width:100%;min-width:0;min-height:48px;
+    font-size:1rem;font-weight:750;padding:8px 10px
+  }
+  .po .bar #cancel{width:100%;min-height:44px}
+  .po[aria-busy=true] .bar .export-row{grid-template-columns:1fr}
+  .po[aria-busy=true] .bar #create,
+  .po[aria-busy=true] .bar #exportOptions{display:none}
+  .po .bar .mobile-process{
+    display:block;font-size:.77rem;line-height:1.25;color:var(--muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
+  .po .bar progress{width:100%;height:6px}
+  .po #clearSession{margin:8px 0;min-height:44px}
+  .po dialog{max-width:94vw;max-height:90dvh}
+  .po .pvhead{flex-wrap:wrap}
+}
+@media (max-width:360px){
+  .po .card{grid-template-columns:82px minmax(0,1fr);padding:8px;gap:7px}
+  .po .thumb{width:82px}
+  .po .acts button{font-size:.75rem}
+  .po .toolbar-primary>.btn{font-size:.83rem}
+}
