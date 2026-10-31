@@ -25,6 +25,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_SRC;
 /* ---------- State ---------- */
 const S = { sources: [], items: [], undo: [], redo: [], nextUid: 1, nextSrc: 1, anchor: null, pv: null };
 const $ = (id) => document.getElementById(id);
+// Adaptive presentation only; PDF parsing, history and export pipelines stay
+// shared across mobile and desktop. Advanced tools remain available on demand.
+const compactLayout=window.matchMedia('(max-width:700px)');
+function syncCompactLayout(){
+  for(const id of ['advancedTools','exportOptions','safetyDetails']){
+    const panel=$(id);
+    if(panel)panel.open=!compactLayout.matches;
+  }
+}
+syncCompactLayout();
+if(compactLayout.addEventListener)compactLayout.addEventListener('change',syncCompactLayout);
+else compactLayout.addListener(syncCompactLayout);
 const el = {
   drop: $('drop'), file: $('file'), pick: $('pick'), ws: $('workspace'), files: $('files'), warnings: $('warnings'),
   grid: $('grid'), bar: $('bar'), stat: $('stat'), status: $('status'), toast: $('toast'), root: $('pdf-organizer'),
@@ -36,6 +48,7 @@ function setBusy(value){
   busy=value; el.root.setAttribute('aria-busy',String(value));
   el.root.querySelectorAll('button,input,select').forEach(b=>{if(!['cancel','clearSession'].includes(b.id))b.disabled=value;});
   $('cancel').hidden=!value; $('progress').hidden=!value;
+  $('mobileProcess').hidden=!value;
   if(!value)render();
 }
 $('cancel').addEventListener('click',()=>{
@@ -59,7 +72,7 @@ const srcById = (id) => S.sources.find((s) => s.id === id);
 const newItem = (src, page, extra = {}) => ({ uid: S.nextUid++, src, page, rot: 0, removed: false, selected: false, blank: false, ...extra });
 const snap = () => S.items.map((i) => ({ ...i }));
 
-function status(msg) { el.status.textContent = msg; }
+function status(msg) { el.status.textContent = msg; $('mobileProcess').textContent=msg; }
 let toastTimer;
 function toast(msg) {
   el.toast.textContent = msg; el.toast.hidden = false; status(msg);
@@ -228,6 +241,7 @@ function cardHTML(it, idx, outPos, multi) {
     <button data-act="prev" aria-label="Move earlier" title="Move earlier">◀</button>
     <button data-act="next" aria-label="Move later" title="Move later">▶</button>
     <button data-act="open" aria-label="Preview page" title="Preview">⌕</button>
+    <button type="button" class="mobile-more-toggle" data-act="more" aria-expanded="false" aria-label="More actions for page ${it.page + 1}">⋯ More</button>
   </div>
   <label class="goto">Move to <input type="number" min="1" inputmode="numeric" data-act="goto" placeholder="${it.removed ? '—' : outPos}" aria-label="Move to position"></label>`;
 }
@@ -256,7 +270,7 @@ function render() {
     if(!it.removed)pos++;
     let li=cards.get(it.uid);
     if(!li){li=document.createElement('li');li.dataset.uid=it.uid;li.innerHTML=cardHTML(it,idx,pos,multi);cards.set(it.uid,li);observer.observe(li);}
-    li.className='card'+(it.selected?' sel':'')+(it.removed?' removed':'');
+    li.className='card'+(li.classList.contains('mobile-open')?' mobile-open':'')+(it.selected?' sel':'')+(it.removed?' removed':'');
     li.querySelector('[data-act="sel"]').checked=it.selected;
     li.querySelector('canvas').style.setProperty('--r',it.rot+'deg');
     const out=li.querySelector('.out');out.textContent=it.removed?'Removed':'#'+pos;
@@ -287,6 +301,7 @@ function render() {
 
   const kept = S.items.filter((i) => !i.removed).length, sel = S.items.filter((i) => i.selected).length;
   el.stat.textContent = `${S.items.length} pages · ${S.items.length - kept} removed · ${sel} selected · output ${kept} page${kept === 1 ? '' : 's'}`;
+  $('mobileStat').textContent = `${kept} page${kept===1?'':'s'} to save${sel?' · '+sel+' selected':''}`;
   el.create.disabled = kept === 0;
   document.querySelectorAll('[data-needsel]').forEach((b) => (b.disabled = sel === 0));
   el.undo.disabled = !S.undo.length; el.redo.disabled = !S.redo.length;
@@ -368,6 +383,7 @@ el.pick.addEventListener('click', () => el.file.click());
 $('addMore').addEventListener('click', () => el.file.click());
 el.file.addEventListener('change', () => { addFiles(el.file.files); el.file.value = ''; });
 el.undo.addEventListener('click', undo); el.redo.addEventListener('click', redo);
+$('redoMobile').addEventListener('click', redo);
 el.create.addEventListener('click', () => exportPdf(S.items.filter((i) => !i.removed), el.outName.value));
 el.blankSize.addEventListener('change',()=>{invalidateDownload();for(const it of S.items)if(it.blank){const card=cards.get(it.uid);if(card?.dataset.visible==='1')paintThumb(card,it);}});
 el.zoom.addEventListener('input', () => el.root.style.setProperty('--card-w', el.zoom.value + 'px'));
@@ -406,7 +422,13 @@ el.grid.addEventListener('click', (e) => {
       } else it.selected = on;
       S.anchor = i; return render();
     }
-    case 'open': if (e.detail >= 2 || act.tagName === 'BUTTON') openPreview(it.uid); return;
+    case 'open': if (e.detail >= 2 || act.tagName === 'BUTTON' || compactLayout.matches) openPreview(it.uid); return;
+    case 'more': {
+      const expanded=card.classList.toggle('mobile-open');
+      act.setAttribute('aria-expanded',String(expanded));
+      act.textContent=expanded?'⋯ Less':'⋯ More';
+      return;
+    }
     case 'rotL': return mutate(() => rotate([it], -90));
     case 'rotR': return mutate(() => rotate([it], 90));
     case 'dup': return mutate(() => dupAfter([it]), 'Page duplicated');
