@@ -4,7 +4,7 @@ const integer=(raw,fallback=1)=>raw!=null&&/^-?\d+$/.test(raw)&&Number.isSafeInt
 function display(number,kind){
  if(kind==='upperLetter'||kind==='lowerLetter'){let label='';while(number>0){number--;label=String.fromCharCode(65+number%26)+label;number=Math.floor(number/26);}return kind==='lowerLetter'?label.toLowerCase():label;}
  if((kind==='upperRoman'||kind==='lowerRoman')&&number>0&&number<4000){let label='';for(const [n,s]of [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']])while(number>=n){label+=s;number-=n;}return kind==='lowerRoman'?label.toLowerCase():label;}
- return String(number);
+ return kind==='decimalZero'?String(number).padStart(2,'0'):String(number);
 }
 export async function readWordNumbering(zip,xml,Parser){
  async function part(path){const file=zip.file(path);if(!file)return null;const text=await file.async('string');if(text.length>5_000_000||/<!DOCTYPE|<!ENTITY/i.test(text))throw new Error('Unsupported Word numbering XML.');const doc=new Parser().parseFromString(text,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('Invalid Word numbering XML.');return doc;}
@@ -20,6 +20,6 @@ export async function readWordNumbering(zip,xml,Parser){
   const config=levels[level],lvl=config.lvl;if(!lvl)return;const counts=counters.get(id)||[];counts[level]=(counts[level]??(config.start-1))+1;
   for(let i=level+1;i<9;i++)if(levels[i].restart!==0&&level<levels[i].restart)counts[i]=undefined;
   counters.set(id,counts);const format=value(child(lvl,'numFmt')),template=value(child(lvl,'lvlText'))??'%1.';
-  result[index]=format==='none'?'':format==='bullet'?template:template.replace(/%([1-9])/g,(_,n)=>{const i=Number(n)-1;return display(counts[i]??levels[i].start,value(child(levels[i].lvl,'numFmt')));});
+  result[index]=format==='none'?'':format==='bullet'?template:template.replace(/%([1-9])/g,(_,n)=>{const i=Number(n)-1;const legal=child(lvl,'isLgl');return display(counts[i]??levels[i].start,legal&&!['0','false','off'].includes(value(legal))?'decimal':value(child(levels[i].lvl,'numFmt')));});
  });return result;
 }

@@ -1,3 +1,4 @@
+import {readFloatingPlacement} from './word-floating.js';
 const R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const A='http://schemas.openxmlformats.org/drawingml/2006/main';
 // Only embedded raster images are previewed. Never fetch external relationships.
@@ -26,7 +27,7 @@ export async function readPreviewImages(model,Parser){
       let drawing=blip;while(drawing&&drawing.localName!=='drawing')drawing=drawing.parentElement;
       const extent=drawing?.getElementsByTagNameNS('*','extent')[0],description=drawing?.getElementsByTagNameNS('*','docPr')[0];
       const rawWidth=Number(extent?.getAttribute('cx'))/9525,rawHeight=Number(extent?.getAttribute('cy'))/9525,width=Number.isFinite(rawWidth)&&rawWidth>0?Math.min(2000,rawWidth):300,height=Number.isFinite(rawHeight)&&rawHeight>0&&rawWidth>0?width*rawHeight/rawWidth:null;
-      images.push({src:cache.get(path),width,height,alt:description?.getAttribute('descr')||'Embedded document image'});
+      images.push({placement:drawing?readFloatingPlacement(drawing):null,src:cache.get(path),width,height,alt:description?.getAttribute('descr')||'Embedded document image'});
     }
     if(images.length)result.set(index,images);
   }

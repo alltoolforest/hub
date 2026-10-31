@@ -1,3 +1,4 @@
+import {paintFloatingPreview} from '../word-floating.js';
 import {canShareSectionPage} from '../word-sections.js';
 import {paintTablePreview,paintCellPreview} from '../word-table-preview.js';
 import {editWordPackage,mountWordAdvanced} from '../word-advanced.js';
@@ -104,11 +105,11 @@ export async function open(file, format) {
             });
             field.addEventListener('drop', event => event.preventDefault());
             field.addEventListener('input', () => { updateDocxText(model, paragraph.index, field.textContent); onChange(); refreshSearch(); });
-          } else { field.setAttribute('aria-readonly','true'); field.textContent += ' [Protected content retained in export]'; }
+          } else { field.setAttribute('aria-readonly','true'); field.setAttribute('aria-description','Protected content retained in export'); }
           if(paragraph.pageBreak)wrap.style.breakBefore='column';
           if(model.numbering[paragraph.index]){const marker=document.createElement('span');marker.textContent=model.numbering[paragraph.index];marker.setAttribute('aria-label','List marker');marker.style.marginRight='8pt';wrap.style.display='flex';field.style.flex='1';wrap.append(marker);}
           wrap.append(field);
-          for(const image of images.get(paragraph.index)||[]){const img=document.createElement('img');img.src=image.src;img.alt=image.alt;img.style.width=image.width+'px';img.style.maxWidth='100%';img.style.height='auto';if(image.height)img.style.aspectRatio=image.width+' / '+image.height;wrap.append(img);}
+          for(const image of images.get(paragraph.index)||[]){const img=document.createElement('img');img.src=image.src;img.alt=image.alt;img.style.width=image.width+'px';img.style.maxWidth='100%';img.style.height='auto';if(image.height)img.style.aspectRatio=image.width+' / '+image.height;wrap.append(img);if(!model.text[paragraph.index].trim())paintFloatingPreview(img,wrap,image.placement);}
           return wrap;
         }
         function renderBlocks(blocks,parent){

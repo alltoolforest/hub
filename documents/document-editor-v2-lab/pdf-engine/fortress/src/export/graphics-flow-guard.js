@@ -35,7 +35,10 @@ export function collectGraphicsBounds(ops,O){
    if(op===O.paintFormXObjectEnd){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
    if([O.paintImageXObject,O.paintInlineImageXObject,O.paintImageMaskXObject,O.paintSolidColorImageMask].includes(op))bounds=box([0,0,1,1]);
    else if(op===O.constructPath&&args?.[2]?.length===4){bounds=box(args[2]);if([O.stroke,O.closeStroke,O.fillStroke,O.eoFillStroke,O.closeFillStroke,O.closeEOFillStroke].includes(args[0])){const scale=Math.hypot(...matrix.slice(0,4)),pad=Math.max(.5,lineWidth*scale*(lineJoin===0?miterLimit:1)/2);bounds=[bounds[0]-pad,bounds[1]-pad,bounds[2]+pad,bounds[3]+pad];}}
-   else if([O.paintImageXObjectRepeat,O.paintImageMaskXObjectRepeat,O.paintInlineImageXObjectGroup,O.paintImageMaskXObjectGroup,O.shadingFill].includes(op))return {ok:false,reason:'COMPLEX_GRAPHICS_REFLOW_PROTECTED'};
+   else if([O.paintImageXObjectRepeat,O.paintImageMaskXObjectRepeat,O.paintInlineImageXObjectGroup,O.paintImageMaskXObjectGroup].includes(op)){
+    let transforms;if(op===O.paintImageXObjectRepeat||op===O.paintImageMaskXObjectRepeat){const mask=op===O.paintImageMaskXObjectRepeat,positions=args[mask?5:3];if(!positions||positions.length%2||positions.length>20000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=[];for(let j=0;j<positions.length;j+=2)transforms.push(mask?[args[1],args[2],args[3],args[4],positions[j],positions[j+1]]:[args[1],0,0,args[2],positions[j],positions[j+1]]);}else{const group=args[op===O.paintInlineImageXObjectGroup?1:0];if(!Array.isArray(group)||group.length>10000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=group.map(item=>item.transform);}
+    const current=matrix;for(const transform of transforms){if(transform?.length!==6||![...transform].every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};matrix=multiply(current,transform);boxes.push(box([0,0,1,1]));}matrix=current;
+   }else if(op===O.shadingFill||op===O.beginGroup||op===O.endGroup)return {ok:false,reason:'COMPLEX_GRAPHICS_REFLOW_PROTECTED'};
    if(bounds){if(!bounds.every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};boxes.push(bounds);}
   }
   return {ok:true,boxes};
