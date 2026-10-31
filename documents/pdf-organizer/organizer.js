@@ -305,6 +305,8 @@ function render() {
   el.root.classList.toggle('has-selection', sel > 0);
   $('selectionResult').textContent = sel ? `${sel} page${sel===1?'':'s'} selected` : 'No pages selected';
   $('selectedActions').hidden = sel === 0;
+  // Make editing actions immediately visible after any page selection.
+  if(sel>0 && !$('advancedTools').open) $('advancedTools').open=true;
   $('rangeGroup').hidden = $('selectionMode').value !== 'range';
   el.create.disabled = kept === 0;
   document.querySelectorAll('[data-needsel]').forEach((b) => (b.disabled = sel === 0));
