@@ -303,6 +303,9 @@ function render() {
   el.stat.textContent = `${S.items.length} pages · ${S.items.length - kept} removed · ${sel} selected · output ${kept} page${kept === 1 ? '' : 's'}`;
   $('mobileStat').textContent = `${kept} page${kept===1?'':'s'} to save${sel?' · '+sel+' selected':''}`;
   el.root.classList.toggle('has-selection', sel > 0);
+  $('selectionResult').textContent = sel ? `${sel} page${sel===1?'':'s'} selected` : 'No pages selected';
+  $('selectedActions').hidden = sel === 0;
+  $('rangeGroup').hidden = $('selectionMode').value !== 'range';
   el.create.disabled = kept === 0;
   document.querySelectorAll('[data-needsel]').forEach((b) => (b.disabled = sel === 0));
   el.undo.disabled = !S.undo.length; el.redo.disabled = !S.redo.length;
@@ -380,6 +383,13 @@ function bulk(name) {
   }
 }
 
+/* V3 presentation adapter: reuse existing bulk selection engine unchanged. */
+$('selectionMode').addEventListener('change',event=>{
+  const choice=event.target.value;
+  $('rangeGroup').hidden=choice!=='range';
+  if(choice==='range'){$('range').focus();return;}
+  if(choice)bulk(choice);
+});
 /* ---------- Events ---------- */
 el.pick.addEventListener('click', () => el.file.click());
 $('addMore').addEventListener('click', () => el.file.click());
