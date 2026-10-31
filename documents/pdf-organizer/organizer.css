@@ -298,3 +298,25 @@ body{margin:0}
   .po .toolbar-primary>.btn{min-width:0}
   .po .advanced-actions>.btn{min-height:44px}
 }
+
+/* Simple visual organizer – contextual actions, all-screen progressive disclosure. */
+.po .toolbar{position:relative;top:auto;display:block;padding:10px;margin:10px 0 14px}
+.po .toolbar-primary{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.po .toolbar-primary>[data-needsel]{display:none}
+.po.has-selection .toolbar-primary>[data-needsel]{display:inline-flex;align-items:center}
+.po .toolbar .advanced-tools{display:block;margin-top:8px}
+.po .toolbar .advanced-tools>summary{min-height:44px;display:list-item}
+.po .safety-details{margin-bottom:10px}
+.po .safety-details>summary{cursor:pointer;font-size:.88rem;color:var(--brand)}
+.po .files{margin:8px 0}
+.po .grid{margin-top:12px}
+.po .lead{max-width:72ch}
+.po .bar .export-options:not([open]) .export-options-body{display:none}
+@media (max-width:700px){
+ .po .toolbar-primary{display:flex;flex-wrap:wrap}
+ .po .toolbar-primary>.btn{flex:1 1 auto;min-width:calc(50% - 8px);min-height:44px}
+ .po .toolbar .advanced-tools{margin-top:8px}
+ .po .toolbar .advanced-actions{gap:8px}
+ .po .toolbar .advanced-actions>.btn{min-height:44px}
+ .po .card .acts button{min-height:44px}
+}
