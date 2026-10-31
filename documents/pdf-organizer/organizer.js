@@ -305,6 +305,7 @@ function render() {
   el.create.disabled = kept === 0;
   document.querySelectorAll('[data-needsel]').forEach((b) => (b.disabled = sel === 0));
   el.undo.disabled = !S.undo.length; el.redo.disabled = !S.redo.length;
+  $('redoMobile').disabled = !S.redo.length;
   if(focused?.isConnected&&focused!==document.activeElement)focused.focus({preventScroll:true});
 }
 
@@ -384,6 +385,7 @@ $('addMore').addEventListener('click', () => el.file.click());
 el.file.addEventListener('change', () => { addFiles(el.file.files); el.file.value = ''; });
 el.undo.addEventListener('click', undo); el.redo.addEventListener('click', redo);
 $('redoMobile').addEventListener('click', redo);
+$('clearMobileSession').addEventListener('click', ()=>$('clearSession').click());
 el.create.addEventListener('click', () => exportPdf(S.items.filter((i) => !i.removed), el.outName.value));
 el.blankSize.addEventListener('change',()=>{invalidateDownload();for(const it of S.items)if(it.blank){const card=cards.get(it.uid);if(card?.dataset.visible==='1')paintThumb(card,it);}});
 el.zoom.addEventListener('input', () => el.root.style.setProperty('--card-w', el.zoom.value + 'px'));
@@ -550,7 +552,10 @@ async function exportPdf(list,name) {
     downloadURL=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
     const a=document.createElement('a');a.href=downloadURL;a.download=filename;
     a.textContent='Download verified PDF';a.className='btn';a.id='verifiedDownload';
-    $('verifiedDownload')?.remove();el.status.after(a);a.click();
+    $('verifiedDownload')?.remove();
+    if(compactLayout.matches)$('mobileProcess').after(a);
+    else el.status.after(a);
+    a.click();
     status('Verified '+plan.length+' pages. Use Download verified PDF if your browser did not start the download.');
   }catch(err){toast(cancelled||err.name==='AbortError'?'Export cancelled. No output was created.':'Export stopped during '+exportStage+': '+err.message);}
   finally{exportWorker?.terminate();exportWorker=null;rejectExport=null;setBusy(false);}
