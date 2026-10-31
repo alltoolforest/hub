@@ -63,16 +63,16 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
       await page.waitForFunction(()=>document.querySelector('#pv')?.open&&document.querySelector('#pvCanvas').width>0,null,{timeout:20000});
       await page.locator('#pvClose').tap();
       await page.locator('#pv').waitFor({state:'hidden'});
-      await page.locator('#advancedTools > summary').tap();
+      await page.locator('#selectionMode').selectOption('selAll');
       assert.equal(await advanced.evaluate(el=>el.open),true);
-      await page.locator('[data-bulk=selAll]').tap();
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),6);
       await page.locator('.toolbar-primary [data-bulk=rotR]').tap();
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),6);
+      await page.locator('#selectionMode').selectOption('range');
       await page.locator('#range').fill('1-2');
       assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),2);
       await page.locator('#range').fill('');
-      await page.locator('#advancedTools > summary').tap();
+      if(await advanced.evaluate(el=>el.open))await page.locator('#advancedTools > summary').tap();
       await page.locator('#exportOptions > summary').tap();
       assert.equal(await options.evaluate(el=>el.open),true);
       await page.locator('#outName').fill('simplified-mobile-test');
@@ -100,7 +100,7 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
     if(mobile){
       for(const pg of out.getPages())assert.equal(pg.getRotation().angle,90);
       assert.equal(await page.locator('#bar #verifiedDownload').count(),1,'Verified download fallback must be visible in mobile bar');
-      await page.locator('#advancedTools > summary').tap();
+      if(!(await advanced.evaluate(el=>el.open)))await page.locator('#advancedTools > summary').tap();
       page.on('dialog',dialog=>dialog.accept());
       await page.locator('#clearMobileSession').tap();
       await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===0&&document.querySelector('#drop')?.hidden===false,null,{timeout:25000});

@@ -27,34 +27,46 @@
         <button class="btn" data-bulk="rotR" type="button" data-needsel>⟳ Rotate</button>
         <button class="btn" data-bulk="del" type="button" data-needsel>Remove</button>
       </div>
+      <div class="v3-selection" aria-label="Page selection">
+        <label for="selectionMode">Select pages</label>
+        <select id="selectionMode" class="btn" aria-label="Choose page selection method">
+          <option value="">Choose selection…</option>
+          <option value="selAll">Select all</option>
+          <option value="selNone">Deselect all</option>
+          <option value="selInv">Invert selection</option>
+          <option value="selOdd">Select odd</option>
+          <option value="selEven">Select even</option>
+          <option value="range">Select page range</option>
+        </select>
+        <div id="selectionResult" role="status" aria-live="polite"></div>
+        <label id="rangeGroup" hidden>Pages <input id="range" type="text" placeholder="1-3, 7, 10-" aria-label="Select pages by position, for example 1-3, 7, 10-"></label>
+      </div>
       <details class="advanced-tools" id="advancedTools">
-        <summary>More options · Selection, page order &amp; extras</summary>
+        <summary>Edit pages · More actions</summary>
         <div class="advanced-actions">
-          <button class="btn" data-bulk="selAll" type="button">Select all</button>
-          <button class="btn" data-bulk="selNone" type="button">Deselect</button>
-          <button class="btn" data-bulk="selInv" type="button">Invert selection</button>
-          <button class="btn" data-bulk="selOdd" type="button">Select odd</button>
-          <button class="btn" data-bulk="selEven" type="button">Select even</button>
-          <label>Select pages <input id="range" type="text" placeholder="1-3, 7, 10-" aria-label="Select pages by position, for example 1-3, 7, 10-"></label>
-          <button class="btn" data-bulk="rotL" type="button" data-needsel>⟲ Rotate left</button>
-          <button class="btn desktop-advanced-rotate" data-bulk="rotR" type="button" data-needsel>⟳ Rotate right</button>
-          <button class="btn" data-bulk="dup" type="button" data-needsel>Duplicate</button>
-          <button class="btn desktop-advanced-remove" data-bulk="del" type="button" data-needsel>Remove selected</button>
-          <button class="btn" data-bulk="res" type="button" data-needsel>Restore</button>
-          <button class="btn" data-bulk="toStart" type="button" data-needsel>To start</button>
-          <button class="btn" data-bulk="toEnd" type="button" data-needsel>To end</button>
-          <button class="btn" data-bulk="blank" type="button" title="Insert a blank page after each selected page, or at the end if none is selected">+ Blank</button>
-          <button class="btn" data-bulk="extract" type="button" data-needsel>Extract selected</button>
-          <button class="btn" data-bulk="reverse" type="button">Reverse order</button>
-          <button class="btn" data-bulk="reset" type="button">Reset all</button>
-          <button class="btn mobile-advanced-redo" id="redoMobile" type="button">↷ Redo</button>
-          <button class="btn mobile-clear-session" id="clearMobileSession" type="button">Clear all files</button>
-          <label>Zoom <input id="zoom" type="range" min="110" max="320" value="170" aria-label="Thumbnail size"></label>
+          <div class="v3-selected-actions" id="selectedActions">
+            <button class="btn" data-bulk="rotL" type="button" data-needsel>⟲ Rotate left</button>
+            <button class="btn desktop-advanced-rotate" data-bulk="rotR" type="button" data-needsel>⟳ Rotate right</button>
+            <button class="btn" data-bulk="dup" type="button" data-needsel>Duplicate</button>
+            <button class="btn" data-bulk="res" type="button" data-needsel>Restore</button>
+            <button class="btn" data-bulk="toStart" type="button" data-needsel>To start</button>
+            <button class="btn" data-bulk="toEnd" type="button" data-needsel>To end</button>
+            <button class="btn" data-bulk="extract" type="button" data-needsel>Extract selected</button>
+          </div>
+          <div class="v3-document-actions">
+            <button class="btn" data-bulk="blank" type="button" title="Insert blank page after selected pages, or at the end if none selected">+ Blank</button>
+            
+            <button class="btn" data-bulk="reverse" type="button">Reverse order</button>
+            <button class="btn" data-bulk="reset" type="button">Reset all</button>
+            <button class="btn mobile-advanced-redo" id="redoMobile" type="button">↷ Redo</button>
+            <button class="btn mobile-clear-session" id="clearMobileSession" type="button">Clear all files</button>
+          </div>
         </div>
       </details>
     </div>
     <p class="mobile-guide">Tap a page checkbox to select it. Drag to reorder, or use each page’s More button.</p>
 
+    <div class="v3-pages-header"><strong>Pages</strong><label for="zoom">− Zoom + <input id="zoom" type="range" min="110" max="320" value="170" aria-label="Thumbnail size"></label></div>
     <ul id="grid" class="grid" aria-label="Pages"></ul>
   </div>
 
