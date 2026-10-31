@@ -1,10 +1,14 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Organize PDF Pages | AllToolForest</title><meta name="description" content="Organize PDF pages online: reorder, rotate, select, duplicate, add blanks, extract and combine supported PDFs locally in your browser."><meta name="theme-color" content="#145940"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'"><meta property="og:title" content="Organize PDF Pages | AllToolForest"><meta property="og:description" content="Organize PDF pages online: reorder, rotate, select, duplicate, add blanks, extract and combine supported PDFs locally in your browser."><meta property="og:type" content="website"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23145940%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2243%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2231%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%3EAF%3C%2Ftext%3E%3C%2Fsvg%3E"><link rel="manifest" href="../../site.webmanifest"><link rel="stylesheet" href="../../assets/css/main.css"><link rel="stylesheet" href="./organizer.css"><script type="module" src="../../assets/js/app.js"></script></head><body><a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="header-inner"><a class="brand" href="../../"><span class="brand-mark">AF</span>AllToolForest</a><nav class="nav" aria-label="Main navigation"><a class="" href="../../work/">Work</a><a class="active" href="../../documents/">Documents</a><a class="" href="../../images/">Images</a><a class="" href="../../calculators/">Calculators</a></nav><span class="header-note"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6"/></svg>No account needed</span></div></header><main class="container" id="main"><div class="breadcrumb"><a href="../../">Home</a><span>/</span><a href="../../documents/">Documents</a><span>/</span>Organize PDF Pages</div><section class="page-intro"><h1 id="po-title">Organize PDF Pages</h1><p>Reorder, rotate, duplicate, extract, insert or remove pages, and combine supported PDFs. All processing stays in your browser.</p></section><div class="tool-layout"><section class="workspace workspace-organizer-v2" aria-label="Organize PDF Pages workspace"><section class="po" id="pdf-organizer" aria-labelledby="po-title">
-  <p class="warn">Browser-local processing. Up to 100 MB per PDF and 100 MB total per session; maximum 2,000 pages. Unsupported complex changes are safely blocked. Page removal is not secure redaction: confidential material may also remain in retained content, metadata, or attachments.</p>
+  <details class="safety-details" id="safetyDetails" open>
+    <summary>PDF limits, privacy &amp; safety</summary>
+    <p class="warn">Browser-local processing. Up to 100 MB per PDF and 100 MB total per session; maximum 2,000 pages. Unsupported complex changes are safely blocked. Page removal is not secure redaction: confidential material may also remain in retained content, metadata, or attachments.</p>
+  </details>
+  <p class="mobile-brief">Private in your browser · 100 MB limit · 2,000 pages</p>
 
   <p class="lead">Reorder, rotate, delete, duplicate and insert pages, merge more PDFs, or extract just the pages you need. No account required.</p>
 
   <div id="drop" class="drop">
-    <strong>Drop PDF files here</strong>
+    <strong><span class="desktop-label">Drop PDF files here</span><span class="mobile-label">Choose PDF files to organize</span></strong>
     <button class="btn primary" id="pick" type="button">Choose PDF files</button>
     <p class="hint">You can add several PDFs. Their pages are combined into one grid.</p>
     <input id="file" type="file" accept="application/pdf,.pdf" multiple hidden>
@@ -16,32 +20,40 @@
     <div id="warnings"></div>
 
     <div class="toolbar" role="group" aria-label="Page tools">
-      <button class="btn" id="addMore" type="button">+ Add PDF</button>
-      <button class="btn" id="undo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
-      <button class="btn" id="redo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
-      <span class="sep"></span>
-      <button class="btn" data-bulk="selAll" type="button">Select all</button>
-      <button class="btn" data-bulk="selNone" type="button">Clear</button>
-      <button class="btn" data-bulk="selInv" type="button">Invert</button>
-      <button class="btn" data-bulk="selOdd" type="button">Odd</button>
-      <button class="btn" data-bulk="selEven" type="button">Even</button>
-      <label>Select <input id="range" type="text" placeholder="1-3, 7, 10-" aria-label="Select pages by position, for example 1-3, 7, 10-"></label>
-      <span class="sep"></span>
-      <button class="btn" data-bulk="rotL" type="button" data-needsel>⟲ Left</button>
-      <button class="btn" data-bulk="rotR" type="button" data-needsel>⟳ Right</button>
-      <button class="btn" data-bulk="dup" type="button" data-needsel>Duplicate</button>
-      <button class="btn" data-bulk="del" type="button" data-needsel>Remove</button>
-      <button class="btn" data-bulk="res" type="button" data-needsel>Restore</button>
-      <button class="btn" data-bulk="toStart" type="button" data-needsel>To start</button>
-      <button class="btn" data-bulk="toEnd" type="button" data-needsel>To end</button>
-      <button class="btn" data-bulk="blank" type="button" title="Insert a blank page after each selected page, or at the end if none is selected">+ Blank</button>
-      <button class="btn" data-bulk="extract" type="button" data-needsel>Extract selected</button>
-      <span class="sep"></span>
-      <button class="btn" data-bulk="reverse" type="button">Reverse order</button>
-      <button class="btn" data-bulk="reset" type="button">Reset all</button>
-      <span class="sep"></span>
-      <label>Zoom <input id="zoom" type="range" min="110" max="320" value="170" aria-label="Thumbnail size"></label>
+      <div class="toolbar-primary">
+        <button class="btn" id="addMore" type="button">+ Add PDF</button>
+        <button class="btn" id="undo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button class="btn desktop-quick" id="redo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
+        <button class="btn" data-bulk="selAll" type="button">Select all</button>
+        <button class="btn" data-bulk="selNone" type="button">Deselect</button>
+        <button class="btn mobile-quick" data-bulk="rotR" type="button" data-needsel>⟳ Rotate selected</button>
+        <button class="btn mobile-quick" data-bulk="del" type="button" data-needsel>Remove selected</button>
+      </div>
+      <details class="advanced-tools" id="advancedTools" open>
+        <summary>More page tools</summary>
+        <div class="advanced-actions">
+          <button class="btn" data-bulk="selInv" type="button">Invert selection</button>
+          <button class="btn" data-bulk="selOdd" type="button">Select odd</button>
+          <button class="btn" data-bulk="selEven" type="button">Select even</button>
+          <label>Select pages <input id="range" type="text" placeholder="1-3, 7, 10-" aria-label="Select pages by position, for example 1-3, 7, 10-"></label>
+          <button class="btn" data-bulk="rotL" type="button" data-needsel>⟲ Rotate left</button>
+          <button class="btn desktop-advanced-rotate" data-bulk="rotR" type="button" data-needsel>⟳ Rotate right</button>
+          <button class="btn" data-bulk="dup" type="button" data-needsel>Duplicate</button>
+          <button class="btn desktop-advanced-remove" data-bulk="del" type="button" data-needsel>Remove selected</button>
+          <button class="btn" data-bulk="res" type="button" data-needsel>Restore</button>
+          <button class="btn" data-bulk="toStart" type="button" data-needsel>To start</button>
+          <button class="btn" data-bulk="toEnd" type="button" data-needsel>To end</button>
+          <button class="btn" data-bulk="blank" type="button" title="Insert a blank page after each selected page, or at the end if none is selected">+ Blank</button>
+          <button class="btn" data-bulk="extract" type="button" data-needsel>Extract selected</button>
+          <button class="btn" data-bulk="reverse" type="button">Reverse order</button>
+          <button class="btn" data-bulk="reset" type="button">Reset all</button>
+          <button class="btn mobile-advanced-redo" id="redoMobile" type="button">↷ Redo</button>
+          <button class="btn mobile-clear-session" id="clearMobileSession" type="button">Clear all files</button>
+          <label>Zoom <input id="zoom" type="range" min="110" max="320" value="170" aria-label="Thumbnail size"></label>
+        </div>
+      </details>
     </div>
+    <p class="mobile-guide">Select pages to edit together, or use each page’s buttons. Tap <strong>More</strong> for moving and extra actions.</p>
 
     <ul id="grid" class="grid" aria-label="Pages"></ul>
   </div>
@@ -49,17 +61,25 @@
   <div class="bar" id="bar" hidden>
     <div class="in">
       <div class="stat" id="stat"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <label class="stat">Blank page size
-          <select id="blankSize" class="btn"><option value="match">Match previous</option><option value="a4">A4</option><option value="letter">Letter</option></select>
-        </label>
-        <input id="outName" type="text" aria-label="Output file name" placeholder="organized.pdf">
-        <button class="btn primary" id="create" type="button">Create &amp; download PDF</button><button id="cancel" class="btn" hidden>Cancel processing</button>
+      <div class="mobile-stat" id="mobileStat"></div>
+      <div class="export-row">
+        <details class="export-options" id="exportOptions" open>
+          <summary>File options</summary>
+          <div class="export-options-body">
+            <label class="stat">Blank page size
+              <select id="blankSize" class="btn"><option value="match">Match previous</option><option value="a4">A4</option><option value="letter">Letter</option></select>
+            </label>
+            <label class="output-name-label">File name <input id="outName" type="text" aria-label="Output file name" placeholder="organized.pdf"></label>
+          </div>
+        </details>
+        <button class="btn primary" id="create" type="button"><span class="desktop-label">Create &amp; download PDF</span><span class="mobile-label">Save PDF</span></button>
+        <button id="cancel" class="btn" type="button" hidden>Cancel</button>
       </div>
+      <div class="mobile-process" id="mobileProcess" hidden></div>
+      <progress id="progress" max="100" value="0" aria-label="Processing progress" hidden></progress>
     </div>
   </div>
-
-  <button id="clearSession" class="btn">Clear session</button><progress id="progress" max="100" value="0" aria-label="Processing progress" hidden></progress>
+  <button id="clearSession" class="btn">Clear session</button>
   <div id="status" role="status" aria-live="polite"></div>
   <div id="toast" class="warn" role="alert" hidden></div>
 

@@ -28,6 +28,10 @@ jobs:
       - run: node --test tests/pdf-organizer*.test.mjs documents/pdf-organizer/engine.test.mjs documents/pdf-organizer/complex-corpus.test.mjs documents/pdf-organizer/stress-integrity.test.mjs documents/pdf-organizer/size-capacity.test.mjs documents/pdf-organizer/expanded-stream-capacity.test.mjs documents/pdf-organizer/flate-footer-recovery.test.mjs
       - run: npm install --no-save --ignore-scripts playwright@1.56.1 axe-core@4.14.0
       - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Audit simplified mobile controls and sticky save without touching PDF engine
+        run: node documents/pdf-organizer/browser-mobile-ui.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
       - run: node documents/pdf-organizer/browser.test.mjs
         env:
           BROWSER: ${{ matrix.browser }}
