@@ -35,6 +35,10 @@ jobs:
       - run: node documents/pdf-organizer/browser-stress.test.mjs
         env:
           BROWSER: ${{ matrix.browser }}
+      - name: Audit simplified mobile controls and sticky save without touching PDF engine
+        run: node documents/pdf-organizer/browser-mobile-ui.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
       - name: Recover incomplete PDF Flate footer without accepting corrupt checksum
         run: node documents/pdf-organizer/browser-flate-footer.test.mjs
         env:
