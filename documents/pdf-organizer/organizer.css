@@ -281,3 +281,20 @@ body{margin:0}
   .po .acts button{font-size:.75rem}
   .po .toolbar-primary>.btn{font-size:.83rem}
 }
+
+/* Progressive-disclosure workspace: keep primary page tools concise on desktop and mobile.
+   Only layout/presentation is changed; existing action handlers and PDF engine are untouched. */
+.po .advanced-tools:not([open]) .advanced-actions{display:none}
+.po .export-options:not([open]) .export-options-body{display:none}
+.po .toolbar-primary{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.po .toolbar-primary>.btn{min-height:44px}
+.po .advanced-tools>summary{cursor:pointer;list-style-position:inside;padding:10px 12px;font-weight:650}
+.po .advanced-tools{min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;margin-top:8px}
+.po .advanced-actions{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.po .advanced-actions .btn{min-height:40px}
+.po .bar #create{min-height:48px}
+@media (max-width:700px){
+  .po .toolbar-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .po .toolbar-primary>.btn{min-width:0}
+  .po .advanced-actions>.btn{min-height:44px}
+}
