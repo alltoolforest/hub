@@ -342,3 +342,9 @@ body{margin:0}
  .po .v3-selected-actions .btn,.po .v3-document-actions .btn{min-width:0;padding:8px 5px}
  .po .v3-pages-header input{width:92px}
 }
+
+/* V3 nested action groups must retain legacy mobile visibility rules. */
+@media(max-width:700px){
+ .po .v3-document-actions>.mobile-clear-session{display:inline-block;border-color:var(--danger);color:var(--danger);font-weight:650}
+ .po .v3-document-actions>.mobile-advanced-redo{display:inline-block}
+}
