@@ -5,7 +5,7 @@
   </details>
   <p class="mobile-brief">Private in your browser · 100 MB limit · 2,000 pages</p>
 
-  <p class="lead">Reorder, rotate, delete, duplicate and insert pages, merge more PDFs, or extract just the pages you need. No account required.</p>
+  <p class="lead">Add a PDF, arrange its pages, then save your new file. No account needed.</p>
 
   <div id="drop" class="drop">
     <strong><span class="desktop-label">Drop PDF files here</span><span class="mobile-label">Choose PDF files to organize</span></strong>
@@ -13,7 +13,7 @@
     <p class="hint">You can add several PDFs. Their pages are combined into one grid.</p>
     <input id="file" type="file" accept="application/pdf,.pdf" multiple hidden>
   </div>
-  <p class="privacy">Your files are processed in your browser and are never uploaded.</p>
+  <p class="privacy">🔒 Your PDF stays on your device.</p>
 
   <div id="workspace" hidden>
     <div id="files" class="files" aria-label="Loaded files"></div>
@@ -26,8 +26,6 @@
         <button class="btn desktop-quick" id="redo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
         <button class="btn desktop-quick" data-bulk="rotR" type="button" data-needsel>⟳ Rotate</button>
         <button class="btn desktop-quick" data-bulk="del" type="button" data-needsel>Remove</button>
-        <button class="btn mobile-quick" data-bulk="rotR" type="button" data-needsel>⟳ Rotate selected</button>
-        <button class="btn mobile-quick" data-bulk="del" type="button" data-needsel>Remove selected</button>
       </div>
       <details class="advanced-tools" id="advancedTools">
         <summary>More options · Selection, page order &amp; extras</summary>
@@ -55,7 +53,7 @@
         </div>
       </details>
     </div>
-    <p class="mobile-guide">Select pages to edit together, or use each page’s buttons. Tap <strong>More</strong> for moving and extra actions.</p>
+    <p class="mobile-guide">Tap a page checkbox to select it. Drag to reorder, or use each page’s More button.</p>
 
     <ul id="grid" class="grid" aria-label="Pages"></ul>
   </div>
