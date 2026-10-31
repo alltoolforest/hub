@@ -1,6 +1,7 @@
 // Mobile-first interface regression. This checks presentation and touch
 // affordances only; the existing engine/verified-output suites remain separate.
 import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,extname} from 'node:path';
@@ -14,7 +15,8 @@ const doc=await P.PDFDocument.create({updateMetadata:false});
 for(let i=0;i<6;i++)doc.addPage([350+i*10,490]).drawText('MOBILE-ORGANIZER-PAGE-'+i,{x:32,y:350});
 const input=Buffer.from(await doc.save());
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const server=createServer(async(req,res)=>{
+const hosted=process.env.ORGANIZER_DEPLOYED_URL;
+const server=hosted?null:createServer(async(req,res)=>{
  try{
   const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
   if(!path.startsWith(root))throw Error('path traversal');
@@ -24,8 +26,23 @@ const server=createServer(async(req,res)=>{
   res.end(b);
  }catch{res.statusCode=404;res.end();}
 });
-await new Promise(done=>server.listen(0,'127.0.0.1',done));
-const base='http://127.0.0.1:'+server.address().port+'/';
+if(server)await new Promise(done=>server.listen(0,'127.0.0.1',done));
+const base=hosted||('http://127.0.0.1:'+server.address().port+'/');
+if(hosted){
+  const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+  for(const name of [
+    'documents/pdf-organizer/index.html','documents/pdf-organizer/organizer.css',
+    'documents/pdf-organizer/organizer.js','documents/pdf-organizer/engine.js',
+    'documents/pdf-organizer/verify.js','documents/pdf-organizer/limits.js'
+  ]){
+    const url=new URL(name,base);url.searchParams.set('mobile_audit','20261031');
+    const response=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+    assert.equal(response.status,200,'Published asset missing: '+name);
+    const served=Buffer.from(await response.arrayBuffer()),local=await readFile(resolve(root,name));
+    assert.equal(sha(served),sha(local),'Published asset mismatch: '+name);
+    console.log(JSON.stringify({audit:'hosted-mobile-asset',name,bytes:served.length,sha256:sha(served)}));
+  }
+}
 let fail=0;
 try{
 for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
@@ -113,5 +130,5 @@ for(const [name,engine] of Object.entries({chromium,firefox,webkit})){
   }
  }finally{await browser.close();}
 }
-}finally{await new Promise(done=>server.close(done));}
+}finally{if(server)await new Promise(done=>server.close(done));}
 if(fail)process.exitCode=1;
