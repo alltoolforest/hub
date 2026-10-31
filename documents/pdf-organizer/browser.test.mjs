@@ -100,6 +100,8 @@ for(const [name,type] of Object.entries({chromium,firefox,webkit})) {
    await page.locator('#range').fill('2, not-a-range');
    assert.equal(await page.locator('#range').getAttribute('aria-invalid'),'true');
    assert.equal(await page.locator('#grid [data-act=sel]:checked').count(),selectedBefore);
+   // Move-to-position is intentionally tucked into each card's mobile More.
+   if(mobile)await activate(page.locator('#grid .card').first().locator('[data-act=more]'));
    const destination=page.locator('#grid .card').first().locator('[data-act=goto]');
    await destination.fill('9999');await destination.press('Enter');
    assert.match(await page.locator('#status').textContent(),/destination between/);
