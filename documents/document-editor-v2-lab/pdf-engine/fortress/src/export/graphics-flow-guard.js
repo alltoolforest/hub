@@ -15,21 +15,28 @@ export async function validateGraphicsFlow(bytes,pageIndex,geometry){
  try{
   const pdfjs=await loadPdfjs();task=pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false});const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),ops=await page.getOperatorList({annotationMode:pdfjs.AnnotationMode.DISABLE}),O=pdfjs.OPS;
   if(geometry.rasterFlow){if(!await verifyRasterFlowCuts(page,geometry))return {ok:false,reason:'SCAN_CUT_CROSSES_VISIBLE_CONTENT'};return {ok:true,rasterFlow:true};}
-  let matrix=identity();const stack=[];
+  const result=collectGraphicsBounds(ops,O);if(!result.ok)return result;const bounds=result.boxes.find(box=>graphicCrossesFlowBoundary(box,geometry));return bounds?{ok:false,reason:'GRAPHIC_CROSSES_REFLOW_BOUNDARY',bounds}:{ok:true};
+ }catch(error){return {ok:false,reason:'GRAPHICS_REFLOW_INSPECTION_FAILED',error:String(error)};}
+ finally{if(task)await task.destroy();}
+}
+
+export function collectGraphicsBounds(ops,O){
+  const boxes=[];let matrix=identity(),lineWidth=1,miterLimit=10,lineJoin=0;const stack=[];const save=()=>stack.push({matrix:[...matrix],lineWidth,miterLimit,lineJoin});const restore=()=>{({matrix,lineWidth,miterLimit,lineJoin}=stack.pop());};
   const box=raw=>{const [x0,y0,x1,y1]=raw,points=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([x,y])=>[matrix[0]*x+matrix[2]*y+matrix[4],matrix[1]*x+matrix[3]*y+matrix[5]]);return [Math.min(...points.map(p=>p[0])),Math.min(...points.map(p=>p[1])),Math.max(...points.map(p=>p[0])),Math.max(...points.map(p=>p[1]))];};
   for(let i=0;i<ops.fnArray.length;i++){
    const op=ops.fnArray[i],args=ops.argsArray[i];let bounds;
-   if(op===O.save){stack.push([...matrix]);continue;}
-   if(op===O.restore){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};matrix=stack.pop();continue;}
+   if(op===O.save){save();continue;}
+   if(op===O.restore){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
+   if(op===O.setLineWidth){lineWidth=Math.abs(Number(args[0]));continue;}
+   if(op===O.setMiterLimit){miterLimit=Math.max(1,Number(args[0]));continue;}
+   if(op===O.setLineJoin){lineJoin=Number(args[0]);continue;}
    if(op===O.transform){matrix=multiply(matrix,args);continue;}
-   if(op===O.paintFormXObjectBegin){stack.push([...matrix]);if(args?.[0])matrix=multiply(matrix,args[0]);continue;}
-   if(op===O.paintFormXObjectEnd){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};matrix=stack.pop();continue;}
+   if(op===O.paintFormXObjectBegin){save();if(args?.[0])matrix=multiply(matrix,args[0]);continue;}
+   if(op===O.paintFormXObjectEnd){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
    if([O.paintImageXObject,O.paintInlineImageXObject,O.paintImageMaskXObject,O.paintSolidColorImageMask].includes(op))bounds=box([0,0,1,1]);
-   else if(op===O.constructPath&&args?.[2]?.length===4)bounds=box(args[2]);
+   else if(op===O.constructPath&&args?.[2]?.length===4){bounds=box(args[2]);if([O.stroke,O.closeStroke,O.fillStroke,O.eoFillStroke,O.closeFillStroke,O.closeEOFillStroke].includes(args[0])){const scale=Math.hypot(...matrix.slice(0,4)),pad=Math.max(.5,lineWidth*scale*(lineJoin===0?miterLimit:1)/2);bounds=[bounds[0]-pad,bounds[1]-pad,bounds[2]+pad,bounds[3]+pad];}}
    else if([O.paintImageXObjectRepeat,O.paintImageMaskXObjectRepeat,O.paintInlineImageXObjectGroup,O.paintImageMaskXObjectGroup,O.shadingFill].includes(op))return {ok:false,reason:'COMPLEX_GRAPHICS_REFLOW_PROTECTED'};
-   if(bounds&&graphicCrossesFlowBoundary(bounds,geometry))return {ok:false,reason:'GRAPHIC_CROSSES_REFLOW_BOUNDARY',bounds};
+   if(bounds){if(!bounds.every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};boxes.push(bounds);}
   }
-  return {ok:true};
- }catch(error){return {ok:false,reason:'GRAPHICS_REFLOW_INSPECTION_FAILED',error:String(error)};}
- finally{if(task)await task.destroy();}
+  return {ok:true,boxes};
 }

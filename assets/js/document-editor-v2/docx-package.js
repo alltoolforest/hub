@@ -1,3 +1,4 @@
+import {readTablePreview,readCellPreview,readRowPreview} from './word-table-preview.js';
 import {readWordNumbering} from './word-numbering.js';
 import {restoreLayouts,writeLayout} from './word-layout.js';
 import {restoreStructures,writeStructures,structureParts,structureText} from './word-structure.js';
@@ -118,13 +119,13 @@ export function documentBlocks(model) {
         return children(row,'tc').map(cell => {
           const pr=children(cell,'tcPr')[0], span=Number(pr && children(pr,'gridSpan')[0]?.getAttributeNS(W,'val')) || 1;
           const merge=pr && children(pr,'vMerge')[0];
-          const result={blocks:blocksIn(cell),colspan:Math.max(1,Math.min(1000,span)),rowspan:1};
+          const result={preview:readCellPreview(cell),rowPreview:readRowPreview(row),blocks:blocksIn(cell),colspan:Math.max(1,Math.min(1000,span)),rowspan:1};
           if(merge && merge.getAttributeNS(W,'val') !== 'restart' && active.get(column)?.colspan===result.colspan){active.get(column).rowspan++;result.hidden=true;}
           else {active.delete(column);if(merge)active.set(column,result);}
           column+=result.colspan;return result;
         });
       });
-      return [{kind:'table',rows}];
+      return [{kind:'table',rows,preview:readTablePreview(child)}];
     });
   }
   const blocks = blocksIn(body);

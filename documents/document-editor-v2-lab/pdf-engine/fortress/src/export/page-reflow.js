@@ -1,6 +1,6 @@
 import {validateGraphicsFlow} from './graphics-flow-guard.js';
 import { PDFName } from '../core/pdf-lib.js';
-import { cascadeOverflowIntoExistingPages } from './cascade-page-flow.js';
+import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
@@ -77,6 +77,10 @@ function snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandL
     boundary=next;
   }
 
+  return {boundary,...overflowIdsForBoundary(lines,boundary)};
+}
+
+function overflowIdsForBoundary(lines,boundary){
   const overflowed=lines.filter(line=>line.top<=boundary+.75);
   const overflowedLineIds=overflowed.map(line=>line.lineId).filter(Boolean);
 
@@ -93,7 +97,7 @@ function snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandL
   for(const [blockId,count] of movedCounts){
     if(count>=(totals.get(blockId)||1))overflowedBlockIds.push(blockId);
   }
-  return {boundary,overflowedBlockIds,overflowedLineIds};
+  return {overflowedBlockIds,overflowedLineIds};
 }
 
 function inspectAnnotations(doc,page){
@@ -261,9 +265,9 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
 
   const overflowNeeded=contentBottomY-delta<movableFloor;
   const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[],overflowedLineIds:[]};
-  const overflowBoundary=snapped.boundary;
-  const overflowedBlockIds=snapped.overflowedBlockIds;
-  const overflowedLineIds=snapped.overflowedLineIds;
+  let overflowBoundary=snapped.boundary;
+  if(overflowNeeded){try{overflowBoundary=await snapLiveBoundary(doc,pageIndex,overflowBoundary,{floor:footerGuardTop,ceiling:cutY,left:bandLeft,right:bandRight});}catch(error){return {applied:false,reason:'NO_SAFE_OBJECT_FLOW_BOUNDARY',detail:String(error),overflowPageCount:0};}}
+  const {overflowedBlockIds,overflowedLineIds}=overflowNeeded?overflowIdsForBoundary(normalizedFlowBlocks(plan,{bandLeft,bandRight,footerGuardTop,cutY}),overflowBoundary):snapped;
   const linkSafety=validateLinkReflow(annotationInfo,{cutY,delta,overflowNeeded,overflowBoundary,movableFloor,bandLeft,bandRight,footerGuardTop});
   if(!linkSafety.ok)return {applied:false,reason:linkSafety.reason,overflowPageCount:0};
 

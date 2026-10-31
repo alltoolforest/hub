@@ -18,6 +18,11 @@ function props(node,theme){
   const color=attr(child(node,'color'));if(/^[\da-f]{6}$/i.test(color))out.color='#'+color;
   return out;
 }
+// Bold/italic are toggles in style chains, but absolute values on direct runs.
+export function resolveWordStyle(byId,id,theme={},base={},seen=new Set()){
+ if(!id||seen.has(id)||seen.size>32)return {...base};seen.add(id);const style=byId.get(id);if(!style)return {...base};const inherited=resolveWordStyle(byId,attr(child(style,'basedOn')),theme,base,seen),own=props(child(style,'rPr'),theme),result={...inherited,...own};for(const key of ['bold','italic'])if(key in own)result[key]=own[key]?!inherited[key]:!!inherited[key];return result;
+}
+export function styleToggleBase(styles,id){const byId=new Map([...styles.getElementsByTagNameNS(W,'style')].map(n=>[attr(n,'styleId'),n]));return resolveWordStyle(byId,id,{},props(styles.getElementsByTagNameNS(W,'rPrDefault')[0]?.getElementsByTagNameNS(W,'rPr')[0],{}));}
 export async function readWordFormatting(zip,xml,Parser){
   async function part(path){const file=zip.file(path);if(!file)return null;const text=await file.async('string');if(text.length>5_000_000||/<!DOCTYPE|<!ENTITY/i.test(text))throw new Error('Unsupported Word formatting XML.');const doc=new Parser().parseFromString(text,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('Invalid Word formatting XML.');return doc;}
   const styles=await part('word/styles.xml'),themeXml=await part('word/theme/theme1.xml'),theme={};
@@ -25,15 +30,11 @@ export async function readWordFormatting(zip,xml,Parser){
   const defaults=props(styles?.getElementsByTagNameNS(W,'rPrDefault')[0]?.getElementsByTagNameNS(W,'rPr')[0],theme),byId=new Map();
   for(const style of styles?.getElementsByTagNameNS(W,'style')||[])byId.set(attr(style,'styleId'),style);
   const defaultParagraph=[...byId.values()].find(s=>attr(s,'type')==='paragraph'&&['1','true'].includes(attr(s,'default')));
-  function resolve(id,seen=new Set()){
-    if(!id||seen.has(id)||seen.size>32)return {};seen.add(id);const style=byId.get(id);if(!style)return {};
-    return {...resolve(attr(child(style,'basedOn')),seen),...props(child(style,'rPr'),theme)};
-  }
   function resolveLayout(id,seen=new Set()){if(!id||seen.has(id)||seen.size>32)return readLayout(styles?.getElementsByTagNameNS(W,'pPrDefault')[0]?.getElementsByTagNameNS(W,'pPr')[0]);seen.add(id);const style=byId.get(id);return readLayout(child(style,'pPr'),resolveLayout(attr(child(style,'basedOn')),seen));}
   const paragraphs=[...xml.getElementsByTagNameNS(W,'p')];
   const formats=paragraphs.map(p=>{
-    const pPr=child(p,'pPr'),base={font:'Calibri',size:11,color:'#000000',bold:false,italic:false,...defaults,...resolve(attr(child(pPr,'pStyle'))||attr(defaultParagraph,'styleId'))};
-    const runs=[...p.getElementsByTagNameNS(W,'t')].map(t=>{const rPr=child(t.parentNode,'rPr');return {...base,...resolve(attr(child(rPr,'rStyle'))),...props(rPr,theme)};});
+    const pPr=child(p,'pPr'),base={font:'Calibri',size:11,color:'#000000',bold:false,italic:false,...resolveWordStyle(byId,attr(child(pPr,'pStyle'))||attr(defaultParagraph,'styleId'),theme,defaults)};
+    const runs=[...p.getElementsByTagNameNS(W,'t')].map(t=>{const rPr=child(t.parentNode,'rPr');return {...resolveWordStyle(byId,attr(child(rPr,'rStyle')),theme,base),...props(rPr,theme)};});
     const spacing=child(pPr,'spacing'),alignment=attr(child(pPr,'jc'));
     return {base,runs,layout:readLayout(pPr,resolveLayout(attr(child(pPr,'pStyle'))||attr(defaultParagraph,'styleId'))),alignment:['left','right','center','both'].includes(alignment)?alignment:'left',before:Number(attr(spacing,'before'))/20||0,after:Number(attr(spacing,'after'))/20||0};
   });

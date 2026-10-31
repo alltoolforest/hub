@@ -1,3 +1,5 @@
+import {canShareSectionPage} from '../word-sections.js';
+import {paintTablePreview,paintCellPreview} from '../word-table-preview.js';
 import {editWordPackage,mountWordAdvanced} from '../word-advanced.js';
 import {mountLayoutControls} from '../word-layout.js';
 import {openText} from './text.js';
@@ -120,9 +122,9 @@ export async function open(file, format) {
               continue;
             }
             flow=null;
-            const table=document.createElement('table');table.className='document-v2-doc-table';
-            for(const cells of block.rows){const tr=document.createElement('tr');
-              for(const cell of cells){if(cell.hidden)continue;const td=document.createElement('td');td.colSpan=cell.colspan;td.rowSpan=cell.rowspan;renderBlocks(cell.blocks,td);tr.append(td);}
+            const table=document.createElement('table');table.className='document-v2-doc-table';paintTablePreview(table,block.preview);
+            for(const [rowIndex,cells] of block.rows.entries()){const tr=document.createElement('tr');Object.assign(tr.style,cells[0]?.rowPreview||{});let column=0;const columns=cells.reduce((n,c)=>n+c.colspan,0);
+              for(const cell of cells){const start=column;column+=cell.colspan;if(cell.hidden)continue;const td=document.createElement('td');td.colSpan=cell.colspan;td.rowSpan=cell.rowspan;paintCellPreview(td,cell.preview,block.preview,{Top:rowIndex===0,Bottom:rowIndex+cell.rowspan===block.rows.length,Left:start===0,Right:column===columns});renderBlocks(cell.blocks,td);tr.append(td);}
               table.append(tr);
             }
             parent.append(table);
@@ -130,7 +132,7 @@ export async function open(file, format) {
         }
         const sectionPages=[],blocks=documentBlocks(model),sections=model.formatting.sections||[];let remaining=[...blocks];
         function lastIndex(block){return block.kind==='paragraph'?block.paragraph.index:Math.max(-1,...block.rows.flatMap(row=>row.flatMap(cell=>cell.blocks.map(lastIndex))));}
-        if(sections.length>1){for(const section of sections){const target=sectionPages.length?document.createElement('div'):page;target.className='document-v2-page';target.dataset.wordSection=String(section.index);const owned=[];while(remaining.length&&lastIndex(remaining[0])<=section.endParagraph)owned.push(remaining.shift());renderBlocks(owned,target);sectionPages.push({page:target,geometry:section});}if(remaining.length)renderBlocks(remaining,sectionPages.at(-1).page);}else{renderBlocks(blocks,page);sectionPages.push({page,geometry:sections[0]||model.formatting.page});}
+        if(sections.length>1){for(const section of sections){const previous=sectionPages.at(-1),shared=previous&&canShareSectionPage(sections[section.index-1],section),target=sectionPages.length?document.createElement('div'):page;target.className=shared?'document-v2-continuous-section':'document-v2-page';target.dataset.wordSection=String(section.index);const owned=[];while(remaining.length&&lastIndex(remaining[0])<=section.endParagraph)owned.push(remaining.shift());renderBlocks(owned,target);if(shared)previous.page.append(target);else sectionPages.push({page:target,geometry:section});}if(remaining.length)renderBlocks(remaining,sectionPages.at(-1).page);}else{renderBlocks(blocks,page);sectionPages.push({page,geometry:sections[0]||model.formatting.page});}
         const additions=document.createElement('div');sectionPages.at(-1).page.append(additions);
         function renderAddition(item,index){
           const field=document.createElement('div');field.className='document-v2-paragraph';field.contentEditable='true';field.setAttribute('role','textbox');field.setAttribute('aria-multiline','true');field.setAttribute('aria-label',`New paragraph ${index+1}`);field.textContent=item.text;styleWordNode(field,item.format);additionFields.set(index,field);

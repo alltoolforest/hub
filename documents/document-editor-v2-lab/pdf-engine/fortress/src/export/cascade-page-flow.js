@@ -1,6 +1,6 @@
 import {rasterFlowProfile} from '../layout/raster-flow.js';
 import {attachFlowAnnotations} from './annotation-flow.js';
-import {validateGraphicsFlow} from './graphics-flow-guard.js';
+import {validateGraphicsFlow,collectGraphicsBounds} from './graphics-flow-guard.js';
 import {loadPdfjs} from '../rendering/pdfjs.js';
 import { PDFName } from '../core/pdf-lib.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
@@ -142,9 +142,10 @@ function preflightFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=t
   const overflowNeeded=g.textBottomY-shift<movableFloor;
   const rawOutgoingBoundary=overflowNeeded?clamp(shift+movableFloor,g.footerTop,g.bodyTopY):g.footerTop;
   const semanticSnap=overflowNeeded&&allowSemantic?snapBoundaryToKeepGroup(rawOutgoingBoundary,g.keepGroups,{footerTop:g.footerTop,bodyTop:g.bodyTopY,safetyGap:g.safetyGap}):{boundary:overflowNeeded?rawOutgoingBoundary:g.footerTop,snapped:false,groupId:null,groupLabel:null};
-  const outgoingBoundary=semanticSnap.boundary;
+  let outgoingBoundary=semanticSnap.boundary;
   const linkInfo=inspectLinks(doc,live);
   if(!linkInfo.ok)return {ok:false,reason:linkInfo.reason};
+  if(overflowNeeded){try{outgoingBoundary=snapCascadeTextBoundary(outgoingBoundary,[...linkInfo.links.map(a=>a.bounds).filter(b=>b.left<g.bandRight&&b.right>g.bandLeft),...g.keepGroups.map(a=>({bottom:a.bottom,top:a.top}))],{floor:g.footerTop,ceiling:g.bodyTopY});}catch{return {ok:false,reason:'ANNOTATION_CANNOT_FIT_FLOW_REGION'};}}
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
   if(!classified.ok)return {ok:false,reason:classified.reason};
   return {ok:true,g,shift,overflowNeeded,outgoingBoundary,semanticSnap,nextIncoming:overflowNeeded?{height:outgoingBoundary-g.footerTop,left:g.bandLeft,right:g.bandRight}:null};
@@ -170,16 +171,16 @@ export function snapCascadeTextBoundary(boundary,rects,{floor,ceiling}){
  for(let attempt=0;attempt<64;attempt++){const crossing=rects.filter(r=>r.bottom<cut+.25&&r.top>cut-.25);if(!crossing.length)return cut;const next=Math.max(...crossing.map(r=>r.top))+1.5;if(next>=ceiling-.5||next<=cut+.01)throw new Error('No safe text boundary for page cascade.');cut=Math.max(floor,next);}
  throw new Error('Page cascade text boundary exceeds the safe limit.');
 }
-async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right,inspectionBytes,rasterFlow=false}){
+export async function snapLiveBoundary(doc,pageIndex,boundary,{floor,ceiling,left,right,inspectionBytes,rasterFlow=false,keepGroups=[]}){
  const lib=await loadPdfjs(),bytes=inspectionBytes||new Uint8Array(await doc.save({useObjectStreams:false,updateFieldAppearances:false})),task=lib.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false});
- try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);if(rasterFlow)rects.push(...(await rasterFlowProfile(page)).rows);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
+ try{const pdf=await task.promise,page=await pdf.getPage(pageIndex+1),text=await page.getTextContent(),rects=text.items.filter(item=>item.str?.trim()).map(item=>{const t=item.transform,size=Math.abs(item.height)||Math.hypot(t[2],t[3]);return {left:t[4],right:t[4]+item.width,bottom:t[5]-size*.3,top:t[5]+size*.92};}).filter(r=>r.left<right&&r.right>left);if(rasterFlow)rects.push(...(await rasterFlowProfile(page)).rows);else{const graphics=collectGraphicsBounds(await page.getOperatorList({annotationMode:lib.AnnotationMode.DISABLE}),lib.OPS);if(!graphics.ok)throw new Error(graphics.reason);rects.push(...graphics.boxes.filter(b=>b[0]<right&&b[2]>left).map(b=>({bottom:b[1],top:b[3]})));}for(const annotation of await page.getAnnotations()){const r=annotation.rect;if(r?.length===4&&r[0]<right&&r[2]>left)rects.push({bottom:Math.min(r[1],r[3]),top:Math.max(r[1],r[3])});}rects.push(...keepGroups);return snapCascadeTextBoundary(boundary,rects,{floor,ceiling});}finally{await task.destroy();}
 }
 
 async function rebuildFollowingPage(doc,pageIndex,geometry,incoming,{allowSemantic=true,flowSlices=[]}={}){
   const live=doc.getPage(pageIndex);
   const check=preflightFollowingPage(doc,pageIndex,geometry,{height:incoming.top-incoming.bottom,left:incoming.left,right:incoming.right},{allowSemantic});
   if(!check.ok)return check;
-  const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight,rasterFlow:g.rasterFlow});
+  const {g,shift,overflowNeeded,semanticSnap}=check;let outgoingBoundary=check.outgoingBoundary;if(overflowNeeded)outgoingBoundary=await snapLiveBoundary(doc,pageIndex,outgoingBoundary,{floor:g.footerTop,ceiling:g.bodyTopY,left:g.bandLeft,right:g.bandRight,rasterFlow:g.rasterFlow,keepGroups:g.keepGroups});
   const linkInfo=inspectLinks(doc,live);
   if(!linkInfo.ok)return linkInfo;
   const classified=classifyLinks(linkInfo,{bandLeft:g.bandLeft,bandRight:g.bandRight,bodyTopY:g.bodyTopY,footerTop:g.footerTop,shift,outgoingBoundary});
@@ -225,7 +226,7 @@ async function appendCarryPages(doc,incoming,{width,height,topMargin,bottomMargi
   const usable=Math.max(40,height-topMargin-bottomMargin);
   let bottom=incoming.bottom,top=incoming.top,count=0;
   while(top>bottom+.5){
-    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right,inspectionBytes:incoming.inspectionBytes,rasterFlow:incoming.rasterFlow});}
+    let sliceBottom=Math.max(bottom,top-usable);if(sliceBottom>bottom+.5){const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page text geometry is unavailable.');sliceBottom=await snapLiveBoundary(owner,index,sliceBottom,{floor:bottom,ceiling:top,left:incoming.left,right:incoming.right,inspectionBytes:incoming.inspectionBytes,rasterFlow:incoming.rasterFlow,keepGroups:incoming.keepGroups||[]});}
     const owner=incoming.donorPage.doc,index=incoming.inspectionPageIndex??owner?.getPages().indexOf(incoming.donorPage);if(!owner||index<0)throw new Error('Carry-page graphics geometry is unavailable.');
     const graphicsBytes=incoming.inspectionBytes||new Uint8Array(await owner.save({useObjectStreams:false,updateFieldAppearances:false}));
     const graphicsSafety=await validateGraphicsFlow(graphicsBytes,index,{bandLeft:incoming.left,bandRight:incoming.right,boundaries:[sliceBottom,top],rasterFlow:incoming.rasterFlow});if(!graphicsSafety.ok)throw new Error(graphicsSafety.reason);

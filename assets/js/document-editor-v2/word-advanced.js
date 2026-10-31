@@ -1,3 +1,4 @@
+import {styleToggleBase} from './word-format.js';
 import {importRichBlocks} from './word-rich-blocks.js';
 import {positionWordImage} from './word-floating.js';
 import {writeLayout,defaultLayout} from './word-layout.js';
@@ -50,7 +51,7 @@ export async function editWordPackage(model,Zip,Parser,Serializer,command){
   if(command.basedOn){const seen=new Set([command.style]);let id=command.basedOn;while(id){if(seen.has(id))throw new Error('Style inheritance cannot contain a cycle.');seen.add(id);const parent=byId.get(id);if(!parent||parent.getAttributeNS(W,'type')!=='paragraph')throw new Error('Choose an existing paragraph base style.');id=child(parent,'basedOn')?.getAttributeNS(W,'val');}}
   if(!style){style=element(styles,'style',{type:'paragraph',styleId:command.style,customStyle:1});styles.documentElement.append(style);}let name=child(style,'name');if(!name){name=element(styles,'name');style.prepend(name);}name.setAttributeNS(W,'w:val',command.name);
   let base=child(style,'basedOn');if(command.basedOn){if(!base){base=element(styles,'basedOn');style.insertBefore(base,name.nextSibling);}base.setAttributeNS(W,'w:val',command.basedOn);}else base?.remove();
-  const run=element(styles,'r'),old=child(style,'rPr');if(old)run.append(old.cloneNode(true));writeWordFormat(styles,run,validateWordFormat(command.format));old?.remove();style.append(child(run,'rPr'));
+  const run=element(styles,'r'),old=child(style,'rPr');if(old)run.append(old.cloneNode(true));writeWordFormat(styles,run,validateWordFormat(command.format));const inherited=styleToggleBase(styles,command.basedOn);for(const [tag,key]of [['b','bold'],['i','italic']])child(child(run,'rPr'),tag).setAttributeNS(W,'w:val',command.format[key]!==!!inherited[key]?'1':'0');old?.remove();style.append(child(run,'rPr'));
   if(command.layout){const p=element(styles,'p'),old=child(style,'pPr');if(old)p.append(old.cloneNode(true));writeLayout(styles,p,command.layout);old?.remove();style.insertBefore(child(p,'pPr'),child(style,'rPr'));}
   zip.file('word/styles.xml',serialize(styles));await ensureRelationship(zip,Parser,Serializer,'styles','styles.xml');await ensureContent(zip,Parser,Serializer,'/word/styles.xml','application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml');
  }else if(command.type==='style'){
