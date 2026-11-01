@@ -31,3 +31,47 @@
 .document-v2-search label {display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .document-v2-search input[type=text] {max-width:100%;min-width:0;min-height:44px;font:inherit}
 .document-v2-search button {min-height:44px}
+/* Document Editor interface only; document canvas and editing geometry untouched. */
+.document-v2-more {margin:16px 0;border:1px solid var(--line);border-radius:12px;padding:12px;background:#f3f8f4;color:#183c30}
+.document-v2-more>summary {cursor:pointer;min-height:44px;display:list-item;font-weight:700;padding:10px}
+.document-v2-more>p {margin:6px 10px 14px;font-size:.9rem}
+.document-v2-more>details {background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0}
+.document-v2-more summary {cursor:pointer;min-height:44px}
+#document-v2-actions {position:sticky;top:0;z-index:20;background:#f3f8f4;padding:10px;border:1px solid var(--line);border-radius:10px}
+#document-v2-title {font-size:.9rem}
+@media(max-width:700px){
+ .document-v2 {padding:12px;min-width:0}
+ .document-v2-top {gap:8px;margin-bottom:12px}
+ .document-v2-top label {text-align:center;min-height:44px}
+ #document-v2-actions {gap:6px;display:grid;grid-template-columns:1fr 1fr}
+ #document-v2-actions[hidden] {display:none}
+ #document-v2-actions [data-action=export] {grid-column:1/-1;grid-row:1}
+ #document-v2-actions [data-action=new] {grid-column:1/-1;font-size:.85rem;background:transparent}
+ .document-v2 .hybrid-toolbar,.document-v2 .pdf-fortress-top,.document-v2 .pdf-fortress-footer,.document-v2 .ocr-toolbar {gap:8px;flex-wrap:wrap;max-width:100%;box-sizing:border-box}
+ .document-v2 .pdf-fortress-name {display:none}
+ .document-v2 button,.document-v2 select {min-height:44px}
+ .document-v2-more input:not([type=checkbox]):not([type=radio]),.document-v2-more select {max-width:100%;min-width:0;box-sizing:border-box;font-size:16px}
+ .document-v2-more label {max-width:100%;overflow-wrap:anywhere}
+ .document-v2-more fieldset {min-width:0;margin:12px 0;padding:10px}
+ .document-v2-more .document-v2-actions {align-items:stretch;gap:8px}
+ .document-v2-more .document-v2-actions>label {flex:1 1 100%}
+}
+/* Shared tool menus across Word, spreadsheets and plain text. */
+.document-v2-more .document-v2-actions {margin-bottom:8px}
+.document-v2-more summary:focus-visible {outline:3px solid #166e52;outline-offset:3px}
+.document-v2-tabs button {flex-shrink:0;min-height:44px}
+@media(max-width:700px){
+ .document-v2-stage>.document-v2-actions {gap:8px}
+ .document-v2-stage>.document-v2-actions button {flex:1 1 40%}
+ .document-v2-more .document-v2-actions>button {flex:1 1 40%;white-space:normal}
+ .document-v2-more input[type=text],.document-v2-more input[type=number] {min-height:44px}
+ .document-v2-more summary {font-size:1rem;line-height:1.4;overflow-wrap:anywhere}
+ .document-v2-grid input {font-size:16px;min-height:44px}
+ .document-v2-stage>.notice {font-size:.875rem;line-height:1.5}
+ .document-v2-text {box-sizing:border-box}
+}
+/* Keep the action bar in normal flow: a tall sticky bar obscures the document
+   when the phone keyboard opens or the browser scrolls a selection into view. */
+#document-v2-actions {position:static}
+#document-v2-file {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.document-v2-top:focus-within label[for=document-v2-file] {outline:3px solid #166e52;outline-offset:3px}

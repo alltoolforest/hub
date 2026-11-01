@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import Zip from '../hybrid-build/node_modules/jszip/lib/index.js';
+import {JSDOM} from '../hybrid-build/node_modules/jsdom/lib/api.js';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
+const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const styled=process.env.FLOW_LAYOUT==='1',properties=styled?'<w:pPr><w:spacing w:before="120" w:after="120"/><w:ind w:left="120" w:right="80" w:firstLine="60"/></w:pPr>':'';
+const text='This long paragraph retains its original words while flowing across unequal columns. '.repeat(35);
+try{
+ const page=await browser.newPage({acceptDownloads:true});page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const zip=new Zip();zip.file('[Content_Types].xml','<Types/>');zip.file('word/document.xml',`<w:document xmlns:w="${W}"><w:body><w:p>${properties}<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="8640" w:h="7200"/><w:pgMar w:top="720" w:bottom="720" w:left="720" w:right="720"/><w:cols w:equalWidth="0" w:num="2"><w:col w:w="2400" w:space="360"/><w:col w:w="4440"/></w:cols></w:sectPr></w:body></w:document>`);
+ await page.goto(process.env.DOCUMENT_EDITOR_URL||'http://127.0.0.1:8770/documents/document-editor/');await page.locator('#document-v2-file').setInputFiles({name:'unequal-paragraph.docx',mimeType:'application/octet-stream',buffer:await zip.generateAsync({type:'nodebuffer'})});
+ await page.waitForFunction(()=>document.querySelectorAll('[data-word-layout-fragment]').length>2);
+ const field=page.locator('[data-word-source="0"]').first();assert.equal(await field.textContent(),text);assert.equal(await page.locator('[data-word-source="0"]').count(),1);
+ const geometry=await page.locator('[data-word-layout-fragment]').evaluateAll(nodes=>nodes.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height,text:n.textContent})));
+ assert.ok(geometry.every(n=>n.h<=384.5));assert.ok(Math.abs(geometry[0].w-(styled?146.6667:160))<1);assert.ok(Math.abs(geometry[1].w-(styled?282.6667:296))<1);
+ await field.evaluate(n=>{const fragment=n.querySelectorAll('[data-word-layout-fragment]')[1],walker=document.createTreeWalker(fragment,4),text=walker.nextNode();n.closest('[contenteditable=""]').focus();getSelection().setBaseAndExtent(text,3,text,3);});
+ await page.keyboard.insertText('INSERTED');await page.waitForTimeout(150);assert.equal((await field.textContent()).length,text.length+8);
+ await page.keyboard.press('Backspace');await page.waitForTimeout(150);assert.equal((await field.textContent()).length,text.length+7);
+ const copied=await field.evaluate(n=>{const range=document.createRange();range.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(range);const data=new DataTransfer();n.dispatchEvent(new ClipboardEvent('copy',{bubbles:true,cancelable:true,clipboardData:data}));return {plain:data.getData('text/plain'),html:data.getData('text/html')};});
+ assert.equal(copied.plain,await field.textContent());assert.ok(!copied.html.includes('word-layout-fragment'));assert.ok(!copied.html.includes('position: absolute'));
+ const roundTrip=await page.evaluate(async html=>{const {readWordClipboard}=await import('../../assets/js/document-editor-v2/word-clipboard.js');return readWordClipboard(html,'',{font:'Arial',size:11,bold:false,italic:false,underline:false,color:'#000000'}).map(p=>p.runs.map(r=>r.text).join(''));},copied.html);assert.deepEqual(roundTrip,[await field.textContent()]);
+ const beforeDelete=await field.textContent(),beforeCount=await page.locator('[data-word-layout-fragment]').count();
+ await field.evaluate(n=>{const walker=document.createTreeWalker(n,4),nodes=[];let t;while(t=walker.nextNode())nodes.push(t);function point(offset){for(const t of nodes){if(offset<=t.length)return [t,offset];offset-=t.length;}}n.closest('[contenteditable=""]').focus();getSelection().setBaseAndExtent(...point(20),...point(1500));});
+ await page.keyboard.press('Backspace');await page.waitForTimeout(150);assert.equal(await field.textContent(),beforeDelete.slice(0,20)+beforeDelete.slice(1500));assert.ok(await page.locator('[data-word-layout-fragment]').count()<beforeCount);
+ const edited=await field.textContent();const pending=page.waitForEvent('download');await page.locator('[data-action=export]').click();const download=await pending;const out=await Zip.loadAsync(await fs.readFile(await download.path()));const xml=new JSDOM(await out.file('word/document.xml').async('string'),{contentType:'application/xml'}).window.document;
+ assert.equal(xml.getElementsByTagNameNS(W,'p').length,1);assert.equal([...xml.getElementsByTagNameNS(W,'t')].map(n=>n.textContent).join(''),edited);assert.deepEqual(errors,[]);
+ await page.locator('[data-action=undo]').click();await page.waitForFunction(expected=>document.querySelector('[data-word-source="0"]')?.textContent===expected,beforeDelete);
+ await page.locator('[data-action=redo]').click();await page.waitForFunction(expected=>document.querySelector('[data-word-source="0"]')?.textContent===expected,edited);
+ await page.waitForTimeout(900);await page.reload();await page.locator('#document-v2-restore').click();await page.waitForFunction(expected=>document.querySelector('[data-word-source="0"]')?.textContent===expected,edited);await page.waitForFunction(()=>document.querySelectorAll('[data-word-layout-fragment]').length>1);assert.deepEqual(errors,[]);
+ await field.evaluate(n=>{const walker=document.createTreeWalker(n,4);let node,offset=200;while(node=walker.nextNode()){if(offset<=node.length)break;offset-=node.length;}n.closest('[contenteditable=""]').focus();getSelection().setBaseAndExtent(node,offset,node,offset);});await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>document.querySelectorAll('[data-word-source="0"]').length===2);await page.waitForFunction(()=>document.querySelector('[data-word-part="1"] [data-word-layout-fragment]'));
+ assert.equal(await page.locator('[data-word-part="0"]').textContent(),edited.slice(0,200));assert.equal(await page.locator('[data-word-part="1"]').textContent(),edited.slice(200));
+ const nextDownload=page.waitForEvent('download');await page.locator('[data-action=export]').click();const splitZip=await Zip.loadAsync(await fs.readFile(await (await nextDownload).path())),splitXml=new JSDOM(await splitZip.file('word/document.xml').async('string'),{contentType:'application/xml'}).window.document;assert.equal(splitXml.getElementsByTagNameNS(W,'p').length,2);assert.equal([...splitXml.getElementsByTagNameNS(W,'t')].map(n=>n.textContent).join(''),edited);assert.deepEqual(errors,[]);
+ console.log('PASS unequal paragraph: geometry, one editing host, continuation typing/deletion, export retains one paragraph');
+}finally{await browser.close();}

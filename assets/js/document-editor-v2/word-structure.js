@@ -72,6 +72,11 @@ export function mountStructure({model,index,container,formatting,onChange,regist
       for(const event of ['focus','mouseup','keyup'])field.addEventListener(event,activate);
       field.addEventListener('beforeinput',event=>{
         const range=selection(field);if(!range)return;const parts=structuredClone(structureParts(model,index)),p=parts[partIndex],length=textOf(p).length;
+        // Native deletion across visual blocks may rewrite neighboring spaces
+        // as NBSP. Apply the logical range directly before repainting instead.
+        if(field.querySelector('[data-word-layout-fragment]')&&range.start!==range.end&&(event.inputType.startsWith('delete')||['insertText','insertReplacementText'].includes(event.inputType))&&!event.isComposing){
+          event.preventDefault();const value=event.inputType.startsWith('delete')?'':event.data||'';replaceStructure(model,index,partIndex,range.start,range.end,value);render();onChange();focus(partIndex,range.start+value.length);return;
+        }
         if(event.inputType==='insertParagraph'){
           event.preventDefault();const inherited={text:'',source:0,format:formatAt(model,index,p.runs,range.start)};
           const left=sliceRuns(p.runs,0,range.start),right=sliceRuns(p.runs,range.end,length);parts.splice(partIndex,1,{runs:left.length?left:[inherited]},{runs:right.length?right:[inherited]});save(parts,partIndex+1,0);
