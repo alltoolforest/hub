@@ -1,3 +1,4 @@
+import {createDownloadDelivery} from './download.js';
 import {detectFile} from './file-router.js';
 import {readDraft, writeDraft, clearDraft} from './drafts.js';
 
@@ -8,12 +9,13 @@ const status = root.querySelector('#document-v2-status');
 const title = root.querySelector('#document-v2-title');
 const recovery = root.querySelector('#document-v2-recovery');
 const actions = root.querySelector('#document-v2-actions');
-let session = null, timer = null, downloadUrl = null, generation = 0, pendingSave = Promise.resolve(), actionBusy = false;
+let session = null, timer = null, generation = 0, pendingSave = Promise.resolve(), actionBusy = false;
 
 function say(message, error = false) {
   status.textContent = message;
   status.classList.toggle('error', error);
 }
+const delivery=createDownloadDelivery(root,say);
 function nameForExport(name, format) {
   return name.replace(/\.[^.]*$/, '').replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 90) + '-edited.' + format;
 }
@@ -46,12 +48,14 @@ async function persist(allowStorageFailure = false) {
 function changed() {
   if (!session) return;
   if(session.engine.asyncSnapshots){
+    delivery.clear();
     session.dirty=true;
     if(actionBusy)return;
     say('Unsaved PDF changes. Finish the edit to save a local draft.');
     clearTimeout(timer);timer=setTimeout(()=>persist().catch(error=>say(error.message||'Local autosave failed. Export your work.',true)),700);
     return;
   }
+  delivery.clear();
   const next = session.engine.snapshot();
   if (JSON.stringify(next) !== JSON.stringify(session.history[session.cursor])) {
     session.history = session.history.slice(0, session.cursor + 1);
@@ -66,6 +70,7 @@ function changed() {
   }
 }
 async function display() {
+  delivery.clear();
   await session.engine.render(stage, changed);
   title.textContent = session.file.name + ' · ' + session.format.toUpperCase();
   actions.hidden = false;
@@ -131,13 +136,8 @@ actions.addEventListener('click', async event => {
       await persist().catch(error => {if(!error.localDraftStorageFailure)throw error;say('Local autosave is unavailable. Preparing your export directly.', true);});
       const blob = await session.engine.export();
       if (!(blob instanceof Blob) || (!blob.size && session.format !== 'txt')) throw new Error('Export did not produce a valid file. Your draft is retained.');
-      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-      downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = nameForExport(session.file.name, session.format);
-      link.click();
-      say('Export prepared. Confirm the download was saved on your device.');
+      delivery.prepare(blob,nameForExport(session.file.name, session.format));
+      say('Export prepared. If the download did not start, use the save options below.');
     } else if (action === 'new') {
       if (session.dirty && !confirm('Clear this session and its local draft? Export first if needed.')) return;
       clearTimeout(timer);
@@ -145,6 +145,7 @@ actions.addEventListener('click', async event => {
       await pendingSave.catch(() => {});
       await clearDraft();
       await session.engine.dispose?.();
+      delivery.clear();
       session = null;
       stage.replaceChildren();
       title.textContent = 'No file open';
@@ -170,7 +171,8 @@ root.querySelector('#document-v2-discard').addEventListener('click', async () =>
 window.addEventListener('beforeunload', event => {
   if (session?.dirty) { event.preventDefault(); event.returnValue = ''; }
 });
-window.addEventListener('pagehide', () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); });
+// Do not revoke on pagehide: Safari may still be opening the prepared blob,
+// and a back/forward-cache return must retain usable save links.
 readDraft().then(draft => {
   if (draft?.file) {
     recovery.hidden = false;
