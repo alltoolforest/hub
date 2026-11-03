@@ -18,3 +18,5 @@ Validation:
 - PDF automatic download and fresh-tap retry produce identical valid bytes.
 
 Scope: only Document Editor and its isolated PDF copy/tests. Frozen Edit PDF and other tools are untouched. The exact user PDF was not attached; manual confirmation with that source is still required before freeze.
+
+Post-deployment: Pages deployment for commit 186b9479b6164b2a78fd695cb3a4a3c6e9c52517 completed successfully. Public HTML, workspace, PDF adapter, both corrected multiline modules and exporter core matched local source bytes. All six Enter/refusal scenarios passed again against the public /hub/documents/document-editor/ route. The test loader now resolves inspection modules relative to that deployed subpath as well as localhost. This follow-up changes only the test and this audit record.
