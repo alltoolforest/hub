@@ -34,7 +34,7 @@ try{
    assert.deepEqual(errors,[]);console.log('PASS '+entry.name+': preview commit, export coordinates, preserved surroundings, undo/redo, recovery');
   }catch(error){console.error('FAIL',entry.name,await page.locator('#document-v2-status').textContent(),await page.locator('.pdf-fortress-status').allTextContents());throw error;}finally{await page.close();}
  }
- for(const rejected of [{name:'unsupported replacement glyph',text:'\n'+declaration+' 😀'},{name:'excessive expansion',text:'\n'.repeat(200)+declaration}]){
+ for(const rejected of [{name:'unsupported replacement glyph',text:'\n'+declaration+' 😀'}]){
   const page=await browser.newPage({acceptDownloads:true});page.on('dialog',d=>d.accept());
   try{
    await page.goto(process.env.DOCUMENT_EDITOR_URL||'http://127.0.0.1:8770/documents/document-editor/');await page.locator('#document-v2-file').setInputFiles({name:'protected-declaration.pdf',mimeType:'application/pdf',buffer:bytes});

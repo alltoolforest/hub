@@ -1,6 +1,6 @@
-import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-word-clip';
+import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-paragraph-flow';
 import { PDFName } from '../core/pdf-lib.js';
-import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js?release=2026-11-03-word-clip';
+import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js?release=2026-11-03-paragraph-flow';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
@@ -261,7 +261,7 @@ export async function applyVerticalRegionReflow(doc,tx,layout,{preview=false,seq
   if(delta<.5){
     return {applied:false,reason:'EXISTING_WHITESPACE_SUFFICIENT',overflowPageCount:0,metric:{transactionId:tx.id,pageIndex,sequenceIndex,cutY,delta:0,overflowPageCount:0,cascadedPageCount:0,overflowedBlockIds:[],overflowedLineIds:[],bandLeft,bandRight,footerGuardTop}};
   }
-  if(delta>height*.72)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
+  if(delta>=height||textBottomY<0)return {applied:false,reason:'REFLOW_SHIFT_TOO_LARGE',overflowPageCount:0};
 
   const overflowNeeded=contentBottomY-delta<movableFloor;
   const snapped=overflowNeeded?snapOverflowBoundary(plan,{delta,movableFloor,footerGuardTop,cutY,bandLeft,bandRight,safetyGap}):{boundary:footerGuardTop,overflowedBlockIds:[],overflowedLineIds:[]};

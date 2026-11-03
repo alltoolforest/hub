@@ -1,10 +1,11 @@
+import {paginateInsertedLayout,insertContinuationPages} from './paragraph-pagination.js';
 import { PDFDocument, StandardFonts, degrees, rgb } from '../core/pdf-lib.js';
 import { getPageContentStreams, replacePageContentStream, getPageFormXObjectStream, replacePageFormXObjectStream } from '../core/document-model.js';
 import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
-import { applyVerticalRegionReflow } from './page-reflow.js?release=2026-11-03-word-clip';
+import { applyVerticalRegionReflow } from './page-reflow.js?release=2026-11-03-paragraph-flow';
 import {detectDocumentFlags} from '../core/document-model.js';
 import {formRegionSafe} from '../core/form-protection.js';
 
@@ -110,11 +111,9 @@ async function drawReconstructedText(doc,item,fontCache,warnings){
         warnings.push({code:'STYLE_EXTENDS_ORIGINAL_BOUNDS',pageIndex:tx.pageIndex,blockId:block.id,message:'Formatted text is slightly wider than the original text region.'});
       }
     }else{
-      if(width>targetWidth*1.04){
-        size=Math.max(6,size*(targetWidth/Math.max(width,1)));
-        width=font.widthOfTextAtSize(text,size);
-      }
-      if(width>targetWidth*1.12)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
+      // Preserve the detected size; the editor must reflow a longer paragraph,
+      // rather than silently shrink its letters into the original line.
+      if(width>targetWidth*1.04)throw Object.assign(new Error('Replacement cannot fit safely in the mapped text region.'),{code:'LAYOUT_COLLISION'});
     }
 
     const y=Number.isFinite(line.y)?line.y:(block.bounds?.y??0);
@@ -259,7 +258,6 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       if(!String(tx.replacementUnicode||'').trim())continue;
       if(!insertionsByPage.has(tx.pageIndex))insertionsByPage.set(tx.pageIndex,[]);
       insertionsByPage.get(tx.pageIndex).push({tx,sequenceIndex});
-      checks.push({kind:'insert',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:''});
       continue;
     }
 
@@ -341,7 +339,8 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
   for(const sourcePageIndex of insertionPages){
     const items=insertionsByPage.get(sourcePageIndex)||[];
     for(const {tx,sequenceIndex} of items){
-      const layout=await prepareInsertedText(doc,tx,fontCache);
+      const fullLayout=await prepareInsertedText(doc,tx,fontCache);
+      const chunks=paginateInsertedLayout(tx,fullLayout),layout=chunks[0];
       guardFormRegion(doc,sourcePageIndex,{x:Number(tx.x),y:layout.bottomY,width:Math.max(...layout.lines.map(text=>layout.font.widthOfTextAtSize(text,layout.size)),0),height:Number(tx.y)+layout.size-layout.bottomY});
       let reflow=null;
       if(tx.reflowPlan?.enabled){
@@ -363,12 +362,19 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       }
       if(!reflow?.applied)validateInsertedDesignRegion(tx,layout);
       drawInsertedLayout(doc,tx,layout,warnings);
+      const shift=insertContinuationPages(doc,sourcePageIndex,chunks);
+      if(shift){shift.transactionId=tx.id;shift.sequenceIndex=sequenceIndex;reflowMetrics.push(shift);overflowCounts.set(sourcePageIndex,(overflowCounts.get(sourcePageIndex)||0)+shift.insertedPageCount);}
+      for(let index=0;index<chunks.length;index++){
+        const chunk=chunks[index];
+        if(index)drawInsertedLayout(doc,{...tx,pageIndex:sourcePageIndex+index,y:chunk.y},chunk,warnings);
+        checks.push({kind:'insert',sourcePageIndex,pageOffset:index,newText:chunk.lines.join(' '),oldText:''});
+      }
     }
   }
 
   const finalChecks=checks.map(check=>({
     ...check,
-    pageIndex:finalSourcePageIndex(check.sourcePageIndex,overflowCounts),
+    pageIndex:finalSourcePageIndex(check.sourcePageIndex,overflowCounts)+(check.pageOffset||0),
   }));
 
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));

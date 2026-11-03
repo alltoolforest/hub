@@ -11,7 +11,7 @@ import { InlineEditor } from './editing/inline-editor.js';
 import { createEditTransaction, createInsertTransaction } from './editing/edit-transaction.js';
 import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
-import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-word-clip';
+import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-paragraph-flow';
 import { planInsertionReflow } from './layout/reflow-planner.js';
 import { replanDependentInsertions } from './dependent-insert-replan.js';
 
@@ -110,7 +110,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   const zoomIn=button('+','Zoom in');
   const status=document.createElement('div');status.className='pdf-fortress-status';status.setAttribute('role','status');
   footer.append(prev,pageLabel,next,zoomOut,zoomIn,status);
-  root.append(top,docArea,footer);
+  const overflowPreview=document.createElement('details');overflowPreview.className='pdf-overflow-preview';overflowPreview.hidden=true;
+  root.append(top,docArea,footer,overflowPreview);
   container.append(root);
   const viewportCtl=new ViewportController(docArea);
   let inline=null;
@@ -313,6 +314,24 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       });
       layer.append(hit);
     }
+    await refreshOverflowPreview();
+  }
+
+  async function refreshOverflowPreview(){
+    overflowPreview.replaceChildren();
+    const display=previewRenderer,count=display?.doc?.numPages||0;
+    overflowPreview.hidden=!(pdfDoc&&count>pdfDoc.getPageCount());
+    if(overflowPreview.hidden)return;
+    const summary=document.createElement('summary');summary.textContent=`Expanded PDF preview (${count} pages)`;summary.style.minHeight='44px';
+    const help=document.createElement('p');help.textContent='Your text and following content continue on these pages. Edit a flowing paragraph from its starting page.';
+    const label=document.createElement('label'),select=document.createElement('select');label.textContent='Output page ';select.setAttribute('aria-label','Expanded PDF output page');
+    for(let i=0;i<count;i++)select.append(new Option(`Page ${i+1}`,String(i)));
+    select.value=String(Math.min(pageIndex+1,count-1));label.append(select);
+    const frame=document.createElement('div');Object.assign(frame.style,{maxHeight:'65vh',overflow:'auto'});
+    const canvas=document.createElement('canvas');canvas.setAttribute('aria-label','Expanded PDF page preview');frame.append(canvas);overflowPreview.append(summary,help,label,frame);
+    let serial=0;
+    const draw=async()=>{const token=++serial;try{const info=await display.pageInfo(Number(select.value));if(token!==serial||display!==previewRenderer)return;await display.render(Number(select.value),canvas,{scale:Math.min(1.5,Math.max(.3,(docArea.clientWidth-24)/info.width))});}catch(error){if(display===previewRenderer)setStatus(error.message,'error');}};
+    select.addEventListener('change',draw);overflowPreview.ontoggle=()=>{if(overflowPreview.open)draw();};
   }
 
   async function buildPreviewForTransactions(transactions){
@@ -364,6 +383,10 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const tap=existing?null:{x:evt.clientX-rect.left,y:evt.clientY-rect.top};
     const input=inline.begin(editBlock,matrix,tap);
     activeTextInput=input;activeInputScale=Math.max(Math.abs(matrix[3]||1),.1);updateActiveInputFormatting();
+    const lane=expansionGeometryForBlock(sourceBlock,existingStyle),scale=Math.max(Math.abs(matrix[0]||1),.1);
+    if(lane)input.style.width=`${Math.min(layer.clientWidth-input.offsetLeft-4,Math.max(input.offsetWidth,lane.maxWidth*scale))}px`;
+    const fitInput=()=>{input.style.height='auto';input.style.height=`${Math.min(Math.max(40,input.scrollHeight+4),Math.max(120,window.innerHeight*.45))}px`;input.style.overflowY='auto';};
+    input.addEventListener('input',fitInput);fitInput();
     viewportCtl.watch(input);
     const done=document.createElement('button');done.className='pdf-done';done.textContent='Done';done.type='button';
     const inputLeft=input.offsetLeft,inputTop=input.offsetTop,inputWidth=input.offsetWidth,inputHeight=input.offsetHeight;
@@ -442,6 +465,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         if(existingTx){
           tx=createInsertTransaction({pageIndex:existingTx.pageIndex,text,x:existingTx.x,y:existingTx.y,fontSize:activeStyle.fontSize,bold:activeStyle.bold,italic:activeStyle.italic,fontFamily:activeStyle.fontFamily,textColor:activeStyle.textColor,lineHeight:activeStyle.fontSize*1.2,maxWidth:existingTx.maxWidth||existingTx._renderedWidth||300,reflowPlan:existingTx.reflowPlan});
           tx.id=existingTx.id;
+          if(existingTx.expandedFromBlockId)tx.expandedFromBlockId=existingTx.expandedFromBlockId;
         }else{
           const scaleY=Math.max(Math.abs(matrix[3]||1),.1);
           const baselineScreenY=topPos+Math.max(16,activeStyle.fontSize*scaleY)*.88;
@@ -471,13 +495,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     });
   }
 
-  function growthNeedsParagraphFallback(error,block,newText,selectedStyle,originalStyle){
-    if(!error||!['LAYOUT_COLLISION','TEXT_OVERFLOW'].includes(error.code))return false;
-    if(error.code==='TEXT_OVERFLOW')return true;
-    const oldLength=Math.max(1,Array.from(String(block.text||'').replace(/\s+/g,'')).length);
-    const newLength=Array.from(String(newText||'').replace(/\s+/g,'')).length;
-    const sizeRatio=(Number(selectedStyle?.fontSize)||originalStyle.fontSize)/Math.max(originalStyle.fontSize,1);
-    return String(newText||'').includes('\n')||(newLength>oldLength*1.12&&sizeRatio<=1.20);
+  function growthNeedsParagraphFallback(error){
+    return !!error&&['LAYOUT_COLLISION','TEXT_OVERFLOW'].includes(error.code);
   }
 
   function expansionGeometryForBlock(block,selectedStyle){
@@ -503,7 +522,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       const cBaseline=Number.isFinite(cLine?.y)?cLine.y:(Number(visual.bounds?.y)||0)+cStyle.fontSize*.30;
       if(Math.abs(cBaseline-baseline)>size*4.2)continue;
       const cX=Number.isFinite(cLine?.minX)?cLine.minX:Number(visual.bounds?.x);
-      if(!Number.isFinite(cX)||Math.abs(cX-x)>Math.max(12,size*1.4))continue;
+      if(!Number.isFinite(cX)||Math.abs(cX-x)>Math.max(48,size*4))continue;
       const cRight=Number.isFinite(cLine?.maxX)?cLine.maxX:cX+Number(visual.bounds?.width||0);
       if(Number.isFinite(cRight)&&cRight>cX)nearbyRights.push(cRight);
     }
@@ -511,8 +530,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     const rightMargin=Math.max(18,geometry.width*.055);
     const pageRight=Math.max(x+40,geometry.width-rightMargin);
     const inferredRight=Math.min(pageRight,Math.max(ownRight,...nearbyRights));
-    const maxWidth=Math.max(ownRight-x,inferredRight-x);
-    if(maxWidth<Math.max(140,geometry.width*.38)||x>geometry.width*.30)return null;
+    const inferredWidth=Math.max(ownRight-x,inferredRight-x);
+    const maxWidth=inferredWidth<Math.max(140,geometry.width*.38)?pageRight-x:inferredWidth;
+    if(maxWidth<40)return null;
 
     const reflowPlan=planInsertionReflow({
       blocks:analysis.blocks.filter(candidate=>candidate.id!==block.id),
@@ -642,13 +662,16 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
 
   async function queueInsertion(tx,old=null){
     const nextMap=new Map(txByBlock);nextMap.set(tx.id,tx);
+    const oldClear=tx.expandedFromBlockId?nextMap.get(tx.expandedFromBlockId):null;
+    const nextClear=oldClear?{...oldClear,displayUnicode:tx.replacementUnicode}:null;
+    if(nextClear)nextMap.set(tx.expandedFromBlockId,nextClear);
     setStatus(old?'Updating added text…':'Adding text and checking page flow…');
     const preview=await buildPreviewForTransactions([...nextMap.values()]);
     const nextRenderer=new PdfRenderer(preview.bytes);await nextRenderer.load();
-    txByBlock.set(tx.id,tx);
+    txByBlock.set(tx.id,tx);if(nextClear)txByBlock.set(tx.expandedFromBlockId,nextClear);
     history.push({
-      undo:()=>{if(old)txByBlock.set(tx.id,old);else txByBlock.delete(tx.id);onChange([...txByBlock.values()]);},
-      redo:()=>{txByBlock.set(tx.id,tx);onChange([...txByBlock.values()]);}
+      undo:()=>{if(old)txByBlock.set(tx.id,old);else txByBlock.delete(tx.id);if(oldClear)txByBlock.set(tx.expandedFromBlockId,oldClear);onChange([...txByBlock.values()]);},
+      redo:()=>{txByBlock.set(tx.id,tx);if(nextClear)txByBlock.set(tx.expandedFromBlockId,nextClear);onChange([...txByBlock.values()]);}
     });
     updateHistory();onChange([...txByBlock.values()]);previewToken++;
     previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview.reflowMetrics||[];

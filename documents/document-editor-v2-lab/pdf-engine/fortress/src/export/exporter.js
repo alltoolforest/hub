@@ -1,4 +1,4 @@
-import { exportEditedPdf as exportEditedPdfCore } from './exporter-core.js?release=2026-11-03-word-clip';
+import { exportEditedPdf as exportEditedPdfCore } from './exporter-core.js?release=2026-11-03-paragraph-flow';
 import { applyUpwardCompaction } from './upward-compaction-v3.js';
 import { addDeletionMarkerCompanions } from './list-marker-companions.js';
 import { prepareStructuredVectorTransactions } from './structured-vector-plan.js';
