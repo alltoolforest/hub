@@ -27,6 +27,7 @@ try{
     await page.waitForFunction(()=>!document.querySelector('#document-v2-file').disabled);
     await page.reload();await page.locator('#document-v2-restore').click();
     await page.getByRole('button',{name:'Edit text: Updated sample text',exact:true}).waitFor();
+    const moreTools=page.locator('[data-editor-more] > summary');if(await moreTools.count()&&!await moreTools.evaluate(el=>el.parentElement.open))await moreTools.click();
     await page.getByText('Find and replace PDF text',{exact:true}).click();
     const search=page.locator('details.document-v2-search').filter({has:page.getByText('Find and replace PDF text',{exact:true})});
     await search.getByLabel('Find',{exact:true}).fill('Updated');await search.getByRole('button',{name:'Search',exact:true}).click();

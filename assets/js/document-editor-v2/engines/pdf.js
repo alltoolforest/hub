@@ -11,9 +11,9 @@ export async function open(file, format, recovery=null) {
   if(format !== 'pdf')throw new Error('Unsupported PDF format.');
   const prepared=await preparePdf(file,{recovery});file=prepared.file;
   const [main,hybrid,precision,anchors,smart] = await Promise.all([
-    import(new URL('fortress/src/main.js',base)),import(new URL('ocr/hybrid-editor.js',base)),
+    import(new URL('fortress/src/main.js?release=2026-11-03-pdf-enter',base)),import(new URL('ocr/hybrid-editor.js?release=2026-11-03-pdf-enter',base)),
     import(new URL('fortress/src/font-size-precision.js',base)),import(new URL('fortress/src/insert-anchor-bridge.js',base)),
-    import(new URL('fortress/src/smart-line-insertion-v8.js',base))
+    import(new URL('fortress/src/smart-line-insertion-v8.js?release=2026-11-03-pdf-enter',base))
   ]);
   await main.configurePdfWorker(new URL('../../edit-pdf/fortress/vendor/pdf.worker.compat.mjs',base).href);
   for(const path of ['fortress/src/styles.css','fortress/src/font-size-precision.css','ocr/styles.css']){

@@ -263,6 +263,13 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       continue;
     }
 
+    // Expansion replaces and redraws one logical paragraph. Its old words may
+    // legitimately remain after adding only blank lines; validate the paired
+    // insertion instead of treating source neutralization as a user deletion.
+    const expanded=tx.expandedInsertId?transactions.find(other=>other.id===tx.expandedInsertId):null;
+    if(tx.expandedInsertId&&(!expanded||expanded.kind!=='INSERT_TEXT'||expanded.pageIndex!==tx.pageIndex||expanded.expandedFromBlockId!==tx.blockId||!String(expanded.replacementUnicode||'').trim()||tx.replacementUnicode!=='')){
+      throw Object.assign(new Error('Invalid expanded PDF paragraph pairing.'),{code:'INVALID_EXPANDED_PARAGRAPH'});
+    }
     const block=tx.block;
     guardFormRegion(doc,tx.pageIndex,block?.bounds);
     if(!block||(block.tier!=='DIRECT_EDIT'&&block.tier!=='FONT_SUBSTITUTION'))throw new Error(`Block ${block?.id||tx.blockId||'unknown'} is not safely editable: ${block?.reason||block?.tier||'UNKNOWN'}`);
@@ -304,7 +311,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
       reconstructions.push({tx,block});
     }
 
-    checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
+    if(!expanded)checks.push({kind:'replace',sourcePageIndex:tx.pageIndex,newText:tx.replacementUnicode.replace(/\n/g,' '),oldText:tx.originalUnicode.replace(/\n/g,' ')});
   }
 
   for(const bucket of byStream.values()){

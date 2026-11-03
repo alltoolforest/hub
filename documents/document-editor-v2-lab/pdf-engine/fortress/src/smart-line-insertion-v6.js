@@ -2,7 +2,7 @@ import {rasterFlowProfile,rasterPageGeometry} from './layout/raster-flow.js';
 import { loadPdfjs } from './rendering/pdfjs.js';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
 import { detectSectionKeepGroups } from './layout/section-pagination.js';
-import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js';
+import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js?release=2026-11-03-pdf-enter';
 
 const ORIGINAL_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);

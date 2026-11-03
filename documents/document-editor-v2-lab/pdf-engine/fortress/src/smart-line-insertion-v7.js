@@ -5,7 +5,6 @@ const ANY_TEXT_SELECTOR=`${ORIGINAL_SELECTOR},.pdf-hit-inserted`;
 const SYNTHETIC_FLAG=Symbol('alltoolforest-smart-line-v7');
 
 function clamp(value,min,max){return Math.max(min,Math.min(max,value));}
-function normalizeText(value){return String(value||'').replace(/\s+/g,' ').trim();}
 function isEditableBlock(block){return block?.tier==='DIRECT_EDIT'||block?.tier==='FONT_SUBSTITUTION';}
 function isListLike(text){return /^\s*(?:\d{1,3}[.)]|[-•▪◦])\s*\S/.test(String(text||''));}
 function listNumber(text){const m=String(text||'').match(/^\s*(\d{1,3})[.)]\s*/);return m?Number(m[1]):null;}
@@ -303,35 +302,10 @@ function classifyInsertion(app,state,input,layer,anchor){
   return {fits:false,distance,belowBlocks:blocksFromVerticalStart(state,entries,nearest.top)};
 }
 
-function waitFor(app,selector,timeout=1800){
-  const current=app.querySelector(selector);
-  if(current)return Promise.resolve(current);
-  return new Promise((resolve,reject)=>{
-    const observer=new MutationObserver(()=>{
-      const found=app.querySelector(selector);
-      if(found){clearTimeout(timer);observer.disconnect();resolve(found);}
-    });
-    observer.observe(app,{subtree:true,childList:true});
-    const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Timed out waiting for the text editor.'));},timeout);
-  });
-}
-
 export function attachSmartLineInsertion({app,getEditor}){
   if(!app)throw new Error('Edit PDF app element is required');
-  let destroyed=false,automating=false,lastExisting=null,pendingAnchor=null;
+  let destroyed=false,pendingAnchor=null;
   function state(){return getEditor?.()?.getState?.()||null;}
-
-  function rememberExisting(event){
-    if(destroyed||automating)return;
-    const s=state();
-    if(!s||s.addTextMode)return;
-    const hit=event.target?.closest?.(ORIGINAL_SELECTOR);
-    if(!hit||!app.contains(hit))return;
-    const layer=hit.closest('.pdf-hit-layer');
-    const entries=buildVisualLines(s,layer);
-    const ref=referenceForHit(hit,s,layer,entries);
-    if(ref?.block)lastExisting={blockId:ref.block.id,pageIndex:s.pageIndex};
-  }
 
   function dispatchSnapped(layer,point,s){
     const rect=layer.getBoundingClientRect();
@@ -344,7 +318,7 @@ export function attachSmartLineInsertion({app,getEditor}){
   }
 
   function onAddTextCapture(event){
-    if(destroyed||automating||event[SYNTHETIC_FLAG])return;
+    if(destroyed||event[SYNTHETIC_FLAG])return;
     const s=state();
     if(!s?.addTextMode)return;
     const layer=event.target?.closest?.('.pdf-hit-layer');
@@ -379,56 +353,12 @@ export function attachSmartLineInsertion({app,getEditor}){
     setTimeout(()=>{pendingAnchor=null;},0);
   }
 
-  async function convertMultilineEdit(event){
-    if(destroyed||automating)return;
-    const done=event.target?.closest?.('.pdf-done');
-    if(!done||!app.contains(done))return;
-    const input=app.querySelector('textarea[data-role="pdf-inline-editor"]');
-    if(!input||!String(input.value).includes('\n'))return;
-    const s=state();
-    if(!s||!lastExisting||lastExisting.pageIndex!==s.pageIndex)return;
-    const block=s.analysis?.blocks?.find(item=>item.id===lastExisting.blockId);
-    if(!block)return;
-    const lines=String(input.value).replace(/\r\n?/g,'\n').split('\n');
-    const first=lines.shift()??'';
-    const extra=lines.join('\n').replace(/^\n+|\n+$/g,'');
-    if(!extra.trim()||normalizeText(first)!==normalizeText(currentBlockText(block,s)))return;
-
-    event.preventDefault();event.stopImmediatePropagation();automating=true;
-    try{
-      const editor=getEditor?.();
-      const layer=app.querySelector('.pdf-hit-layer');
-      if(!editor||!layer)throw new Error('The PDF page is not ready for line insertion.');
-      const entries=buildVisualLines(s,layer);
-      let reference=entries.find(entry=>entry.kind==='original'&&entry.block?.id===block.id);
-      if(!reference)throw new Error('Could not determine the edited line position.');
-      reference=findCurrentListTail(reference,entries);
-      const point=insertionPoint(reference,entries);
-      applyStyle(app,point.style);
-      editor.setMode('add-text');
-      dispatchSnapped(layer,point,s);
-      const insertInput=await waitFor(app,'textarea[data-role="pdf-new-text-editor"]');
-      insertInput.value=extra;
-      insertInput.dispatchEvent(new Event('input',{bubbles:true}));
-      const insertDone=app.querySelector('.pdf-insert-done');
-      if(!insertDone)throw new Error('The Add Text confirmation control is unavailable.');
-      insertDone.click();
-    }catch(error){console.warn('Unified line insertion:',error);}
-    finally{setTimeout(()=>{automating=false;},0);}
-  }
-
-  app.addEventListener('pointerup',rememberExisting,true);
-  app.addEventListener('click',rememberExisting,true);
   app.addEventListener('click',onAddTextCapture,true);
   app.addEventListener('click',onInsertDoneCapture,true);
-  app.addEventListener('click',convertMultilineEdit,true);
 
   return {destroy(){
     destroyed=true;pendingAnchor=null;
-    app.removeEventListener('pointerup',rememberExisting,true);
-    app.removeEventListener('click',rememberExisting,true);
     app.removeEventListener('click',onAddTextCapture,true);
     app.removeEventListener('click',onInsertDoneCapture,true);
-    app.removeEventListener('click',convertMultilineEdit,true);
   }};
 }

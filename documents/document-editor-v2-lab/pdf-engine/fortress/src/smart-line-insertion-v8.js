@@ -1,4 +1,4 @@
-import { attachSmartLineInsertion as attachCore } from './smart-line-insertion-v8-core.js';
+import { attachSmartLineInsertion as attachCore } from './smart-line-insertion-v8-core.js?release=2026-11-03-pdf-enter';
 
 const HIT_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);
