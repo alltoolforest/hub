@@ -1,6 +1,6 @@
 import {rasterFlowProfile} from '../layout/raster-flow.js';
 import {attachFlowAnnotations} from './annotation-flow.js';
-import {validateGraphicsFlow,collectGraphicsBounds} from './graphics-flow-guard.js?release=2026-11-03-paragraph-flow';
+import {validateGraphicsFlow,collectGraphicsBounds} from './graphics-flow-guard.js?release=2026-11-03-upward-flow';
 import {loadPdfjs} from '../rendering/pdfjs.js';
 import { PDFName } from '../core/pdf-lib.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';

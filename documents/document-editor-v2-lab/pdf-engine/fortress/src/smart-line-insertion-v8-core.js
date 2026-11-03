@@ -1,4 +1,4 @@
-import { attachSmartLineInsertion as attachV6 } from './smart-line-insertion-v6.js?release=2026-11-03-pdf-enter';
+import { attachSmartLineInsertion as attachV6 } from './smart-line-insertion-v6.js?release=2026-11-03-upward-flow';
 
 const ORIGINAL_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);
@@ -36,7 +36,7 @@ function recordsForPage(app,state){
     const lines=block.lines?.length?block.lines:[null];
     const style=blockStyle(block);
     for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
-      const hit=hits[cursor++];
+      const legacy=hits[cursor++];const tagged=hits.some(item=>item.dataset.blockId);const hit=tagged?hits.find(item=>item.dataset.blockId===block.id&&Number(item.dataset.lineIndex)===lineIndex):legacy;
       if(!hit)continue;
       const rect=hit.getBoundingClientRect();
       records.push({block,lineIndex,hit,rect,style,text:lines[lineIndex]?.text||currentBlockText(block,state)});

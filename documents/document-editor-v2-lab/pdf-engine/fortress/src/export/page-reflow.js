@@ -1,6 +1,6 @@
-import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-paragraph-flow';
+import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-upward-flow';
 import { PDFName } from '../core/pdf-lib.js';
-import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js?release=2026-11-03-paragraph-flow';
+import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js?release=2026-11-03-upward-flow';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 

@@ -1,4 +1,5 @@
-import {validateGraphicsFlow} from './graphics-flow-guard.js';
+import {mapFlowRectangle} from './flow-map.js';
+import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-upward-flow';
 import { PDFDocument, PDFName } from '../core/pdf-lib.js';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
@@ -17,6 +18,17 @@ function copyBytes(bytes){return bytes instanceof Uint8Array?new Uint8Array(byte
 function blockRect(block){const b=block?.bounds;if(!b)return null;const left=Number(b.x),bottom=Number(b.y),width=Number(b.width),height=Number(b.height);if(![left,bottom,width,height].every(Number.isFinite)||width<=0||height<=0)return null;return {left,right:left+width,bottom,top:bottom+height,width,height};}
 function blockBaseline(block){const y=Number(block?.lines?.[0]?.y);if(Number.isFinite(y))return y;const r=blockRect(block);return r?r.bottom+Math.max(1,Number(block?.fontSize)||12)*.24:null;}
 function needsCompaction(tx){return tx?.kind==='REPLACE_TEXT'&&!tx.expandedInsertId&&!!tx?.block&&String(tx?.originalUnicode??tx?.block?.text??'').trim().length>0&&String(tx?.replacementUnicode??'').trim().length===0;}
+
+function compactionCandidates(transactions){
+  return (transactions||[]).flatMap(tx=>{
+    if(tx?.kind!=='REPLACE_TEXT'||tx.expandedInsertId||!tx.block||!String(tx.originalUnicode??tx.block.text??'').trim())return [];
+    const lines=tx.block.lines||[],remaining=String(tx.replacementUnicode||'').trim()?String(tx.replacementUnicode).replace(/\r\n?/g,'\n').split('\n').length:0;
+    if(!lines.length)return needsCompaction(tx)?[tx]:[];
+    if(remaining>=lines.length)return [];
+    if(lines.length===1)return [tx];
+    return lines.slice(remaining).map((line,index)=>{const size=Number(line.fontSize||tx.block.fontSize)||12,x=Number.isFinite(line.minX)?line.minX:tx.block.bounds.x,right=Number.isFinite(line.maxX)?line.maxX:x+tx.block.bounds.width;return {...tx,id:`${tx.id}:released:${remaining+index}`,parentTransactionId:tx.id,replacementUnicode:'',block:{...tx.block,lines:[line],bounds:{x,y:Number(line.y)-size*.24,width:Math.max(1,right-x),height:size*1.1}}};});
+  });
+}
 
 function textRect(item){
   const tr=item?.transform||[],left=Number(tr[4]),baseline=Number(tr[5]);
@@ -59,12 +71,13 @@ function originalTransactionPitch(tx,candidates,pageWidth){
   gaps.sort((a,b)=>a-b);
   return gaps[0]||null;
 }
+function fontIdentity(name){return String(name||'').replace(/^g_d\d+_/, '');}
 function sourceLinePitch(lines,tx,source,{width,fontSize,baseline,preferredPitch=null}){
   if(Number.isFinite(Number(preferredPitch))&&Number(preferredPitch)>=fontSize*.72&&Number(preferredPitch)<=fontSize*2.6)return Number(preferredPitch);
   const sourceFont=tx?.block?.lines?.[0]?.fontName||tx?.block?.fontName||null,candidates=[];
   for(const line of lines){
     if(!sameLane(line,source,width,fontSize))continue;
-    if(sourceFont&&line.fontNames?.size&&!line.fontNames.has(sourceFont))continue;
+    if(sourceFont&&line.fontNames?.size&&![...line.fontNames].some(name=>fontIdentity(name)===fontIdentity(sourceFont)))continue;
     if(Math.abs(Number(line.fontSize)-fontSize)>Math.max(1.1,fontSize*.16))continue;
     const gap=Math.abs(baseline-line.baseline);
     if(gap>=fontSize*.72&&gap<=fontSize*2.6)candidates.push(gap);
@@ -137,7 +150,7 @@ async function vectorSafety(bytes,pageIndex,g){
   try{
     const p=await loadPdfjs(),task=p.getDocument({data:bytes.slice(),isEvalSupported:false,useWorkerFetch:false,disableFontFace:true}),pdf=await task.promise,page=await pdf.getPage(pageIndex+1),ops=await page.getOperatorList(),shapes=[];
     for(let i=0;i<ops.fnArray.length;i++){
-      if(ops.fnArray[i]!==p.OPS.constructPath)continue;const raw=ops.argsArray[i]?.[2];if(!raw)continue;
+      if(ops.fnArray[i]!==p.OPS.constructPath||ops.argsArray[i]?.[0]===p.OPS.endPath)continue;const raw=ops.argsArray[i]?.[2];if(!raw)continue;
       const a=Number(raw[0]),b=Number(raw[1]),c=Number(raw[2]),d=Number(raw[3]);if(![a,b,c,d].every(Number.isFinite))continue;
       const x0=Math.min(a,c),x1=Math.max(a,c),y0=Math.min(b,d),y1=Math.max(b,d),w=x1-x0,h=y1-y0,hOverlap=overlap(x0,x1,g.bandLeft,g.bandRight),bandWidth=Math.max(1,g.bandRight-g.bandLeft);
       const vertical=w<=2.5&&h>=10&&((x0+x1)/2)>=g.bandLeft-1&&((x0+x1)/2)<=g.bandRight+1,horizontal=h<=2.5&&w>=12&&hOverlap>=8,cell=w>=8&&h>=6&&w<=bandWidth*.92&&h<=180&&hOverlap>=Math.min(8,w*.20);
@@ -195,7 +208,7 @@ async function compactOne(doc,tx,sequenceIndex,candidates){
   if(Number.isFinite(vectors.snappedCutY))g.cutY=vectors.snappedCutY;
   const graphics=await validateGraphicsFlow(donorBytes,pageIndex,{bandLeft:g.bandLeft,bandRight:g.bandRight,boundaries:[g.footerGuardTop,g.cutY]});if(!graphics.ok)return {applied:false,reason:graphics.reason};
   const links=validateLinks(annotations,g,height);if(!links.ok)return {applied:false,reason:links.reason};
-  const donorDoc=await PDFDocument.load(donorBytes,{ignoreEncryption:true,updateMetadata:false}),donor=donorDoc.getPage(pageIndex);
+  const donor=page; // Keep resources in this PDF context across successive row deletions.
   const top=await embed(doc,donor,{left:0,bottom:g.cutY,right:width,top:height}),footer=g.footerGuardTop>.5?await embed(doc,donor,{left:0,bottom:0,right:width,top:g.footerGuardTop}):null,moving=await embed(doc,donor,{left:g.bandLeft,bottom:g.footerGuardTop,right:g.bandRight,top:g.cutY}),left=g.bandLeft>1?await embed(doc,donor,{left:0,bottom:g.footerGuardTop,right:g.bandLeft,top:g.cutY}):null,right=g.bandRight<width-1?await embed(doc,donor,{left:g.bandRight,bottom:g.footerGuardTop,right:width,top:g.cutY}):null;
   const replacement=doc.insertPage(pageIndex,[width,height]);draw(replacement,top,{x:0,y:g.cutY,width,height:height-g.cutY});draw(replacement,footer,{x:0,y:0,width,height:g.footerGuardTop});draw(replacement,left,{x:0,y:g.footerGuardTop,width:g.bandLeft,height:g.cutY-g.footerGuardTop});draw(replacement,right,{x:g.bandRight,y:g.footerGuardTop,width:width-g.bandRight,height:g.cutY-g.footerGuardTop});draw(replacement,moving,{x:g.bandLeft,y:g.footerGuardTop+g.shiftY,width:g.bandWidth,height:g.cutY-g.footerGuardTop});preserveLinks(doc,replacement,annotations,links.links,g.shiftY);doc.removePage(pageIndex+1);
   return {applied:true,metric:{transactionId:tx.id,pageIndex,sequenceIndex,direction:'UP',mode:'SAME_PAGE_UPWARD_COMPACTION',cutY:g.cutY,shiftY:g.shiftY,linePitch:g.pitch,delta:0,footerGuardTop:g.footerGuardTop,bandLeft:g.bandLeft,bandRight:g.bandRight,bandWidth:g.bandWidth,preservedLinkCount:annotations.links.length,vectorBoundarySnap:!!vectors.boundarySnap,cutSnapDelta:Number(vectors.snapDelta)||0,cascadedPageCount:0,appendedPageCount:0,overflowPageCount:0}};
@@ -203,14 +216,19 @@ async function compactOne(doc,tx,sequenceIndex,candidates){
 function checks(txs){return (txs||[]).map(tx=>tx?.kind==='INSERT_TEXT'?{kind:'insert',pageIndex:Number(tx.pageIndex),newText:String(tx.replacementUnicode||'').replace(/\n/g,' '),oldText:''}:{kind:'replace',pageIndex:Number(tx.pageIndex),newText:String(tx?.replacementUnicode||'').replace(/\n/g,' '),oldText:String(tx?.originalUnicode||'').replace(/\n/g,' ')}).filter(x=>Number.isInteger(x.pageIndex)&&x.pageIndex>=0);}
 
 export async function applyUpwardCompaction(result,transactions,{preview=false}={}){
-  const candidates=(transactions||[]).filter(needsCompaction);if(!candidates.length)return result;
-  if((result?.reflowMetrics||[]).some(m=>Number(m?.cascadedPageCount)>0||Number(m?.appendedPageCount)>0||Number(m?.overflowPageCount)>0))throw Object.assign(new Error('Upward compaction is not combined with cross-page reflow in this safety phase.'),{code:'COMPACTION_WITH_PAGE_CASCADE_UNSUPPORTED'});
-  const pages=new Set(candidates.map(tx=>Number(tx.pageIndex)));if((transactions||[]).some(tx=>tx?.kind==='INSERT_TEXT'&&pages.has(Number(tx.pageIndex))))throw Object.assign(new Error('Finish line deletion compaction before adding new text on the same page.'),{code:'COMPACTION_WITH_INSERT_SAME_PAGE_UNSUPPORTED'});
+  const candidates=compactionCandidates(transactions);if(!candidates.length)return result;
+  // Native replacements have already cleared their original operators. Locate
+  // each released row in the actual rebuilt page, after downward/page flow.
+  const mappedCandidates=candidates.map(tx=>{
+    const bounds=mapFlowRectangle(tx.block.bounds,Number(tx.pageIndex),result?.reflowMetrics||[]);
+    const dx=bounds.x-tx.block.bounds.x,dy=bounds.y-tx.block.bounds.y;
+    return {...tx,originalPageIndex:Number(tx.pageIndex),pageIndex:bounds.pageIndex,block:{...tx.block,pageIndex:bounds.pageIndex,bounds:{...tx.block.bounds,x:bounds.x,y:bounds.y},lines:(tx.block.lines||[]).map(line=>({...line,y:Number(line.y)+dy,minX:Number(line.minX)+dx,maxX:Number(line.maxX)+dx}))}};
+  });
   const doc=await PDFDocument.load(copyBytes(result.bytes),{ignoreEncryption:true,updateMetadata:false}),metrics=[...(result?.reflowMetrics||[])],warnings=[...(result?.warnings||[])];
-  const ordered=[...candidates].sort((a,b)=>Number(a.pageIndex)-Number(b.pageIndex)||(Number(a.block?.bounds?.y)||0)-(Number(b.block?.bounds?.y)||0));let appliedCount=0,totalShift=0;
-  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===tx.id),applied=await compactOne(doc,tx,sequenceIndex,candidates);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;metrics.push(applied.metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
+  const ordered=[...mappedCandidates].sort((a,b)=>Number(a.pageIndex)-Number(b.pageIndex)||(Number(a.block?.bounds?.y)||0)-(Number(b.block?.bounds?.y)||0));let appliedCount=0,totalShift=0;
+  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===(tx.parentTransactionId||tx.id)),applied=await compactOne(doc,tx,sequenceIndex,mappedCandidates);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;const metric=applied.metric;metric.flowSlices=[{sourcePageIndex:metric.pageIndex,destinationPageIndex:metric.pageIndex,left:metric.bandLeft,right:metric.bandRight,bottom:metric.footerGuardTop,top:metric.cutY,dy:metric.shiftY}];metric.outputPageIndex=metric.pageIndex;metric.pageIndex=tx.originalPageIndex;metrics.push(metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
   if(!appliedCount)return result;
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));let validation=result?.validation||null;
-  if(!preview){validation=await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:checks(transactions)});if(!validation.ok)throw Object.assign(new Error('Upward-compacted PDF failed final validation.'),{code:'UPWARD_COMPACTION_VALIDATION_FAILED',validation});}
+  if(!preview){validation=await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:result.validationChecks||checks(transactions)});if(!validation.ok)throw Object.assign(new Error('Upward-compacted PDF failed final validation.'),{code:'UPWARD_COMPACTION_VALIDATION_FAILED',validation});}
   return {...result,bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):result?.blob||null,validation,warnings,reflowMetrics:metrics,upwardCompactionCount:appliedCount,upwardCompactionShift:totalShift};
 }

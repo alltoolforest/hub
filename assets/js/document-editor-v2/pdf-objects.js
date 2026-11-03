@@ -1,4 +1,4 @@
-import {assertObjectLayout} from './pdf-object-layout.js';
+import {assertObjectLayout} from './pdf-object-layout.js?release=2026-11-03-upward-flow';
 import {imagesIn,applyImageChanges} from './pdf-image-objects.js';
 import {PDFDocument,PDFName,PDFArray,PDFDict,PDFString} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/core/pdf-lib.js';
 import {PdfRenderer} from '../../../documents/document-editor-v2-lab/pdf-engine/fortress/src/rendering/renderer.js';

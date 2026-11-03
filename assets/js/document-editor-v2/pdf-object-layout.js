@@ -2,17 +2,17 @@ import {mapFlowRectangle} from '../../../documents/document-editor-v2-lab/pdf-en
 // Derive export coordinates from immutable source-page drafts on every save.
 export function assertObjectLayout(changes,state,originalPages,outputPages){
  const metrics=state.reflowMetrics||[];
- if(outputPages!==originalPages){const appended=metrics.reduce((sum,m)=>sum+(Number(m.appendedPageCount)||0),0);if(outputPages<originalPages||appended!==outputPages-originalPages)throw new Error('Page count changed without a verified append-only flow. Undo page-flow or object edits before exporting.');}
+ if(outputPages!==originalPages){const appended=metrics.reduce((sum,m)=>sum+((Number(m.appendedPageCount)||0)+(Number(m.insertedPageCount)||0)),0);if(outputPages<originalPages||appended!==outputPages-originalPages)throw new Error('Page count changed without a verified append-only flow. Undo page-flow or object edits before exporting.');}
  const result=changes.map(item=>({...item,...(item.source?{source:{...item.source,rect:item.source.rect?[...item.source.rect]:undefined}}:{})}));
  for(const metric of metrics){
   if(!['delta','shiftY','cascadedPageCount','appendedPageCount','overflowPageCount'].some(k=>Number(metric[k])))continue;
   if(!Number.isInteger(metric.pageIndex)||metric.pageIndex<0||metric.pageIndex>=originalPages)throw new Error('Text-flow page ownership is unknown. Undo object or text-flow edits before exporting.');
   const cascade=Number(metric.cascadedPageCount)||Number(metric.appendedPageCount)||Number(metric.overflowPageCount);
   for(const item of result){
-   if(item.pageIndex<metric.pageIndex||item.pageIndex!==metric.pageIndex&&!cascade)continue;
+   if(item.pageIndex<metric.pageIndex||item.pageIndex!==metric.pageIndex&&!cascade&&!metric.flowSlices)continue;
    const conflict=()=>{throw new Error(`Image/link edits on page ${item.pageIndex+1} conflict with moved text. Undo those object edits or text flow before exporting.`);};
    if(item.source&&item.kind==='image')conflict();
-   if(cascade&&metric.flowSlices){const beforePage=item.pageIndex,mapped=mapFlowRectangle(item,beforePage,[metric]);item.pageIndex=mapped.pageIndex;item.x=mapped.x;item.y=mapped.y;if(item.source?.rect){const r=item.source.rect,original=mapFlowRectangle({x:r[0],y:r[1],width:r[2]-r[0],height:r[3]-r[1]},beforePage,[metric]);if(original.pageIndex!==item.pageIndex)conflict();item.source.rect=[original.x,original.y,original.x+original.width,original.y+original.height];}continue;}
+   if(metric.flowSlices){const beforePage=item.pageIndex,mapped=mapFlowRectangle(item,beforePage,[metric]);if(metric.direction==='UP'&&mapped.pageIndex===beforePage&&mapped.y!==item.y&&mapped.y+item.height>Number(metric.cutY)+.01)conflict();item.pageIndex=mapped.pageIndex;item.x=mapped.x;item.y=mapped.y;if(item.source?.rect){const r=item.source.rect,original=mapFlowRectangle({x:r[0],y:r[1],width:r[2]-r[0],height:r[3]-r[1]},beforePage,[metric]);if(original.pageIndex!==item.pageIndex)conflict();item.source.rect=[original.x,original.y,original.x+original.width,original.y+original.height];}continue;}
    if(cascade)conflict();
    const up=metric.mode==='SAME_PAGE_UPWARD_COMPACTION',down=metric.mode==='VERTICAL_CONTENT_BAND_REFLOW';
    if(!up&&!down||up&&Number(metric.delta)||down&&Number(metric.shiftY))conflict();

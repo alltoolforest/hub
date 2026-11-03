@@ -21,28 +21,35 @@ export async function validateGraphicsFlow(bytes,pageIndex,geometry){
 }
 
 export function collectGraphicsBounds(ops,O){
-  const boxes=[];let matrix=identity(),lineWidth=1,miterLimit=10,lineJoin=0;const stack=[];const save=()=>stack.push({matrix:[...matrix],lineWidth,miterLimit,lineJoin});const restore=()=>{({matrix,lineWidth,miterLimit,lineJoin}=stack.pop());};
-  const box=raw=>{const [x0,y0,x1,y1]=raw,points=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([x,y])=>[matrix[0]*x+matrix[2]*y+matrix[4],matrix[1]*x+matrix[3]*y+matrix[5]]);return [Math.min(...points.map(p=>p[0])),Math.min(...points.map(p=>p[1])),Math.max(...points.map(p=>p[0])),Math.max(...points.map(p=>p[1]))];};
-  for(let i=0;i<ops.fnArray.length;i++){
-   const op=ops.fnArray[i],args=ops.argsArray[i];let bounds;
-   if(op===O.save){save();continue;}
-   if(op===O.restore){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
-   if(op===O.setLineWidth){lineWidth=Math.abs(Number(args[0]));continue;}
-   if(op===O.setMiterLimit){miterLimit=Math.max(1,Number(args[0]));continue;}
-   if(op===O.setLineJoin){lineJoin=Number(args[0]);continue;}
-   if(op===O.transform){matrix=multiply(matrix,args);continue;}
-   if(op===O.paintFormXObjectBegin){save();if(args?.[0])matrix=multiply(matrix,args[0]);continue;}
-   if(op===O.paintFormXObjectEnd){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
-   if([O.paintImageXObject,O.paintInlineImageXObject,O.paintImageMaskXObject,O.paintSolidColorImageMask].includes(op))bounds=box([0,0,1,1]);
-   // PDF.js endPath constructs clipping geometry without painting it. A
-   // page-sized Word clip is not a graphic crossing every reflow cut.
-   else if(op===O.constructPath&&args?.[0]===O.endPath)continue;
-   else if(op===O.constructPath&&args?.[2]?.length===4){bounds=box(args[2]);if([O.stroke,O.closeStroke,O.fillStroke,O.eoFillStroke,O.closeFillStroke,O.closeEOFillStroke].includes(args[0])){const scale=Math.hypot(...matrix.slice(0,4)),pad=Math.max(.5,lineWidth*scale*(lineJoin===0?miterLimit:1)/2);bounds=[bounds[0]-pad,bounds[1]-pad,bounds[2]+pad,bounds[3]+pad];}}
-   else if([O.paintImageXObjectRepeat,O.paintImageMaskXObjectRepeat,O.paintInlineImageXObjectGroup,O.paintImageMaskXObjectGroup].includes(op)){
-    let transforms;if(op===O.paintImageXObjectRepeat||op===O.paintImageMaskXObjectRepeat){const mask=op===O.paintImageMaskXObjectRepeat,positions=args[mask?5:3];if(!positions||positions.length%2||positions.length>20000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=[];for(let j=0;j<positions.length;j+=2)transforms.push(mask?[args[1],args[2],args[3],args[4],positions[j],positions[j+1]]:[args[1],0,0,args[2],positions[j],positions[j+1]]);}else{const group=args[op===O.paintInlineImageXObjectGroup?1:0];if(!Array.isArray(group)||group.length>10000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=group.map(item=>item.transform);}
-    const current=matrix;for(const transform of transforms){if(transform?.length!==6||![...transform].every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};matrix=multiply(current,transform);boxes.push(box([0,0,1,1]));}matrix=current;
-   }else if(op===O.shadingFill||op===O.beginGroup||op===O.endGroup)return {ok:false,reason:'COMPLEX_GRAPHICS_REFLOW_PROTECTED'};
-   if(bounds){if(!bounds.every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};boxes.push(bounds);}
-  }
-  return {ok:true,boxes};
+ const boxes=[],stack=[];let matrix=identity(),lineWidth=1,miterLimit=10,lineJoin=0,clip=[-Infinity,-Infinity,Infinity,Infinity],pendingClip=false;
+ const save=()=>stack.push({matrix:[...matrix],lineWidth,miterLimit,lineJoin,clip:[...clip]});
+ const restore=()=>{({matrix,lineWidth,miterLimit,lineJoin,clip}=stack.pop());};
+ const box=raw=>{const [x0,y0,x1,y1]=raw,points=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(([x,y])=>[matrix[0]*x+matrix[2]*y+matrix[4],matrix[1]*x+matrix[3]*y+matrix[5]]);return [Math.min(...points.map(p=>p[0])),Math.min(...points.map(p=>p[1])),Math.max(...points.map(p=>p[0])),Math.max(...points.map(p=>p[1]))];};
+ const intersect=(a,b)=>[Math.max(a[0],b[0]),Math.max(a[1],b[1]),Math.min(a[2],b[2]),Math.min(a[3],b[3])];
+ const emit=raw=>{if(!raw.every(Number.isFinite))return false;const visible=intersect(raw,clip);if(visible[2]>visible[0]&&visible[3]>visible[1])boxes.push(visible);return true;};
+ for(let i=0;i<ops.fnArray.length;i++){
+  const op=ops.fnArray[i],args=ops.argsArray[i];let bounds,nextClip;
+  if(op===O.save){save();continue;}
+  if(op===O.restore){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
+  if(op===O.setLineWidth){lineWidth=Math.abs(Number(args[0]));continue;}
+  if(op===O.setMiterLimit){miterLimit=Math.max(1,Number(args[0]));continue;}
+  if(op===O.setLineJoin){lineJoin=Number(args[0]);continue;}
+  if(op===O.transform){matrix=multiply(matrix,args);continue;}
+  if(op===O.clip||op===O.eoClip){pendingClip=true;continue;}
+  if(op===O.paintFormXObjectBegin){save();if(args?.[0])matrix=multiply(matrix,args[0]);if(args?.[1]){const b=box(args[1]);if(!b.every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};clip=intersect(clip,b);}continue;}
+  if(op===O.paintFormXObjectEnd){if(!stack.length)return {ok:false,reason:'GRAPHICS_STATE_UNBALANCED'};restore();continue;}
+  if([O.paintImageXObject,O.paintInlineImageXObject,O.paintImageMaskXObject,O.paintSolidColorImageMask].includes(op))bounds=box([0,0,1,1]);
+  else if(op===O.constructPath&&args?.[2]?.length===4){
+   const path=box(args[2]);if(pendingClip){nextClip=intersect(clip,path);pendingClip=false;}
+   // endPath establishes clipping geometry without painting it.
+   if(args[0]!==O.endPath){bounds=path;if([O.stroke,O.closeStroke,O.fillStroke,O.eoFillStroke,O.closeFillStroke,O.closeEOFillStroke].includes(args[0])){const scale=Math.hypot(...matrix.slice(0,4)),pad=Math.max(.5,lineWidth*scale*(lineJoin===0?miterLimit:1)/2);bounds=[bounds[0]-pad,bounds[1]-pad,bounds[2]+pad,bounds[3]+pad];}}
+  }else if(op===O.constructPath&&pendingClip)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};
+  else if([O.paintImageXObjectRepeat,O.paintImageMaskXObjectRepeat,O.paintInlineImageXObjectGroup,O.paintImageMaskXObjectGroup].includes(op)){
+   let transforms;if(op===O.paintImageXObjectRepeat||op===O.paintImageMaskXObjectRepeat){const mask=op===O.paintImageMaskXObjectRepeat,positions=args[mask?5:3];if(!positions||positions.length%2||positions.length>20000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=[];for(let j=0;j<positions.length;j+=2)transforms.push(mask?[args[1],args[2],args[3],args[4],positions[j],positions[j+1]]:[args[1],0,0,args[2],positions[j],positions[j+1]]);}else{const group=args[op===O.paintInlineImageXObjectGroup?1:0];if(!Array.isArray(group)||group.length>10000)return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};transforms=group.map(item=>item.transform);}
+   const current=matrix;for(const transform of transforms){if(transform?.length!==6||![...transform].every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};matrix=multiply(current,transform);if(!emit(box([0,0,1,1])))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};}matrix=current;
+  }else if(op===O.shadingFill||op===O.beginGroup||op===O.endGroup)return {ok:false,reason:'COMPLEX_GRAPHICS_REFLOW_PROTECTED'};
+  if(bounds&&!emit(bounds))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};
+  if(nextClip){if(!nextClip.every(Number.isFinite))return {ok:false,reason:'GRAPHICS_GEOMETRY_INVALID'};clip=nextClip;}
+ }
+ return {ok:true,boxes};
 }

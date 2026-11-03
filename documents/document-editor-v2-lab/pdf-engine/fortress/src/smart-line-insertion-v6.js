@@ -2,7 +2,7 @@ import {rasterFlowProfile,rasterPageGeometry} from './layout/raster-flow.js';
 import { loadPdfjs } from './rendering/pdfjs.js';
 import { configureCascadePageGeometry } from './layout/reflow-planner.js';
 import { detectSectionKeepGroups } from './layout/section-pagination.js';
-import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js?release=2026-11-03-pdf-enter';
+import { attachSmartLineInsertion as attachV7 } from './smart-line-insertion-v7.js?release=2026-11-03-upward-flow';
 
 const ORIGINAL_SELECTOR='.pdf-hit-direct_edit,.pdf-hit-font_substitution';
 const EDITABLE_TIERS=new Set(['DIRECT_EDIT','FONT_SUBSTITUTION']);
@@ -161,7 +161,7 @@ function pruneFlowedHitRegions(app,getEditor){
     const count=Math.max(1,block.lines?.length||1);
     if(ids.has(block.id)){
       for(let i=0;i<count;i++){
-        const hit=hits[cursor+i];
+        const hit=hits.some(item=>item.dataset.blockId)?hits.find(item=>item.dataset.blockId===block.id&&Number(item.dataset.lineIndex)===i):hits[cursor+i];
         if(!hit)continue;
         hit.hidden=true;
         hit.style.pointerEvents='none';

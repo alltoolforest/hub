@@ -11,7 +11,7 @@ import { InlineEditor } from './editing/inline-editor.js';
 import { createEditTransaction, createInsertTransaction } from './editing/edit-transaction.js';
 import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
-import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-paragraph-flow';
+import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-upward-flow';
 import { planInsertionReflow } from './layout/reflow-planner.js';
 import { replanDependentInsertions } from './dependent-insert-replan.js';
 
@@ -133,13 +133,14 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
   function currentText(block){const tx=txByBlock.get(block.id);return tx?.displayUnicode??tx?.replacementUnicode??block.text;}
   function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true',textColor:formatContext==='existing'&&!recolorExisting?null:(/^#[0-9a-f]{6}$/i.test(textColor.value)?textColor.value:'#000000')};}
-  function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&Number(m.delta)>0).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);}
+  function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&(Number(m.delta)>0||m.direction==='UP'&&(m.outputPageIndex==null||m.outputPageIndex===index)));}
 
-  function visualBlock(block){
+  function visualBlock(block,ignoreUp=false){
     let out=block;
     for(const metric of metricsForPage(block.pageIndex)){
+      if(ignoreUp&&metric.direction==='UP')continue;
       const top=(out.bounds?.y||0)+(out.bounds?.height||0);
-      if(top<=Number(metric.cutY)+.75)out=shiftBlock(out,-Number(metric.delta||0));
+      if(top<=Number(metric.cutY)+.75)out=shiftBlock(out,metric.direction==='UP'?Number(metric.shiftY||0):-Number(metric.delta||0));
     }
     return out;
   }
@@ -150,9 +151,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     let y=Number(tx.y)||0;
     const size=Math.max(6,Number(tx.fontSize)||12);
     for(const metric of metricsForPage(tx.pageIndex)){
-      if(Number(metric.sequenceIndex)<=txIndex)continue;
+      if(metric.direction!=='UP'&&Number(metric.sequenceIndex)<=txIndex)continue;
       const top=y+size*.9;
-      if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta||0);
+      if(top<=Number(metric.cutY)+.75)y+=metric.direction==='UP'?Number(metric.shiftY||0):-Number(metric.delta||0);
     }
     return {...tx,y};
   }
@@ -279,14 +280,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     for(const block of analysis.blocks){
       if(!isEditable(block))continue;
       const existingTx=txByBlock.get(block.id);
-      if(existingTx?.expandedInsertId)continue;
+      if(existingTx?.expandedInsertId||existingTx&&!String(currentText(block)).trim())continue;
       const shown=visualBlock(block);
       const lines=shown.lines?.length?shown.lines:[{text:shown.text,...shown.bounds,minX:shown.bounds?.x,maxX:(shown.bounds?.x||0)+(shown.bounds?.width||1),y:(shown.bounds?.y||0)+(shown.fontSize||12)*.3,fontSize:shown.fontSize||12}];
-      for(const line of lines){
+      const visibleLines=existingTx?lines.slice(0,Math.max(1,String(currentText(block)).replace(/\r\n?/g,'\n').split('\n').length)):lines;
+      for(const line of visibleLines){
         const rect=pdfRectToScreen(r.matrix,lineHitBounds(line,shown));
         const hit=document.createElement('button');
         hit.type='button';
-        hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;
+        hit.className=`pdf-hit pdf-hit-${block.tier.toLowerCase()}`;hit.dataset.blockId=block.id;hit.dataset.lineIndex=String(Math.max(0,lines.indexOf(line)));
         Object.assign(hit.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${Math.max(rect.width,4)}px`,height:`${Math.max(rect.height,4)}px`});
         hit.title=addTextMode?'Place new text here':'Click to edit and format text';
         hit.setAttribute('aria-label',`Edit text: ${currentText(block).slice(0,100)}`);
@@ -456,10 +458,11 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     done.addEventListener('click',async(event)=>{
       event.stopPropagation();
       const text=input.value;
-      if(!text.trim()){setStatus('Type some text before pressing Done.','warning');input.focus();return;}
+      if(!text.trim()&&!existingTx){setStatus('Type some text before pressing Done.','warning');input.focus();return;}
       done.disabled=true;cancel.disabled=true;input.disabled=true;
       commitDepth++;
       try{
+        if(existingTx&&!text.trim()){await queueRemoveInsertion(existingTx);cleanup();setAddTextMode(false,{announce:false});setStatus('Text deleted — following content moved upward.');return;}
         const activeStyle=currentFormatStyle();
         let tx;
         if(existingTx){
@@ -469,9 +472,12 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         }else{
           const scaleY=Math.max(Math.abs(matrix[3]||1),.1);
           const baselineScreenY=topPos+Math.max(16,activeStyle.fontSize*scaleY)*.88;
-          const p=screenPointToPdf(matrix,left,baselineScreenY);
+          const p=screenPointToPdf(matrix,left,baselineScreenY),pointerY=p.y;
+          // Store new intent before final upward compaction, so adding after a
+          // deletion does not apply the same upward shift twice.
+          for(const metric of [...metricsForPage(pageIndex)].reverse())if(metric.direction==='UP'&&p.x>=metric.bandLeft&&p.x<=metric.bandRight&&p.y+activeStyle.fontSize*.9<=metric.cutY+metric.shiftY+.75&&p.y>=metric.footerGuardTop+metric.shiftY)p.y-=Number(metric.shiftY)||0;
           const p2=screenPointToPdf(matrix,left+desiredWidth,baselineScreenY);
-          const pdfWidth=Math.max(40,Math.hypot(p2.x-p.x,p2.y-p.y));
+          const pdfWidth=Math.max(40,Math.hypot(p2.x-p.x,p2.y-pointerY));
           const geometry=currentPageGeometry||{width:Math.max(p.x+pdfWidth,1),height:Math.max(p.y+activeStyle.fontSize*4,1),rotation:model?.page(pageIndex)?.rotation||0};
           const reflowPlan=planInsertionReflow({
             blocks:analysis?.blocks||[],
@@ -502,7 +508,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function expansionGeometryForBlock(block,selectedStyle){
     const geometry=currentPageGeometry;
     if(!geometry||Number(geometry.rotation||0)!==0||!analysis?.blocks?.length)return null;
-    const shown=visualBlock(block);
+    const shown=visualBlock(block,true);
     const line=shown.lines?.[0];
     const originalStyle=inferBlockStyle(block);
     const size=Math.max(6,Math.min(72,Number(selectedStyle?.fontSize)||originalStyle.fontSize));
@@ -517,7 +523,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       const cStyle=inferBlockStyle(candidate);
       if(cStyle.fontFamily!==originalStyle.fontFamily||cStyle.bold!==originalStyle.bold||cStyle.italic!==originalStyle.italic)continue;
       if(Math.abs(cStyle.fontSize-originalStyle.fontSize)>Math.max(1.25,originalStyle.fontSize*.12))continue;
-      const visual=visualBlock(candidate);
+      const visual=visualBlock(candidate,true);
       const cLine=visual.lines?.[0];
       const cBaseline=Number.isFinite(cLine?.y)?cLine.y:(Number(visual.bounds?.y)||0)+cStyle.fontSize*.30;
       if(Math.abs(cBaseline-baseline)>size*4.2)continue;
@@ -658,6 +664,13 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     previewReflowMetrics=preview.reflowMetrics||[];
     await renderPage({announce:false});
     setStatus(style.styleChanged?'Text and formatting applied — continue editing or Save a copy.':'Edit applied — continue editing or Save a copy.');
+  }
+
+  async function queueRemoveInsertion(old){
+    const before=[...txByBlock.values()],nextMap=new Map(txByBlock);nextMap.delete(old.id);
+    if(old.expandedFromBlockId){const clear=nextMap.get(old.expandedFromBlockId);if(!clear)throw new Error('The paragraph source is unavailable.');const unpaired={...clear,displayUnicode:''};delete unpaired.expandedInsertId;nextMap.set(old.expandedFromBlockId,unpaired);}
+    const after=[...nextMap.values()],preview=await buildPreviewForTransactions(after),nextRenderer=preview?new PdfRenderer(preview.bytes):null;await nextRenderer?.load();
+    applyTransactionList(after);history.push({undo:()=>{applyTransactionList(before);onChange([...txByBlock.values()]);},redo:()=>{applyTransactionList(after);onChange([...txByBlock.values()]);}});updateHistory();onChange(after);previewToken++;previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview?.reflowMetrics||[];await renderPage({announce:false});
   }
 
   async function queueInsertion(tx,old=null){

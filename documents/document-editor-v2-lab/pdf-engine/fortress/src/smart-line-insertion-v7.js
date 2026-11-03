@@ -40,26 +40,25 @@ function currentBlockText(block,state){
 }
 
 function txVisualY(tx,state,txIndex){
-  let y=Number(tx?.y);
-  if(!Number.isFinite(y))return null;
+  let y=Number(tx?.y);if(!Number.isFinite(y))return null;
   const size=Math.max(6,Number(tx.fontSize)||12);
   for(const metric of state?.reflowMetrics||[]){
-    if(metric?.pageIndex!==tx.pageIndex||!(Number(metric.delta)>0))continue;
-    if(Number(metric.sequenceIndex)<=txIndex)continue;
-    const top=y+size*.9;
-    if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta)||0;
+    if(metric.direction==='UP'&&metric.outputPageIndex!=null&&metric.outputPageIndex!==state.pageIndex)continue;
+    if(metric.pageIndex!==tx.pageIndex||!(Number(metric.delta)>0||metric.direction==='UP'))continue;
+    if(metric.direction!=='UP'&&Number(metric.sequenceIndex)<=txIndex)continue;
+    if(y+size*.9<=Number(metric.cutY)+.75)y+=metric.direction==='UP'?(Number(metric.shiftY)||0):-(Number(metric.delta)||0);
   }
   return y;
 }
 
 function blockVisualY(block,state){
-  const line=block?.lines?.[0];
-  let y=Number(line?.y);
+  const line=block?.lines?.[0],originalY=Number(line?.y);let y=originalY;
   if(!Number.isFinite(y))return null;
   const top=Number(block?.bounds?.y||0)+Number(block?.bounds?.height||0);
   for(const metric of state?.reflowMetrics||[]){
-    if(metric?.pageIndex!==block.pageIndex||!(Number(metric.delta)>0))continue;
-    if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta)||0;
+    if(metric.direction==='UP'&&metric.outputPageIndex!=null&&metric.outputPageIndex!==state.pageIndex)continue;
+    if(metric.pageIndex!==block.pageIndex||!(Number(metric.delta)>0||metric.direction==='UP'))continue;
+    if(top+y-originalY<=Number(metric.cutY)+.75)y+=metric.direction==='UP'?(Number(metric.shiftY)||0):-(Number(metric.delta)||0);
   }
   return y;
 }
@@ -72,6 +71,7 @@ function buildVisualLines(state,layer){
 
   for(const block of state?.analysis?.blocks||[]){
     if(!isEditableBlock(block))continue;
+    const replacement=(state.transactions||[]).find(tx=>tx.kind==='REPLACE_TEXT'&&tx.blockId===block.id);if(replacement&&(replacement.expandedInsertId||!String(replacement.replacementUnicode||'').trim()))continue;
     const style=blockStyle(block);
     const text=currentBlockText(block,state);
     const lines=block.lines?.length?block.lines:[null];
@@ -80,10 +80,11 @@ function buildVisualLines(state,layer){
       let y=Number(line?.y);
       if(!Number.isFinite(y))y=blockVisualY(block,state);
       else{
-        const top=Number(block?.bounds?.y||0)+Number(block?.bounds?.height||0);
+        const baseTop=Number(block?.bounds?.y||0)+Number(block?.bounds?.height||0);
         for(const metric of state?.reflowMetrics||[]){
-          if(metric?.pageIndex!==block.pageIndex||!(Number(metric.delta)>0))continue;
-          if(top<=Number(metric.cutY)+.75)y-=Number(metric.delta)||0;
+          if(metric.direction==='UP'&&metric.outputPageIndex!=null&&metric.outputPageIndex!==state.pageIndex)continue;
+          if(metric?.pageIndex!==block.pageIndex||!(Number(metric.delta)>0||metric.direction==='UP'))continue;
+          if(baseTop+y-Number(line.y)<=Number(metric.cutY)+.75)y+=metric.direction==='UP'?Number(metric.shiftY)||0:-(Number(metric.delta)||0);
         }
       }
       if(!Number.isFinite(y))continue;

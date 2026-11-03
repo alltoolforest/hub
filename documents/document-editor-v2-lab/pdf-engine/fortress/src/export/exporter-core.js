@@ -5,7 +5,7 @@ import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
-import { applyVerticalRegionReflow } from './page-reflow.js?release=2026-11-03-paragraph-flow';
+import { applyVerticalRegionReflow } from './page-reflow.js?release=2026-11-03-upward-flow';
 import {detectDocumentFlags} from '../core/document-model.js';
 import {formRegionSafe} from '../core/form-protection.js';
 
@@ -386,6 +386,7 @@ export async function exportEditedPdf(originalBytes,transactions,{validate=true,
     bytes,
     blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):null,
     validation,
+    validationChecks:finalChecks,
     warnings,
     reflowMetrics,
     overflowPageCount,
