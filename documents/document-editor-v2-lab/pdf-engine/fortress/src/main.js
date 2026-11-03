@@ -11,7 +11,7 @@ import { InlineEditor } from './editing/inline-editor.js';
 import { createEditTransaction, createInsertTransaction } from './editing/edit-transaction.js';
 import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
-import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-pdf-enter';
+import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-word-clip';
 import { planInsertionReflow } from './layout/reflow-planner.js';
 import { replanDependentInsertions } from './dependent-insert-replan.js';
 

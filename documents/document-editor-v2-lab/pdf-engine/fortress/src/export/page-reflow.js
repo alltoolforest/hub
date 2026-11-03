@@ -1,6 +1,6 @@
-import {validateGraphicsFlow} from './graphics-flow-guard.js';
+import {validateGraphicsFlow} from './graphics-flow-guard.js?release=2026-11-03-word-clip';
 import { PDFName } from '../core/pdf-lib.js';
-import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js';
+import { cascadeOverflowIntoExistingPages,snapLiveBoundary } from './cascade-page-flow.js?release=2026-11-03-word-clip';
 import { loadPdfjs } from '../rendering/pdfjs.js';
 import { embedExtractionCleanPageSlice } from './embedded-slice-sanitizer.js';
 
@@ -192,7 +192,7 @@ async function validateVectorReflow(bytes,pageIndex,{cutY,overflowBoundary,bandL
     const operators=await page.getOperatorList();
     const dangerous=[];
     for(let i=0;i<operators.fnArray.length;i++){
-      if(operators.fnArray[i]!==p.OPS.constructPath)continue;
+      if(operators.fnArray[i]!==p.OPS.constructPath||operators.argsArray[i]?.[0]===p.OPS.endPath)continue;
       const raw=operators.argsArray[i]?.[2];
       if(!raw)continue;
       const left=Number(raw[0]),bottom=Number(raw[1]),right=Number(raw[2]),top=Number(raw[3]);

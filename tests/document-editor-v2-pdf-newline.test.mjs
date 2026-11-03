@@ -13,3 +13,11 @@ test('paragraph relocation cannot bypass deletion verification using an absent o
   await assert.rejects(exportEditedPdf(bytes,transactions),error=>error.code==='INVALID_EXPANDED_PARAGRAPH');
  }
 });
+test('Word page clipping paths do not count as painted graphics, while fills and strokes remain protected',async()=>{
+ const {collectGraphicsBounds,graphicCrossesFlowBoundary}=await import(base+'export/graphics-flow-guard.js');
+ const O={constructPath:91,endPath:28,fill:22,stroke:20,eoClip:30};
+ const ops={fnArray:[O.eoClip,O.constructPath,O.constructPath,O.constructPath],argsArray:[null,[O.endPath,[],[0,0,595,842]],[O.fill,[],[50,500,550,520]],[O.stroke,[],[50,300,550,300]]]};
+ const r=collectGraphicsBounds(ops,O);assert.equal(r.ok,true);assert.equal(r.boxes.length,2);assert.deepEqual(r.boxes[0],[50,500,550,520]);
+ const geometry={bandLeft:30,bandRight:570,boundaries:[70,320]};assert.equal(r.boxes.some(b=>graphicCrossesFlowBoundary(b,geometry)),false);
+ assert.equal(graphicCrossesFlowBoundary([50,300,550,340],geometry),true,'a painted object crossing the actual cut stays guarded');
+});

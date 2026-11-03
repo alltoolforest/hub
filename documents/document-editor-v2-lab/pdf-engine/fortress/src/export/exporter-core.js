@@ -4,7 +4,7 @@ import { rewriteByteRanges } from '../mutation/content-stream-editor.js';
 import { buildReplacementForSourceLine, buildNeutralizerForSourceRun } from '../mutation/text-operator-rewriter.js';
 import { validateReplacementLayout } from '../editing/collision-detector.js';
 import { validateRoundTrip } from './roundtrip-validator.js';
-import { applyVerticalRegionReflow } from './page-reflow.js';
+import { applyVerticalRegionReflow } from './page-reflow.js?release=2026-11-03-word-clip';
 import {detectDocumentFlags} from '../core/document-model.js';
 import {formRegionSafe} from '../core/form-protection.js';
 
