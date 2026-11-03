@@ -1,4 +1,4 @@
-import {createDownloadDelivery} from './download.js';
+import {createDownloadDelivery} from './download.js?release=2026-11-03-ios-save';
 import {detectFile} from './file-router.js';
 import {readDraft, writeDraft, clearDraft} from './drafts.js';
 
@@ -116,6 +116,8 @@ pick.addEventListener('change', async () => {
 actions.addEventListener('click', async event => {
   const action = event.target.closest('button')?.dataset.action;
   if (!session || !action || actionBusy) return;
+  // Reuse the validated export synchronously inside the new user gesture.
+  if(action==='export'&&delivery.savePrepared())return;
   actionBusy=true;controls();pick.disabled=true;stage.inert=true;
   try {
     if (action === 'undo' || action === 'redo') {
@@ -137,7 +139,7 @@ actions.addEventListener('click', async event => {
       const blob = await session.engine.export();
       if (!(blob instanceof Blob) || (!blob.size && session.format !== 'txt')) throw new Error('Export did not produce a valid file. Your draft is retained.');
       delivery.prepare(blob,nameForExport(session.file.name, session.format));
-      say('Export prepared. If the download did not start, use the save options below.');
+      say('Export prepared. Tap the save button to save this copy to your device.');
     } else if (action === 'new') {
       if (session.dirty && !confirm('Clear this session and its local draft? Export first if needed.')) return;
       clearTimeout(timer);
