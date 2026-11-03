@@ -329,8 +329,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     select.value=String(Math.min(pageIndex+1,count-1));label.append(select);
     const frame=document.createElement('div');Object.assign(frame.style,{maxHeight:'65vh',overflow:'auto'});
     const canvas=document.createElement('canvas');canvas.setAttribute('aria-label','Expanded PDF page preview');frame.append(canvas);overflowPreview.append(summary,help,label,frame);
-    let serial=0;
-    const draw=async()=>{const token=++serial;try{const info=await display.pageInfo(Number(select.value));if(token!==serial||display!==previewRenderer)return;await display.render(Number(select.value),canvas,{scale:Math.min(1.5,Math.max(.3,(docArea.clientWidth-24)/info.width))});}catch(error){if(display===previewRenderer)setStatus(error.message,'error');}};
+    let serial=0,paint=Promise.resolve();
+    const draw=()=>{const token=++serial,index=Number(select.value);paint=paint.catch(()=>{}).then(async()=>{if(token!==serial||display!==previewRenderer)return;try{const info=await display.pageInfo(index);if(token!==serial||display!==previewRenderer)return;await display.render(index,canvas,{scale:Math.min(1.5,Math.max(.3,(docArea.clientWidth-24)/info.width))});}catch(error){if(display===previewRenderer)setStatus(error.message,'error');}});return paint;};
     select.addEventListener('change',draw);overflowPreview.ontoggle=()=>{if(overflowPreview.open)draw();};
   }
 

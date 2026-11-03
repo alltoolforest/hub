@@ -21,3 +21,5 @@ Validation:
 Boundaries: unsafe graphic/form/rotation cuts and unsupported glyphs remain protected. Memory and geometry validation remain. Long text can introduce space before following original content on a later page; this is bounded PDF reconstruction, not exact Word pagination. Continuation previews are view-only; modify the flowing paragraph from its starting page. No claim of unrestricted editing for every PDF layout, physical-device certification, or freeze approval.
 
 Only Document Editor and its isolated PDF copy/tests were changed. The supplied private PDF is not committed. Frozen Edit PDF and other tools are untouched.
+
+Preview follow-up: output-page rendering is serialized so rapid page selections cannot render concurrently into the same canvas. The latest requested page wins; superseded requests are skipped. The delivery entry points were cache-versioned again for this small presentation fix.

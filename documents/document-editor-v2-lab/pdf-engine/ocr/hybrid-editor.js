@@ -3,7 +3,7 @@ import {sourceDigest} from '../fortress/src/workspace/native-draft.js';
 import {validateScanDraft} from './scan-draft.js';
 import { PDFDocument } from '../fortress/src/core/pdf-lib.js';
 import { withPdfDocument } from '../fortress/src/rendering/with-document.js';
-import { createAdvancedPdfTextEngine } from '../fortress/src/main.js?release=2026-11-03-paragraph-flow';
+import { createAdvancedPdfTextEngine } from '../fortress/src/main.js?release=2026-11-03-paragraph-flow-2';
 import { createPdfPageClassifier } from './classifier.js';
 import { createScannedPdfEditor } from './scan-editor.js?v=20261004-scan-geometry';
 import { DEFAULT_LIMITS } from '../fortress/src/core/pdf-loader.js';
