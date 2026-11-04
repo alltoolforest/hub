@@ -80,7 +80,7 @@ async function display() {
 async function open(file, draft = null) {
   const detected = await detectFile(file);
   if (draft && detected.format !== draft.format) throw new Error('Recovery file type has changed.');
-  const module = await import(`./engines/${detected.engine}.js${detected.engine==='pdf'?'?release=2026-11-03-upward-flow':''}`);
+  const module = await import(`./engines/${detected.engine}.js${detected.engine==='pdf'?'?release=2026-11-04-zoom-slider':''}`);
   const engine = await module.open(file, detected.format, draft?.snapshot);
   let initialSnapshot;
   try { if (draft) await engine.restore(draft.snapshot); initialSnapshot=await engine.snapshot(); } catch(error) { await engine.dispose?.(); throw error; }

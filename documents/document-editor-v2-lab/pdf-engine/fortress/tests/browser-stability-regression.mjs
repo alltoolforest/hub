@@ -52,7 +52,7 @@ byLabel('Edit text: Original sample text').click();
 let input=byLabel('Edit PDF text');input.value='Updated sample text';
 await test('save refuses unfinished edit without dropping text',async()=>{assert.equal(await engine.save(),null);assert.match(message,/Press Done/);assert.equal(input.value,'Updated sample text');assert.equal(exports,0);});
 await test('page navigation preserves unfinished text',async()=>{topButton('Next').click();await new Promise(r=>setTimeout(r,10));assert.equal(engine.getState().pageIndex,0);assert.equal(input.isConnected,true);});
-await test('zoom preserves unfinished text',async()=>{byLabel('Zoom in').click();await new Promise(r=>setTimeout(r,10));assert.equal(input.isConnected,true);assert.equal(input.value,'Updated sample text');});
+await test('zoom preserves unfinished text',async()=>{const slider=byLabel('PDF zoom');slider.value='130';slider.dispatchEvent(new window.Event('change',{bubbles:true}));await new Promise(r=>setTimeout(r,10));assert.equal(input.isConnected,true);assert.equal(input.value,'Updated sample text');});
 await test('undo and redo preserve unfinished text',async()=>{await engine.undo();await engine.redo();assert.equal(input.isConnected,true);assert.equal(input.value,'Updated sample text');});
 async function settled(check){for(let i=0;i<200;i++){if(check())return;await new Promise(r=>setTimeout(r,10));}throw new Error('Editor did not settle: '+message);}
 app.querySelector('.pdf-done').click();

@@ -106,10 +106,13 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   const prev=button('‹','Previous page');
   const pageLabel=document.createElement('span');
   const next=button('›','Next page');
-  const zoomOut=button('−','Zoom out');
-  const zoomIn=button('+','Zoom in');
+  const zoomControl=document.createElement('label');zoomControl.textContent='Zoom ';
+  Object.assign(zoomControl.style,{display:'inline-flex',alignItems:'center',gap:'6px',minWidth:'0',flex:'0 1 260px'});
+  const zoomSlider=document.createElement('input');zoomSlider.type='range';zoomSlider.min='60';zoomSlider.max='200';zoomSlider.step='5';zoomSlider.value='100';zoomSlider.setAttribute('aria-label','PDF zoom');
+  Object.assign(zoomSlider.style,{width:'clamp(90px,20vw,180px)',minWidth:'60px',minHeight:'44px',margin:'0',accentColor:'var(--pdf-editor-focus,#2563eb)'});
+  const zoomValue=document.createElement('output');zoomValue.setAttribute('aria-hidden','true');zoomValue.style.minWidth='42px';zoomControl.append(zoomSlider,zoomValue);
   const status=document.createElement('div');status.className='pdf-fortress-status';status.setAttribute('role','status');
-  footer.append(prev,pageLabel,next,zoomOut,zoomIn,status);
+  footer.append(prev,pageLabel,next,zoomControl,status);
   const overflowPreview=document.createElement('details');overflowPreview.className='pdf-overflow-preview';overflowPreview.hidden=true;
   root.append(top,docArea,footer,overflowPreview);
   container.append(root);
@@ -130,7 +133,8 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
   function setStatus(msg,kind=''){status.textContent=msg||'';status.dataset.kind=kind;onStatus(msg);}
   function updateHistory(){undo.disabled=!history.state.canUndo;redo.disabled=!history.state.canRedo;}
-  function updatePageLabel(){pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
+  function syncZoom(){zoomSlider.value=String(Math.round(zoom*100));zoomValue.textContent=`${Math.round(zoom*100)}%`;zoomSlider.setAttribute('aria-valuetext',zoomValue.textContent);}
+  function updatePageLabel(){syncZoom();pageLabel.textContent=pdfDoc?`${pageIndex+1} / ${pdfDoc.getPageCount()}`:'—';}
   function currentText(block){const tx=txByBlock.get(block.id);return tx?.displayUnicode??tx?.replacementUnicode??block.text;}
   function currentFormatStyle(){return {fontFamily:['serif','sans','mono'].includes(familySelect.value)?familySelect.value:'serif',fontSize:Number(sizeSelect.value)||12,bold:bold.getAttribute('aria-pressed')==='true',italic:italic.getAttribute('aria-pressed')==='true',textColor:formatContext==='existing'&&!recolorExisting?null:(/^#[0-9a-f]{6}$/i.test(textColor.value)?textColor.value:'#000000')};}
   function metricsForPage(index=pageIndex){return previewReflowMetrics.filter(m=>m.pageIndex===index&&(Number(m.delta)>0||m.direction==='UP'&&(m.outputPageIndex==null||m.outputPageIndex===index)));}
@@ -882,7 +886,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   function setMode(mode){setAddTextMode(mode==='add-text');}
   async function undoAction(){if(requireFinishedEdit()&&history.undo()){updateHistory();await refreshPreviewFromCommittedState('Undone');}}
   async function redoAction(){if(requireFinishedEdit()&&history.redo()){updateHistory();await refreshPreviewFromCommittedState('Redone');}}
-  function destroy(){previewToken++;viewportCtl.stop();insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;previewReflowMetrics=[];currentPageGeometry=null;}
+  function destroy(){initialFitObserver?.disconnect();previewToken++;viewportCtl.stop();insertEditorCleanup?.();insertEditorCleanup=null;inline?.cancel();previewRenderer?.destroy();renderer?.destroy();container.innerHTML='';originalBytes=null;pdfDoc=null;model=null;analysis=null;previewRenderer=null;activeTextInput=null;previewReflowMetrics=[];currentPageGeometry=null;}
 
   addText.addEventListener('click',()=>{if(requireFinishedEdit())setAddTextMode(!addTextMode);});
   familySelect.addEventListener('change',updateActiveInputFormatting);
@@ -903,8 +907,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   }
   prev.addEventListener('click',()=>{if(pageIndex>0)changeView(()=>pageIndex--);});
   next.addEventListener('click',()=>{if(pdfDoc&&pageIndex<pdfDoc.getPageCount()-1)changeView(()=>pageIndex++);});
-  zoomOut.addEventListener('click',()=>changeView(()=>{zoom=Math.max(.6,zoom-.15);}));
-  zoomIn.addEventListener('click',()=>changeView(()=>{zoom=Math.min(2,zoom+.15);}));
+  zoomSlider.addEventListener('input',()=>{zoomValue.textContent=`${zoomSlider.value}%`;zoomSlider.setAttribute('aria-valuetext',zoomValue.textContent);});
+  zoomSlider.addEventListener('change',async()=>{const requested=Math.max(.6,Math.min(2,Number(zoomSlider.value)/100));zoomSlider.disabled=true;try{await changeView(()=>{zoom=requested;});}finally{zoomSlider.disabled=false;syncZoom();}});
+  // The hybrid workspace can open this view while its host is still hidden.
+  // Once visible, apply the same zoom action so 100% starts at the fitted size.
+  const initialFitObserver=typeof ResizeObserver==='function'?new ResizeObserver(()=>{
+    if(!pdfDoc||!docArea.clientWidth||viewBusy||hasPendingEdit())return;
+    initialFitObserver.disconnect();zoomSlider.dispatchEvent(new Event('change',{bubbles:true}));
+  }):null;
+  initialFitObserver?.observe(docArea);
   updateHistory();updatePageLabel();
 
   return {open,snapshot,restore,textEntries,replaceTextRanges,revealText,analyzePage,beginEdit:(blockId)=>{const b=analysis?.blocks.find(x=>x.id===blockId);if(!b)throw new Error('Unknown block');return b;},setMode,undo:undoAction,redo:redoAction,save:saveCopy,moveInsertTransaction,destroy,getState:()=>({pageIndex,analysis,transactions:[...txByBlock.values()],flags:model?.flags,hasPreview:!!previewRenderer,hasPendingEdit:hasPendingEdit(),commitPending:commitDepth>0||!!inline?.busy||!!activeTextInput?.disabled,viewBusy,addTextMode,formatContext,reflowMetrics:previewReflowMetrics})};
