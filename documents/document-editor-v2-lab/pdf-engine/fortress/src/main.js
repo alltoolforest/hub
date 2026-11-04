@@ -70,6 +70,9 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   if(workerUrl)configurePdfWorker(workerUrl);
   let originalBytes=null,pdfDoc=null,model=null,renderer=null,previewRenderer=null,fileName='document.pdf',pageIndex=0,zoom=1,analysis=null;
   let draftSource=null;
+  let replacementBatch=false;
+  const notifyChange=onChange;
+  onChange=(...args)=>{if(!replacementBatch)notifyChange(...args);};
   let previewToken=0;
   let addTextMode=false;
   let activeTextInput=null;
@@ -797,7 +800,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     try{
       for(let index=0;index<pdfDoc.getPageCount();index++){
         const result=await analyzePage(index,{announce:false});
-        for(const block of result.blocks)entries.push({id:block.id,pageIndex:index,text:currentText(block),protected:!isEditable(block)});
+        for(const block of result.blocks)if(!txByBlock.get(block.id)?.expandedInsertId)entries.push({id:block.id,pageIndex:index,text:currentText(block),protected:!isEditable(block)});
       }
       for(const tx of txByBlock.values())if(tx.kind==='INSERT_TEXT')entries.push({id:tx.id,pageIndex:tx.pageIndex,text:tx.displayUnicode??tx.replacementUnicode,protected:false});
       return entries;
@@ -806,7 +809,6 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
   async function replaceTextRanges(matches,replacement){
     if(typeof replacement!=='string'||!Array.isArray(matches))throw new Error('Invalid PDF replacement.');
     const entries=new Map((await textEntries()).map(entry=>[entry.id,entry]));
-    const draft=snapshot(),intents=new Map(draft.transactions.map(tx=>[transactionMapKey(tx),tx]));
     const grouped=new Map();
     for(const match of matches){
       const entry=entries.get(match.id);
@@ -814,23 +816,49 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
         throw new Error('Search results changed. Search again before replacing.');
       if(!grouped.has(match.id))grouped.set(match.id,[]);grouped.get(match.id).push(match);
     }
-    const oldAnalysis=analysis;
-    try{
-      for(const [id,ranges] of grouped){
-        const entry=entries.get(id);let text=entry.text,last=entry.text.length;
-        for(const match of ranges.sort((a,b)=>b.start-a.start)){
-          if(match.end>last)throw new Error('Overlapping PDF replacements are not supported.');
-          text=text.slice(0,match.start)+replacement+text.slice(match.end);last=match.start;
-        }
-        let intent=intents.get(id);
-        if(!intent){
-          const result=await analyzePage(entry.pageIndex,{announce:false}),block=result.blocks.find(block=>block.id===id);
-          intent=nativeDraft([createEditTransaction({pageIndex:entry.pageIndex,block,replacementUnicode:text})],draftSource,pageIndex,zoom).transactions[0];
-        }else{intent={...intent,replacementUnicode:text};if(intent.displayUnicode!==undefined)intent.displayUnicode=text;}
-        intents.set(id,intent);
+    const edits=[];
+    for(const [id,ranges] of grouped){
+      const entry=entries.get(id);let text=entry.text,last=entry.text.length;
+      for(const match of [...ranges].sort((a,b)=>b.start-a.start)){
+        if(match.end>last)throw new Error('Overlapping PDF replacements are not supported.');
+        text=text.slice(0,match.start)+replacement+text.slice(match.end);last=match.start;
       }
-    }finally{analysis=oldAnalysis;}
-    await restore({...draft,transactions:[...intents.values()]});
+      edits.push({id,entry,text});
+    }
+    if(!edits.length)return 0;
+    const before=[...txByBlock.values()],oldPage=pageIndex;
+    const undoStack=[...history.undoStack],redoStack=[...history.redoStack];
+    replacementBatch=true;commitDepth++;
+    try{
+      // Use the same measured paragraph flow as tapping existing text. Keep the
+      // whole batch private until every replacement has passed export checks.
+      for(const {id,entry,text} of edits){
+        pageIndex=entry.pageIndex;await renderPage({announce:false});
+        const old=txByBlock.get(id);
+        if(old?.kind==='INSERT_TEXT'){
+          if(!text.length)await queueRemoveInsertion(old);
+          else await queueInsertion({...old,replacementUnicode:text,...(old.displayUnicode!==undefined?{displayUnicode:text}:{})},old);
+        }else{
+          const block=analysis?.blocks.find(block=>block.id===id);
+          if(!block||!isEditable(block))throw new Error('This text region is no longer editable. Search again.');
+          const originalStyle=inferBlockStyle(block),style=old?.fontSize?{fontFamily:old.fontFamily||originalStyle.fontFamily,fontSize:old.fontSize,bold:old.bold??originalStyle.bold,italic:old.italic??originalStyle.italic,textColor:old.textColor||null}:originalStyle;
+          if(old?.expandedInsertId)await queueExpandedEdit(block,text,style,originalStyle,old);
+          else await queueEdit(block,text,style);
+        }
+      }
+      pageIndex=oldPage;await renderPage({announce:false});
+      const after=[...txByBlock.values()];
+      history.undoStack=undoStack;history.redoStack=redoStack;
+      history.push({undo:()=>{applyTransactionList(before);onChange([...txByBlock.values()]);},redo:()=>{applyTransactionList(after);onChange([...txByBlock.values()]);}});
+      updateHistory();
+    }catch(error){
+      applyTransactionList(before);pageIndex=oldPage;
+      history.undoStack=undoStack;history.redoStack=redoStack;updateHistory();
+      await refreshPreviewFromCommittedState('Replacement was not applied. Your previous document is unchanged.');
+      throw error;
+    }finally{replacementBatch=false;commitDepth--;}
+    setStatus('Replacements applied — continue editing or Download copy.');
+    onChange([...txByBlock.values()]);
     return matches.length;
   }
   async function revealText(id,page){

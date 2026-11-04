@@ -32,7 +32,7 @@ try{
     const search=page.locator('details.document-v2-search').filter({has:page.getByText('Find and replace PDF text',{exact:true})});
     await search.getByLabel('Find',{exact:true}).fill('Updated');await search.getByRole('button',{name:'Search',exact:true}).click();
     await search.getByRole('status').filter({hasText:'1 matches'}).waitFor();
-    await search.getByLabel('Replace with',{exact:true}).fill('Edited');await search.getByRole('button',{name:'Replace all',exact:true}).click();
+    await search.getByLabel('Replace with',{exact:true}).fill('Edited');await search.getByText('Options',{exact:true}).click();await search.getByRole('button',{name:'Replace all',exact:true}).click();
     await search.getByRole('status').filter({hasText:'1 replacements applied'}).waitFor();
     await page.getByRole('button',{name:'Edit text: Edited sample text',exact:true}).waitFor();
     const downloadPromise=page.waitForEvent('download');await page.locator('[data-action=export]').click();const download=await downloadPromise;

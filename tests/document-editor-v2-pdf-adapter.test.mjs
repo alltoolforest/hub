@@ -75,7 +75,7 @@ test('workspace routes native PDF through copied engine with async history and v
   await wait(()=>status().includes('Recovered local draft'));
   assert.ok(document.querySelector('[aria-label="Edit text: Updated sample text"]'));
   const searchPanel=document.querySelector('.document-v2-search');
-  const [find,replaceWith]=searchPanel.querySelectorAll('input[type=text]');
+  const find=searchPanel.querySelector('input[type=text]'),replaceWith=searchPanel.querySelector('textarea');
   find.value='Updated';find.dispatchEvent(new dom.window.Event('input'));
   const searchButton=label=>[...searchPanel.querySelectorAll('button')].find(button=>button.textContent===label);
   searchButton('Search').click();await wait(()=>searchPanel.textContent.includes('1 matches'));
@@ -85,9 +85,9 @@ test('workspace routes native PDF through copied engine with async history and v
   await wait(()=>storedDraft?.snapshot?.state?.native?.transactions?.[0]?.replacementUnicode==='Edited sample text');
   find.value='Edited';find.dispatchEvent(new dom.window.Event('input'));
   searchButton('Search').click();await wait(()=>searchPanel.textContent.includes('1 matches'));
-  replaceWith.value='Extremely long replacement '.repeat(100);
-  searchButton('Replace all').click();await wait(()=>!searchButton('Replace all').disabled);
-  assert.ok(document.querySelector('[aria-label="Edit text: Edited sample text"]'),'unsafe replacement must leave the existing text intact');
+  replaceWith.value='Unsupported replacement 😀';
+  searchButton('Replace all').click();await wait(()=>!searchButton('Replace all').disabled);assert.match(searchPanel.textContent,/No replacements were applied/);
+  assert.ok(document.querySelector('[aria-label="Edit text: Edited sample text"]'),'unsupported replacement must leave the existing text intact');
   assert.ok(!searchPanel.textContent.includes('replacements applied'));
   undo.click();await wait(()=>!picker.disabled);
   assert.ok(document.querySelector('[aria-label="Edit text: Updated sample text"]'));

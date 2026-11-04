@@ -80,3 +80,14 @@
 .document-v2-download p {margin:0 0 12px;overflow-wrap:anywhere}
 .document-v2-download .document-v2-actions {margin-bottom:8px}
 @media(max-width:700px){.document-v2-download .button,.document-v2-download button {min-height:44px;box-sizing:border-box;white-space:normal}}
+/* Compact PDF replacement controls; no document canvas geometry changes. */
+.document-v2-pdf-search .document-v2-replace-fields {display:grid;gap:10px}
+.document-v2-pdf-search .document-v2-replace-fields>label {display:grid;gap:4px}
+.document-v2-pdf-search input[type=text],.document-v2-pdf-search textarea {font:inherit;resize:vertical;min-width:0;max-width:100%;width:100%;box-sizing:border-box;padding:10px;font-size:16px}
+.document-v2-pdf-search .document-v2-replace-actions {display:flex;gap:8px;margin-top:10px}
+.document-v2-pdf-search .document-v2-replace-actions>button {flex:1;min-width:0;padding:10px;white-space:normal}
+.document-v2-pdf-search button[hidden],.document-v2-pdf-search p[hidden] {display:none}
+.document-v2-pdf-search>details {border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.document-v2-pdf-search>details label {margin:8px 0}
+.document-v2-pdf-search .document-v2-match-preview {padding:10px;background:#f3f8f4;border-radius:6px;overflow-wrap:anywhere;max-height:8em;overflow:auto;font-size:.9rem}
+.document-v2-pdf-search [role=status] {font-size:.9rem;line-height:1.45;margin:10px 0}
