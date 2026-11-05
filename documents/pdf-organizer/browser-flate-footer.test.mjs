@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -24,6 +25,7 @@ async function fixture(footerCount,corrupt=false) {
 }
 const recover=await fixture(2),bad=await fixture(0,true);
 const root=fileURLToPath(new URL('../../',import.meta.url));
+const deployed=process.env.ORGANIZER_DEPLOYED_URL;
 const server=createServer(async(req,res)=>{
  try{
   const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
@@ -34,7 +36,27 @@ const server=createServer(async(req,res)=>{
   res.end(content);
  }catch{res.statusCode=404;res.end();}
 });
-await new Promise(done=>server.listen(0,'127.0.0.1',done));
+let base;
+if(deployed){
+ base=deployed;
+ const sha=b=>createHash('sha256').update(b).digest('hex');
+ for(const name of [
+   'documents/pdf-organizer/index.html',
+   'documents/pdf-organizer/organizer.js',
+   'documents/pdf-organizer/engine.js',
+   'documents/pdf-organizer/inspect-worker.js',
+   'documents/pdf-organizer/verify.js']){
+   const url=new URL(name,base);url.searchParams.set('audit','flate-footer');
+   const response=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(30000)});
+   assert.equal(response.status,200,'Hosted asset HTTP '+response.status+' '+name);
+   const remote=Buffer.from(await response.arrayBuffer()),local=await readFile(resolve(root,name));
+   assert.equal(sha(remote),sha(local),'Published asset does not match deployed main: '+name);
+   console.log(JSON.stringify({audit:'hosted-asset',name,bytes:remote.length,sha256:sha(remote)}));
+ }
+}else{
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ base='http://127.0.0.1:'+server.address().port+'/';
+}
 let browser;
 try{
  browser=await runner.launch({headless:true,timeout:30000});
@@ -43,8 +65,8 @@ try{
   try{
    const page=await context.newPage(),errors=[],remote=[];
    page.on('pageerror',e=>errors.push(e.message));
-   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
-   await page.goto('http://127.0.0.1:'+server.address().port+'/documents/pdf-organizer/');
+   page.on('request',r=>{if(!r.url().startsWith(base)&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))remote.push(r.url());});
+   await page.goto(new URL('documents/pdf-organizer/',base).href,{waitUntil:'domcontentloaded'});
    await page.locator('#file').setInputFiles({name:'recoverable-short-Flate-footer.pdf',mimeType:'application/pdf',buffer:recover});
    try{await page.waitForFunction(()=>document.querySelectorAll('#grid .card').length===3,null,{timeout:30000});}
    catch(e){console.error('Upload status',await page.locator('#status').innerText(),errors);throw e;}
@@ -74,4 +96,4 @@ try{
      corruptChecksumRejected:true,pageErrors:errors.length,remoteRequests:remote.length}));
   }finally{await context.close();}
  }
-}finally{if(browser)await browser.close();await new Promise(done=>server.close(done));}
+}finally{if(browser)await browser.close();if(server.listening)await new Promise(done=>server.close(done));}
