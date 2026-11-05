@@ -1,0 +1,28 @@
+name: Organize PDF V2 published mobile UI acceptance (read-only)
+on:
+  pull_request:
+    paths:
+      - 'documents/pdf-organizer/browser-mobile-ui.test.mjs'
+      - '.github/workflows/pdf-organizer-mobile-hosted-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hosted-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: node documents/pdf-organizer/browser-mobile-ui.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
+          ORGANIZER_DEPLOYED_URL: https://alltoolforest.github.io/hub/
