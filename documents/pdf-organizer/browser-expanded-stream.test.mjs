@@ -3,6 +3,7 @@
 // Generated synthetic QA PDF; no user's private document is uploaded.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -16,6 +17,7 @@ const {bytes,meta}=await buildRealistic56PagePdf();
 assert(meta.bytes>30_000_000&&meta.bytes<31_000_000,'input should mimic reported 30.27 MB PDF');
 assert(meta.decodedBytes>128*MiB&&meta.largestDecoded>24*MiB,'must reproduce old guard case');
 const root=fileURLToPath(new URL('../../',import.meta.url));
+const deployed=process.env.ORGANIZER_DEPLOYED_URL;
 const dir=await mkdtemp(join(tmpdir(),'organizer-expanded-'));
 const src=join(dir,'30.27MB-56pages.pdf');
 await writeFile(src,bytes);
@@ -28,7 +30,29 @@ const server=createServer(async(req,res)=>{
    res.end(data);
  }catch{res.statusCode=404;res.end();}
 });
-await new Promise(done=>server.listen(0,'127.0.0.1',done));
+let base;
+if(deployed){
+ base=deployed;
+ const sha=b=>createHash('sha256').update(b).digest('hex');
+ for(const name of [
+   'documents/pdf-organizer/index.html',
+   'documents/pdf-organizer/organizer.css',
+   'documents/pdf-organizer/engine.js',
+   'documents/pdf-organizer/organizer.js',
+   'documents/pdf-organizer/inspect-worker.js',
+   'documents/pdf-organizer/limits.js',
+   'documents/pdf-organizer/verify.js']){
+   const url=new URL(name,base);url.searchParams.set('audit','expanded-staging');
+   const res=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+   assert.equal(res.status,200,'Hosted asset HTTP '+res.status+' '+name);
+   const remote=Buffer.from(await res.arrayBuffer()),local=await readFile(resolve(root,name));
+   assert.equal(sha(remote),sha(local),'Deployed file mismatch: '+name);
+   console.log(JSON.stringify({audit:'deployed-asset',name,bytes:remote.length,sha256:sha(remote)}));
+ }
+}else{
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ base='http://127.0.0.1:'+server.address().port+'/';
+}
 let browser;
 try{
  browser=await kind.launch({headless:true,timeout:30000});
@@ -37,8 +61,8 @@ try{
    try{
      const page=await ctx.newPage();const errors=[],outside=[];
      page.on('pageerror',e=>errors.push(e.message));
-     page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))outside.push(r.url());});
-     await page.goto('http://127.0.0.1:'+server.address().port+'/documents/pdf-organizer/',{waitUntil:'domcontentloaded'});
+     page.on('request',r=>{if(!r.url().startsWith(base)&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))outside.push(r.url());});
+     await page.goto(new URL('documents/pdf-organizer/',base).href,{waitUntil:'domcontentloaded'});
      const start=performance.now();
      await page.locator('#file').setInputFiles(src);
      try{
@@ -64,4 +88,4 @@ try{
        pageErrors:errors.length,outsideRequests:outside.length}));
    }finally{await ctx.close();}
  }
-}finally{if(browser)await browser.close();await new Promise(done=>server.close(done));await rm(dir,{recursive:true,force:true});}
+}finally{if(browser)await browser.close();if(server.listening)await new Promise(done=>server.close(done));await rm(dir,{recursive:true,force:true});}
