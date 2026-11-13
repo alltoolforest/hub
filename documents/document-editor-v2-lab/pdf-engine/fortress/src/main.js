@@ -11,7 +11,7 @@ import { InlineEditor } from './editing/inline-editor.js';
 import { createEditTransaction, createInsertTransaction } from './editing/edit-transaction.js';
 import { History } from './editing/history.js';
 import { ViewportController } from './mobile/viewport-controller.js';
-import { exportEditedPdf } from './export/exporter.js?release=2026-11-03-upward-flow';
+import { exportEditedPdf } from './export/exporter.js?release=2026-11-13-layout-deletion';
 import { planInsertionReflow } from './layout/reflow-planner.js';
 import { replanDependentInsertions } from './dependent-insert-replan.js';
 
@@ -469,7 +469,7 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
       done.disabled=true;cancel.disabled=true;input.disabled=true;
       commitDepth++;
       try{
-        if(existingTx&&!text.trim()){await queueRemoveInsertion(existingTx);cleanup();setAddTextMode(false,{announce:false});setStatus('Text deleted — following content moved upward.');return;}
+        if(existingTx&&!text.trim()){const preview=await queueRemoveInsertion(existingTx);cleanup();setAddTextMode(false,{announce:false});setStatus(preview?.preservedDeletionCount?'Text deleted — surrounding layout preserved.':'Text deleted — page flow updated.');return;}
         const activeStyle=currentFormatStyle();
         let tx;
         if(existingTx){
@@ -670,14 +670,15 @@ export function createAdvancedPdfTextEngine({container,workerUrl,onStatus=()=>{}
     previewRenderer=nextRenderer;
     previewReflowMetrics=preview.reflowMetrics||[];
     await renderPage({announce:false});
-    setStatus(style.styleChanged?'Text and formatting applied — continue editing or Save a copy.':'Edit applied — continue editing or Save a copy.');
+    const layoutPreserved=preview.warnings?.some(w=>w.code==='DELETION_LAYOUT_PRESERVED'&&w.transactionId===tx.id);
+    setStatus(layoutPreserved?'Text deleted — surrounding layout preserved.':style.styleChanged?'Text and formatting applied — continue editing or Save a copy.':'Edit applied — continue editing or Save a copy.');
   }
 
   async function queueRemoveInsertion(old){
     const before=[...txByBlock.values()],nextMap=new Map(txByBlock);nextMap.delete(old.id);
     if(old.expandedFromBlockId){const clear=nextMap.get(old.expandedFromBlockId);if(!clear)throw new Error('The paragraph source is unavailable.');const unpaired={...clear,displayUnicode:''};delete unpaired.expandedInsertId;nextMap.set(old.expandedFromBlockId,unpaired);}
     const after=[...nextMap.values()],preview=await buildPreviewForTransactions(after),nextRenderer=preview?new PdfRenderer(preview.bytes):null;await nextRenderer?.load();
-    applyTransactionList(after);history.push({undo:()=>{applyTransactionList(before);onChange([...txByBlock.values()]);},redo:()=>{applyTransactionList(after);onChange([...txByBlock.values()]);}});updateHistory();onChange(after);previewToken++;previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview?.reflowMetrics||[];await renderPage({announce:false});
+    applyTransactionList(after);history.push({undo:()=>{applyTransactionList(before);onChange([...txByBlock.values()]);},redo:()=>{applyTransactionList(after);onChange([...txByBlock.values()]);}});updateHistory();onChange(after);previewToken++;previewRenderer?.destroy();previewRenderer=nextRenderer;previewReflowMetrics=preview?.reflowMetrics||[];await renderPage({announce:false});return preview;
   }
 
   async function queueInsertion(tx,old=null){

@@ -1,5 +1,5 @@
 import { exportEditedPdf as exportEditedPdfCore } from './exporter-core.js?release=2026-11-03-upward-flow';
-import { applyUpwardCompaction } from './upward-compaction-v3.js?release=2026-11-03-upward-flow';
+import { applyUpwardCompaction } from './upward-compaction-v3.js?release=2026-11-13-layout-deletion';
 import { addDeletionMarkerCompanions } from './list-marker-companions.js';
 import { prepareStructuredVectorTransactions } from './structured-vector-plan.js';
 import { expandStyleAwareInsertTransactions } from './style-aware-insert.js';

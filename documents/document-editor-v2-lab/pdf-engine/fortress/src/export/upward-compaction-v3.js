@@ -12,6 +12,20 @@ const AP=PDFName.of('AP');
 const QUAD_POINTS=PDFName.of('QuadPoints');
 const PAGE=PDFName.of('P');
 
+// These are movement constraints, not failures to remove the source text.
+// Keep the validated deletion and the original coordinates when closing its
+// gap would split a column, vector enclosure, image, link or form widget.
+// Missing/malformed source geometry and inspection failures still fail closed.
+const PRESERVE_LAYOUT_REASONS=new Set([
+  'ROTATED_PAGE_REFLOW_UNSUPPORTED','MULTI_COLUMN_COMPACTION_UNSAFE',
+  'COMPACTION_CONTENT_BAND_UNSAFE','COMPACTION_RELEASED_SPACE_TOO_SMALL',
+  'COMPACTION_SHIFT_TOO_LARGE','NO_MOVABLE_CONTENT_ABOVE_FOOTER',
+  'STRUCTURED_VECTOR_REFLOW_UNSAFE','GRAPHIC_CROSSES_REFLOW_BOUNDARY',
+  'COMPLEX_GRAPHICS_REFLOW_PROTECTED','COMPLEX_ANNOTATION_REFLOW_UNSAFE',
+  'COMPLEX_LINK_GEOMETRY_REFLOW_UNSAFE','FORM_WIDGET_REFLOW_PROTECTED',
+  'LINK_CROSSES_FOOTER_GUARD','LINK_CROSSES_CONTENT_BAND','LINK_COMPACTION_OUT_OF_PAGE',
+]);
+
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 function overlap(a1,a2,b1,b2){return Math.max(0,Math.min(a2,b2)-Math.max(a1,b1));}
 function copyBytes(bytes){return bytes instanceof Uint8Array?new Uint8Array(bytes):new Uint8Array(bytes||0);}
@@ -47,6 +61,15 @@ function lineGroups(items,fontSize){
     line.left=Math.min(line.left,rect.left);line.right=Math.max(line.right,rect.right);line.bottom=Math.min(line.bottom,rect.bottom);line.top=Math.max(line.top,rect.top);line.fontSize=Math.max(line.fontSize,rect.fontSize);
   }
   return lines.sort((a,b)=>b.baseline-a.baseline);
+}
+function separatedLineParts(line){
+  const parts=[];
+  for(const rect of [...(line.rects||[line])].sort((a,b)=>a.left-b.left)){
+    const previous=parts.at(-1),gap=Math.max(8,Number(rect.fontSize||line.fontSize)*1.8);
+    if(previous&&rect.left<=previous.right+gap)previous.right=Math.max(previous.right,rect.right);
+    else parts.push({left:rect.left,right:rect.right});
+  }
+  return parts;
 }
 function sameLane(line,source,pageWidth,fontSize){if(overlap(line.left,line.right,source.left,source.right)>Math.min(8,Math.max(1,source.width)*.15))return true;return source.left<=pageWidth*.30&&Math.abs(line.left-source.left)<=Math.max(24,fontSize*2.2);}
 function originalTransactionPitch(tx,candidates,pageWidth){
@@ -100,7 +123,13 @@ function inferGeometry(lines,tx,{width,height,preferredPitch=null}){
   const nearest=laneLines[0],pitch=sourceLinePitch(lines,tx,source,{width,fontSize,baseline,preferredPitch});
 
   const sourceWide=source.width>=width*.42;
-  if(!sourceWide){const farRight=downstream.filter(line=>line.left>width*.54&&line.right-line.left>width*.15),leftColumn=downstream.filter(line=>line.left<width*.46&&line.right<width*.66);if(farRight.length>=2&&leftColumn.length>=2)return {ok:false,reason:'MULTI_COLUMN_COMPACTION_UNSAFE'};}
+  if(!sourceWide){
+    // Same-baseline columns are grouped into one visual row. Inspect their
+    // separate text rectangles too, rather than treating that row as one lane.
+    const parts=downstream.flatMap(separatedLineParts);
+    const farRight=parts.filter(part=>part.left>width*.54&&part.right-part.left>width*.15),leftColumn=parts.filter(part=>part.left<width*.46&&part.right<width*.66);
+    if(farRight.length>=2&&leftColumn.length>=2)return {ok:false,reason:'MULTI_COLUMN_COMPACTION_UNSAFE'};
+  }
 
   const pad=Math.max(10,fontSize*.85),rightMargin=Math.max(18,width*.045);
   const related=laneLines.filter(line=>line.baseline<=nearest.baseline+.5).slice(0,32);
@@ -225,10 +254,16 @@ export async function applyUpwardCompaction(result,transactions,{preview=false}=
     return {...tx,originalPageIndex:Number(tx.pageIndex),pageIndex:bounds.pageIndex,block:{...tx.block,pageIndex:bounds.pageIndex,bounds:{...tx.block.bounds,x:bounds.x,y:bounds.y},lines:(tx.block.lines||[]).map(line=>({...line,y:Number(line.y)+dy,minX:Number(line.minX)+dx,maxX:Number(line.maxX)+dx}))}};
   });
   const doc=await PDFDocument.load(copyBytes(result.bytes),{ignoreEncryption:true,updateMetadata:false}),metrics=[...(result?.reflowMetrics||[])],warnings=[...(result?.warnings||[])];
-  const ordered=[...mappedCandidates].sort((a,b)=>Number(a.pageIndex)-Number(b.pageIndex)||(Number(a.block?.bounds?.y)||0)-(Number(b.block?.bounds?.y)||0));let appliedCount=0,totalShift=0;
-  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===(tx.parentTransactionId||tx.id)),applied=await compactOne(doc,tx,sequenceIndex,mappedCandidates);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;const metric=applied.metric;metric.flowSlices=[{sourcePageIndex:metric.pageIndex,destinationPageIndex:metric.pageIndex,left:metric.bandLeft,right:metric.bandRight,bottom:metric.footerGuardTop,top:metric.cutY,dy:metric.shiftY}];metric.outputPageIndex=metric.pageIndex;metric.pageIndex=tx.originalPageIndex;metrics.push(metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
-  if(!appliedCount)return result;
+  const ordered=[...mappedCandidates].sort((a,b)=>Number(a.pageIndex)-Number(b.pageIndex)||(Number(a.block?.bounds?.y)||0)-(Number(b.block?.bounds?.y)||0));let appliedCount=0,totalShift=0,preservedDeletionCount=0;
+  for(const tx of ordered){const sequenceIndex=(transactions||[]).findIndex(item=>item?.id===(tx.parentTransactionId||tx.id)),applied=await compactOne(doc,tx,sequenceIndex,mappedCandidates);if(!applied.applied){if(applied.reason==='NO_CONTENT_BELOW_DELETED_LINE')continue;
+      if(PRESERVE_LAYOUT_REASONS.has(applied.reason)){
+        preservedDeletionCount++;
+        warnings.push({code:'DELETION_LAYOUT_PRESERVED',pageIndex:tx.originalPageIndex,transactionId:tx.parentTransactionId||tx.id,reason:applied.reason,message:'Text removed; surrounding content kept in its original position because closing the gap would alter the layout.'});
+        continue;
+      }
+      throw Object.assign(new Error('The deleted line cannot be compacted upward without risking layout damage.'),{code:applied.reason||'UPWARD_COMPACTION_UNSAFE',compaction:applied});}appliedCount++;totalShift+=Number(applied.metric.shiftY)||0;const metric=applied.metric;metric.flowSlices=[{sourcePageIndex:metric.pageIndex,destinationPageIndex:metric.pageIndex,left:metric.bandLeft,right:metric.bandRight,bottom:metric.footerGuardTop,top:metric.cutY,dy:metric.shiftY}];metric.outputPageIndex=metric.pageIndex;metric.pageIndex=tx.originalPageIndex;metrics.push(metric);warnings.push({code:'LAYOUT_COMPACTED_UPWARD',pageIndex:Number(tx.pageIndex),transactionId:tx.id,shiftY:applied.metric.shiftY,linePitch:applied.metric.linePitch,message:'Content below the deleted line moved upward by one measured visual line advance.'});}
+  if(!appliedCount)return preservedDeletionCount?{...result,warnings,preservedDeletionCount}:result;
   const bytes=new Uint8Array(await doc.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false}));let validation=result?.validation||null;
   if(!preview){validation=await validateRoundTrip(bytes,{expectedPages:doc.getPageCount(),checks:result.validationChecks||checks(transactions)});if(!validation.ok)throw Object.assign(new Error('Upward-compacted PDF failed final validation.'),{code:'UPWARD_COMPACTION_VALIDATION_FAILED',validation});}
-  return {...result,bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):result?.blob||null,validation,warnings,reflowMetrics:metrics,upwardCompactionCount:appliedCount,upwardCompactionShift:totalShift};
+  return {...result,bytes,blob:typeof Blob!=='undefined'?new Blob([bytes],{type:'application/pdf'}):result?.blob||null,validation,warnings,reflowMetrics:metrics,upwardCompactionCount:appliedCount,upwardCompactionShift:totalShift,preservedDeletionCount};
 }
