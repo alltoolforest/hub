@@ -20,6 +20,14 @@ The revised 210-page corpus yielded 0% CER for clean, office, digital, mixed and
 
 Peak RSS includes the browser, runner, and fixture construction, and may count shared pages more than once. It is neither an isolated WASM measurement nor an operating limit for physical phones. The workload includes unique scans, large uncompressed embedded images, mixed page dimensions, and native-text pages. It does not establish throughput for 500 dense raster-only pages.
 
+### Additional qualification measurements
+
+- A main-thread Blob instrumentation run on the 99.89 MiB fixture observed a largest single read of 24.75 MiB across validation, preview and recognition. Total bytes read were 125.78 MiB because preview and recognition each open the file. This is a read-size measurement, separate from process or WASM memory.
+- The expanded Chromium suite processed ten scanned pages in 3.82 seconds including startup and cleanup, acknowledged cancellation in 0.10 seconds, and completed three 30-page raster runs in 9.88–11.41 seconds.
+- The final resting interface produced zero automated axe WCAG violations at all seven tested widths. The browser regression also verifies horizontal overflow, target height, accessible edit labels, and initial layout shift. Screen readers and device-native sharing remain pending.
+- One real photocopy check used page 7 of the [NASA Apollo 11 photocopied press kit](https://www.nasa.gov/wp-content/uploads/static/apollo50th/pdf/A11_PressKit.pdf). The input SHA-256 is `fcb1ae7a88e5251559dde0b7d51ec71f06795cf78f64491aa9594fdf9ca89334`. Render the entire page at 200 dpi in grayscale into a one-page image-only PDF to exclude the pre-existing text layer. The reference was manually transcribed from the visible page, including its page number and footer, and scored after collapsing whitespace. Desktop Chromium measured 7/956 character errors and 1/163 word errors (0.73% CER and 0.61% WER). The 360 px viewport measured 8/956 and 2/163 (0.84% CER and 1.23% WER). One photocopy page is insufficient to qualify a field corpus.
+- [GitHub Actions qualification for the stabilized implementation](https://github.com/alltoolforest/hub/actions/runs/45816644119) runs the committed browser and capacity scripts.
+
 Reproduce with `python -u tests/scanned-pdf-ocr-capacity.py`. The `--mobile` variant uses a test-only cap override in a desktop browser and leaves shipping policy intact. The cross-browser qualification workflow runs both variants and the Chromium, Firefox and WebKit regression suite.
 
 ## Prior qualification at 97faf96
