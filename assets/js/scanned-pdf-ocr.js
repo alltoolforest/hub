@@ -20,11 +20,25 @@ async function openDocument(file,job,resources){
  const limits=budgets(mobile());
  const tail=await stage(file.slice(-4096).text(),job,LIMIT.read,'PDF trailer validation');
  if(!/(?:^|[\r\n])%%EOF(?:[\r\n\t \0]|$)/.test(tail))throw Error('This PDF appears truncated because its end-of-file marker is missing.');
- const bytes=await stage(file.arrayBuffer(),job,LIMIT.read,'PDF reading');
  const pdfjs=await stage(loadPdf(),job,LIMIT.open,'PDF engine loading');
  job.check();
  pdfjs.GlobalWorkerOptions.workerSrc=url(PDFJS+'pdf.worker.min.mjs');
- const task=pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,stopAtErrors:true,maxImageSize:limits.sourceImagePixels,
+ const transport=new class extends pdfjs.PDFDataRangeTransport{
+  closed=false;
+  requestDataRange(begin,end){
+   if(this.closed||job.reason)return;
+   file.slice(begin,end).arrayBuffer().then(buffer=>{
+    if(this.closed||job.reason)return;
+    if(buffer.byteLength!==end-begin)throw Error('The requested PDF bytes could not be read.');
+    this.onDataRange(begin,new Uint8Array(buffer));
+   }).catch(()=>{
+    if(!this.closed)job.cancel(Error('Could not read the selected PDF. Reopen the file and try again.'));
+   });
+  }
+  abort(){this.closed=true;}
+ }(file.size,null,true);
+ const task=pdfjs.getDocument({range:transport,rangeChunkSize:262144,disableStream:true,disableAutoFetch:true,
+   isEvalSupported:false,stopAtErrors:true,maxImageSize:limits.sourceImagePixels,
    cMapUrl:url('assets/vendor/cmaps/'),cMapPacked:true,standardFontDataUrl:url('assets/vendor/standard_fonts/'),wasmUrl:url('assets/vendor/wasm/')});
  resources.pdfTask=task;
  task.onPassword=()=>job.cancel(Error('This PDF is password-protected. Unlock it in a trusted PDF application and retry.'));
@@ -47,7 +61,7 @@ export async function mount(root){
  const info=el('p',{class:'selected-files','aria-live':'polite',text:'No PDF selected.'});
  input.after(info);
  notice(root,'Printed English text only. Recognition depends on scan quality. Your PDF and extracted text are processed in this browser. Review the extracted text before use.');
- const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run on phones, 30 on desktop.'});
+ const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run at narrow widths or 500 at desktop widths.'});
  const orientationField=field('ocr-orientation','Scan orientation','select','auto',{options:[['auto','Automatic'],['0','Original'],['90','90°'],['180','180°'],['270','270°']]});
  const selectionField=field('ocr-selection','Pages','select','all',{options:[['all','All pages'],['range','Selected pages']]});
  const selection=selectionField.querySelector('select');
@@ -153,7 +167,11 @@ export async function mount(root){
    const pdfjs=await stage(loadPdf(),job,LIMIT.open,'PDF engine loading');
    const records=current;
    for(const index of indices){
-    job.check();progressInfo.textContent='Page '+(records.length+1)+' of '+indices.length+' (PDF page '+(index+1)+')';safeStatus('Reading page '+(index+1)+'…');
+    job.check();
+    if(records.length&&records.length%16===0){
+     await stage(pdf.cleanup(),job,LIMIT.cleanup,'PDF cache cleanup');
+    }
+    progressInfo.textContent='Page '+(records.length+1)+' of '+indices.length+' (PDF page '+(index+1)+')';safeStatus('Reading page '+(index+1)+'…');
     let p=null;
     try{
      p=await stage(pdf.getPage(index+1),job,LIMIT.page,'Page loading');resources.page=p;
@@ -221,6 +239,10 @@ export async function mount(root){
       // The unfiltered OCR result remains available for candidate comparison.
       const stride=c.width*4;
       for(let y=1;y<c.height-1;y++){
+       if(y%256===0){
+        await new Promise(resolve=>setTimeout(resolve,0));
+        job.check();
+       }
        for(let x=1;x<c.width-1;x++){
         const i=y*stride+x*4;
         if(d[i]<120&&d[i-stride-4]>240&&d[i-stride]>240&&d[i-stride+4]>240&&
@@ -234,7 +256,7 @@ export async function mount(root){
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':undefined,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
      if(job.reason||locked||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
@@ -280,6 +302,7 @@ export async function mount(root){
  }
  run.onclick=()=>recognize(false);
  retry.onclick=()=>{if(recovery&&recovery.file===file) return recognize(true);};
+ text.addEventListener('input',clearOutputs);
  copyBtn.onclick=async()=>{if(lifecycle.active)return;try{await copy(text.value)}catch(e){safeStatus(errorMessage(e),true)}};
  save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain;charset=utf-8'}),safeName(resultFile?.name||'recognized','-text','txt'));safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
  window.addEventListener('pagehide',()=>{leaving=true;lifecycle.active?.cancel(Error(STOP));clearOutputs();});

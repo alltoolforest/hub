@@ -1,6 +1,28 @@
 # Scanned PDF to Text V2 pre-deployment qualification
 
-**Decision: hold release.** The exact English model works end to end, and the development branch has a reproducible qualification suite. The higher file and page budgets, representative real-world accuracy, and physical-browser release checks remain open.
+## Final stabilization, 26 November 2026
+
+**Decision: HOLD.** Desktop mixed-document capacity is established on the browser test fixture. Physical mobile memory, native sharing, assistive technology, representative field accuracy, and production metrics still need qualification.
+
+- File input uses PDF.js range transport backed by browser-local File slices. The tool no longer reads a complete PDF into a main-thread buffer before opening. PDF.js can still allocate document-sized backing storage internally.
+- Clear PDF decode caches every 16 finished pages. The OCR worker remains shared within each job. Longer image preprocessing yields to the event loop and checks cancellation without changing the filter.
+- Mixed-page deduplication consumes only matching native occurrences, preserving repeated OCR lines beyond that count. Unrecognized raster sections on mixed pages receive a specific warning. Editing recognized text invalidates previously generated download links.
+- Desktop admission limits are 100 MiB and 500 pages. Narrow viewports retain 15 MiB and 10 pages pending physical-device qualification.
+- The original synthetic OCR corpus now includes invoice, inspection-form, statement, and memorandum prompts. The browser suite checks horizontal overflow at 320, 360, 390, 430, 768, 1024 and 1440 px. The lifecycle and recognition suite has 20 passing Node tests.
+- The exact model, both isolated PDF.js bundle checksums and vendor licenses matched the prior qualification evidence. Runtime dependency files were outside this change.
+
+| Mixed-document capacity test | Runs | Time | Text and page integrity | Peak process-tree RSS |
+| --- | ---: | --- | --- | ---: |
+| Chromium 131 desktop, 99.89 MiB and 500 pages | 2 | 15.00 s, 11.47 s | 0% CER, 500 pages in order each run | 1040.4 MiB |
+| Chromium 131 at 360 px, experimental budgets, 49.79 MiB and 100 pages | 2 | 4.69 s, 2.86 s | 0% CER, 100 pages in order each run | 921.7 MiB |
+
+The revised 210-page corpus yielded 0% CER for clean, office, digital, mixed and rotated fixtures. Degraded fixtures measured 0.40% CER and 2.75% WER. Skewed fixtures measured 0.27% CER and 1.83% WER. These are generated references.
+
+Peak RSS includes the browser, runner, and fixture construction, and may count shared pages more than once. It is neither an isolated WASM measurement nor an operating limit for physical phones. The workload includes unique scans, large uncompressed embedded images, mixed page dimensions, and native-text pages. It does not establish throughput for 500 dense raster-only pages.
+
+Reproduce with `python -u tests/scanned-pdf-ocr-capacity.py`. The `--mobile` variant uses a test-only cap override in a desktop browser and leaves shipping policy intact. The cross-browser qualification workflow runs both variants and the Chromium, Firefox and WebKit regression suite.
+
+## Prior qualification at 97faf96
 
 ## Implementation and scope
 
@@ -39,7 +61,7 @@ Integrated checks cover real OCR initialization, blank-page reporting, a two-col
 
 Axe reported zero automated WCAG rule violations on the resting tool at 360 and 1280 px. This covers the tested state only. The workspace now reserves its initial height while the module loads. In three local cold-load runs per viewport, CLS fell from 0.300 at 360 px and 0.101 at 1280 px to 0 at both widths. Local LCP samples ranged from 34 to 94 ms. Sampled interaction latency for expanding scan options was 16–24 ms. These localhost lab measurements do not represent production Core Web Vitals.
 
-## Remaining release checks
+## Remaining checks from the prior baseline
 
 - Current file admission limits remain 15 MiB at narrow widths and 40 MiB at wider widths. Raster stress verified the configured 10- and 30-page run counts for repeated clean scans. The target 50 MiB/100 pages on physical mobile and 100 MiB/500 pages on desktop, and full-size mixed-workload memory stability, remain unqualified.
 - Validate against varied real-world scans, complex tables and layouts, more languages for digital extraction, and larger mixed PDFs. Tiled OCR remains deferred pending evidence of accuracy gains within the memory budget.

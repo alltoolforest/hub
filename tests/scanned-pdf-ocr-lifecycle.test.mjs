@@ -19,3 +19,12 @@ test('resolved stage does not later cancel',async()=>{const j=createLifecycle().
 test('selected pages are deduplicated and processed in document order', () => {
  assert.deepEqual(boundedRanges('7, 3-5, 1, 4',8,8),[0,2,3,4,6]);
 });
+
+
+test('mixed extraction preserves repeated raster lines beyond native duplicates', async () => {
+ const {mergeMixed}=await import('../assets/js/scanned-pdf-ocr-quality.js');
+ const result=mergeMixed('Repeated heading\nNative only', 'Repeated heading\nRepeated heading\nScanned text\nScanned text');
+ assert.equal(result.text.split('Repeated heading').length-1,2);
+ assert.equal(result.text.split('Scanned text').length-1,2);
+ assert.equal(result.review,true);
+});

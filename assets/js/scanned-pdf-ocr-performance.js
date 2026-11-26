@@ -13,7 +13,7 @@ export function boundedRanges(text,count,limit){
  return [...selected].sort((a,b)=>a-b);
 }
 
-export function budgets(mobile){return {fileMB:mobile?15:40,pages:mobile?10:30,pixels:mobile?1500000:3000000,side:8192,sourceImagePixels:mobile?16000000:32000000,textChars:mobile?2000000:6000000};}
+export function budgets(mobile){return {fileMB:mobile?15:100,pages:mobile?10:500,pixels:mobile?1500000:3000000,side:8192,sourceImagePixels:mobile?16000000:32000000,textChars:mobile?2000000:6000000};}
 
 export function canvasDimensions(width,height,limits){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw Error('Invalid render dimensions.');

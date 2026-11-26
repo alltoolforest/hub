@@ -24,9 +24,19 @@ export function normalizeLine(s){return s.normalize('NFKC').toLowerCase().replac
 
 export function mergeMixed(native,ocr){
  // Retain exact native text, add unmatched OCR lines, never silently claim exact mixed layout.
- const lines=native.split(/\n/).filter(x=>x.trim()), keys=new Set(lines.map(normalizeLine));
+ const remaining=new Map();
+ for(const line of native.split(/\n/)){
+  const key=normalizeLine(line);
+  if(key)remaining.set(key,(remaining.get(key)||0)+1);
+ }
  const extra=[];
- for(const line of ocr.split(/\n/)){const key=normalizeLine(line);if(!key||keys.has(key))continue;extra.push(line);keys.add(key)}
+ for(const line of ocr.split(/\n/)){
+  const key=normalizeLine(line);
+  if(!key)continue;
+  const duplicates=remaining.get(key)||0;
+  if(duplicates)remaining.set(key,duplicates-1);
+  else extra.push(line);
+ }
  return {text:[native,extra.length?'[Additional OCR text — review reading order]\n'+extra.join('\n'):''].filter(Boolean).join('\n\n'),review:true};
 }
 

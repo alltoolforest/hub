@@ -23,6 +23,20 @@ LINES = [
 ]
 
 
+DOCUMENT_LINES = [
+    ['SUPPLY INVOICE 3048', 'Laboratory labels, 25 packets at $4.25',
+     'Packing charge $6.50. Deliver by 12 June.', 'Total amount due $112.75.'],
+    ['FIELD INSPECTION FORM', 'Facility: Birch Avenue Pump Station',
+     'Inspector: Anita Cole. Reference: A219.', 'Follow-up required before reopening.'],
+    ['MONTHLY ACCOUNT STATEMENT', 'Date      Description       Amount',
+     '12 May    Service credit    $26.00', '23 May    Deposit           $84.50',
+     'Closing balance $110.50.'],
+    ['TECHNICAL MEMORANDUM', 'The inspection covered three cooling units.',
+     'Each unit maintained pressure overnight.', 'Repeat checks are scheduled for Monday.',
+     'Retain the original readings for review.'],
+]
+
+
 def distance(expected, actual):
     row = list(range(len(actual) + 1))
     for index, item in enumerate(expected, 1):
@@ -42,10 +56,12 @@ def fixture(path, index):
         text = '\n'.join(LINES[(index + number) % 4:] + LINES[:(index + number) % 4])
         kind = 'digital'
         if number == 1:
+            if index >= 6:
+                text = '\n'.join(DOCUMENT_LINES[(index // 6 + index) % len(DOCUMENT_LINES)])
             kind = ['clean', 'office', 'degraded', 'rotated', 'skewed', 'mixed'][index % 6]
             image = Image.new('L', (1100, 1400), 255)
             fill = 80 if kind == 'degraded' else 0
-            ImageDraw.Draw(image).multiline_text((70, 160), text, font=ImageFont.truetype(FONT, 35),
+            ImageDraw.Draw(image).multiline_text((70, 160), text, font=ImageFont.truetype(FONT, 35 if index < 6 else 30),
                                                 fill=fill, spacing=16)
             if kind == 'office':
                 image = image.resize((550, 700))
@@ -138,6 +154,9 @@ def qualify(page, origin, directory, count, stress):
         page.get_by_role('button', name='Download TXT').click()
         page.get_by_role('link', name='Download', exact=False).last.click()
     assert Path(pending.value.path()).read_bytes() == corrected.encode('utf-8')
+    text_box.fill(corrected + '\n')
+    assert page.locator('#downloads a').count() == 0
+    text_box.fill(corrected)
     file_input.set_input_files({'name': 'invalid.pdf', 'mimeType': 'application/pdf', 'buffer': b'not a PDF'})
     page.get_by_text(re.compile('This file appears to be corrupted')).wait_for()
     assert text_box.input_value() == corrected
@@ -256,7 +275,11 @@ def qualify(page, origin, directory, count, stress):
     page.unroute('**/eng.traineddata.gz', deny_model)
     assert all(method in ('GET', 'HEAD') and url.startswith(origin + '/') for method, url in requests), requests
     assert not errors, errors
-    assert page.evaluate('document.documentElement.scrollWidth === innerWidth')
+    initial_viewport = page.viewport_size
+    for width in (320, 360, 390, 430, 768, 1024, 1440):
+        page.set_viewport_size({'width': width, 'height': initial_viewport['height']})
+        assert page.evaluate('document.documentElement.scrollWidth === innerWidth'), width
+    page.set_viewport_size(initial_viewport)
     print(f'Passed UTF-8 export, bad header, password rejection, oversized image reporting, '
           f'page order, viewport width and same-origin read-only network checks ({len(requests)} requests).')
 
