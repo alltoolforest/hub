@@ -1,3 +1,4 @@
+import {importPdfModule} from './module-loader.js?release=2026-11-26-load-recovery';
 import {createDownloadDelivery} from './download.js?release=2026-11-03-ios-save';
 import {detectFile} from './file-router.js';
 import {readDraft, writeDraft, clearDraft} from './drafts.js';
@@ -10,8 +11,32 @@ const title = root.querySelector('#document-v2-title');
 const recovery = root.querySelector('#document-v2-recovery');
 const actions = root.querySelector('#document-v2-actions');
 let session = null, timer = null, generation = 0, pendingSave = Promise.resolve(), actionBusy = false;
+const reloadEditor = document.createElement('button');
+reloadEditor.type = 'button';
+reloadEditor.textContent = 'Save draft and reload editor';
+reloadEditor.hidden = true;
+status.after(reloadEditor);
+reloadEditor.addEventListener('click', async () => {
+  if (actionBusy || pick.disabled) return;
+  actionBusy = true; pick.disabled = true; stage.inert = true; controls();
+  try {
+    clearTimeout(timer);
+    await session?.engine.ready?.();
+    await persist();
+    if (session) session.dirty = false;
+    window.location.reload();
+  } catch (error) {
+    say(error.message || 'Could not save the draft. Download your current document before reloading.', true);
+    reloadEditor.hidden = false;
+  } finally { actionBusy = false; pick.disabled = false; stage.inert = false; controls(); }
+});
+function reportOpenFailure(error) {
+  say(error.message || 'Could not open this file.', true);
+  reloadEditor.hidden = error.code !== 'PDF_MODULE_LOAD_FAILED';
+}
 
 function say(message, error = false) {
+  reloadEditor.hidden = true;
   status.textContent = message;
   status.classList.toggle('error', error);
 }
@@ -80,7 +105,9 @@ async function display() {
 async function open(file, draft = null) {
   const detected = await detectFile(file);
   if (draft && detected.format !== draft.format) throw new Error('Recovery file type has changed.');
-  const module = await import(`./engines/${detected.engine}.js${detected.engine==='pdf'?'?release=2026-11-13-layout-deletion':''}`);
+  const module = detected.engine==='pdf'
+    ? await importPdfModule(new URL('./engines/pdf.js?release=2026-11-26-load-recovery',import.meta.url))
+    : await import(`./engines/${detected.engine}.js`);
   const engine = await module.open(file, detected.format, draft?.snapshot);
   let initialSnapshot;
   try { if (draft) await engine.restore(draft.snapshot); initialSnapshot=await engine.snapshot(); } catch(error) { await engine.dispose?.(); throw error; }
@@ -110,7 +137,7 @@ pick.addEventListener('change', async () => {
   say('Checking and opening file…');
   pick.disabled = true;
   try { await open(file); await clearDraft().catch(() => say('File opened, but an earlier local draft could not be cleared.', true)); }
-  catch (error) { say(error.message || 'Could not open this file.', true); }
+  catch (error) { reportOpenFailure(error); }
   finally { pick.disabled = false; }
 });
 actions.addEventListener('click', async event => {
@@ -163,7 +190,7 @@ root.querySelector('#document-v2-restore').addEventListener('click', async () =>
   if(session?.dirty&&!confirm('Restore the saved draft and replace this editing session?'))return;
   actionBusy=true;pick.disabled=true;stage.inert=true;controls();
   try { const draft = await readDraft(); if (draft?.file) await open(draft.file, draft); }
-  catch (error) { say(error.message || 'Could not restore the local draft.', true); }
+  catch (error) { reportOpenFailure(error); }
   finally {actionBusy=false;pick.disabled=false;stage.inert=false;controls();}
 });
 root.querySelector('#document-v2-discard').addEventListener('click', async () => {

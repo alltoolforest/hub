@@ -1,3 +1,4 @@
+import {importPdfModule} from '../module-loader.js?release=2026-11-26-load-recovery';
 import {preparePdf} from '../pdf-unlock.js';
 import {pdfSearch} from '../pdf-search.js?release=2026-11-13-layout-deletion';
 import {pdfOcrSearch} from '../pdf-ocr-search.js';
@@ -10,10 +11,12 @@ const base = new URL('../../../../documents/document-editor-v2-lab/pdf-engine/',
 export async function open(file, format, recovery=null) {
   if(format !== 'pdf')throw new Error('Unsupported PDF format.');
   const prepared=await preparePdf(file,{recovery});file=prepared.file;
-  const [main,hybrid,precision,anchors,smart] = await Promise.all([
-    import(new URL('fortress/src/main.js?release=2026-11-13-layout-deletion',base)),import(new URL('ocr/hybrid-editor.js?release=2026-11-13-layout-deletion',base)),
-    import(new URL('fortress/src/font-size-precision.js',base)),import(new URL('fortress/src/insert-anchor-bridge.js',base)),
-    import(new URL('fortress/src/smart-line-insertion-v8.js?release=2026-11-13-layout-deletion',base))
+  // Resolve the shared native module before its hybrid static importer.
+  const main = await importPdfModule(new URL('fortress/src/main.js?release=2026-11-26-load-recovery',base));
+  const [hybrid,precision,anchors,smart] = await Promise.all([
+    importPdfModule(new URL('ocr/hybrid-editor.js?release=2026-11-26-load-recovery',base)),
+    importPdfModule(new URL('fortress/src/font-size-precision.js',base)),importPdfModule(new URL('fortress/src/insert-anchor-bridge.js',base)),
+    importPdfModule(new URL('fortress/src/smart-line-insertion-v8.js?release=2026-11-13-layout-deletion',base))
   ]);
   await main.configurePdfWorker(new URL('../../edit-pdf/fortress/vendor/pdf.worker.compat.mjs',base).href);
   for(const path of ['fortress/src/styles.css','fortress/src/font-size-precision.css','ocr/styles.css']){
