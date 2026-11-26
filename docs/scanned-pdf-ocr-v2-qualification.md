@@ -7,7 +7,7 @@
 - File input uses PDF.js range transport backed by browser-local File slices. The tool no longer reads a complete PDF into a main-thread buffer before opening. PDF.js can still allocate document-sized backing storage internally.
 - Clear PDF decode caches every 16 finished pages. The OCR worker remains shared within each job. Longer image preprocessing yields to the event loop and checks cancellation without changing the filter.
 - Mixed-page deduplication consumes only matching native occurrences, preserving repeated OCR lines beyond that count. Unrecognized raster sections on mixed pages receive a specific warning. Editing recognized text invalidates previously generated download links.
-- Desktop admission limits are 100 MiB and 500 pages. Narrow viewports retain 15 MiB and 10 pages pending physical-device qualification.
+- Desktop admission limits are 100 MiB and 500 pages. Narrow viewports and touch-first devices retain 15 MiB and 10 pages, including landscape phones with wide viewports, pending physical-device qualification.
 - The original synthetic OCR corpus now includes invoice, inspection-form, statement, and memorandum prompts. The browser suite checks horizontal overflow at 320, 360, 390, 430, 768, 1024 and 1440 px. The lifecycle and recognition suite has 20 passing Node tests.
 - The exact model, both isolated PDF.js bundle checksums and vendor licenses matched the prior qualification evidence. Runtime dependency files were outside this change.
 

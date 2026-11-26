@@ -8,6 +8,7 @@ import {recognitionEvidence,safeRenderPlan} from './scanned-pdf-ocr-layout.js';
 const LANG='assets/vendor/scanned-pdf-ocr/';
 const PDFJS=LANG+'pdfjs/';
 const loadPdf=()=>import(url(PDFJS+'pdf.min.mjs'));
+const constrainedDevice=()=>mobile()||matchMedia('(pointer: coarse) and (hover: none)').matches;
 const STOP='Cancelled. Previous results have been kept.';
 const LIMIT={read:30000,open:60000,init:120000,page:120000,cleanup:15000};
 async function dispose(fn){
@@ -15,9 +16,8 @@ async function dispose(fn){
  try {await Promise.race([Promise.resolve().then(fn),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Resource cleanup timed out. Reload before retrying.')),LIMIT.cleanup)})]);}
  finally {clearTimeout(timer);}
 }
-async function openDocument(file,job,resources){
- await stage(validateFile(file,budgets(mobile()).fileMB),job,LIMIT.read,'PDF validation');
- const limits=budgets(mobile());
+async function openDocument(file,job,resources,limits=budgets(constrainedDevice())){
+ await stage(validateFile(file,limits.fileMB),job,LIMIT.read,'PDF validation');
  const tail=await stage(file.slice(-4096).text(),job,LIMIT.read,'PDF trailer validation');
  if(!/(?:^|[\r\n])%%EOF(?:[\r\n\t \0]|$)/.test(tail))throw Error('This PDF appears truncated because its end-of-file marker is missing.');
  const pdfjs=await stage(loadPdf(),job,LIMIT.open,'PDF engine loading');
@@ -61,7 +61,7 @@ export async function mount(root){
  const info=el('p',{class:'selected-files','aria-live':'polite',text:'No PDF selected.'});
  input.after(info);
  notice(root,'Printed English text only. Recognition depends on scan quality. Your PDF and extracted text are processed in this browser. Review the extracted text before use.');
- const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run at narrow widths or 500 at desktop widths.'});
+ const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run on narrow or touch-first devices, or 500 on desktop.'});
  const orientationField=field('ocr-orientation','Scan orientation','select','auto',{options:[['auto','Automatic'],['0','Original'],['90','90°'],['180','180°'],['270','270°']]});
  const selectionField=field('ocr-selection','Pages','select','all',{options:[['all','All pages'],['range','Selected pages']]});
  const selection=selectionField.querySelector('select');
@@ -118,7 +118,7 @@ export async function mount(root){
   if(!candidate)return;
   file=null;recovery=null;pageCount=0;preview.hidden=true;preview.width=0;preview.height=0;root.querySelector('#ocr-recovery')?.remove();root.querySelector('#ocr-page-warnings')?.remove();info.textContent='Checking selected PDF…';sync();
   const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');const doc=await openDocument(candidate,job,resources);const p=await stage(doc.getPage(1),job,LIMIT.page,'Preview page');resources.page=p;const base=p.getViewport({scale:1});const view=p.getViewport({scale:Math.min(1,360/Math.max(base.width,base.height))});preview.width=Math.max(1,Math.ceil(view.width));preview.height=Math.max(1,Math.ceil(view.height));resources.render=p.render({canvasContext:preview.getContext('2d'),viewport:view,background:'rgb(255,255,255)'});await stage(resources.render.promise,job,LIMIT.page,'Preview rendering');resources.render=null;return {file:candidate,count:doc.numPages};});
-  if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;selection.value='all';range.value='1';rangeField.hidden=true;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(mobile()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(mobile()).pages;safeStatus('File ready. Only the first '+budgets(mobile()).pages+' pages are selected; change the range to process other pages.');}else safeStatus('File ready. All pages selected.');}
+  if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;selection.value='all';range.value='1';rangeField.hidden=true;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(constrainedDevice()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(constrainedDevice()).pages;safeStatus('File ready. Only the first '+budgets(constrainedDevice()).pages+' pages are selected; change the range to process other pages.');}else safeStatus('File ready. All pages selected.');}
   else {preview.hidden=true;preview.width=0;preview.height=0;info.textContent='No valid PDF selected. Previous results, if any, remain below.';}
   sync();
  });
@@ -126,7 +126,7 @@ export async function mount(root){
  async function recognize(retrying=false){
   if(!file||lifecycle.active||locked||initializing)return;
   if(!retrying&&text.value.trim()&&!window.confirm('A successful recognition run will replace the current editable text. Continue?'))return;
-  const selected=file,requested=selection.value==='all'?'1-'+pageCount:range.value.trim(),isMobile=mobile(),rotation=retrying?recovery.rotation:orientation.value,limits=budgets(isMobile);
+  const selected=file,requested=selection.value==='all'?'1-'+pageCount:range.value.trim(),isMobile=constrainedDevice(),rotation=retrying?recovery.rotation:orientation.value,limits=budgets(isMobile);
   const previous=retrying?recovery.records:null;
   const remainingTextBudget=limits.textChars-(previous||[]).filter(r=>r.state==='completed').reduce((n,r)=>n+r.text.length,0);
   let current=[],indices=[],attempted=false,abortNote='Job interrupted';
@@ -134,7 +134,7 @@ export async function mount(root){
   progress.value=0;progressInfo.textContent='Preparing recognition…';
   const recognized=await withJob(async(job,resources)=>{
    safeStatus('Opening PDF…');
-   const pdf=await openDocument(selected,job,resources);
+   const pdf=await openDocument(selected,job,resources,limits);
    indices=retrying?retryIndices(previous):boundedRanges(requested,pdf.numPages,limits.pages);
    if(indices.length>limits.pages||indices.some(i=>i<0||i>=pdf.numPages))throw Error('Choose fewer valid pages for this device.');
    attempted=true;
