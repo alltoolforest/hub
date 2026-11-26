@@ -1,0 +1,40 @@
+name: Scanned PDF OCR isolated qualification
+on:
+  push:
+    branches: [development/scanned-pdf-ocr-v2-task1]
+    paths:
+      - '.github/workflows/scanned-pdf-ocr-qualification.yml'
+      - 'assets/js/scanned-pdf-ocr*.js'
+      - 'scripts/provision-scanned-pdf-ocr-model.mjs'
+      - 'tests/scanned-pdf-ocr*'
+      - 'assets/vendor/scanned-pdf-ocr/**'
+      - 'documents/scanned-pdf-to-text/**'
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/scanned-pdf-ocr*.test.mjs
+      - run: node scripts/provision-scanned-pdf-ocr-model.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pymupdf==1.26.6 pillow==13.0.0 playwright==1.62.0
+      - run: python -m playwright install --with-deps chromium firefox webkit
+      - run: python -u tests/scanned-pdf-ocr-browser.py --stress
+      - run: python -u tests/scanned-pdf-ocr-browser.py --mobile --count 6
+      - run: python -u tests/scanned-pdf-ocr-browser.py --browser firefox --count 6
+      - run: python -u tests/scanned-pdf-ocr-browser.py --browser webkit --mobile --count 6
+      - run: python -u tests/scanned-pdf-ocr-capacity.py
+      - run: python -u tests/scanned-pdf-ocr-capacity.py --mobile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanned-pdf-ocr-model
+          path: assets/vendor/scanned-pdf-ocr/
+          if-no-files-found: error

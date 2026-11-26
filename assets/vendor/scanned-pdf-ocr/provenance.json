@@ -1,0 +1,13 @@
+{
+  "package": "@tesseract.js-data/eng@1.0.0",
+  "registry": "https://registry.npmjs.org/",
+  "packageIntegrity": "sha512-mbTumm6KQPUHyzTPQaF3ObXYnx0SqqfV2nabqFVQBwD6Kl7PhGSLSzOlfFTWy0P3BjghaSKA2W9GB19Jk+ZcTg==",
+  "model": "4.0.0_best_int/eng.traineddata.gz",
+  "modelSha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91",
+  "modelBytes": 2952873,
+  "modelSource": "https://github.com/naptha/tessdata/blob/b86746569320a6103cea84cc2b8d9ee74f0f45d3/4.0.0_best_int/eng.traineddata.gz",
+  "licenseSource": "https://github.com/tesseract-ocr/tessdata_best/blob/e9f15884bc503cf905c8a1dbbc9cb14458152628/LICENSE",
+  "licenseSha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+  "packageLicense": "MIT",
+  "modelLicense": "Apache-2.0"
+}
