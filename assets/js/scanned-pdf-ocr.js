@@ -54,12 +54,12 @@ export async function mount(root){
  preview.style.maxWidth='100%';preview.style.height='auto';
  root.append(preview);
  const orientation=orientationField.querySelector('select');
- const range=rangeField.querySelector('input');
+ const range=rangeField.querySelector('input');const hint=rangeField.querySelector('small');if(hint){hint.id='ocr-range-hint';range.setAttribute('aria-describedby',hint.id);}
  const text=el('textarea',{id:'ocr-text',rows:15,'aria-label':'Editable recognized text'});
  const resultInfo=el('p',{'aria-live':'polite',text:'No recognition result yet.'});
  const progress=el('progress',{max:100,value:0,'aria-label':'Document recognition progress'});
  const progressInfo=el('p',{text:'No recognition job running.'});
- root.append(progress,progressInfo);
+ progress.style.width='100%';progressInfo.setAttribute('role','status');root.append(progress,progressInfo);
  const run=el('button',{type:'button',class:'primary',text:'Recognize text'});
  const cancel=el('button',{type:'button',text:'Cancel',disabled:true});
  const retry=el('button',{type:'button',text:'Retry failed pages',disabled:true});
@@ -99,7 +99,7 @@ export async function mount(root){
   if(!candidate)return;
   file=null;recovery=null;pageCount=0;preview.hidden=true;preview.width=0;preview.height=0;root.querySelector('#ocr-recovery')?.remove();info.textContent='Checking selected PDF…';sync();
   const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');const doc=await openDocument(candidate,job,resources);const p=await stage(doc.getPage(1),job,LIMIT.page,'Preview page');resources.page=p;const base=p.getViewport({scale:1});const view=p.getViewport({scale:Math.min(1,360/Math.max(base.width,base.height))});preview.width=Math.max(1,Math.ceil(view.width));preview.height=Math.max(1,Math.ceil(view.height));resources.render=p.render({canvasContext:preview.getContext('2d'),viewport:view,background:'rgb(255,255,255)'});await stage(resources.render.promise,job,LIMIT.page,'Preview rendering');resources.render=null;return {file:candidate,count:doc.numPages};});
-  if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(mobile()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(mobile()).pages;}safeStatus('File ready.');}
+  if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;selection.value='all';range.value='1';rangeField.hidden=true;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(mobile()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(mobile()).pages;safeStatus('File ready. Only the first '+budgets(mobile()).pages+' pages are selected; change the range to process other pages.');}else safeStatus('File ready. All pages selected.');}
   else {preview.hidden=true;preview.width=0;preview.height=0;info.textContent='No valid PDF selected. Previous results, if any, remain below.';}
   sync();
  });
@@ -156,6 +156,10 @@ export async function mount(root){
      const native=nativeText(content.items);
      const ops=await stage(p.getOperatorList(),job,LIMIT.page,'Page classification');
      const kind=classifyPage(native,ops.fnArray,pdfjs.OPS||{});
+     // PDF.js may omit oversized images rather than reject the page. Do not certify
+     // raster/mixed pages as complete solely from its rendered output.
+     const imagePresent=classifyPage('probe',ops.fnArray,pdfjs.OPS||{})==='mixed';
+     const imageReview=imagePresent;
      if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},remainingTextBudget);continue;}
      const angle=rotation==='auto'?0:Number(rotation);
      const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
@@ -168,7 +172,7 @@ export async function mount(root){
      const pixels=context.getImageData(0,0,c.width,c.height);
      let ink=0;
      for(let i=0;i<pixels.data.length;i+=4){if(pixels.data[i]<245||pixels.data[i+1]<245||pixels.data[i+2]<245)ink++;}
-     if(!ink&&!native&&kind==='scan'&&!ops.fnArray.some(op=>[pdfjs.OPS?.paintImageXObject,pdfjs.OPS?.paintInlineImageXObject,pdfjs.OPS?.paintImageMaskXObject].filter(Number.isFinite).includes(op))){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     if(!ink&&!native&&kind==='scan'&&!imagePresent){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
      const options={rotateAuto:rotation==='auto'};
@@ -183,10 +187,10 @@ export async function mount(root){
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:imageReview||merged.review||best.confidence===null||best.confidence<75||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
-     if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote))throw e;
+     if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
      // A failed page is recoverable only after all active page resources are released.
      records.push({page:index+1,state:'failed',text:'',note:'Page processing failed; retry this page'});
     }finally{
@@ -213,8 +217,8 @@ export async function mount(root){
     const replace=el('button',{type:'button',text:'Replace editable text with recovered result'});
     const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
     root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
-    replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.skipped+' skipped.';panel.remove();};
-   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';}
+    replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped.';panel.remove();};
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review.';}
   }
   if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
   sync();
