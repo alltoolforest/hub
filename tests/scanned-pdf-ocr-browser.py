@@ -74,12 +74,22 @@ def qualify(page, origin, directory, count, stress):
     errors = []
     page.on('request', lambda request: requests.append((request.method, request.url)))
     page.on('pageerror', lambda error: errors.append(str(error)))
+    page.add_init_script("""window.ocrLayoutShift = 0;
+        if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
+            new PerformanceObserver(list => {
+                for (const event of list.getEntries()) {
+                    if (!event.hadRecentInput) window.ocrLayoutShift += event.value;
+                }
+            }).observe({type: 'layout-shift', buffered: true});
+        }""")
     page.goto(origin + '/documents/scanned-pdf-to-text/')
     page.on('dialog', lambda dialog: dialog.accept())
     page.get_by_role('button', name='Recognize text').wait_for()
     assert page.evaluate("""() => [...document.querySelectorAll('#workspace button, #workspace select, #workspace summary')]
         .every(element => element.getBoundingClientRect().height >= 44)""")
     assert page.get_by_role('textbox', name='Editable recognized text').is_visible()
+    page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    assert page.evaluate('window.ocrLayoutShift') <= .1
     file_input = page.locator('input[type=file]')
     text_box = page.locator('#ocr-text')
     run = page.get_by_role('button', name='Recognize text')

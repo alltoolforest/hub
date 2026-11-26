@@ -37,6 +37,8 @@ Reference texts were scored with Levenshtein distance after collapsing formattin
 
 Integrated checks cover real OCR initialization, blank-page reporting, a two-column fixture, malformed and truncated inputs, protected PDF rejection, oversized-image continuation, retry without overwriting text, cancellation, injected model fetch failure, edited TXT byte verification, viewport width and same-origin requests. The tested flows used only same-origin GET and HEAD. The PDF.js version is outside the affected range of CVE-2024-4367. The OCR viewer creates no PDF script sandbox or interactive PDF annotation UI. A worker that fails during initial setup can still require a reload because Tesseract.js exposes the worker handle only after setup.
 
+Axe reported zero automated WCAG rule violations on the resting tool at 360 and 1280 px. This covers the tested state only. The workspace now reserves its initial height while the module loads. In three local cold-load runs per viewport, CLS fell from 0.300 at 360 px and 0.101 at 1280 px to 0 at both widths. Local LCP samples ranged from 34 to 94 ms. Sampled interaction latency for expanding scan options was 16–24 ms. These localhost lab measurements do not represent production Core Web Vitals.
+
 ## Remaining release checks
 
 - Current file admission limits remain 15 MiB at narrow widths and 40 MiB at wider widths. Raster stress verified the configured 10- and 30-page run counts for repeated clean scans. The target 50 MiB/100 pages on physical mobile and 100 MiB/500 pages on desktop, and full-size mixed-workload memory stability, remain unqualified.
