@@ -2,6 +2,8 @@ import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,outp
 import {pageRanges} from './math.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
 
+import {nativeText,classifyPage,renderPlan,mergeMixed,candidate,chooseCandidate,summarize} from './scanned-pdf-ocr-quality.js';
+
 const LANG='assets/vendor/scanned-pdf-ocr/';
 const STOP='Cancelled. Previous results have been kept.';
 const LIMIT={read:30000,open:60000,init:120000,page:120000,cleanup:15000};
@@ -40,7 +42,9 @@ export async function mount(root){
  input.after(info);
  notice(root,'Printed English text only. Recognition depends on scan quality. Your PDF and extracted text are processed in this browser. Review the extracted text before use.');
  const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run on phones, 30 on desktop.'});
- root.append(rangeField);
+ const orientationField=field('ocr-orientation','Scan orientation','select','auto',{options:[['auto','Automatic'],['0','Original'],['90','90°'],['180','180°'],['270','270°']]});
+ root.append(rangeField,orientationField);
+ const orientation=orientationField.querySelector('select');
  const range=rangeField.querySelector('input');
  const text=el('textarea',{id:'ocr-text',rows:15,'aria-label':'Editable recognized text'});
  const resultInfo=el('p',{'aria-live':'polite',text:'No recognition result yet.'});
@@ -51,7 +55,7 @@ export async function mount(root){
  const save=el('button',{type:'button',text:'Download TXT'});
  root.append(el('div',{class:'actions'},[run,cancel,copyBtn,save]));
  setupStatus(root);downloads(root);
- const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;root.setAttribute('aria-busy',String(busy));};
+ const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;orientation.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;root.setAttribute('aria-busy',String(busy));};
  const safeStatus=(message,error=false)=>{if(!leaving)status(message,error);};
  async function cleanup(resources){
   let failed=false;
@@ -90,12 +94,14 @@ export async function mount(root){
  cancel.onclick=()=>{lifecycle.active?.cancel(Error(STOP));safeStatus('Cancelling…');};
  run.onclick=async()=>{
   if(!file||lifecycle.active||locked||initializing)return;
-  const selected=file,requested=range.value.trim(),isMobile=mobile();
+  const selected=file,requested=range.value.trim(),isMobile=mobile(),rotation=orientation.value;
   const recognized=await withJob(async(job,resources)=>{
    safeStatus('Opening PDF…');
    const pdf=await openDocument(selected,job,resources);
    const indices=pageRanges(requested,pdf.numPages);
    if(indices.length>(isMobile?10:30))throw Error('Choose fewer pages for this device.');
+   const getWorker=async()=>{
+   if(resources.worker)return resources.worker;
    safeStatus('Checking local OCR model…');await ensureLocalModel(job);
    safeStatus('Loading OCR engine…');const T=await stage(load('ocr'),job,LIMIT.init,'OCR engine loading');
    job.check();
@@ -118,24 +124,57 @@ export async function mount(root){
     // Fail closed after an interrupted initialization rather than risk overlap.
     locked=true;throw Error((e?.message||'OCR initialization failed.')+' Reload the page before retrying.');
    }
-   const pages=[];
+   return resources.worker;
+   };
+   const pdfjs=await stage(load('pdfjs'),job,LIMIT.open,'PDF engine loading');
+   const records=[];
    for(const index of indices){
-    job.check();safeStatus('Recognizing page '+(index+1)+'…');
+    job.check();safeStatus('Reading page '+(index+1)+'…');
     const p=await stage(pdf.getPage(index+1),job,LIMIT.page,'Page loading');resources.page=p;
-    const base=p.getViewport({scale:1}),scale=Math.min(isMobile?1.3:2,Math.sqrt((isMobile?1.5e6:3e6)/(base.width*base.height)));
-    const view=p.getViewport({scale}),c=el('canvas',{width:Math.ceil(view.width),height:Math.ceil(view.height)});resources.canvas=c;
-    const context=c.getContext('2d');if(!context)throw Error('Could not create a rendering canvas.');
-    resources.render=p.render({canvasContext:context,viewport:view});
-    await stage(resources.render.promise,job,LIMIT.page,'Page rendering');resources.render=null;
-    const r=await stage(resources.worker.recognize(c),job,LIMIT.page,'Page recognition');
-    pages.push('Page '+(index+1)+'\n'+r.data.text+'\n');
-    c.width=c.height=0;resources.canvas=null;p.cleanup();resources.page=null;
+    try{
+     const content=await stage(p.getTextContent(),job,LIMIT.page,'Text inspection');
+     const native=nativeText(content.items);
+     const ops=await stage(p.getOperatorList(),job,LIMIT.page,'Page classification');
+     const kind=classifyPage(native,ops.fnArray,pdfjs.OPS||{});
+     if(kind==='digital'){records.push({page:index+1,state:'completed',text:native});continue;}
+     const angle=rotation==='auto'?0:Number(rotation);
+     const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
+     const view=p.getViewport({scale:renderPlan(base.width,base.height,isMobile),rotation:(p.rotate+angle)%360});
+     const c=el('canvas',{width:Math.max(1,Math.floor(view.width)),height:Math.max(1,Math.floor(view.height))});resources.canvas=c;
+     const context=c.getContext('2d',{willReadFrequently:true});if(!context)throw Error('Could not create a rendering canvas.');
+     resources.render=p.render({canvasContext:context,viewport:view,background:'rgb(255,255,255)'});
+     await stage(resources.render.promise,job,LIMIT.page,'Page rendering');resources.render=null;
+     const pixels=context.getImageData(0,0,c.width,c.height);
+     let ink=0;
+     for(let i=0;i<pixels.data.length;i+=4){if(pixels.data[i]<245||pixels.data[i+1]<245||pixels.data[i+2]<245)ink++;}
+     if(!ink&&!native){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     const worker=await getWorker();
+     safeStatus('Recognizing page '+(index+1)+'…');
+     const options={rotateAuto:rotation==='auto'};
+     let best=candidate((await stage(worker.recognize(c,options),job,LIMIT.page,'Page recognition')).data);
+     if(!best.text||best.confidence===null||best.confidence<75){
+      // A single conservative contrast retry, without changing original PDF or dimensions.
+      const d=pixels.data;
+      for(let i=0;i<d.length;i+=4){const gray=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.2+128));d[i]=d[i+1]=d[i+2]=v;}
+      context.putImageData(pixels,0,0);
+      const second=candidate((await stage(worker.recognize(c,options),job,LIMIT.page,'Quality retry')).data);
+      best=chooseCandidate(best,second);
+     }
+     if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
+     const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
+     records.push({page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text});
+    }finally{
+     if(!resources.render){if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}p.cleanup();resources.page=null;}
+    }
    }
-   return pages.join('');
+   return summarize(records);
+
   });
   if(recognized&&!leaving){
-   clearOutputs();text.value=recognized.value;resultInfo.textContent='Result from: '+selected.name;
-   safeStatus(text.value.trim()?'Text recognized. Review and correct it before export.':'No text recognized. Try a clearer image.');
+   const result=recognized.value,counts=result.counts;
+   if(!result.actual){safeStatus('No text recognized. '+counts.blank+' blank, '+counts.failed+' unrecognized pages. Previous results preserved.',true);return;}
+   clearOutputs();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';
+   safeStatus(counts.failed||counts.review?'Recognition finished with warnings. Review page results and names or numbers before export.':'Text recognized. Review and correct it before export.',!!counts.failed);
   }
  };
  copyBtn.onclick=async()=>{if(lifecycle.active)return;try{await copy(text.value)}catch(e){safeStatus(errorMessage(e),true)}};
