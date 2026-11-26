@@ -2,7 +2,8 @@ import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,outp
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
 
-import {nativeText,classifyPage,renderPlan,mergeMixed,candidate,chooseCandidate,summarize} from './scanned-pdf-ocr-quality.js';
+import {nativeText,classifyPage,mergeMixed,chooseCandidate,summarize} from './scanned-pdf-ocr-quality.js';
+import {recognitionEvidence,safeRenderPlan} from './scanned-pdf-ocr-layout.js';
 
 const LANG='assets/vendor/scanned-pdf-ocr/';
 const STOP='Cancelled. Previous results have been kept.';
@@ -163,7 +164,8 @@ export async function mount(root){
      if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},remainingTextBudget);continue;}
      const angle=rotation==='auto'?0:Number(rotation);
      const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
-     const view=p.getViewport({scale:renderPlan(base.width,base.height,isMobile),rotation:(p.rotate+angle)%360});
+     const plan=safeRenderPlan(base.width,base.height,isMobile);
+     const view=p.getViewport({scale:plan.scale,rotation:(p.rotate+angle)%360});
      const dims=canvasDimensions(view.width,view.height,limits);
      const c=el('canvas',{width:dims.width,height:dims.height});resources.canvas=c;
      const context=c.getContext('2d',{willReadFrequently:true});if(!context)throw Error('Could not create a rendering canvas.');
@@ -176,18 +178,18 @@ export async function mount(root){
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
      const options={rotateAuto:rotation==='auto'};
-     let best=candidate((await stage(worker.recognize(c,options),job,LIMIT.page,'Page recognition')).data);
-     if(!best.text||best.confidence===null||best.confidence<75){
+     let best=recognitionEvidence((await stage(worker.recognize(c,options,{text:true,tsv:true}),job,LIMIT.page,'Page recognition')).data);
+     if(!best.text||best.confidence===null||best.confidence<75||best.uncertain>0){
       // A single conservative contrast retry, without changing original PDF or dimensions.
       const d=pixels.data;
       for(let i=0;i<d.length;i+=4){const gray=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.2+128));d[i]=d[i+1]=d[i+2]=v;}
       context.putImageData(pixels,0,0);
-      const second=candidate((await stage(worker.recognize(c,options),job,LIMIT.page,'Quality retry')).data);
+      const second=recognitionEvidence((await stage(worker.recognize(c,options,{text:true,tsv:true}),job,LIMIT.page,'Quality retry')).data);
       best=chooseCandidate(best,second);
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:imageReview||merged.review||best.confidence===null||best.confidence<75||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,review:imageReview||merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
      if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
@@ -208,6 +210,7 @@ export async function mount(root){
   if(!recognized){const done=new Set(current.map(r=>r.page));for(const i of indices)if(!done.has(i+1))current.push({page:i+1,state:'skipped',text:'',note:'Job interrupted before page completed'});}
   const records=previous?mergeRetry(previous,current):current;
   const result=summarize(records),counts=result.counts;
+  const uncertain=records.reduce((sum,r)=>sum+(r.uncertain||0),0);
   recovery={file:selected,rotation,records};
   progressInfo.textContent='Processed '+(counts.completed+counts.blank)+' of '+records.length+' selected pages. '+Math.round(performance.now()-start)+' ms total'+(workerReady!==null?' · OCR initialization '+Math.round(workerReady-workerStart)+' ms':'')+'.';
   // On retry, never overwrite manually edited output. Keep recovered text separately until explicit review.
@@ -218,7 +221,7 @@ export async function mount(root){
     const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
     root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
     replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped.';panel.remove();};
-   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review.';}
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review · '+uncertain+' low-confidence OCR words (check against original).';}
   }
   if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
   sync();
