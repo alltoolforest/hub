@@ -109,9 +109,15 @@ export async function mount(root){
    }catch(e){initializing=false;throw e;}
    // If initialization cannot be interrupted, do not permit another worker until it settles.
    pending.then(()=>{initializing=false;sync();},()=>{initializing=false;sync();});
-   resources.worker=await stage(pending,job,LIMIT.init,'OCR worker initialization',async worker=>{
-    try{await dispose(()=>worker.terminate());}catch{locked=true;}finally{sync();}
-   });
+   try{
+    resources.worker=await stage(pending,job,LIMIT.init,'OCR worker initialization',async worker=>{
+     try{await dispose(()=>worker.terminate());}catch{locked=true;}finally{sync();}
+    });
+   }catch(e){
+    // The library does not expose its worker handle until initialization resolves.
+    // Fail closed after an interrupted initialization rather than risk overlap.
+    locked=true;throw Error((e?.message||'OCR initialization failed.')+' Reload the page before retrying.');
+   }
    const pages=[];
    for(const index of indices){
     job.check();safeStatus('Recognizing page '+(index+1)+'…');
