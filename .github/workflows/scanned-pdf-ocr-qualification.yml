@@ -1,0 +1,27 @@
+name: Scanned PDF OCR isolated qualification
+on:
+  push:
+    branches: [development/scanned-pdf-ocr-v2-task1]
+    paths:
+      - '.github/workflows/scanned-pdf-ocr-qualification.yml'
+      - 'assets/js/scanned-pdf-ocr*.js'
+      - 'scripts/provision-scanned-pdf-ocr-model.mjs'
+      - 'tests/scanned-pdf-ocr*.mjs'
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/scanned-pdf-ocr*.test.mjs
+      - run: node scripts/provision-scanned-pdf-ocr-model.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanned-pdf-ocr-model
+          path: assets/vendor/scanned-pdf-ocr/
+          if-no-files-found: error
