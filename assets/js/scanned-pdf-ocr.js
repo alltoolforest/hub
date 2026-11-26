@@ -1,4 +1,4 @@
-import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage} from './core.js';
+import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage,safeName} from './core.js';
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
 
@@ -37,29 +37,37 @@ async function ensureLocalModel(job){
 
 export async function mount(root){
  const lifecycle=createLifecycle();
- let file=null,locked=false,initializing=false,leaving=false,recovery=null;
+ let file=null,locked=false,initializing=false,leaving=false,recovery=null,pageCount=0,resultFile=null;
  const input=fileInput(root,'.pdf',false,'Open a scanned PDF');
  const info=el('p',{class:'selected-files','aria-live':'polite',text:'No PDF selected.'});
  input.after(info);
  notice(root,'Printed English text only. Recognition depends on scan quality. Your PDF and extracted text are processed in this browser. Review the extracted text before use.');
  const rangeField=field('ranges','Pages to recognize','text','1',{hint:'For example 1-3,5. Up to 10 pages per run on phones, 30 on desktop.'});
  const orientationField=field('ocr-orientation','Scan orientation','select','auto',{options:[['auto','Automatic'],['0','Original'],['90','90°'],['180','180°'],['270','270°']]});
- root.append(rangeField,orientationField);
+ const selectionField=field('ocr-selection','Pages','select','all',{options:[['all','All pages'],['range','Selected pages']]});
+ const selection=selectionField.querySelector('select');
+ const advanced=el('details',{},[el('summary',{text:'Scan orientation options'}),orientationField]);
+ root.append(selectionField,rangeField,advanced);
+ rangeField.hidden=true;
+ selection.onchange=()=>{rangeField.hidden=selection.value!=='range';};
+ const preview=el('canvas',{'aria-label':'First page preview',role:'img',hidden:true});
+ preview.style.maxWidth='100%';preview.style.height='auto';
+ root.append(preview);
  const orientation=orientationField.querySelector('select');
  const range=rangeField.querySelector('input');
  const text=el('textarea',{id:'ocr-text',rows:15,'aria-label':'Editable recognized text'});
  const resultInfo=el('p',{'aria-live':'polite',text:'No recognition result yet.'});
  const progress=el('progress',{max:100,value:0,'aria-label':'Document recognition progress'});
  const progressInfo=el('p',{text:'No recognition job running.'});
- root.append(progress,progressInfo,resultInfo,text);
+ root.append(progress,progressInfo);
  const run=el('button',{type:'button',class:'primary',text:'Recognize text'});
  const cancel=el('button',{type:'button',text:'Cancel',disabled:true});
  const retry=el('button',{type:'button',text:'Retry failed pages',disabled:true});
  const copyBtn=el('button',{type:'button',text:'Copy text'});
  const save=el('button',{type:'button',text:'Download TXT'});
- root.append(el('div',{class:'actions'},[run,cancel,retry,copyBtn,save]));
+ root.append(el('div',{class:'actions'},[run,cancel,retry]),el('h2',{text:'Recognized text'}),resultInfo,text,el('div',{class:'actions'},[copyBtn,save]));
  setupStatus(root);downloads(root);
- const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;orientation.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;retry.disabled=busy||locked||initializing||!recovery||!file||recovery.file!==file||!retryIndices(recovery.records).length;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;root.setAttribute('aria-busy',String(busy));};
+ const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;selection.disabled=busy||locked;orientation.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;retry.disabled=busy||locked||initializing||!recovery||!file||recovery.file!==file||!retryIndices(recovery.records).length;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;progressInfo.setAttribute('aria-busy',String(busy));};
  const safeStatus=(message,error=false)=>{if(!leaving)status(message,error);};
  async function cleanup(resources){
   let failed=false;
@@ -89,17 +97,19 @@ export async function mount(root){
   if(lifecycle.active||locked||initializing)return;
   const candidate=input.files?.[0];input.value='';
   if(!candidate)return;
-  file=null;recovery=null;info.textContent='Checking selected PDF…';sync();
-  const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');await openDocument(candidate,job,resources);return candidate;});
-  if(checked&&!leaving){file=checked.value;info.textContent='Selected: '+file.name;safeStatus('File ready.');}
-  else info.textContent='No valid PDF selected. Previous results, if any, remain below.';
+  file=null;recovery=null;pageCount=0;preview.hidden=true;preview.width=0;preview.height=0;root.querySelector('#ocr-recovery')?.remove();info.textContent='Checking selected PDF…';sync();
+  const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');const doc=await openDocument(candidate,job,resources);const p=await stage(doc.getPage(1),job,LIMIT.page,'Preview page');resources.page=p;const base=p.getViewport({scale:1});const view=p.getViewport({scale:Math.min(1,360/Math.max(base.width,base.height))});preview.width=Math.max(1,Math.ceil(view.width));preview.height=Math.max(1,Math.ceil(view.height));resources.render=p.render({canvasContext:preview.getContext('2d'),viewport:view,background:'rgb(255,255,255)'});await stage(resources.render.promise,job,LIMIT.page,'Preview rendering');resources.render=null;return {file:candidate,count:doc.numPages};});
+  if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(mobile()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(mobile()).pages;}safeStatus('File ready.');}
+  else {preview.hidden=true;preview.width=0;preview.height=0;info.textContent='No valid PDF selected. Previous results, if any, remain below.';}
   sync();
  });
  cancel.onclick=()=>{lifecycle.active?.cancel(Error(STOP));safeStatus('Cancelling…');};
  async function recognize(retrying=false){
   if(!file||lifecycle.active||locked||initializing)return;
-  const selected=file,requested=range.value.trim(),isMobile=mobile(),rotation=retrying?recovery.rotation:orientation.value,limits=budgets(isMobile);
+  if(!retrying&&text.value.trim()&&!window.confirm('A successful recognition run will replace the current editable text. Continue?'))return;
+  const selected=file,requested=selection.value==='all'?'1-'+pageCount:range.value.trim(),isMobile=mobile(),rotation=retrying?recovery.rotation:orientation.value,limits=budgets(isMobile);
   const previous=retrying?recovery.records:null;
+  const remainingTextBudget=limits.textChars-(previous||[]).filter(r=>r.state==='completed').reduce((n,r)=>n+r.text.length,0);
   let current=[],indices=[],attempted=false,abortNote='Job interrupted';
   const start=performance.now();let workerStart=null,workerReady=null;
   progress.value=0;progressInfo.textContent='Preparing recognition…';
@@ -146,7 +156,7 @@ export async function mount(root){
      const native=nativeText(content.items);
      const ops=await stage(p.getOperatorList(),job,LIMIT.page,'Page classification');
      const kind=classifyPage(native,ops.fnArray,pdfjs.OPS||{});
-     if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},limits.textChars);continue;}
+     if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},remainingTextBudget);continue;}
      const angle=rotation==='auto'?0:Number(rotation);
      const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
      const view=p.getViewport({scale:renderPlan(base.width,base.height,isMobile),rotation:(p.rotate+angle)%360});
@@ -158,7 +168,7 @@ export async function mount(root){
      const pixels=context.getImageData(0,0,c.width,c.height);
      let ink=0;
      for(let i=0;i<pixels.data.length;i+=4){if(pixels.data[i]<245||pixels.data[i+1]<245||pixels.data[i+2]<245)ink++;}
-     if(!ink&&!native){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     if(!ink&&!native&&kind==='scan'&&!ops.fnArray.some(op=>[pdfjs.OPS?.paintImageXObject,pdfjs.OPS?.paintInlineImageXObject,pdfjs.OPS?.paintImageMaskXObject].filter(Number.isFinite).includes(op))){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
      const options={rotateAuto:rotation==='auto'};
@@ -173,7 +183,7 @@ export async function mount(root){
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text},limits.textChars);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
      if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote))throw e;
@@ -203,8 +213,8 @@ export async function mount(root){
     const replace=el('button',{type:'button',text:'Replace editable text with recovered result'});
     const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
     root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
-    replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;clearOutputs();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.skipped+' skipped.';panel.remove();};
-   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';}
+    replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.skipped+' skipped.';panel.remove();};
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';}
   }
   if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
   sync();
@@ -212,7 +222,7 @@ export async function mount(root){
  run.onclick=()=>recognize(false);
  retry.onclick=()=>{if(recovery&&recovery.file===file) return recognize(true);};
  copyBtn.onclick=async()=>{if(lifecycle.active)return;try{await copy(text.value)}catch(e){safeStatus(errorMessage(e),true)}};
- save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain'}),'recognized-text.txt');safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
+ save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain'}),safeName(resultFile?.name||'recognized','-text','txt'));safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
  window.addEventListener('pagehide',()=>{leaving=true;lifecycle.active?.cancel(Error(STOP));clearOutputs();},{once:true});
  sync();
 }
