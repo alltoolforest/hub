@@ -6,6 +6,8 @@ import {nativeText,classifyPage,mergeMixed,chooseCandidate,summarize} from './sc
 import {recognitionEvidence,safeRenderPlan} from './scanned-pdf-ocr-layout.js';
 
 const LANG='assets/vendor/scanned-pdf-ocr/';
+const PDFJS=LANG+'pdfjs/';
+const loadPdf=()=>import(url(PDFJS+'pdf.min.mjs'));
 const STOP='Cancelled. Previous results have been kept.';
 const LIMIT={read:30000,open:60000,init:120000,page:120000,cleanup:15000};
 async function dispose(fn){
@@ -14,12 +16,14 @@ async function dispose(fn){
  finally {clearTimeout(timer);}
 }
 async function openDocument(file,job,resources){
- await stage(validateFile(file,mobile()?15:40),job,LIMIT.read,'PDF validation');
+ await stage(validateFile(file,budgets(mobile()).fileMB),job,LIMIT.read,'PDF validation');
  const limits=budgets(mobile());
+ const tail=await stage(file.slice(-4096).text(),job,LIMIT.read,'PDF trailer validation');
+ if(!/(?:^|[\r\n])%%EOF(?:[\r\n\t \0]|$)/.test(tail))throw Error('This PDF appears truncated because its end-of-file marker is missing.');
  const bytes=await stage(file.arrayBuffer(),job,LIMIT.read,'PDF reading');
- const pdfjs=await stage(load('pdfjs'),job,LIMIT.open,'PDF engine loading');
+ const pdfjs=await stage(loadPdf(),job,LIMIT.open,'PDF engine loading');
  job.check();
- pdfjs.GlobalWorkerOptions.workerSrc=url('assets/vendor/pdf.worker.mjs');
+ pdfjs.GlobalWorkerOptions.workerSrc=url(PDFJS+'pdf.worker.min.mjs');
  const task=pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,stopAtErrors:true,maxImageSize:limits.sourceImagePixels,
    cMapUrl:url('assets/vendor/cmaps/'),cMapPacked:true,standardFontDataUrl:url('assets/vendor/standard_fonts/'),wasmUrl:url('assets/vendor/wasm/')});
  resources.pdfTask=task;
@@ -98,7 +102,7 @@ export async function mount(root){
   if(lifecycle.active||locked||initializing)return;
   const candidate=input.files?.[0];input.value='';
   if(!candidate)return;
-  file=null;recovery=null;pageCount=0;preview.hidden=true;preview.width=0;preview.height=0;root.querySelector('#ocr-recovery')?.remove();info.textContent='Checking selected PDF…';sync();
+  file=null;recovery=null;pageCount=0;preview.hidden=true;preview.width=0;preview.height=0;root.querySelector('#ocr-recovery')?.remove();root.querySelector('#ocr-page-warnings')?.remove();info.textContent='Checking selected PDF…';sync();
   const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');const doc=await openDocument(candidate,job,resources);const p=await stage(doc.getPage(1),job,LIMIT.page,'Preview page');resources.page=p;const base=p.getViewport({scale:1});const view=p.getViewport({scale:Math.min(1,360/Math.max(base.width,base.height))});preview.width=Math.max(1,Math.ceil(view.width));preview.height=Math.max(1,Math.ceil(view.height));resources.render=p.render({canvasContext:preview.getContext('2d'),viewport:view,background:'rgb(255,255,255)'});await stage(resources.render.promise,job,LIMIT.page,'Preview rendering');resources.render=null;return {file:candidate,count:doc.numPages};});
   if(checked&&!leaving){file=checked.value.file;pageCount=checked.value.count;selection.value='all';range.value='1';rangeField.hidden=true;preview.hidden=false;info.textContent='Selected: '+file.name+' · '+(file.size/1048576).toFixed(2)+' MB · '+pageCount+' pages';if(pageCount>budgets(mobile()).pages){selection.value='range';rangeField.hidden=false;range.value='1-'+budgets(mobile()).pages;safeStatus('File ready. Only the first '+budgets(mobile()).pages+' pages are selected; change the range to process other pages.');}else safeStatus('File ready. All pages selected.');}
   else {preview.hidden=true;preview.width=0;preview.height=0;info.textContent='No valid PDF selected. Previous results, if any, remain below.';}
@@ -146,7 +150,7 @@ export async function mount(root){
    }
    workerReady=performance.now();return resources.worker;
    };
-   const pdfjs=await stage(load('pdfjs'),job,LIMIT.open,'PDF engine loading');
+   const pdfjs=await stage(loadPdf(),job,LIMIT.open,'PDF engine loading');
    const records=current;
    for(const index of indices){
     job.check();progressInfo.textContent='Page '+(records.length+1)+' of '+indices.length+' (PDF page '+(index+1)+')';safeStatus('Reading page '+(index+1)+'…');
@@ -157,44 +161,85 @@ export async function mount(root){
      const native=nativeText(content.items);
      const ops=await stage(p.getOperatorList(),job,LIMIT.page,'Page classification');
      const kind=classifyPage(native,ops.fnArray,pdfjs.OPS||{});
-     // PDF.js may omit oversized images rather than reject the page. Do not certify
-     // raster/mixed pages as complete solely from its rendered output.
+     // Strict PDF.js operator-list parsing rejects images over maxImageSize.
      const imagePresent=classifyPage('probe',ops.fnArray,pdfjs.OPS||{})==='mixed';
-     const imageReview=imagePresent;
+    
      if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},remainingTextBudget);continue;}
      const angle=rotation==='auto'?0:Number(rotation);
-     const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
-     const plan=safeRenderPlan(base.width,base.height,isMobile);
-     const view=p.getViewport({scale:plan.scale,rotation:(p.rotate+angle)%360});
-     const dims=canvasDimensions(view.width,view.height,limits);
-     const c=el('canvas',{width:dims.width,height:dims.height});resources.canvas=c;
-     const context=c.getContext('2d',{willReadFrequently:true});if(!context)throw Error('Could not create a rendering canvas.');
-     resources.render=p.render({canvasContext:context,viewport:view,background:'rgb(255,255,255)'});
-     await stage(resources.render.promise,job,LIMIT.page,'Page rendering');resources.render=null;
-     const pixels=context.getImageData(0,0,c.width,c.height);
-     let ink=0;
-     for(let i=0;i<pixels.data.length;i+=4){if(pixels.data[i]<245||pixels.data[i+1]<245||pixels.data[i+2]<245)ink++;}
-     if(!ink&&!native&&kind==='scan'&&!imagePresent){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     const c=el('canvas');
+     resources.canvas=c;
+     async function renderAt(angle) {
+      const rotation=(p.rotate+angle)%360;
+      const base=p.getViewport({scale:1,rotation});
+      const plan=safeRenderPlan(base.width,base.height,isMobile);
+      const viewport=p.getViewport({scale:plan.scale,rotation});
+      const {width,height}=canvasDimensions(viewport.width,viewport.height,limits);
+      c.width=width;
+      c.height=height;
+      const context=c.getContext('2d',{willReadFrequently:true});
+      if(!context)throw Error('Could not create a rendering canvas.');
+      resources.render=p.render({canvasContext:context,viewport,background:'rgb(255,255,255)'});
+      await stage(resources.render.promise,job,LIMIT.page,'Page rendering');
+      resources.render=null;
+      return context;
+     }
+     let context=await renderAt(angle);
+     if(!imagePresent&&!native){
+      const pixels=context.getImageData(0,0,c.width,c.height).data;
+      const hasInk=pixels.some((value,index)=>index%4!==3&&value<245);
+      if(!hasInk){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     }
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
-     const options={rotateAuto:rotation==='auto'};
-     let best=recognitionEvidence((await stage(worker.recognize(c,options,{text:true,tsv:true}),job,LIMIT.page,'Page recognition')).data);
+     const read=async label=>recognitionEvidence((await stage(
+      worker.recognize(c,{rotateAuto:rotation==='auto',tessedit_pageseg_mode:'3'},{text:true,tsv:true}),
+      job,LIMIT.page,label)).data);
+     let best=await read('Page recognition'),bestAngle=angle,renderedAngle=angle;
+     if(rotation==='auto'&&imagePresent&&(!best.text||(best.confidence??0)<65)){
+      // Tesseract's rotateAuto corrects small skew but does not reliably correct
+      // upside-down or sideways scans. Reuse a single bounded canvas for retries.
+      for(const alternate of [180,90,270]){
+       context=await renderAt(alternate);
+       renderedAngle=alternate;
+       const candidate=await read('Orientation retry');
+       if(candidate.text&&(!best.text||(candidate.confidence??0)>=Math.max(75,(best.confidence??0)+15))){
+        best=candidate;
+        bestAngle=alternate;
+       }
+       if((best.confidence??0)>=85)break;
+      }
+     }
      if(!best.text||best.confidence===null||best.confidence<75||best.uncertain>0){
-      // A single conservative contrast retry, without changing original PDF or dimensions.
+      if(bestAngle!==renderedAngle)context=await renderAt(bestAngle);
+      const pixels=context.getImageData(0,0,c.width,c.height);
       const d=pixels.data;
-      for(let i=0;i<d.length;i+=4){const gray=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.2+128));d[i]=d[i+1]=d[i+2]=v;}
+      for(let i=0;i<d.length;i+=4){
+       const gray=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+       d[i]=d[i+1]=d[i+2]=Math.max(0,Math.min(255,(gray-128)*1.2+128));
+      }
+      // Clear only isolated, single-pixel dark specks surrounded by near-white.
+      // The unfiltered OCR result remains available for candidate comparison.
+      const stride=c.width*4;
+      for(let y=1;y<c.height-1;y++){
+       for(let x=1;x<c.width-1;x++){
+        const i=y*stride+x*4;
+        if(d[i]<120&&d[i-stride-4]>240&&d[i-stride]>240&&d[i-stride+4]>240&&
+           d[i-4]>240&&d[i+4]>240&&d[i+stride-4]>240&&d[i+stride]>240&&d[i+stride+4]>240){
+         d[i]=d[i+1]=d[i+2]=255;
+        }
+       }
+      }
       context.putImageData(pixels,0,0);
-      const second=recognitionEvidence((await stage(worker.recognize(c,options,{text:true,tsv:true}),job,LIMIT.page,'Quality retry')).data);
-      best=chooseCandidate(best,second);
+      best=chooseCandidate(best,await read('Quality retry'));
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,review:imageReview||merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
-     if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
+     if(job.reason||locked||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
      // A failed page is recoverable only after all active page resources are released.
-     records.push({page:index+1,state:'failed',text:'',note:'Page processing failed; retry this page'});
+     records.push({page:index+1,state:'failed',text:'',note:abortNote});
     }finally{
      if(resources.render){try{resources.render.cancel();await dispose(async()=>{try{await resources.render.promise}catch{}});resources.render=null;}catch{locked=true;throw Error('Render cleanup failed; reload before retrying.');}}
      if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}
@@ -210,6 +255,13 @@ export async function mount(root){
   if(!recognized){const done=new Set(current.map(r=>r.page));for(const i of indices)if(!done.has(i+1))current.push({page:i+1,state:'skipped',text:'',note:'Job interrupted before page completed'});}
   const records=previous?mergeRetry(previous,current):current;
   const result=summarize(records),counts=result.counts;
+  const issues=records.filter(record=>record.state!=='completed'||record.review);
+  root.querySelector('#ocr-page-warnings')?.remove();
+  if(issues.length){
+   const details=el('details',{id:'ocr-page-warnings'},[el('summary',{text:'Page details ('+issues.length+')'})]);
+   details.append(el('ul',{},issues.map(record=>el('li',{text:'Page '+record.page+': '+(record.note||'Review the recognized text against the original.')}))));
+   resultInfo.after(details);
+  }
   const uncertain=records.reduce((sum,r)=>sum+(r.uncertain||0),0);
   recovery={file:selected,rotation,records};
   progressInfo.textContent='Processed '+(counts.completed+counts.blank)+' of '+records.length+' selected pages. '+Math.round(performance.now()-start)+' ms total'+(workerReady!==null?' · OCR initialization '+Math.round(workerReady-workerStart)+' ms':'')+'.';
@@ -229,7 +281,8 @@ export async function mount(root){
  run.onclick=()=>recognize(false);
  retry.onclick=()=>{if(recovery&&recovery.file===file) return recognize(true);};
  copyBtn.onclick=async()=>{if(lifecycle.active)return;try{await copy(text.value)}catch(e){safeStatus(errorMessage(e),true)}};
- save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain'}),safeName(resultFile?.name||'recognized','-text','txt'));safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
- window.addEventListener('pagehide',()=>{leaving=true;lifecycle.active?.cancel(Error(STOP));clearOutputs();},{once:true});
+ save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain;charset=utf-8'}),safeName(resultFile?.name||'recognized','-text','txt'));safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
+ window.addEventListener('pagehide',()=>{leaving=true;lifecycle.active?.cancel(Error(STOP));clearOutputs();});
+ window.addEventListener('pageshow',event=>{if(event.persisted){leaving=false;sync();}});
  sync();
 }

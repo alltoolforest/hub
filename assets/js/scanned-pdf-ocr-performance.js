@@ -10,7 +10,7 @@ export function boundedRanges(text,count,limit){
   if(b-a+1>limit)throw Error('Choose fewer pages for this device.');
   for(let n=a;n<=b;n++){selected.add(n-1);if(selected.size>limit)throw Error('Choose fewer pages for this device.');}
  }
- return [...selected];
+ return [...selected].sort((a,b)=>a-b);
 }
 
 export function budgets(mobile){return {fileMB:mobile?15:40,pages:mobile?10:30,pixels:mobile?1500000:3000000,side:8192,sourceImagePixels:mobile?16000000:32000000,textChars:mobile?2000000:6000000};}

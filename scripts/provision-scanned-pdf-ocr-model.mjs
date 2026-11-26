@@ -12,6 +12,11 @@ const target=join(root,'assets/vendor/scanned-pdf-ocr');
 const scratch=mkdtempSync(join(tmpdir(),'atf-ocr-'));
 const spec='@tesseract.js-data/eng@1.0.0';
 const registry='https://registry.npmjs.org/';
+const packageIntegrity='sha512-mbTumm6KQPUHyzTPQaF3ObXYnx0SqqfV2nabqFVQBwD6Kl7PhGSLSzOlfFTWy0P3BjghaSKA2W9GB19Jk+ZcTg==';
+const modelSha256='45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91';
+const licenseSha256='a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9';
+const modelSource='https://github.com/naptha/tessdata/blob/b86746569320a6103cea84cc2b8d9ee74f0f45d3/4.0.0_best_int/eng.traineddata.gz';
+const licenseSource='https://github.com/tesseract-ocr/tessdata_best/blob/e9f15884bc503cf905c8a1dbbc9cb14458152628/LICENSE';
 const hash=(data,algorithm='sha256',encoding='hex')=>createHash(algorithm).update(data).digest(encoding);
 function npm(args){
  const opts={cwd:scratch,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024,stdio:['ignore','pipe','pipe']};
@@ -23,7 +28,7 @@ function npm(args){
 }
 try{
  const expected=JSON.parse(npm(['view',spec,'dist.integrity','--json','--registry='+registry])).trim();
- if(!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(expected))throw Error('Expected a SHA-512 package integrity value.');
+ if(expected!==packageIntegrity)throw Error('Registry integrity differs from the pinned package.');
  const packed=JSON.parse(npm(['pack',spec,'--ignore-scripts','--json','--registry='+registry]))[0];
  const archive=join(scratch,packed.filename);
  const bytes=readFileSync(archive);
@@ -33,11 +38,14 @@ try{
  if(pkg.name!=='@tesseract.js-data/eng'||pkg.version!=='1.0.0')throw Error('Unexpected package identity.');
  const model=extract('package/4.0.0_best_int/eng.traineddata.gz');
  if(model.length<100000||gunzipSync(model,{maxOutputLength:32*1024*1024}).length<100000)throw Error('Invalid language model.');
- let license;
- for(const name of ['LICENSE','LICENSE.txt','LICENSE.md','license','license.txt']){try{license=extract('package/'+name);break}catch{}}
- // Preserve upstream package license text if present. Otherwise fail closed until it is supplied.
- if(!license?.length)throw Error('Upstream package license text not found. Review licensing before redistribution.');
- const manifest={package:spec,registry,packageIntegrity:expected,model:'4.0.0_best_int/eng.traineddata.gz',modelSha256:hash(model),modelBytes:model.length,packageLicense:pkg.license};
+ if(hash(model)!==modelSha256)throw Error('Language model checksum verification failed.');
+ // The npm archive omits a license file. Preserve the license of the upstream
+ // tessdata_best submodule from which Naptha produced the integerized model.
+ const license=readFileSync(join(target,'LICENSE.upstream.txt'));
+ if(hash(license)!==licenseSha256)throw Error('Upstream license checksum verification failed.');
+ const manifest={package:spec,registry,packageIntegrity,model:'4.0.0_best_int/eng.traineddata.gz',
+  modelSha256,modelBytes:model.length,modelSource,licenseSource,licenseSha256,
+  packageLicense:pkg.license,modelLicense:'Apache-2.0'};
  mkdirSync(target,{recursive:true});
  for(const [name,data] of [['eng.traineddata.gz',model],['LICENSE.upstream.txt',license],['provenance.json',Buffer.from(JSON.stringify(manifest,null,2)+'\n')]]){
   const dest=join(target,name);

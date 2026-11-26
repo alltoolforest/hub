@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createLifecycle,validateFile,stage} from '../assets/js/scanned-pdf-ocr-lifecycle.js';
+import {boundedRanges} from '../assets/js/scanned-pdf-ocr-performance.js';
 const f=(name,body)=>new File([body],name);
 for(const [name,body,err] of [['good.pdf','%PDF-1.7',null],['good.PDF','%PDF-2.0',null],['empty.pdf','','non-empty'],['fake.pdf','not pdf','header'],['bad.pdf','%PDF-abc','version'],['truncated.pdf','%PDF-1','version'],['wrong.png','%PDF-1.7','PDF file']]) test(name,async()=>{if(err)await assert.rejects(validateFile(f(name,body),15),new RegExp(err));else await validateFile(f(name,body),15)});
 test('size cap',async()=>assert.rejects(validateFile(f('large.pdf','%PDF-1.7'),0),/no larger/));
@@ -14,3 +15,7 @@ test('cancel during stage and late dispose',async()=>{const j=createLifecycle().
 test('cancelled before stage',async()=>{const j=createLifecycle().start();j.cancel();await assert.rejects(stage(Promise.resolve(1),j,100,'test'),/Cancelled/)});
 test('late rejection consumed',async()=>{const j=createLifecycle().start();let reject;const p=stage(new Promise((_,r)=>reject=r),j,100,'test');j.cancel();await assert.rejects(p,/Cancelled/);reject(Error('late'));await new Promise(r=>setImmediate(r))});
 test('resolved stage does not later cancel',async()=>{const j=createLifecycle().start();await stage(Promise.resolve(1),j,10,'test');await new Promise(r=>setTimeout(r,25));assert.equal(j.reason,null)});
+
+test('selected pages are deduplicated and processed in document order', () => {
+ assert.deepEqual(boundedRanges('7, 3-5, 1, 4',8,8),[0,2,3,4,6]);
+});

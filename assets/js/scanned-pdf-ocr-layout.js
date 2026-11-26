@@ -24,12 +24,50 @@ export function recognitionLayout(words){
  const text=[...paragraphs.values()].map(lines=>[...lines.values()].map(line=>line.map(w=>w.text).join(' ')).join('\n')).join('\n\n');
  return {text,wordCount:words.length,uncertain:words.filter(w=>w.confidence<75).length};
 }
+// Reorder only when every OCR line has a common, wide gutter and TSV contains
+// exactly the raw OCR words. A narrow table or a heading spanning the gutter
+// leaves the original reading order intact.
+function pairedColumns(words,raw){
+ if(words.length<6||raw.split(/\s+/).join(' ')!==words.map(word=>word.text).join(' '))return '';
+ const lines=new Map();
+ for(const word of words){
+  const key=[word.page,word.block,word.paragraph,word.line].join(':');
+  if(!lines.has(key))lines.set(key,[]);
+  lines.get(key).push(word);
+ }
+ if(lines.size<3)return '';
+ const leftEdge=words.reduce((min,word)=>Math.min(min,word.x),Infinity);
+ const rightEdge=words.reduce((max,word)=>Math.max(max,word.x+word.w),0);
+ const splitRows=[];
+ let gutterStart=leftEdge,gutterEnd=rightEdge;
+ for(const row of lines.values()){
+  const ordered=[...row].sort((a,b)=>a.x-b.x);
+  let split=0,start=0,end=0;
+  for(let i=1;i<ordered.length;i++){
+   const previous=ordered[i-1],next=ordered[i];
+   const left=previous.x+previous.w,right=next.x;
+   if(right-left>Math.max(end-start,(rightEdge-leftEdge)*.12,3*Math.max(previous.h,next.h))){
+    split=i;start=left;end=right;
+   }
+  }
+  if(!split)return '';
+  gutterStart=Math.max(gutterStart,start);
+  gutterEnd=Math.min(gutterEnd,end);
+  if(gutterEnd<=gutterStart)return '';
+  splitRows.push([
+   ordered.slice(0,split).map(word=>word.text).join(' '),
+   ordered.slice(split).map(word=>word.text).join(' ')
+  ]);
+ }
+ return [0,1].map(column=>splitRows.map(row=>row[column]).join('\n')).join('\n\n');
+}
+
 export function recognitionEvidence(data){
  const raw=typeof data?.text==='string'?data.text.trim():'';
  const words=parseRecognitionWords(data?.tsv);
  const layout=recognitionLayout(words);
  // Keep raw OCR as authoritative: TSV may omit words or alter punctuation.
- return {text:raw||layout.text,confidence:typeof data?.confidence==='number'&&Number.isFinite(data.confidence)?Math.max(0,Math.min(100,data.confidence)):null,uncertain:layout.uncertain,wordCount:layout.wordCount,layoutText:layout.text,layoutFallback:!raw&&!!layout.text};
+ return {text:pairedColumns(words,raw)||raw||layout.text,confidence:typeof data?.confidence==='number'&&Number.isFinite(data.confidence)?Math.max(0,Math.min(100,data.confidence)):null,uncertain:layout.uncertain,wordCount:layout.wordCount,layoutText:layout.text,layoutFallback:!raw&&!!layout.text};
 }
 export function safeRenderPlan(width,height,mobile){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw Error('Invalid page dimensions.');
