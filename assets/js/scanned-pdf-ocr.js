@@ -1,5 +1,5 @@
 import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage} from './core.js';
-import {pageRanges} from './math.js';
+import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
 
 import {nativeText,classifyPage,renderPlan,mergeMixed,candidate,chooseCandidate,summarize} from './scanned-pdf-ocr-quality.js';
@@ -14,11 +14,12 @@ async function dispose(fn){
 }
 async function openDocument(file,job,resources){
  await stage(validateFile(file,mobile()?15:40),job,LIMIT.read,'PDF validation');
+ const limits=budgets(mobile());
  const bytes=await stage(file.arrayBuffer(),job,LIMIT.read,'PDF reading');
  const pdfjs=await stage(load('pdfjs'),job,LIMIT.open,'PDF engine loading');
  job.check();
  pdfjs.GlobalWorkerOptions.workerSrc=url('assets/vendor/pdf.worker.mjs');
- const task=pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,stopAtErrors:true,
+ const task=pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,stopAtErrors:true,maxImageSize:limits.sourceImagePixels,
    cMapUrl:url('assets/vendor/cmaps/'),cMapPacked:true,standardFontDataUrl:url('assets/vendor/standard_fonts/'),wasmUrl:url('assets/vendor/wasm/')});
  resources.pdfTask=task;
  task.onPassword=()=>job.cancel(Error('This PDF is password-protected. Unlock it in a trusted PDF application and retry.'));
@@ -36,7 +37,7 @@ async function ensureLocalModel(job){
 
 export async function mount(root){
  const lifecycle=createLifecycle();
- let file=null,locked=false,initializing=false,leaving=false;
+ let file=null,locked=false,initializing=false,leaving=false,recovery=null;
  const input=fileInput(root,'.pdf',false,'Open a scanned PDF');
  const info=el('p',{class:'selected-files','aria-live':'polite',text:'No PDF selected.'});
  input.after(info);
@@ -48,14 +49,17 @@ export async function mount(root){
  const range=rangeField.querySelector('input');
  const text=el('textarea',{id:'ocr-text',rows:15,'aria-label':'Editable recognized text'});
  const resultInfo=el('p',{'aria-live':'polite',text:'No recognition result yet.'});
- root.append(resultInfo,text);
+ const progress=el('progress',{max:100,value:0,'aria-label':'Document recognition progress'});
+ const progressInfo=el('p',{text:'No recognition job running.'});
+ root.append(progress,progressInfo,resultInfo,text);
  const run=el('button',{type:'button',class:'primary',text:'Recognize text'});
  const cancel=el('button',{type:'button',text:'Cancel',disabled:true});
+ const retry=el('button',{type:'button',text:'Retry failed pages',disabled:true});
  const copyBtn=el('button',{type:'button',text:'Copy text'});
  const save=el('button',{type:'button',text:'Download TXT'});
- root.append(el('div',{class:'actions'},[run,cancel,copyBtn,save]));
+ root.append(el('div',{class:'actions'},[run,cancel,retry,copyBtn,save]));
  setupStatus(root);downloads(root);
- const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;orientation.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;root.setAttribute('aria-busy',String(busy));};
+ const sync=()=>{const busy=!!lifecycle.active;input.disabled=busy||locked||initializing;range.disabled=busy||locked;orientation.disabled=busy||locked;run.disabled=busy||locked||initializing||!file;cancel.disabled=!busy;retry.disabled=busy||locked||initializing||!recovery||!file||recovery.file!==file||!retryIndices(recovery.records).length;copyBtn.disabled=busy;save.disabled=busy;text.readOnly=busy;root.setAttribute('aria-busy',String(busy));};
  const safeStatus=(message,error=false)=>{if(!leaving)status(message,error);};
  async function cleanup(resources){
   let failed=false;
@@ -85,24 +89,29 @@ export async function mount(root){
   if(lifecycle.active||locked||initializing)return;
   const candidate=input.files?.[0];input.value='';
   if(!candidate)return;
-  file=null;info.textContent='Checking selected PDF…';sync();
+  file=null;recovery=null;info.textContent='Checking selected PDF…';sync();
   const checked=await withJob(async(job,resources)=>{safeStatus('Validating PDF…');await openDocument(candidate,job,resources);return candidate;});
   if(checked&&!leaving){file=checked.value;info.textContent='Selected: '+file.name;safeStatus('File ready.');}
   else info.textContent='No valid PDF selected. Previous results, if any, remain below.';
   sync();
  });
  cancel.onclick=()=>{lifecycle.active?.cancel(Error(STOP));safeStatus('Cancelling…');};
- run.onclick=async()=>{
+ async function recognize(retrying=false){
   if(!file||lifecycle.active||locked||initializing)return;
-  const selected=file,requested=range.value.trim(),isMobile=mobile(),rotation=orientation.value;
+  const selected=file,requested=range.value.trim(),isMobile=mobile(),rotation=retrying?recovery.rotation:orientation.value,limits=budgets(isMobile);
+  const previous=retrying?recovery.records:null;
+  let current=[],indices=[],attempted=false,abortNote='Job interrupted';
+  const start=performance.now();let workerStart=null,workerReady=null;
+  progress.value=0;progressInfo.textContent='Preparing recognition…';
   const recognized=await withJob(async(job,resources)=>{
    safeStatus('Opening PDF…');
    const pdf=await openDocument(selected,job,resources);
-   const indices=pageRanges(requested,pdf.numPages);
-   if(indices.length>(isMobile?10:30))throw Error('Choose fewer pages for this device.');
+   indices=retrying?retryIndices(previous):boundedRanges(requested,pdf.numPages,limits.pages);
+   if(indices.length>limits.pages||indices.some(i=>i<0||i>=pdf.numPages))throw Error('Choose fewer valid pages for this device.');
+   attempted=true;
    const getWorker=async()=>{
    if(resources.worker)return resources.worker;
-   safeStatus('Checking local OCR model…');await ensureLocalModel(job);
+   workerStart=performance.now();safeStatus('Checking local OCR model…');await ensureLocalModel(job);
    safeStatus('Loading OCR engine…');const T=await stage(load('ocr'),job,LIMIT.init,'OCR engine loading');
    job.check();
    initializing=true;
@@ -124,23 +133,25 @@ export async function mount(root){
     // Fail closed after an interrupted initialization rather than risk overlap.
     locked=true;throw Error((e?.message||'OCR initialization failed.')+' Reload the page before retrying.');
    }
-   return resources.worker;
+   workerReady=performance.now();return resources.worker;
    };
    const pdfjs=await stage(load('pdfjs'),job,LIMIT.open,'PDF engine loading');
-   const records=[];
+   const records=current;
    for(const index of indices){
-    job.check();safeStatus('Reading page '+(index+1)+'…');
-    const p=await stage(pdf.getPage(index+1),job,LIMIT.page,'Page loading');resources.page=p;
+    job.check();progressInfo.textContent='Page '+(records.length+1)+' of '+indices.length+' (PDF page '+(index+1)+')';safeStatus('Reading page '+(index+1)+'…');
+    let p=null;
     try{
+     p=await stage(pdf.getPage(index+1),job,LIMIT.page,'Page loading');resources.page=p;
      const content=await stage(p.getTextContent(),job,LIMIT.page,'Text inspection');
      const native=nativeText(content.items);
      const ops=await stage(p.getOperatorList(),job,LIMIT.page,'Page classification');
      const kind=classifyPage(native,ops.fnArray,pdfjs.OPS||{});
-     if(kind==='digital'){records.push({page:index+1,state:'completed',text:native});continue;}
+     if(kind==='digital'){appendRecord(records,{page:index+1,state:'completed',text:native},limits.textChars);continue;}
      const angle=rotation==='auto'?0:Number(rotation);
      const base=p.getViewport({scale:1,rotation:(p.rotate+angle)%360});
      const view=p.getViewport({scale:renderPlan(base.width,base.height,isMobile),rotation:(p.rotate+angle)%360});
-     const c=el('canvas',{width:Math.max(1,Math.floor(view.width)),height:Math.max(1,Math.floor(view.height))});resources.canvas=c;
+     const dims=canvasDimensions(view.width,view.height,limits);
+     const c=el('canvas',{width:dims.width,height:dims.height});resources.canvas=c;
      const context=c.getContext('2d',{willReadFrequently:true});if(!context)throw Error('Could not create a rendering canvas.');
      resources.render=p.render({canvasContext:context,viewport:view,background:'rgb(255,255,255)'});
      await stage(resources.render.promise,job,LIMIT.page,'Page rendering');resources.render=null;
@@ -162,21 +173,44 @@ export async function mount(root){
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     records.push({page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text});
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,review:merged.review||best.confidence===null||best.confidence<75||!best.text},limits.textChars);
+    }catch(e){
+     abortNote=errorMessage(e);
+     if(job.reason||locked||!resources.worker||/safe output budget/.test(abortNote))throw e;
+     // A failed page is recoverable only after all active page resources are released.
+     records.push({page:index+1,state:'failed',text:'',note:'Page processing failed; retry this page'});
     }finally{
-     if(!resources.render){if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}p.cleanup();resources.page=null;}
+     if(resources.render){try{resources.render.cancel();await dispose(async()=>{try{await resources.render.promise}catch{}});resources.render=null;}catch{locked=true;throw Error('Render cleanup failed; reload before retrying.');}}
+     if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}
+     if(p){p.cleanup();resources.page=null;}
+     progress.value=pageProgress(records.length,indices.length);
     }
    }
-   return summarize(records);
+   return records;
 
   });
-  if(recognized&&!leaving){
-   const result=recognized.value,counts=result.counts;
-   if(!result.actual){safeStatus('No text recognized. '+counts.blank+' blank, '+counts.failed+' unrecognized pages. Previous results preserved.',true);return;}
-   clearOutputs();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';
-   safeStatus(counts.failed||counts.review?'Recognition finished with warnings. Review page results and names or numbers before export.':'Text recognized. Review and correct it before export.',!!counts.failed);
+  if(leaving)return;
+  if(!attempted){progressInfo.textContent='Recognition not started.';return;}
+  if(!recognized){const done=new Set(current.map(r=>r.page));for(const i of indices)if(!done.has(i+1))current.push({page:i+1,state:'skipped',text:'',note:'Job interrupted before page completed'});}
+  const records=previous?mergeRetry(previous,current):current;
+  const result=summarize(records),counts=result.counts;
+  recovery={file:selected,rotation,records};
+  progressInfo.textContent='Processed '+(counts.completed+counts.blank)+' of '+records.length+' selected pages. '+Math.round(performance.now()-start)+' ms total'+(workerReady!==null?' · OCR initialization '+Math.round(workerReady-workerStart)+' ms':'')+'.';
+  // On retry, never overwrite manually edited output. Keep recovered text separately until explicit review.
+  if(result.actual){
+   if(retrying||!recognized){
+    const block=el('textarea',{rows:8,readonly:true,'aria-label':'Recovered recognition output'});block.value=result.text;
+    const replace=el('button',{type:'button',text:'Replace editable text with recovered result'});
+    const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
+    root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
+    replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;clearOutputs();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.skipped+' skipped.';panel.remove();};
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.review+' need review.';}
   }
- };
+  if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
+  sync();
+ }
+ run.onclick=()=>recognize(false);
+ retry.onclick=()=>{if(recovery&&recovery.file===file) return recognize(true);};
  copyBtn.onclick=async()=>{if(lifecycle.active)return;try{await copy(text.value)}catch(e){safeStatus(errorMessage(e),true)}};
  save.onclick=()=>{if(lifecycle.active)return;try{if(!text.value.trim())throw Error('Recognize or enter text first.');clearOutputs();output(new Blob([text.value],{type:'text/plain'}),'recognized-text.txt');safeStatus('TXT ready.');}catch(e){safeStatus(errorMessage(e),true)}};
  window.addEventListener('pagehide',()=>{leaving=true;lifecycle.active?.cancel(Error(STOP));clearOutputs();},{once:true});
