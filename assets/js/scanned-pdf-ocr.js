@@ -1,3 +1,4 @@
+import {rasterBlank,eraseDetectedGrid,detectTable,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
 import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage,safeName} from './core.js';
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
@@ -95,6 +96,7 @@ export async function mount(root){
   if(resources.worker)await attempt(()=>resources.worker.terminate());
   if(resources.page)await attempt(()=>resources.page.cleanup());
   if(resources.canvas){resources.canvas.width=0;resources.canvas.height=0;}
+  if(resources.tile){resources.tile.width=0;resources.tile.height=0;}
   if(resources.pdfTask)await attempt(()=>resources.pdfTask.destroy());
   if(failed){locked=true;throw Error('Resource cleanup failed. Reload the page before processing another PDF.');}
  }
@@ -186,11 +188,13 @@ export async function mount(root){
      const angle=rotation==='auto'?0:Number(rotation);
      const c=el('canvas');
      resources.canvas=c;
+     let scanViewport;
      async function renderAt(angle) {
       const rotation=(p.rotate+angle)%360;
       const base=p.getViewport({scale:1,rotation});
       const plan=safeRenderPlan(base.width,base.height,isMobile);
       const viewport=p.getViewport({scale:plan.scale,rotation});
+      scanViewport=viewport;
       const {width,height}=canvasDimensions(viewport.width,viewport.height,limits);
       c.width=width;
       c.height=height;
@@ -202,10 +206,9 @@ export async function mount(root){
       return context;
      }
      let context=await renderAt(angle);
-     if(!imagePresent&&!native){
-      const pixels=context.getImageData(0,0,c.width,c.height).data;
-      const hasInk=pixels.some((value,index)=>index%4!==3&&value<245);
-      if(!hasInk){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     if(!native&&rasterBlank(context.getImageData(0,0,c.width,c.height).data)){
+      records.push({page:index+1,state:'blank',text:'',note:'Uniform near-white rendered page'});
+      continue;
      }
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
@@ -254,7 +257,115 @@ export async function mount(root){
       context.putImageData(pixels,0,0);
       best=chooseCandidate(best,await read('Quality retry'));
      }
-     if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
+     if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content, no reliable text recognized; review images or unsupported handwriting'});continue;}
+     // Region coordinates refer to the original upright raster. Deskewed or
+     // rotated candidates keep their existing output when coordinates may differ.
+     if(bestAngle===0&&angle===0&&best.words.length){
+      let table=detectTable(best.words,best.raw);
+      if(!table&&best.words.length>=24){
+       if(renderedAngle!==bestAngle){
+        context=await renderAt(bestAngle);
+        renderedAngle=bestAngle;
+       }
+       const grid=context.getImageData(0,0,c.width,c.height);
+       if(eraseDetectedGrid(grid)){
+        context.putImageData(grid,0,0);
+        const candidate=await read('Ruled table recognition');
+        const candidateTable=detectTable(candidate.words,candidate.raw);
+        if(candidateTable&&candidate.wordCount>=best.wordCount&&candidate.confidence>=best.confidence-3){
+         best=candidate;
+         table=candidateTable;
+        }
+       }
+      }
+      if(table){
+       const region=el('canvas');
+       let tile=null,tileX=0,tileY=0,tileScale=1,tableConfidence=best.confidence;
+       try{
+        if(renderedAngle!==bestAngle)await renderAt(bestAngle);
+        if(isMobile){
+         const last=table.body.at(-1);
+         const right=Math.max(...[...table.header,...last.cells].flat().map(w=>w.x+w.w));
+         tileX=Math.max(0,Math.floor(table.anchors[0]-table.height));
+         tileY=Math.max(0,Math.floor(table.header[0][0].y-table.height));
+         const width=Math.min(c.width-tileX,Math.ceil(right-tileX+table.height*2));
+         const height=Math.min(c.height-tileY,Math.ceil(last.y-tileY+table.height*2));
+         const gain=Math.min(Math.SQRT2,Math.sqrt(limits.pixels/(width*height)));
+         if(gain>1.1){
+          tile=el('canvas',{width:Math.floor(width*gain),height:Math.floor(height*gain)});
+          resources.tile=tile;
+          tileX=Math.round(tileX*gain)/gain;
+          tileY=Math.round(tileY*gain)/gain;
+          resources.render=p.render({canvasContext:tile.getContext('2d'),viewport:scanViewport,
+           transform:[gain,0,0,gain,-tileX*gain,-tileY*gain],background:'rgb(255,255,255)'});
+          await stage(resources.render.promise,job,LIMIT.page,'Table tile rendering');
+          resources.render=null;
+          const candidate=recognitionEvidence((await stage(worker.recognize(tile,{tessedit_pageseg_mode:'3'},
+           {text:true,tsv:true}),job,LIMIT.page,'Table tile recognition')).data);
+          const mapped=candidate.words.map(w=>({...w,x:w.x/gain+tileX,y:w.y/gain+tileY,w:w.w/gain,h:w.h/gain}));
+          const precise=detectTable(mapped,candidate.raw);
+          if(precise?.body.length===table.body.length&&precise.anchors.length===table.anchors.length&&
+              !precise.left.length&&!precise.rightRows.length&&candidate.confidence>=best.confidence-5){
+           table={...precise,left:table.left,rightRows:table.rightRows};
+           tableConfidence=candidate.confidence;
+           tileScale=gain;
+          }
+         }
+        }
+        const result=await reconstructTable(table,async (box,numeric)=>{
+         const useTile=tileScale>1&&box.y>=tileY;
+         const source=useTile?tile:c;
+         const scale=useTile?tileScale:1;
+         const x=Math.max(0,Math.floor((box.x-(useTile?tileX:0))*scale));
+         const y=Math.max(0,Math.floor((box.y-(useTile?tileY:0))*scale));
+         const width=Math.min(source.width-x,Math.ceil(box.width*scale));
+         const height=Math.min(source.height-y,Math.ceil(box.height*scale));
+         if(width<2||height<2||width*height>90000)return {text:'',confidence:0};
+         const src=source.getContext('2d');
+         const pixels=src.getImageData(x,y,width,height).data;
+         let ink=0;
+         for(let i=0;i<pixels.length;i+=4)if(pixels[i]<175)ink++;
+         if(ink<5)return null;
+         region.width=width*2+24;
+         region.height=height*2+24;
+         const ctx=region.getContext('2d');
+         ctx.fillStyle='#fff';ctx.fillRect(0,0,region.width,region.height);
+         ctx.imageSmoothingQuality='high';
+         ctx.drawImage(source,x,y,width,height,12,12,width*2,height*2);
+         const runRegion=async options=>(await stage(worker.recognize(region,options,{text:true}),job,LIMIT.page,'Table cell recognition')).data;
+         let data=await runRegion({tessedit_pageseg_mode:'7'});
+         if(numeric&&(!/^[+−$€£0-9.,%‰-]+$/u.test(data.text.trim())||data.confidence<55)){
+          const whitelist='0123456789.+,-−$€£%‰';
+          data=await runRegion({tessedit_pageseg_mode:'8',tessedit_char_whitelist:whitelist});
+          if(data.confidence<55){
+           const glyph=await runRegion({tessedit_pageseg_mode:'10',tessedit_char_whitelist:whitelist});
+           if(glyph.confidence>data.confidence)data=glyph;
+          }
+         }
+         let agreement=false;
+         if(!numeric){
+          const softened=ctx.getImageData(0,0,region.width,region.height);
+          const shades=softened.data;
+          for(let i=0;i<shades.length;i+=4){
+           const intensity=shades[i];
+           const value=Math.max(0,Math.min(255,(intensity-205)*1.8+205));
+           shades[i]=shades[i+1]=shades[i+2]=value;
+          }
+          ctx.putImageData(softened,0,0);
+          const enhanced=await runRegion({tessedit_pageseg_mode:'7'});
+          agreement=enhanced.text.trim()===data.text.trim();
+          if(enhanced.confidence>=data.confidence-1 &&
+             enhanced.text.trim().toLowerCase()!==data.text.trim().toLowerCase())data=enhanced;
+         }
+         return {text:data.text.trim(),confidence:data.confidence,agreement};
+        },job,tableConfidence<93,isMobile);
+        best={...best,text:result.text,uncertain:best.uncertain+result.uncertain};
+       }finally{region.width=region.height=0;}
+      }else{
+       const ordered=orderColumnBlocks(best.words,best.raw);
+       if(ordered)best={...best,text:ordered};
+      }
+     }
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
      appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':undefined,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
@@ -265,6 +376,7 @@ export async function mount(root){
     }finally{
      if(resources.render){try{resources.render.cancel();await dispose(async()=>{try{await resources.render.promise}catch{}});resources.render=null;}catch{locked=true;throw Error('Render cleanup failed; reload before retrying.');}}
      if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}
+     if(resources.tile){resources.tile.width=resources.tile.height=0;resources.tile=null;}
      if(p){p.cleanup();resources.page=null;}
      progress.value=pageProgress(records.length,indices.length);
     }
@@ -295,7 +407,7 @@ export async function mount(root){
     const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
     root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
     replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped.';panel.remove();};
-   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review · '+uncertain+' low-confidence OCR words (check against original).';}
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review · '+uncertain+' OCR words or cells to review against the original.';}
   }
   if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
   sync();

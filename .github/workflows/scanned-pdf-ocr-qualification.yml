@@ -1,7 +1,7 @@
 name: Scanned PDF OCR isolated qualification
 on:
   push:
-    branches: [development/scanned-pdf-ocr-v2-task1]
+    branches: [development/scanned-pdf-ocr-v2-task1, development/scanned-pdf-ocr-v2.1-remediation]
     paths:
       - '.github/workflows/scanned-pdf-ocr-qualification.yml'
       - 'assets/js/scanned-pdf-ocr*.js'
@@ -31,6 +31,7 @@ jobs:
       - run: python -u tests/scanned-pdf-ocr-browser.py --mobile --count 6
       - run: python -u tests/scanned-pdf-ocr-browser.py --browser firefox --count 6
       - run: python -u tests/scanned-pdf-ocr-browser.py --browser webkit --mobile --count 6
+      - run: python -u tests/scanned-pdf-ocr-remediation.py
       - run: python -u tests/scanned-pdf-ocr-capacity.py
       - run: python -u tests/scanned-pdf-ocr-capacity.py --mobile
       - uses: actions/upload-artifact@v4
