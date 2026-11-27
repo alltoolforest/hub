@@ -29,12 +29,12 @@ export function eraseDetectedGrid(image){
  const horizontal=[],vertical=[];
  for(let y=0;y<height;y++){
   let dark=0;
-  for(let x=0;x<width;x+=2)if(data[(y*width+x)*4]<155)dark++;
+  for(let x=0;x<width;x+=2)if(data[(y*width+x)*4]<190)dark++;
   if(dark>=width*.28)horizontal.push(y);
  }
  for(let x=0;x<width;x++){
   let dark=0;
-  for(let y=0;y<height;y+=2)if(data[(y*width+x)*4]<155)dark++;
+  for(let y=0;y<height;y+=2)if(data[(y*width+x)*4]<190)dark++;
   if(dark>=height*.16)vertical.push(x);
  }
  const groups=values=>values.filter((value,i)=>!i||value-values[i-1]>1).length;

@@ -262,7 +262,7 @@ export async function mount(root){
      // rotated candidates keep their existing output when coordinates may differ.
      if(bestAngle===0&&angle===0&&best.words.length){
       let table=detectTable(best.words,best.raw);
-      if(!table&&best.words.length>=24){
+      if(!table&&best.words.length>=6){
        if(renderedAngle!==bestAngle){
         context=await renderAt(bestAngle);
         renderedAngle=bestAngle;
@@ -272,10 +272,11 @@ export async function mount(root){
         context.putImageData(grid,0,0);
         const candidate=await read('Ruled table recognition');
         const candidateTable=detectTable(candidate.words,candidate.raw);
-        if(candidateTable&&candidate.wordCount>=best.wordCount&&candidate.confidence>=best.confidence-3){
+        const moreEvidence=candidate.wordCount>=best.wordCount*1.25&&candidate.confidence>=85;
+        if(candidateTable&&candidate.wordCount>=best.wordCount&&(moreEvidence||candidate.confidence>=best.confidence-3)){
          best=candidate;
          table=candidateTable;
-        }
+        }else best={...best,uncertain:best.uncertain+1};
        }
       }
       if(table){
@@ -290,7 +291,7 @@ export async function mount(root){
          tileY=Math.max(0,Math.floor(table.header[0][0].y-table.height));
          const width=Math.min(c.width-tileX,Math.ceil(right-tileX+table.height*2));
          const height=Math.min(c.height-tileY,Math.ceil(last.y-tileY+table.height*2));
-         const gain=Math.min(Math.SQRT2,Math.sqrt(limits.pixels/(width*height)));
+         const gain=Math.min(Math.SQRT2,limits.side/width,limits.side/height,Math.sqrt(limits.pixels/(width*height)));
          if(gain>1.1){
           tile=el('canvas',{width:Math.floor(width*gain),height:Math.floor(height*gain)});
           resources.tile=tile;

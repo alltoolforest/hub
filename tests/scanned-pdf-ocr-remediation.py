@@ -106,12 +106,17 @@ def independent(path, ruled):
         draw.line((55,785,1150,785),fill=80,width=2)
         for x in (55,302,795,960,1150):
             draw.line((x,190,x,785),fill=80,width=2)
+    faint = Image.new('L', (1200, 1350), 252)
+    ImageDraw.Draw(faint).text((76, 210),'Faint approval text.',font=font,fill=232)
+    reduced = image.resize((660, 743), Image.Resampling.LANCZOS)
     with fitz.open() as doc:
-        for bitmap in (image, Image.new('L',(1200,1350),252)):
+        for bitmap in (image, Image.new('L',(1200,1350),252), faint, reduced, image):
             page = doc.new_page(width=600,height=675)
             stream = BytesIO()
             bitmap.save(stream,'PNG')
             page.insert_image(page.rect,stream=stream.getvalue())
+            if len(doc) == 5:
+                page.insert_text((38,60),'Native approval heading')
         doc.save(path,deflate=True)
     return expected
 
@@ -153,7 +158,12 @@ def main():
             rows=[tuple(line.split('\t')) for line in actual[1].splitlines() if line.startswith('TX-')]
             assert rows==expected,(rows,actual)
             assert actual[2].startswith('[blank:'),actual[2]
-            print(f'Independent {"ruled" if ruled else "borderless"} table passed')
+            assert 'Faint approval text.' in actual[3], actual[3]
+            for number in (4, 5):
+                rows = [tuple(line.split('\t')) for line in actual[number].splitlines() if line.startswith('TX-')]
+                assert rows == expected, (number, rows, actual[number])
+            assert actual[5].count('Native approval heading') == 1, actual[5]
+            print(f'Independent {"ruled" if ruled else "borderless"} tables passed, including low-resolution and mixed pages')
 
 
 if __name__=='__main__':

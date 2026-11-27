@@ -33,10 +33,10 @@ The supplied V2 export contained eight of the 36 expected quantities. Both V2.1 
 
 ## Performance and regression evidence
 
-- Local Chromium V2 timed run was 14.92 s and processed nine of ten fixture pages. The V2.1 monitored desktop fixture run took about 16 s and processed all ten. The 360 px run took 19.93 s. These are desktop-browser results.
-- Combined process-tree RSS includes the browser and runner and can double-count shared pages. V2 sampled at 796.3 MiB and a V2.1 desktop run including the independent fixture suite sampled at 850.8 MiB. These workloads differ and do not isolate WASM memory.
+- Sequential local Chromium runs of the same fixture took 15.44 s on V2 (nine processed pages) and 16.99 s on V2.1 (all ten pages). The 360 px run took 19.93 s. These are desktop-browser results.
+- Combined process-tree RSS includes the browser and runner and can double-count shared pages. Sequential same-fixture samples peaked at 802.5 MiB on V2 and 818.2 MiB on V2.1. These are aggregate process samples, with no isolation of WASM memory.
 - Two desktop Chromium runs on the 99.89 MiB, 500-page mixed capacity fixture took 13.10 and 12.54 seconds. Both returned all pages in order and scored 0% CER. Sampled combined process RSS was 1050.2 MiB. Published admission budgets remain 100 MiB/500 pages desktop and 15 MiB/10 pages mobile.
-- The Node suite has 22 passing tests. The standalone browser test includes a separately generated table with and without rules and uses non-sequential values, repeated quantities, leading zeros, an empty cell and negative or decimal amounts. Browser-wide regression and stress results are retained in the branch qualification workflow.
+- The Node suite has 22 passing tests. The standalone browser test includes a separately generated table with and without rules and uses non-sequential values, repeated quantities, leading zeros, an empty cell and negative or decimal amounts. A second raster size, faint text, and a native heading on the same page as a scanned table also passed. Browser-wide regression and stress results are retained in the branch qualification workflow.
 - Production runtime and model dependencies were unchanged. PDF, cell OCR and TXT handling remain browser-local. The existing network privacy, decode failure, cancellation, worker lifecycle and export checks remain in the qualification suite. WebKit coverage is browser-engine automation. It is separate from physical Apple devices.
 
 ## Qualification boundaries
