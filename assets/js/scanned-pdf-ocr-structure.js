@@ -176,7 +176,7 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
    const half=Math.min(step*.37,height*1.1);
    const value=await recognize({x,y:body[row].y-half,width:end-x-height*.4,height:half*2},true);
    if(!value)continue;
-   if(numeric.test(value.text) && value.confidence>=55){
+   if(numeric.test(value.text) && (value.confidence>=55 || value.agreement&&value.confidence>=45)){
     cells[row][column]=value.text;
     if(value.confidence<85)uncertain++;
    }else uncertain++;

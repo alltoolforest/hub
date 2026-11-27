@@ -261,19 +261,21 @@ export async function mount(root){
      // Region coordinates refer to the original upright raster. Deskewed or
      // rotated candidates keep their existing output when coordinates may differ.
      if(bestAngle===0&&angle===0&&best.words.length){
-      let table=detectTable(best.words,best.raw);
-      if(!table&&best.words.length>=6){
+      let table=detectTable(best.words,best.raw), ruled=false;
+      if((!table||isMobile)&&best.words.length>=6){
        if(renderedAngle!==bestAngle){
         context=await renderAt(bestAngle);
         renderedAngle=bestAngle;
        }
        const grid=context.getImageData(0,0,c.width,c.height);
        if(eraseDetectedGrid(grid)){
+        ruled=true;
         context.putImageData(grid,0,0);
         const candidate=await read('Ruled table recognition');
         const candidateTable=detectTable(candidate.words,candidate.raw);
         const moreEvidence=candidate.wordCount>=best.wordCount*1.25&&candidate.confidence>=85;
-        if(candidateTable&&candidate.wordCount>=best.wordCount&&(moreEvidence||candidate.confidence>=best.confidence-3)){
+        const coversTable=!table||(candidateTable?.body.length>=table.body.length&&candidateTable.anchors.length>=table.anchors.length);
+        if(candidateTable&&coversTable&&candidate.wordCount>=best.wordCount&&(moreEvidence||candidate.confidence>=best.confidence-3)){
          best=candidate;
          table=candidateTable;
         }else best={...best,uncertain:best.uncertain+1};
@@ -297,10 +299,15 @@ export async function mount(root){
           resources.tile=tile;
           tileX=Math.round(tileX*gain)/gain;
           tileY=Math.round(tileY*gain)/gain;
-          resources.render=p.render({canvasContext:tile.getContext('2d'),viewport:scanViewport,
+          const tileContext=tile.getContext('2d',{willReadFrequently:true});
+          resources.render=p.render({canvasContext:tileContext,viewport:scanViewport,
            transform:[gain,0,0,gain,-tileX*gain,-tileY*gain],background:'rgb(255,255,255)'});
           await stage(resources.render.promise,job,LIMIT.page,'Table tile rendering');
           resources.render=null;
+          if(ruled){
+           const grid=tileContext.getImageData(0,0,tile.width,tile.height);
+           if(eraseDetectedGrid(grid))tileContext.putImageData(grid,0,0);
+          }
           const candidate=recognitionEvidence((await stage(worker.recognize(tile,{tessedit_pageseg_mode:'3'},
            {text:true,tsv:true}),job,LIMIT.page,'Table tile recognition')).data);
           const mapped=candidate.words.map(w=>({...w,x:w.x/gain+tileX,y:w.y/gain+tileY,w:w.w/gain,h:w.h/gain}));
@@ -334,16 +341,17 @@ export async function mount(root){
          ctx.imageSmoothingQuality='high';
          ctx.drawImage(source,x,y,width,height,12,12,width*2,height*2);
          const runRegion=async options=>(await stage(worker.recognize(region,options,{text:true}),job,LIMIT.page,'Table cell recognition')).data;
-         let data=await runRegion({tessedit_pageseg_mode:'7'});
+         let data=await runRegion({tessedit_pageseg_mode:'7'}),agreement=false;
          if(numeric&&(!/^[+−$€£0-9.,%‰-]+$/u.test(data.text.trim())||data.confidence<55)){
+          const initial=data.text.trim();
           const whitelist='0123456789.+,-−$€£%‰';
           data=await runRegion({tessedit_pageseg_mode:'8',tessedit_char_whitelist:whitelist});
-          if(data.confidence<55){
+          agreement=initial===data.text.trim();
+          if(data.confidence<55&&!agreement){
            const glyph=await runRegion({tessedit_pageseg_mode:'10',tessedit_char_whitelist:whitelist});
            if(glyph.confidence>data.confidence)data=glyph;
           }
          }
-         let agreement=false;
          if(!numeric){
           const softened=ctx.getImageData(0,0,region.width,region.height);
           const shades=softened.data;

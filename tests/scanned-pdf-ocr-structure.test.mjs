@@ -27,4 +27,7 @@ test('aligned wrapped descriptions and observed non-sequential numbers retain th
  assert.equal(result.text.split('\n')[1],'A-310\tValve assembly\t007\t-31.50');
  assert.equal(result.text.split('\n')[3],'A-485\tFilter\t\t17.01');
  assert.equal(result.text.split('\n')[4],'A-918\tSensor\t007\t-15.05');
+ const lowScore=await reconstructTable(table,async ()=>({text:'3',confidence:50,agreement:true}),{check(){}});
+ assert.equal(lowScore.text.split('\n')[3],'A-485\tFilter\t3\t17.01');
+ assert.equal(lowScore.uncertain,1);
 });
