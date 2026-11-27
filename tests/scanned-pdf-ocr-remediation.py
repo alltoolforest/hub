@@ -121,6 +121,35 @@ def independent(path, ruled):
     return expected
 
 
+def multi_table(path):
+    sets = [
+        [('BA-41', 'Motor bracket', '007', '-4.75'), ('BA-55', 'Bearing cover', '2', '9.10'),
+         ('BA-62', 'Bearing cover', '23', '9.10'), ('BA-93', 'Fan ring', '4', '12.80'),
+         ('BA-95', 'Valve sleeve', '23', '31.02')],
+        [('CT-12', 'Coolant cap', '11', '2.12'), ('CT-21', 'Supply valve', '2', '9.21'),
+         ('CT-32', 'Filter plate', '16', '8.32'), ('CT-43', 'Joint sleeve', '2', '7.43'),
+         ('CT-54', 'Outlet hose', '009', '-4.54')],
+    ]
+    font = ImageFont.truetype(qa['FONT'], 28)
+    with fitz.open() as doc:
+        for groups in (sets, [sets[1]]):
+            image = Image.new('L', (1200, 1500), 255)
+            draw = ImageDraw.Draw(image)
+            for group, values in enumerate(groups):
+                top = 130 + group*680
+                if group:
+                    draw.text((76, top-120), 'Warehouse note between table sections.', font=font, fill=0)
+                for number, row in enumerate(values):
+                    for x, value in zip((76, 325, 820, 985), row):
+                        draw.text((x, top+number*70), value, font=font, fill=0)
+            stream = BytesIO()
+            image.save(stream, 'PNG')
+            page = doc.new_page(width=600, height=750)
+            page.insert_image(page.rect, stream=stream.getvalue())
+        doc.save(path, deflate=True)
+    return sets
+
+
 @contextmanager
 def serve():
     class Handler(qa['SimpleHTTPRequestHandler']):
@@ -142,10 +171,11 @@ def main():
     parser=ArgumentParser()
     parser.add_argument('--fixture-dir',type=Path)
     parser.add_argument('--executable')
+    parser.add_argument('--browser', choices=('chromium','firefox','webkit'), default='chromium')
     parser.add_argument('--viewport',type=int,default=1280)
     args=parser.parse_args()
     with serve() as origin, TemporaryDirectory() as tmp, sync_playwright() as pw:
-        browser=pw.chromium.launch(executable_path=args.executable)
+        browser=getattr(pw,args.browser).launch(executable_path=args.executable)
         page=browser.new_page(viewport={'width': args.viewport,'height':900})
         page.goto(origin+'/documents/scanned-pdf-to-text/')
         page.on('dialog',lambda dialog: dialog.accept())
@@ -164,6 +194,17 @@ def main():
                 assert rows == expected, (number, rows, actual[number])
             assert actual[5].count('Native approval heading') == 1, actual[5]
             print(f'Independent {"ruled" if ruled else "borderless"} tables passed, including low-resolution and mixed pages')
+        path=Path(tmp)/'headerless-sections.pdf'
+        expected=multi_table(path)
+        actual=read_fixture(page,path)
+        for number, tables in enumerate((expected,[expected[1]]),1):
+            rows=[tuple(line.split('\t')) for line in actual[number].splitlines()
+                  if line.startswith(('BA-', 'CT-'))]
+            assert rows == [row for table in tables for row in table], (number,actual[number])
+        text=actual[1]
+        assert text.index('BA-95') < text.index('Warehouse note') < text.index('CT-12')
+        print('Multiple headerless tables, intervening prose and continuation page passed.')
+
 
 
 if __name__=='__main__':

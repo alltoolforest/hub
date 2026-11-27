@@ -32,6 +32,8 @@ jobs:
       - run: python -u tests/scanned-pdf-ocr-browser.py --browser firefox --count 6
       - run: python -u tests/scanned-pdf-ocr-browser.py --browser webkit --mobile --count 6
       - run: python -u tests/scanned-pdf-ocr-remediation.py
+      - run: python -u tests/scanned-pdf-ocr-remediation.py --browser firefox
+      - run: python -u tests/scanned-pdf-ocr-remediation.py --browser webkit
       - run: python -u tests/scanned-pdf-ocr-capacity.py
       - run: python -u tests/scanned-pdf-ocr-capacity.py --mobile
       - uses: actions/upload-artifact@v4

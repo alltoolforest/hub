@@ -1,5 +1,5 @@
 // Reconstruct only where the recognized words provide geometric evidence.
-const numeric = /^[+−-]?(?:[$€£])?\d[\d.,]*(?:[%‰])?$/u;
+const numeric = /^(?:(?:[+−-]?[$€£¥₹]?|[$€£¥₹][+−-])\d[\d.,]*(?:[eE][+−-]?\d+)?[%‰]?|\([$€£¥₹]?\d[\d.,]*\))$/u;
 const center = word => word.y + word.h / 2;
 const right = word => word.x + word.w;
 const median = values => [...values].sort((a,b) => a-b)[Math.floor(values.length/2)];
@@ -19,7 +19,7 @@ export function rasterBlank(data) {
   max=Math.max(max,level);
   if(max-min>4)return false;
  }
- return min>=242;
+ return max>=242 && min>=242;
 }
 
 // Rule detection runs only after the original OCR cannot explain the layout.
@@ -71,26 +71,39 @@ function segments(words, gap) {
 }
 
 export function detectTable(words, raw) {
- if(words.length<24 || !wordsMatch(words,raw))return null;
+ if(words.length<16 || !wordsMatch(words,raw))return null;
  const height=median(words.map(word=>word.h));
  const rows=visualRows(words,height);
  for(let start=0;start+4<rows.length;start++){
   const head=segments(rows[start].words,height*1.65);
-  if(head.length<3 || head.length>12 || !head.every(cell=>/\p{L}/u.test(lineText(cell))))continue;
+  if(head.length<3 || head.length>12)continue;
+  const headerless=head.some(cell=>numeric.test(lineText(cell)));
+  // A headerless run needs both textual and numerical evidence in its first row.
+  if(!head.every(cell=>/\p{L}/u.test(lineText(cell))||numeric.test(lineText(cell))) ||
+     !head.some(cell=>/\p{L}/u.test(lineText(cell))&&!numeric.test(lineText(cell))))continue;
   const anchors=head.map(cell=>cell[0].x);
   const assign=row=>{
    const cells=anchors.map(()=>[]);
    for(const segment of segments(row.words,height*1.65)){
-    const column=anchors.findIndex(x=>Math.abs(x-segment[0].x)<=height*1.25);
+    let column=anchors.findIndex(x=>Math.abs(x-segment[0].x)<=height*1.25);
+    if(column<0&&numeric.test(lineText(segment))){
+     // A right-aligned numeric value may begin just to the left of its
+     // exemplar. Require unique, close geometric evidence.
+     const possible=anchors.map((x,i)=>i).filter(i=>{
+      const a=head[i];
+      return numeric.test(lineText(a))&&Math.abs(right(a.at(-1))-right(segment.at(-1)))<=height*.6;
+     });
+     if(possible.length===1)column=possible[0];
+    }
     if(column<0 || cells[column].length)return null;
     cells[column]=segment;
    }
    return cells;
   };
-  const body=[];
+  const body=headerless?[{...rows[start],cells:head}]:[];
   const step=rows[start+1].y-rows[start].y;
   let end=start+1;
-  for(;end<rows.length && body.length<100;end++){
+  for(;end<rows.length && body.length<500;end++){
    const i=end;
    const row=rows[i];
    const previous=body.at(-1);
@@ -104,7 +117,7 @@ export function detectTable(words, raw) {
     previous.cells[filled[0]].push(...cells[filled[0]]);
     continue;
    }
-   if(delta<step*.55 || delta>step*1.5 || filled.length<head.length-1)break;
+   if(delta<step*.55 || delta>step*1.85 || filled.length<head.length-1)break;
    body.push({...row,cells});
   }
   if(body.length<4)continue;
@@ -115,7 +128,7 @@ export function detectTable(words, raw) {
   if(!numberColumns.length || !numberColumns.some(i=>body.filter(row=>row.cells[i].length).length>=body.length*.65))continue;
   const left=rows.slice(0,start);
   const rightRows=rows.slice(end);
-  return {anchors,header:head,body,numberColumns,height,step,left,rightRows};
+  return {anchors,header:headerless?[]:head,body,numberColumns,height,step,left,rightRows};
  }
  return null;
 }
@@ -162,15 +175,50 @@ export function orderColumnBlocks(words,raw){
  return '';
 }
 
-export async function reconstructTable(table, recognize, job, refine=false, verifyIds=false){
+export function hasUnverifiedTableRows(words){
+ if(words.length<16)return false;
+ const height=median(words.map(word=>word.h));
+ let matches=0;
+ for(const row of visualRows(words,height)){
+  const cells=segments(row.words,height*1.65);
+  if(cells.length>=3&&cells.some(cell=>numeric.test(lineText(cell)))&&++matches>=3)return true;
+ }
+ return false;
+}
+
+export function detectFollowingTable(table) {
+ const words=table.rightRows.flatMap(row=>row.words);
+ return detectTable(words,lineText(words));
+}
+
+export function regionBudget(constrained){
+ const deadline=performance.now()+(constrained?10000:14000);
+ let remaining=constrained?50:140;
+ return {
+  take(){if(remaining===0||performance.now()>=deadline)return false;remaining--;return true;}
+ };
+}
+
+export async function reconstructTable(table, recognize, job, refine=false, verifyIds=false, budget=regionBudget(false)){
  const {anchors,header,body,numberColumns,height,step,left,rightRows}=table;
  const cells=body.map(row=>row.cells.map(lineText));
+ const warnings=[];
  let uncertain=0, attempts=0;
+ const missing=cells.reduce((count,row)=>count+numberColumns.filter(column=>!row[column]).length,0);
+ const maxAttempts=Math.min(missing,verifyIds?42:112,Math.max(12,body.length*numberColumns.length));
+ const warn=(row,column,message)=>{
+  uncertain++;
+  if(warnings.length<8)warnings.push('Row '+(row+1)+', column '+(column+1)+': '+message);
+ };
  for(let row=0;row<body.length;row++){
   for(const column of numberColumns){
-   if(cells[row][column])continue;
-   if(++attempts>24){uncertain++;continue;}
    job.check();
+   if(cells[row][column]){
+    if(body[row].cells[column].some(word=>word.confidence<75))warn(row,column,'check numerical reading');
+    continue;
+   }
+   if(attempts>=maxAttempts||!budget.take()){warn(row,column,'not verified within OCR budget');continue;}
+   attempts++;
    const x=anchors[column]-height*.4;
    const end=anchors[column+1] ?? (anchors[column]+height*8);
    const half=Math.min(step*.37,height*1.1);
@@ -178,8 +226,8 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
    if(!value)continue;
    if(numeric.test(value.text) && (value.confidence>=55 || value.agreement&&value.confidence>=45)){
     cells[row][column]=value.text;
-    if(value.confidence<85)uncertain++;
-   }else uncertain++;
+    if(value.confidence<85)warn(row,column,'check recovered value');
+   }else warn(row,column,'visible or ambiguous content could not be read');
   }
  }
  const refined=new Map();
@@ -193,6 +241,7 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
    const id=/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_-]+$/.test(original);
    if(!id&&!/^[\p{L}\s/]+$/u.test(original))continue;
    job.check();
+   if(!budget.take())break;
    const bounds=blockBounds(words);
    const pad=height*.28;
    const result=await recognize({x:bounds.left-pad,y:bounds.top-pad,width:bounds.right-bounds.left+pad*2,height:bounds.bottom-bounds.top+pad*2},false);
@@ -212,6 +261,6 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
   if(refined.has(body[i].cells[j]))cells[i][j]=refined.get(body[i].cells[j]);
  }
  const original=row=>refined.get(row.words)??lineText(row.words);
- const tableText=[header.map(lineText),...cells].map(row=>row.join('\t')).join('\n');
- return {text:[left.map(original).join('\n'),tableText,rightRows.map(original).join('\n')].filter(Boolean).join('\n\n'),uncertain};
+ const tableText=[...(header.length?[header.map(lineText)]:[]),...cells].map(row=>row.join('\t')).join('\n');
+ return {text:[left.map(original).join('\n'),tableText,rightRows.map(original).join('\n')].filter(Boolean).join('\n\n'),uncertain,warnings};
 }

@@ -1,4 +1,4 @@
-import {rasterBlank,eraseDetectedGrid,detectTable,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
+import {rasterBlank,eraseDetectedGrid,detectTable,detectFollowingTable,hasUnverifiedTableRows,regionBudget,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
 import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage,safeName} from './core.js';
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
@@ -278,7 +278,7 @@ export async function mount(root){
         if(candidateTable&&coversTable&&candidate.wordCount>=best.wordCount&&(moreEvidence||candidate.confidence>=best.confidence-3)){
          best=candidate;
          table=candidateTable;
-        }else best={...best,uncertain:best.uncertain+1};
+        }else best={...best,uncertain:best.uncertain+1,tableWarning:'Ruling lines detected. Table structure could not be verified. Compare with the source.'};
        }
       }
       if(table){
@@ -290,7 +290,7 @@ export async function mount(root){
          const last=table.body.at(-1);
          const right=Math.max(...[...table.header,...last.cells].flat().map(w=>w.x+w.w));
          tileX=Math.max(0,Math.floor(table.anchors[0]-table.height));
-         tileY=Math.max(0,Math.floor(table.header[0][0].y-table.height));
+         tileY=Math.max(0,Math.floor((table.header[0]?.[0]?.y??table.body[0].y)-table.height));
          const width=Math.min(c.width-tileX,Math.ceil(right-tileX+table.height*2));
          const height=Math.min(c.height-tileY,Math.ceil(last.y-tileY+table.height*2));
          const gain=Math.min(Math.SQRT2,limits.side/width,limits.side/height,Math.sqrt(limits.pixels/(width*height)));
@@ -320,8 +320,8 @@ export async function mount(root){
           }
          }
         }
-        const result=await reconstructTable(table,async (box,numeric)=>{
-         const useTile=tileScale>1&&box.y>=tileY;
+        const recognizeRegion=async (box,numeric)=>{
+         const useTile=tileScale>1&&box.y>=tileY&&box.y+box.height<=tileY+tile.height/tileScale;
          const source=useTile?tile:c;
          const scale=useTile?tileScale:1;
          const x=Math.max(0,Math.floor((box.x-(useTile?tileX:0))*scale));
@@ -333,7 +333,7 @@ export async function mount(root){
          const pixels=src.getImageData(x,y,width,height).data;
          let ink=0;
          for(let i=0;i<pixels.length;i+=4)if(pixels[i]<175)ink++;
-         if(ink<5)return null;
+         if(ink<5)return rasterBlank(pixels)?null:{text:'',confidence:0};
          region.width=width*2+24;
          region.height=height*2+24;
          const ctx=region.getContext('2d');
@@ -367,16 +367,38 @@ export async function mount(root){
              enhanced.text.trim().toLowerCase()!==data.text.trim().toLowerCase())data=enhanced;
          }
          return {text:data.text.trim(),confidence:data.confidence,agreement};
-        },job,tableConfidence<93,isMobile);
-        best={...best,text:result.text,uncertain:best.uncertain+result.uncertain};
+        };
+        const budget=regionBudget(isMobile), sections=[], warnings=[];
+        let uncertain=best.uncertain;
+        for(let i=1;table;i++){
+         job.check();
+         const next=i<12?detectFollowingTable(table):null;
+         const input=next?{...table,rightRows:[]}:table;
+         const result=await reconstructTable(input,recognizeRegion,job,tableConfidence<93,isMobile,budget);
+         sections.push(result.text);
+         uncertain+=result.uncertain;
+         for(const warning of result.warnings)if(warnings.length<8)warnings.push('Table '+i+' · '+warning);
+         if(!next&&hasUnverifiedTableRows(table.rightRows.flatMap(row=>row.words))){
+          uncertain++;
+          warnings.push('Additional table-like rows were retained without verified cell associations.');
+         }
+         table=next;
+        }
+        if(uncertain>best.uncertain&&warnings.length)warnings.push('Compare flagged cells against the source.');
+        best={...best,text:sections.join('\n\n'),uncertain,tableWarning:warnings.join(' · ')};
        }finally{region.width=region.height=0;}
       }else{
-       const ordered=orderColumnBlocks(best.words,best.raw);
-       if(ordered)best={...best,text:ordered};
+       if(hasUnverifiedTableRows(best.words)){
+        best={...best,text:best.raw||best.text,uncertain:best.uncertain+1,
+         tableWarning:'Table-like text retained. Cell associations could not be verified.'};
+       }else{
+        const ordered=orderColumnBlocks(best.words,best.raw);
+        if(ordered)best={...best,text:ordered};
+       }
       }
      }
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':undefined,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':best.tableWarning,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
      if(job.reason||locked||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
