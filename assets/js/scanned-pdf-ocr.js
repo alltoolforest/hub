@@ -1,3 +1,4 @@
+import {rasterBlank,eraseDetectedGrid,detectTable,detectFollowingTable,hasUnverifiedTableRows,regionBudget,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
 import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage,safeName} from './core.js';
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
@@ -95,6 +96,7 @@ export async function mount(root){
   if(resources.worker)await attempt(()=>resources.worker.terminate());
   if(resources.page)await attempt(()=>resources.page.cleanup());
   if(resources.canvas){resources.canvas.width=0;resources.canvas.height=0;}
+  if(resources.tile){resources.tile.width=0;resources.tile.height=0;}
   if(resources.pdfTask)await attempt(()=>resources.pdfTask.destroy());
   if(failed){locked=true;throw Error('Resource cleanup failed. Reload the page before processing another PDF.');}
  }
@@ -186,11 +188,13 @@ export async function mount(root){
      const angle=rotation==='auto'?0:Number(rotation);
      const c=el('canvas');
      resources.canvas=c;
+     let scanViewport;
      async function renderAt(angle) {
       const rotation=(p.rotate+angle)%360;
       const base=p.getViewport({scale:1,rotation});
       const plan=safeRenderPlan(base.width,base.height,isMobile);
       const viewport=p.getViewport({scale:plan.scale,rotation});
+      scanViewport=viewport;
       const {width,height}=canvasDimensions(viewport.width,viewport.height,limits);
       c.width=width;
       c.height=height;
@@ -202,10 +206,9 @@ export async function mount(root){
       return context;
      }
      let context=await renderAt(angle);
-     if(!imagePresent&&!native){
-      const pixels=context.getImageData(0,0,c.width,c.height).data;
-      const hasInk=pixels.some((value,index)=>index%4!==3&&value<245);
-      if(!hasInk){records.push({page:index+1,state:'blank',text:'',note:'Uniform white rendered page'});continue;}
+     if(!native&&rasterBlank(context.getImageData(0,0,c.width,c.height).data)){
+      records.push({page:index+1,state:'blank',text:'',note:'Uniform near-white rendered page'});
+      continue;
      }
      const worker=await getWorker();
      safeStatus('Recognizing page '+(index+1)+'…');
@@ -254,9 +257,148 @@ export async function mount(root){
       context.putImageData(pixels,0,0);
       best=chooseCandidate(best,await read('Quality retry'));
      }
-     if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content but no text recognized; check scan or handwriting'});continue;}
+     if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content, no reliable text recognized; review images or unsupported handwriting'});continue;}
+     // Region coordinates refer to the original upright raster. Deskewed or
+     // rotated candidates keep their existing output when coordinates may differ.
+     if(bestAngle===0&&angle===0&&best.words.length){
+      let table=detectTable(best.words,best.raw), ruled=false;
+      if((!table||isMobile)&&best.words.length>=6){
+       if(renderedAngle!==bestAngle){
+        context=await renderAt(bestAngle);
+        renderedAngle=bestAngle;
+       }
+       const grid=context.getImageData(0,0,c.width,c.height);
+       if(eraseDetectedGrid(grid)){
+        ruled=true;
+        context.putImageData(grid,0,0);
+        const candidate=await read('Ruled table recognition');
+        const candidateTable=detectTable(candidate.words,candidate.raw);
+        const moreEvidence=candidate.wordCount>=best.wordCount*1.25&&candidate.confidence>=85;
+        const coversTable=!table||(candidateTable?.body.length>=table.body.length&&candidateTable.anchors.length>=table.anchors.length);
+        if(candidateTable&&coversTable&&candidate.wordCount>=best.wordCount&&(moreEvidence||candidate.confidence>=best.confidence-3)){
+         best=candidate;
+         table=candidateTable;
+        }else best={...best,uncertain:best.uncertain+1,tableWarning:'Ruling lines detected. Table structure could not be verified. Compare with the source.'};
+       }
+      }
+      if(table){
+       const region=el('canvas');
+       let tile=null,tileX=0,tileY=0,tileScale=1,tableConfidence=best.confidence;
+       try{
+        if(renderedAngle!==bestAngle)await renderAt(bestAngle);
+        if(isMobile){
+         const last=table.body.at(-1);
+         const right=Math.max(...[...table.header,...last.cells].flat().map(w=>w.x+w.w));
+         tileX=Math.max(0,Math.floor(table.anchors[0]-table.height));
+         tileY=Math.max(0,Math.floor((table.header[0]?.[0]?.y??table.body[0].y)-table.height));
+         const width=Math.min(c.width-tileX,Math.ceil(right-tileX+table.height*2));
+         const height=Math.min(c.height-tileY,Math.ceil(last.y-tileY+table.height*2));
+         const gain=Math.min(Math.SQRT2,limits.side/width,limits.side/height,Math.sqrt(limits.pixels/(width*height)));
+         if(gain>1.1){
+          tile=el('canvas',{width:Math.floor(width*gain),height:Math.floor(height*gain)});
+          resources.tile=tile;
+          tileX=Math.round(tileX*gain)/gain;
+          tileY=Math.round(tileY*gain)/gain;
+          const tileContext=tile.getContext('2d',{willReadFrequently:true});
+          resources.render=p.render({canvasContext:tileContext,viewport:scanViewport,
+           transform:[gain,0,0,gain,-tileX*gain,-tileY*gain],background:'rgb(255,255,255)'});
+          await stage(resources.render.promise,job,LIMIT.page,'Table tile rendering');
+          resources.render=null;
+          if(ruled){
+           const grid=tileContext.getImageData(0,0,tile.width,tile.height);
+           if(eraseDetectedGrid(grid))tileContext.putImageData(grid,0,0);
+          }
+          const candidate=recognitionEvidence((await stage(worker.recognize(tile,{tessedit_pageseg_mode:'3'},
+           {text:true,tsv:true}),job,LIMIT.page,'Table tile recognition')).data);
+          const mapped=candidate.words.map(w=>({...w,x:w.x/gain+tileX,y:w.y/gain+tileY,w:w.w/gain,h:w.h/gain}));
+          const precise=detectTable(mapped,candidate.raw);
+          if(precise?.body.length===table.body.length&&precise.anchors.length===table.anchors.length&&
+              !precise.left.length&&!precise.rightRows.length&&candidate.confidence>=best.confidence-5){
+           table={...precise,left:table.left,rightRows:table.rightRows};
+           tableConfidence=candidate.confidence;
+           tileScale=gain;
+          }
+         }
+        }
+        const recognizeRegion=async (box,numeric)=>{
+         const useTile=tileScale>1&&box.y>=tileY&&box.y+box.height<=tileY+tile.height/tileScale;
+         const source=useTile?tile:c;
+         const scale=useTile?tileScale:1;
+         const x=Math.max(0,Math.floor((box.x-(useTile?tileX:0))*scale));
+         const y=Math.max(0,Math.floor((box.y-(useTile?tileY:0))*scale));
+         const width=Math.min(source.width-x,Math.ceil(box.width*scale));
+         const height=Math.min(source.height-y,Math.ceil(box.height*scale));
+         if(width<2||height<2||width*height>90000)return {text:'',confidence:0};
+         const src=source.getContext('2d');
+         const pixels=src.getImageData(x,y,width,height).data;
+         let ink=0;
+         for(let i=0;i<pixels.length;i+=4)if(pixels[i]<175)ink++;
+         if(ink<5)return rasterBlank(pixels)?null:{text:'',confidence:0};
+         region.width=width*2+24;
+         region.height=height*2+24;
+         const ctx=region.getContext('2d');
+         ctx.fillStyle='#fff';ctx.fillRect(0,0,region.width,region.height);
+         ctx.imageSmoothingQuality='high';
+         ctx.drawImage(source,x,y,width,height,12,12,width*2,height*2);
+         const runRegion=async options=>(await stage(worker.recognize(region,options,{text:true}),job,LIMIT.page,'Table cell recognition')).data;
+         let data=await runRegion({tessedit_pageseg_mode:'7'}),agreement=false;
+         if(numeric&&(!/^[+−$€£0-9.,%‰-]+$/u.test(data.text.trim())||data.confidence<55)){
+          const initial=data.text.trim();
+          const whitelist='0123456789.+,-−$€£%‰';
+          data=await runRegion({tessedit_pageseg_mode:'8',tessedit_char_whitelist:whitelist});
+          agreement=initial===data.text.trim();
+          if(data.confidence<55&&!agreement){
+           const glyph=await runRegion({tessedit_pageseg_mode:'10',tessedit_char_whitelist:whitelist});
+           if(glyph.confidence>data.confidence)data=glyph;
+          }
+         }
+         if(!numeric){
+          const softened=ctx.getImageData(0,0,region.width,region.height);
+          const shades=softened.data;
+          for(let i=0;i<shades.length;i+=4){
+           const intensity=shades[i];
+           const value=Math.max(0,Math.min(255,(intensity-205)*1.8+205));
+           shades[i]=shades[i+1]=shades[i+2]=value;
+          }
+          ctx.putImageData(softened,0,0);
+          const enhanced=await runRegion({tessedit_pageseg_mode:'7'});
+          agreement=enhanced.text.trim()===data.text.trim();
+          if(enhanced.confidence>=data.confidence-1 &&
+             enhanced.text.trim().toLowerCase()!==data.text.trim().toLowerCase())data=enhanced;
+         }
+         return {text:data.text.trim(),confidence:data.confidence,agreement};
+        };
+        const budget=regionBudget(isMobile), sections=[], warnings=[];
+        let uncertain=best.uncertain;
+        for(let i=1;table;i++){
+         job.check();
+         const next=i<12?detectFollowingTable(table):null;
+         const input=next?{...table,rightRows:[]}:table;
+         const result=await reconstructTable(input,recognizeRegion,job,tableConfidence<93,isMobile,budget);
+         sections.push(result.text);
+         uncertain+=result.uncertain;
+         for(const warning of result.warnings)if(warnings.length<8)warnings.push('Table '+i+' · '+warning);
+         if(!next&&hasUnverifiedTableRows(table.rightRows.flatMap(row=>row.words))){
+          uncertain++;
+          warnings.push('Additional table-like rows were retained without verified cell associations.');
+         }
+         table=next;
+        }
+        if(uncertain>best.uncertain&&warnings.length)warnings.push('Compare flagged cells against the source.');
+        best={...best,text:sections.join('\n\n'),uncertain,tableWarning:warnings.join(' · ')};
+       }finally{region.width=region.height=0;}
+      }else{
+       if(hasUnverifiedTableRows(best.words)){
+        best={...best,text:best.raw||best.text,uncertain:best.uncertain+1,
+         tableWarning:'Table-like text retained. Cell associations could not be verified.'};
+       }else{
+        const ordered=orderColumnBlocks(best.words,best.raw);
+        if(ordered)best={...best,text:ordered};
+       }
+      }
+     }
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
-     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':undefined,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
+     appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':best.tableWarning,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);
     }catch(e){
      abortNote=errorMessage(e);
      if(job.reason||locked||/safe output budget/.test(abortNote)){records.push({page:index+1,state:job.reason&&String(job.reason.message).startsWith('Cancelled.')?'cancelled':'failed',text:'',note:'Page interrupted; retry after resolving the reported error'});throw e;}
@@ -265,6 +407,7 @@ export async function mount(root){
     }finally{
      if(resources.render){try{resources.render.cancel();await dispose(async()=>{try{await resources.render.promise}catch{}});resources.render=null;}catch{locked=true;throw Error('Render cleanup failed; reload before retrying.');}}
      if(resources.canvas){resources.canvas.width=resources.canvas.height=0;resources.canvas=null;}
+     if(resources.tile){resources.tile.width=resources.tile.height=0;resources.tile=null;}
      if(p){p.cleanup();resources.page=null;}
      progress.value=pageProgress(records.length,indices.length);
     }
@@ -295,7 +438,7 @@ export async function mount(root){
     const panel=el('div',{class:'notice'},[el('p',{text:'Recovered result from '+selected.name+'. Existing editable text and downloads are unchanged.'}),block,replace]);
     root.querySelector('#ocr-recovery')?.remove();panel.id='ocr-recovery';root.append(panel);
     replace.onclick=()=>{if(lifecycle.active||recovery?.records!==records)return;if(text.value.trim()&&!window.confirm('Replace the current editable text, including any corrections?'))return;clearOutputs();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.failed+' failed, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped.';panel.remove();};
-   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review · '+uncertain+' low-confidence OCR words (check against original).';}
+   }else{clearOutputs();root.querySelector('#ocr-recovery')?.remove();text.value=result.text;resultFile=selected;resultInfo.textContent='Result from: '+selected.name+' · '+counts.completed+' completed, '+counts.blank+' blank, '+counts.failed+' unrecognized, '+counts.cancelled+' cancelled, '+counts.skipped+' skipped, '+counts.review+' need review · '+uncertain+' OCR words or cells to review against the original.';}
   }
   if(recognized)safeStatus(!result.actual?'No text recognized. Previous results preserved.':counts.failed||counts.review?'Recognition finished with warnings. Review results before export.':'Recognition finished. Review results before export.',!result.actual||!!counts.failed);
   sync();

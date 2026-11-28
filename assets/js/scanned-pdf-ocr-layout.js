@@ -67,7 +67,7 @@ export function recognitionEvidence(data){
  const words=parseRecognitionWords(data?.tsv);
  const layout=recognitionLayout(words);
  // Keep raw OCR as authoritative: TSV may omit words or alter punctuation.
- return {text:pairedColumns(words,raw)||raw||layout.text,confidence:typeof data?.confidence==='number'&&Number.isFinite(data.confidence)?Math.max(0,Math.min(100,data.confidence)):null,uncertain:layout.uncertain,wordCount:layout.wordCount,layoutText:layout.text,layoutFallback:!raw&&!!layout.text};
+ return {raw,words,text:pairedColumns(words,raw)||raw||layout.text,confidence:typeof data?.confidence==='number'&&Number.isFinite(data.confidence)?Math.max(0,Math.min(100,data.confidence)):null,uncertain:layout.uncertain,wordCount:layout.wordCount,layoutText:layout.text,layoutFallback:!raw&&!!layout.text};
 }
 export function safeRenderPlan(width,height,mobile){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw Error('Invalid page dimensions.');
