@@ -28,3 +28,11 @@ test('mixed extraction preserves repeated raster lines beyond native duplicates'
  assert.equal(result.text.split('Scanned text').length-1,2);
  assert.equal(result.review,true);
 });
+
+test('an optional OCR timeout does not cancel the parent job',async()=>{
+ const job=createLifecycle().start();
+ await assert.rejects(stage(new Promise(()=>{}),job,5,'Regional recognition',undefined,false),/timed out/);
+ assert.equal(job.reason,null);
+ job.check();
+ job.finish();
+});

@@ -1,7 +1,7 @@
 name: Scanned PDF OCR isolated qualification
 on:
   push:
-    branches: [development/scanned-pdf-ocr-v2-task1, development/scanned-pdf-ocr-v2.1-remediation]
+    branches: [development/scanned-pdf-ocr-v2-task1, development/scanned-pdf-ocr-v2.1-remediation, development/scanned-pdf-ocr-v2.2-remediation]
     paths:
       - '.github/workflows/scanned-pdf-ocr-qualification.yml'
       - 'assets/js/scanned-pdf-ocr*.js'
@@ -22,6 +22,7 @@ jobs:
           node-version: '22'
       - run: node --test tests/scanned-pdf-ocr*.test.mjs
       - run: node scripts/provision-scanned-pdf-ocr-model.mjs
+      - run: echo '1a72ffa691ff26a818384bb4649a6d2a4fd840d1fac841523a8a25f9baf02576  assets/vendor/scanned-pdf-ocr/mar.traineddata.gz' | sha256sum --check
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
