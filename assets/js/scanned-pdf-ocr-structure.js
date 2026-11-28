@@ -1,5 +1,9 @@
 // Reconstruct only where the recognized words provide geometric evidence.
-const numeric = /^(?:(?:[+−-]?[$€£¥₹]?|[$€£¥₹][+−-])\d[\d.,]*(?:[eE][+−-]?\d+)?[%‰]?|\([$€£¥₹]?\d[\d.,]*\))$/u;
+export const NUMERIC_WHITELIST='0123456789.+,-−$€£¥₹%‰()eE';
+const numeral='\\d[\\d.,]*(?:[eE][+−-]?\\d+)?';
+const numeric=new RegExp('^(?:(?:[+−-]?[$€£¥₹]?|[$€£¥₹][+−-])'+numeral+
+ '(?:[%‰$€£¥₹])?|\\([$€£¥₹]?'+numeral+'[$€£¥₹]?\\))$','u');
+export const isNumeric=text=>numeric.test(text);
 const center = word => word.y + word.h / 2;
 const right = word => word.x + word.w;
 const median = values => [...values].sort((a,b) => a-b)[Math.floor(values.length/2)];
@@ -7,14 +11,10 @@ const lineText = words => words.map(word => word.text).join(' ');
 const wordsMatch = (words, raw) => lineText(words) === raw.trim().replace(/\s+/g,' ');
 
 export function rasterBlank(data) {
- const pixels = data.length / 4;
- let min = 255, max = 0, dark = 0;
+ let min = 255, max = 0;
  for(let offset=0;offset<data.length;offset+=4){
   const level=Math.min(data[offset],data[offset+1],data[offset+2]);
-  if(level<236){
-   if(++dark>Math.max(1,Math.floor(pixels/500000)))return false;
-   continue;
-  }
+  if(level<236)return false;
   min=Math.min(min,level);
   max=Math.max(max,level);
   if(max-min>4)return false;
@@ -40,10 +40,23 @@ export function eraseDetectedGrid(image){
  const groups=values=>values.filter((value,i)=>!i||value-values[i-1]>1).length;
  if(groups(horizontal)<3||groups(vertical)<3||horizontal.length>height*.06||vertical.length>width*.06)return false;
  const firstX=vertical[0],lastX=vertical.at(-1),firstY=horizontal[0],lastY=horizontal.at(-1);
- for(const y of horizontal)data.fill(255,(y*width+firstX)*4,(y*width+lastX+1)*4);
- for(const x of vertical)for(let y=firstY;y<=lastY;y++){
-  const i=(y*width+x)*4;
-  data[i]=data[i+1]=data[i+2]=255;
+ const xLines=new Set(vertical),yLines=new Set(horizontal);
+ const outside=(line,step,lines)=>{while(lines.has(line))line+=step;return line;};
+ const at=(x,y)=>(y*width+x)*4;
+ const isDark=(x,y)=>x>=0&&x<width&&y>=0&&y<height&&data[at(x,y)]<175;
+ for(const y of horizontal){
+  const above=outside(y,-1,yLines),below=outside(y,1,yLines);
+  for(let x=firstX;x<=lastX;x++){
+   if(!xLines.has(x)&&isDark(x,above)&&isDark(x,below))continue;
+   const i=at(x,y);data[i]=data[i+1]=data[i+2]=255;
+  }
+ }
+ for(const x of vertical){
+  const left=outside(x,-1,xLines),right=outside(x,1,xLines);
+  for(let y=firstY;y<=lastY;y++){
+   if(!yLines.has(y)&&isDark(left,y)&&isDark(right,y))continue;
+   const i=at(x,y);data[i]=data[i+1]=data[i+2]=255;
+  }
  }
  return true;
 }
@@ -95,6 +108,14 @@ export function detectTable(words, raw) {
      });
      if(possible.length===1)column=possible[0];
     }
+    if(column<0&&/\d/u.test(lineText(segment))){
+     // Numeric text may align to either edge of its column. The entire
+     // segment must fit in a unique header-delimited interval.
+     const start=segment[0].x,end=right(segment.at(-1));
+     const candidate=anchors.findIndex((x,i)=>i>=2&&start>=x-height*.65&&
+      end<(anchors[i+1]??Infinity)-height*.25);
+     if(candidate>=0)column=candidate;
+    }
     if(column<0 || cells[column].length)return null;
     cells[column]=segment;
    }
@@ -117,13 +138,17 @@ export function detectTable(words, raw) {
     previous.cells[filled[0]].push(...cells[filled[0]]);
     continue;
    }
-   if(delta<step*.55 || delta>step*1.85 || filled.length<head.length-1)break;
+   const sparse=head.length>=5&&cells[0].length&&cells[1].length&&
+    filled.length>=head.length-2&&filled.slice(2).some(column=>numeric.test(lineText(cells[column])));
+   if(delta<step*.55 || delta>step*1.85 || (filled.length<head.length-1&&!sparse))break;
    body.push({...row,cells});
   }
   if(body.length<4)continue;
   const numberColumns=anchors.map((x,i)=>i).filter(i=>{
    const values=body.map(row=>lineText(row.cells[i])).filter(Boolean);
-   return values.length>=2 && values.every(value=>numeric.test(value));
+   const label=lineText(head[i]);
+   const headerEvidence=!headerless&&i>=2&&/^(?:qty|quantity|count|amount|net amount|price|total|adjustment|balance)(?:\s|$)/i.test(label);
+   return headerEvidence||values.length>=2&&values.filter(value=>numeric.test(value)).length>=values.length*.7;
   });
   if(!numberColumns.length || !numberColumns.some(i=>body.filter(row=>row.cells[i].length).length>=body.length*.65))continue;
   const left=rows.slice(0,start);
@@ -175,6 +200,43 @@ export function orderColumnBlocks(words,raw){
  return '';
 }
 
+// Some OCR modes group both columns in the same blocks. A repeated
+// whitespace gutter within a prose region is stronger evidence than those
+// block IDs. Spanning headings remain outside the column region.
+export function orderProseRows(rows){
+ if(rows.length<6)return '';
+ const words=rows.flatMap(row=>row.words);
+ const height=median(words.map(word=>word.h));
+ const min=Math.min(...words.map(word=>word.x)),max=Math.max(...words.map(right));
+ const width=max-min;
+ if(!width)return '';
+ let best=null;
+ for(let n=35;n<=65;n++){
+  const gutter=min+width*n/100;
+  let start=-1,score=0;
+  for(let i=0;i<=rows.length;i++){
+   const words=rows[i]?.words??[];
+   const lhs=words.filter(word=>right(word)<=gutter);
+   const rhs=words.filter(word=>word.x>=gutter);
+   const gap=lhs.length&&rhs.length?rhs[0].x-right(lhs.at(-1)):0;
+   if(lhs.length+rhs.length===words.length&&lhs.length>=2&&rhs.length>=2&&gap>=height*1.5){
+    if(start<0)start=i;
+    score+=Math.min(gap,height*5);
+    continue;
+   }
+   if(start>=0&&i-start>=5&&(!best||score>best.score))best={start,end:i,gutter,score};
+   start=-1;
+   score=0;
+  }
+ }
+ if(!best)return '';
+ const slice=rows.slice(best.start,best.end);
+ const lines=part=>part.map(row=>lineText(row.words)).join('\n');
+ const lane=filter=>slice.map(row=>lineText(row.words.filter(filter))).join('\n');
+ return [lines(rows.slice(0,best.start)),lane(word=>right(word)<=best.gutter),
+  lane(word=>word.x>=best.gutter),lines(rows.slice(best.end))].filter(Boolean).join('\n\n');
+}
+
 export function hasUnverifiedTableRows(words){
  if(words.length<16)return false;
  const height=median(words.map(word=>word.h));
@@ -195,8 +257,18 @@ export function regionBudget(constrained){
  const deadline=performance.now()+(constrained?10000:14000);
  let remaining=constrained?50:140;
  return {
-  take(){if(remaining===0||performance.now()>=deadline)return false;remaining--;return true;}
+  take(){if(remaining===0||performance.now()>=deadline)return false;remaining--;return true;},
+  milliseconds(){return Math.max(0,Math.floor(deadline-performance.now()));}
  };
+}
+
+export function corroboratedRupee(original, result) {
+ if(!result?.agreement||!/^₹\d/u.test(result.text)||!isNumeric(result.text))return false;
+ const digits=result.text.slice(1);
+ // Accept only when the numerical suffix agrees and the original differs
+ // by at most one leading symbol or confusable character.
+ return original===digits||
+  (original.length===digits.length+1&&original.slice(1)===digits&&!/[-−+()$€£¥₹]/u.test(original[0]));
 }
 
 export async function reconstructTable(table, recognize, job, refine=false, verifyIds=false, budget=regionBudget(false)){
@@ -214,7 +286,7 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
   for(const column of numberColumns){
    job.check();
    if(cells[row][column]){
-    if(body[row].cells[column].some(word=>word.confidence<75))warn(row,column,'check numerical reading');
+    if(!isNumeric(cells[row][column])||body[row].cells[column].some(word=>word.confidence<75))warn(row,column,'check numerical reading');
     continue;
    }
    if(attempts>=maxAttempts||!budget.take()){warn(row,column,'not verified within OCR budget');continue;}
@@ -230,15 +302,36 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
    }else warn(row,column,'visible or ambiguous content could not be read');
   }
  }
+ for(let row=0;row<body.length;row++){
+  for(const column of numberColumns){
+   if(!/\b(?:amount|price|balance|total)\b/i.test(lineText(header[column]??[])))continue;
+   const original=cells[row][column];
+   if(!/\d,\d{3}[.,]/u.test(original)||/[$€£¥₹()−-]/u.test(original))continue;
+   job.check();
+   if(!budget.take()){warn(row,column,'currency not verified within OCR budget');continue;}
+   const bounds=blockBounds(body[row].cells[column]);
+   const left=Math.max(anchors[column]-height*.55,bounds.left-height*.95);
+   const result=await recognize({x:left,y:bounds.top-height*.25,
+    width:bounds.right-left+height*.25,height:bounds.bottom-bounds.top+height*.5},'currency');
+   if(corroboratedRupee(original,result)){
+    cells[row][column]=result.text;
+    if(result.confidence<65)warn(row,column,'verify the recovered currency symbol');
+   }
+   else if(!result?.text||result.text!==original)warn(row,column,'currency or amount could not be verified');
+  }
+ }
  const refined=new Map();
- if(refine||verifyIds){
+ const fragmented=body.map(row=>row.cells[0]).filter(cell=>cell.length>1&&
+  /^[A-Za-z]+-\s+\d+$/.test(lineText(cell)));
+ if(refine||verifyIds||fragmented.length){
   const textRegions=refine?[...left.slice(0,3).map(row=>row.words),
    ...body.flatMap(row=>row.cells.slice(1).filter(cell=>cell.length>1))]:[];
-  const identifiers=verifyIds?body.map(row=>row.cells[0]).filter(cell=>cell.length===1):[];
+  const identifiers=[...fragmented,...(verifyIds?body.map(row=>row.cells[0]).filter(cell=>cell.length===1):[])];
   const regions=[...textRegions,...identifiers];
   for(const words of regions.slice(0,30)){
    const original=lineText(words);
-   const id=/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_-]+$/.test(original);
+   const joined=original.replace(/\s+/g,'');
+   const id=/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_-]+$/.test(joined);
    if(!id&&!/^[\p{L}\s/]+$/u.test(original))continue;
    job.check();
    if(!budget.take())break;
@@ -248,7 +341,7 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
    const baseline=words.reduce((sum,word)=>sum+word.confidence,0)/words.length;
    if(!result||result.text===original)continue;
    const reliableId=id&&result.agreement&&result.confidence>=Math.max(87,baseline-3)&&
-    result.text.length===original.length&&/^[A-Za-z0-9_-]+$/.test(result.text);
+    result.text.length>=joined.length&&result.text.length<=joined.length+1&&/^[A-Za-z0-9_-]+$/.test(result.text);
    const reliableText=!id&&result.confidence>=Math.max(88,baseline-4)&&
     result.text.length>=original.length*.85&&/^[\p{L}\s/]+$/u.test(result.text);
    if(reliableId||reliableText){
@@ -261,6 +354,11 @@ export async function reconstructTable(table, recognize, job, refine=false, veri
   if(refined.has(body[i].cells[j]))cells[i][j]=refined.get(body[i].cells[j]);
  }
  const original=row=>refined.get(row.words)??lineText(row.words);
+ const prose=rows=>{
+  const words=rows.flatMap(row=>row.words);
+  return rows.some(row=>refined.has(row.words))?rows.map(original).join('\n'):
+   orderProseRows(rows)||orderColumnBlocks(words,lineText(words))||rows.map(original).join('\n');
+ };
  const tableText=[...(header.length?[header.map(lineText)]:[]),...cells].map(row=>row.join('\t')).join('\n');
- return {text:[left.map(original).join('\n'),tableText,rightRows.map(original).join('\n')].filter(Boolean).join('\n\n'),uncertain,warnings};
+ return {text:[prose(left),tableText,prose(rightRows)].filter(Boolean).join('\n\n'),uncertain,warnings};
 }

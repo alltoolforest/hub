@@ -1,4 +1,4 @@
-import {rasterBlank,eraseDetectedGrid,detectTable,detectFollowingTable,hasUnverifiedTableRows,regionBudget,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
+import {NUMERIC_WHITELIST,isNumeric,rasterBlank,eraseDetectedGrid,detectTable,detectFollowingTable,hasUnverifiedTableRows,regionBudget,reconstructTable,orderColumnBlocks} from './scanned-pdf-ocr-structure.js';
 import {el,field,fileInput,notice,status,setupStatus,downloads,clearOutputs,output,copy,load,url,mobile,errorMessage,safeName} from './core.js';
 import {boundedRanges,budgets,canvasDimensions,retryIndices,mergeRetry,pageProgress,appendRecord} from './scanned-pdf-ocr-performance.js';
 import {createLifecycle,validateFile,stage} from './scanned-pdf-ocr-lifecycle.js';
@@ -94,6 +94,7 @@ export async function mount(root){
   const attempt=async fn=>{try{await dispose(fn)}catch{failed=true}};
   if(resources.render)await attempt(async()=>{resources.render.cancel();try{await resources.render.promise}catch{}});
   if(resources.worker)await attempt(()=>resources.worker.terminate());
+  if(resources.currencyWorker)await attempt(()=>resources.currencyWorker.terminate());
   if(resources.page)await attempt(()=>resources.page.cleanup());
   if(resources.canvas){resources.canvas.width=0;resources.canvas.height=0;}
   if(resources.tile){resources.tile.width=0;resources.tile.height=0;}
@@ -151,7 +152,7 @@ export async function mount(root){
     pending=Promise.resolve(T.createWorker('eng',1,{workerPath:url('assets/vendor/tesseract-worker.js'),
      corePath:url('assets/vendor/tesseract-core/'),langPath:url(LANG),workerBlobURL:false,cacheMethod:'none',
      logger:m=>{if(lifecycle.active===job&&!job.reason)safeStatus(m.status+(m.progress!=null?' · '+Math.round(m.progress*100)+'%':''));},
-     errorHandler:()=>job.cancel(Error('OCR worker failed. Retry or reload the page.'))}));
+     errorHandler:()=>{if(!resources.optionalOCR)job.cancel(Error('OCR worker failed. Retry or reload the page.'));}}));
    }catch(e){initializing=false;throw e;}
    // If initialization cannot be interrupted, do not permit another worker until it settles.
    pending.then(()=>{initializing=false;sync();},()=>{initializing=false;sync();});
@@ -231,7 +232,7 @@ export async function mount(root){
       }
      }
      if(!best.text||best.confidence===null||best.confidence<75||best.uncertain>0){
-      if(bestAngle!==renderedAngle)context=await renderAt(bestAngle);
+      if(bestAngle!==renderedAngle){context=await renderAt(bestAngle);renderedAngle=bestAngle;}
       const pixels=context.getImageData(0,0,c.width,c.height);
       const d=pixels.data;
       for(let i=0;i<d.length;i+=4){
@@ -258,9 +259,19 @@ export async function mount(root){
       best=chooseCandidate(best,await read('Quality retry'));
      }
      if(!best.text&&!native){records.push({page:index+1,state:'failed',text:'',note:'Visible content, no reliable text recognized; review images or unsupported handwriting'});continue;}
-     // Region coordinates refer to the original upright raster. Deskewed or
-     // rotated candidates keep their existing output when coordinates may differ.
-     if(bestAngle===0&&angle===0&&best.words.length){
+     // Orthogonal corrections use the same PDF viewport for layout and crops.
+     // Deskewed evidence can reorder recognized words, while additional crops
+     // need an explicit deskew transform and are therefore withheld.
+     if(best.words.length){
+      const initial=best;
+      const optionalBudget=regionBudget(isMobile);
+      const optionalStage=(promise,label)=>stage(promise,job,Math.max(1,Math.min(6000,optionalBudget.milliseconds())),label,undefined,false);
+      resources.optionalOCR=true;
+      try{
+      if(renderedAngle!==bestAngle){
+       context=await renderAt(bestAngle);
+       renderedAngle=bestAngle;
+      }
       let table=detectTable(best.words,best.raw), ruled=false;
       if((!table||isMobile)&&best.words.length>=6){
        if(renderedAngle!==bestAngle){
@@ -271,7 +282,7 @@ export async function mount(root){
        if(eraseDetectedGrid(grid)){
         ruled=true;
         context.putImageData(grid,0,0);
-        const candidate=await read('Ruled table recognition');
+        const candidate=recognitionEvidence((await optionalStage(worker.recognize(c,{rotateAuto:rotation==='auto',tessedit_pageseg_mode:'3'},{text:true,tsv:true}),'Ruled table recognition')).data);
         const candidateTable=detectTable(candidate.words,candidate.raw);
         const moreEvidence=candidate.wordCount>=best.wordCount*1.25&&candidate.confidence>=85;
         const coversTable=!table||(candidateTable?.body.length>=table.body.length&&candidateTable.anchors.length>=table.anchors.length);
@@ -286,7 +297,7 @@ export async function mount(root){
        let tile=null,tileX=0,tileY=0,tileScale=1,tableConfidence=best.confidence;
        try{
         if(renderedAngle!==bestAngle)await renderAt(bestAngle);
-        if(isMobile){
+        if(isMobile&&Math.abs(best.deskew)<.005){
          const last=table.body.at(-1);
          const right=Math.max(...[...table.header,...last.cells].flat().map(w=>w.x+w.w));
          tileX=Math.max(0,Math.floor(table.anchors[0]-table.height));
@@ -302,14 +313,14 @@ export async function mount(root){
           const tileContext=tile.getContext('2d',{willReadFrequently:true});
           resources.render=p.render({canvasContext:tileContext,viewport:scanViewport,
            transform:[gain,0,0,gain,-tileX*gain,-tileY*gain],background:'rgb(255,255,255)'});
-          await stage(resources.render.promise,job,LIMIT.page,'Table tile rendering');
+          await optionalStage(resources.render.promise,'Table tile rendering');
           resources.render=null;
           if(ruled){
            const grid=tileContext.getImageData(0,0,tile.width,tile.height);
            if(eraseDetectedGrid(grid))tileContext.putImageData(grid,0,0);
           }
-          const candidate=recognitionEvidence((await stage(worker.recognize(tile,{tessedit_pageseg_mode:'3'},
-           {text:true,tsv:true}),job,LIMIT.page,'Table tile recognition')).data);
+          const candidate=recognitionEvidence((await optionalStage(worker.recognize(tile,{tessedit_pageseg_mode:'3'},
+           {text:true,tsv:true}),'Table tile recognition')).data);
           const mapped=candidate.words.map(w=>({...w,x:w.x/gain+tileX,y:w.y/gain+tileY,w:w.w/gain,h:w.h/gain}));
           const precise=detectTable(mapped,candidate.raw);
           if(precise?.body.length===table.body.length&&precise.anchors.length===table.anchors.length&&
@@ -321,7 +332,10 @@ export async function mount(root){
          }
         }
         const recognizeRegion=async (box,numeric)=>{
-         const useTile=tileScale>1&&box.y>=tileY&&box.y+box.height<=tileY+tile.height/tileScale;
+         const currency=numeric==='currency';
+         if(Math.abs(best.deskew)>=.005)return {text:'',confidence:0};
+         const useTile=tileScale>1&&box.y>=tileY&&box.y+box.height<=tileY+tile.height/tileScale&&
+          box.x>=tileX&&box.x+box.width<=tileX+tile.width/tileScale;
          const source=useTile?tile:c;
          const scale=useTile?tileScale:1;
          const x=Math.max(0,Math.floor((box.x-(useTile?tileX:0))*scale));
@@ -340,11 +354,41 @@ export async function mount(root){
          ctx.fillStyle='#fff';ctx.fillRect(0,0,region.width,region.height);
          ctx.imageSmoothingQuality='high';
          ctx.drawImage(source,x,y,width,height,12,12,width*2,height*2);
-         const runRegion=async options=>(await stage(worker.recognize(region,options,{text:true}),job,LIMIT.page,'Table cell recognition')).data;
+         if(currency){
+          if(resources.currencyDisabled)return {text:'',confidence:0};
+          try{
+           if(!resources.currencyWorker){
+            const T=await load('ocr');
+            job.check();
+            const pending=T.createWorker('mar',1,{workerPath:url('assets/vendor/tesseract-worker.js'),
+             corePath:url('assets/vendor/tesseract-core/'),langPath:url(LANG),workerBlobURL:false,cacheMethod:'none',
+             errorHandler:()=>{}});
+            resources.currencyWorker=await stage(pending,job,Math.max(1,Math.min(6000,optionalBudget.milliseconds())),
+             'Currency model setup',worker=>worker.terminate(),false);
+           }
+           const probe=async mode=>(await optionalStage(resources.currencyWorker.recognize(region,
+            {tessedit_pageseg_mode:mode,tessedit_char_whitelist:NUMERIC_WHITELIST},{text:true}),
+            'Currency recognition')).data;
+           const first=await probe('7');
+           const text=first.text.trim();
+           if(!text.includes('₹'))return {text,confidence:first.confidence};
+           const second=await probe('8');
+           return {text,confidence:Math.min(first.confidence,second.confidence),agreement:text===second.text.trim()};
+          }catch(error){
+           job.check();
+           if(resources.currencyWorker){
+            await dispose(()=>resources.currencyWorker.terminate());
+            resources.currencyWorker=null;
+           }
+           resources.currencyDisabled=true;
+           return {text:'₹',confidence:0};
+          }
+         }
+         const runRegion=async options=>(await optionalStage(worker.recognize(region,options,{text:true}),'Table cell recognition')).data;
          let data=await runRegion({tessedit_pageseg_mode:'7'}),agreement=false;
-         if(numeric&&(!/^[+−$€£0-9.,%‰-]+$/u.test(data.text.trim())||data.confidence<55)){
+         if(numeric&&(!isNumeric(data.text.trim())||data.confidence<55)){
           const initial=data.text.trim();
-          const whitelist='0123456789.+,-−$€£%‰';
+          const whitelist=NUMERIC_WHITELIST;
           data=await runRegion({tessedit_pageseg_mode:'8',tessedit_char_whitelist:whitelist});
           agreement=initial===data.text.trim();
           if(data.confidence<55&&!agreement){
@@ -368,13 +412,13 @@ export async function mount(root){
          }
          return {text:data.text.trim(),confidence:data.confidence,agreement};
         };
-        const budget=regionBudget(isMobile), sections=[], warnings=[];
+        const sections=[], warnings=[];
         let uncertain=best.uncertain;
         for(let i=1;table;i++){
          job.check();
          const next=i<12?detectFollowingTable(table):null;
          const input=next?{...table,rightRows:[]}:table;
-         const result=await reconstructTable(input,recognizeRegion,job,tableConfidence<93,isMobile,budget);
+         const result=await reconstructTable(input,recognizeRegion,job,tableConfidence<93,isMobile,optionalBudget);
          sections.push(result.text);
          uncertain+=result.uncertain;
          for(const warning of result.warnings)if(warnings.length<8)warnings.push('Table '+i+' · '+warning);
@@ -396,6 +440,19 @@ export async function mount(root){
         if(ordered)best={...best,text:ordered};
        }
       }
+      }catch(error){
+       job.check();
+       if(resources.render){
+        resources.render.cancel();
+        await dispose(async()=>{try{await resources.render.promise;}catch{}});
+        resources.render=null;
+       }
+       if(resources.worker){
+        await dispose(()=>worker.terminate());
+        resources.worker=null;
+       }
+       best={...initial,uncertain:initial.uncertain+1,tableWarning:'Table refinement stopped. Initial recognition was retained; verify rows and values.'};
+      }finally{resources.optionalOCR=false;}
      }
      const merged=kind==='mixed'?mergeMixed(native,best.text):{text:best.text,review:false};
      appendRecord(records,{page:index+1,state:'completed',text:merged.text,uncertain:best.uncertain,note:!best.text?'No raster text recognized. Selectable text was preserved.':best.tableWarning,review:merged.review||best.confidence===null||best.confidence<75||best.uncertain>0||best.layoutFallback||!best.text},remainingTextBudget);

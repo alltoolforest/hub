@@ -59,3 +59,24 @@ test('budget exhaustion leaves cells editable and identifies their locations',as
  assert.equal(result.uncertain,2);
  assert.match(result.warnings[1],/Row 2, column 2: not verified/);
 });
+
+test('rupee evidence cannot change the numerical suffix or an observed sign',async()=>{
+ const {corroboratedRupee,isNumeric,NUMERIC_WHITELIST}=await import('../assets/js/scanned-pdf-ocr-structure.js');
+ const reading={text:'₹1,904.75',confidence:92,agreement:true};
+ assert.equal(corroboratedRupee('31,904.75',reading),true);
+ assert.equal(corroboratedRupee('1,904.75',reading),true);
+ assert.equal(corroboratedRupee('-1,904.75',reading),false);
+ assert.equal(corroboratedRupee('$1,904.75',reading),false);
+ assert.equal(corroboratedRupee('1,905.75',reading),false);
+ assert.equal(corroboratedRupee('1,904.75',{...reading,agreement:false}),false);
+ for(const sample of ['($31.75)','1.2e-3','+2.25%','007','19.25¥']){
+  assert.equal(isNumeric(sample),true);
+  for(const character of sample)assert.ok(NUMERIC_WHITELIST.includes(character));
+ }
+});
+
+test('a dark sparse mark prevents the blank-page shortcut',()=>{
+ const image=new Uint8ClampedArray(600*1000*4).fill(255);
+ image[20100*4]=178;
+ assert.equal(rasterBlank(image),false);
+});

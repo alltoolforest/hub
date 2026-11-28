@@ -1,0 +1,9 @@
+{
+  "model": "mar.traineddata",
+  "project": "tesseract-ocr/tessdata_fast",
+  "source": "https://github.com/tesseract-ocr/tessdata_fast/blob/4e7c9ce934584e30654178261986ca1a03ffcfe8/mar.traineddata",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE.mar.txt",
+  "uncompressedSha256": "0ba3f2d116972e72fe9e176bc84c38e81dfb6670f4ed1f7f6c8e16a27da7cb61",
+  "gzipSha256": "1a72ffa691ff26a818384bb4649a6d2a4fd840d1fac841523a8a25f9baf02576"
+}

@@ -12,11 +12,15 @@ export async function validateFile(file,maxMB){
  if(!/^[0-9]\.[0-9]$/.test(String.fromCharCode(...bytes.slice(5,8))))throw Error("Invalid PDF version header.");
 }
 
-export function stage(promise,job,ms,label,lateDispose){
+export function stage(promise,job,ms,label,lateDispose,abortOnTimeout=true){
  return new Promise((resolve,reject)=>{
   let settled=false,timer,unsubscribe=()=>{};
   const finish=(ok,value)=>{if(settled)return;settled=true;clearTimeout(timer);unsubscribe();ok?resolve(value):reject(value);};
-  timer=setTimeout(()=>job.cancel(Error(label+" timed out. Retry or reload the page.")),ms);
+  timer=setTimeout(()=>{
+   const error=Error(label+" timed out.");
+   if(abortOnTimeout)job.cancel(Error(error.message+" Retry or reload the page."));
+   else finish(false,error);
+  },ms);
   unsubscribe=job.onCancel(error=>finish(false,error));
   Promise.resolve(promise).then(value=>{if(settled){if(lateDispose)Promise.resolve().then(()=>lateDispose(value)).catch(()=>{});return;}finish(true,value);},err=>finish(false,err));
  });
